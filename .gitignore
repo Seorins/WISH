@@ -1,35 +1,55 @@
-# ===== OS =====
+# Secrets and env files
+.env
+.env.*
+!.env.example
+!.env.template
+*.pem
+*.key
+
+# OS and IDE files
 .DS_Store
 Thumbs.db
-desktop.ini
-
-# ===== IDE =====
 .idea/
 .vscode/
-*.iml
-*.iws
-*.ipr
-out/
-
-# ===== Env & Secrets =====
-.env
-.env.local
-.env.*.local
-*.env
-!.env.example
-!*.env.example
-
-# ===== Logs =====
+*.swp
 *.log
-logs/
 
-# ===== Docker =====
-# compose 로컬 볼륨 데이터 (로컬에서 덤프할 경우)
-**/postgres-data/
-**/redis-data/
+# Docker and local data
+infra/postgres_data/
+postgres_data/
+redis_data/
+jenkins_home/
+chroma_data/
 
-# ===== Archive & Temp =====
-*.zip
-*.tar.gz
-tmp/
-temp/
+# Raw data files
+data/raw/
+*.csv
+
+# Claude / local tooling
+thoughts/
+.claude
+.tldr/
+.tldrignore
+
+# Python
+venv/
+__pycache__/
+
+# Local Gradle caches
+/.gradle-cache-backend/
+/.gradle-cache-frontend/
+
+# Android local files
+/.android-user-home/debug.keystore
+/.android-user-home/*.lock
+# Android build outputs
+frontend/app/build/
+frontend/wear/build/
+frontend/build/
+frontend/.gradle/
+
+
+# Markdown
+*.md
+!exec/porting_manual.md
+!dump.sql
