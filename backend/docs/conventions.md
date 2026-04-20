@@ -1,0 +1,154 @@
+# 백엔드 코드 컨벤션
+
+팀 공통 규약입니다. PR 리뷰 시 이 문서를 기준으로 논의합니다.
+
+## 1. 패키지 구조
+
+```
+com.comong.backend
+├─ global/        # 애플리케이션 전역
+│  ├─ common/     # 공통 유틸/응답 포맷 등
+│  ├─ config/     # @Configuration 클래스
+│  └─ exception/  # 공통 예외 처리
+└─ domain/        # 비즈니스 도메인
+   └─ <도메인>/
+      ├─ controller/
+      ├─ service/
+      ├─ repository/
+      ├─ entity/
+      ├─ dto/
+      └─ exception/  # 해당 도메인 전용 ErrorCode enum
+```
+
+**원칙**
+- 도메인 간 의존은 **service 레이어**에서만 허용 (repository/entity 크로스 참조 금지)
+- `global/` 패키지는 도메인을 import 하지 않는다 (역방향 의존 금지)
+- 공통 추상 클래스/인터페이스는 `global/common/` 에 둔다
+
+## 2. 공통 응답 포맷
+
+모든 REST 응답은 `ApiResponse<T>` 로 감싼다.
+
+```json
+{ "code": "SUCCESS", "message": "OK", "data": { ... } }
+```
+
+### 사용
+
+```java
+return ResponseEntity.ok(ApiResponse.success(dto));
+return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(dto));
+```
+
+실패 응답은 **직접 만들지 말 것.** `BusinessException` 을 던지면 `GlobalExceptionHandler` 가 알아서 변환한다.
+
+### 필드 설명
+
+| 필드 | 성공 | 비즈니스 실패 | 검증 실패 |
+| --- | --- | --- | --- |
+| `code` | `"SUCCESS"` | `"U-001"` 등 | `"G-001"` |
+| `message` | `"OK"` | 에러코드 정의 메시지 | 입력값 오류 메시지 |
+| `data` | 도메인 응답 DTO | `null` | `null` |
+| `errors` | `null` | `null` | `{"field": "메시지"}` |
+
+Jackson `@JsonInclude(NON_NULL)` 로 `null` 필드는 응답에서 제외된다.
+
+## 3. 에러 코드 규칙
+
+### 접두사 배정
+
+| 접두사 | 영역 | 예시 |
+| --- | --- | --- |
+| `G-` | 전역/공통 | `G-001` 입력값 오류 |
+| `U-` | User 도메인 | `U-001` 사용자 없음 |
+| `(새 접두사)` | 새 도메인 | 신규 도메인 추가 시 팀 논의로 결정 |
+
+### enum 정의
+
+각 도메인은 `<도메인>/exception/` 하위에 enum을 둔다.
+
+```java
+@Getter
+@RequiredArgsConstructor
+public enum UserErrorCode implements ErrorCode {
+    USER_NOT_FOUND(HttpStatus.NOT_FOUND, "U-001", "사용자를 찾을 수 없습니다."),
+    EMAIL_DUPLICATED(HttpStatus.CONFLICT, "U-002", "이미 사용 중인 이메일입니다.");
+
+    private final HttpStatus status;
+    private final String code;
+    private final String message;
+}
+```
+
+**메시지는 사용자에게 노출되는 한글 텍스트**로 작성한다 (프론트가 그대로 표시 가능).
+
+## 4. 예외 처리
+
+### 비즈니스 예외
+
+서비스 레이어에서 에러 상황은 항상 `BusinessException` 으로 던진다.
+
+```java
+User user = userRepository.findById(id)
+    .orElseThrow(() -> new BusinessException(UserErrorCode.USER_NOT_FOUND));
+```
+
+금지:
+- `throw new RuntimeException(...)`
+- `throw new IllegalArgumentException(...)` (입력 검증은 DTO의 `@Valid` 로)
+- Controller 에서 `try/catch` 로 상태코드 변환
+
+### 검증 예외
+
+요청 DTO에 Jakarta Validation 어노테이션(`@NotBlank`, `@Email`, `@Size` 등)을 붙이고 컨트롤러에서 `@Valid` 로 받는다. 필드별 메시지는 `GlobalExceptionHandler` 가 Map 으로 만들어 `errors` 에 담아준다.
+
+### 처리되지 않은 예외
+
+`GlobalExceptionHandler.handleUnexpectedException` 에서 500 으로 처리 + `log.error`. 이 로그가 찍히면 **버그**로 간주하고 원인 제거가 우선 (fallback 에 의존하지 않기).
+
+## 5. 엔티티 규칙
+
+- 기본 생성자 접근자: `@NoArgsConstructor(access = AccessLevel.PROTECTED)`
+- 객체 생성은 `@Builder` + private 생성자로만 허용 (무분별한 setter 금지)
+- setter 는 쓰지 않고, 상태 변경은 의미 있는 메서드(`user.changeNickname(...)`)로 표현
+- 테이블명은 **복수형** (`users`, `games`) 으로 통일
+- `createdAt` / `updatedAt` 은 `@PrePersist` / `@PreUpdate` 또는 JPA Auditing 사용
+
+## 6. DTO 규칙
+
+- 요청/응답 모두 `record` 사용 (불변 + 간결)
+- 엔티티를 Controller 에 그대로 노출하지 않는다 — 반드시 DTO 변환
+- 변환 메서드는 DTO 에 둔다 (`UserSignupRequest#toEntity()`, `UserResponse#from(User)`)
+
+## 7. 서비스 레이어
+
+- `@Transactional(readOnly = true)` 를 **클래스 레벨**에 기본으로 둔다
+- 쓰기 메서드에만 `@Transactional` 재선언
+- `@RequiredArgsConstructor` + `final` 필드로 생성자 주입 (필드/세터 주입 금지)
+
+## 8. 컨트롤러 레이어
+
+- REST 관례 준수
+  - 생성: `POST /<resource>` → `201 Created`
+  - 조회: `GET /<resource>/{id}` → `200 OK`
+  - 수정: `PUT` 또는 `PATCH`
+  - 삭제: `DELETE` → `204 No Content`
+- 컨트롤러는 **DTO 변환과 HTTP 상태코드만** 담당. 비즈니스 로직 금지
+- URL 은 소문자 복수형 (`/users`, `/games`)
+
+## 9. 새 도메인 추가 가이드
+
+1. `domain/<도메인>/` 디렉토리 생성
+2. `domain/user/` 의 서브 구조(`controller/service/repository/entity/dto/exception`) 복사
+3. 새 `<도메인>ErrorCode` enum 작성 및 접두사 배정 (팀과 협의)
+4. 엔티티 → 레포지토리 → DTO → 서비스 → 컨트롤러 순으로 구현
+5. 필요시 Flyway 마이그레이션 스크립트 추가 (도입 시점에 가이드 업데이트 예정)
+
+## 10. 커밋 메시지
+
+```
+[S14P31E103-<이슈번호>] BE/<타입>: <내용>
+```
+
+- 타입: `init`, `feat`, `fix`, `refactor`, `test`, `docs`, `chore` 등
+- 한 커밋은 한 관심사. 공통 설정과 도메인 기능을 섞지 말 것
