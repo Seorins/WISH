@@ -1,0 +1,55 @@
+# Secrets and env files
+.env
+.env.*
+!.env.example
+!.env.template
+*.pem
+*.key
+
+# OS and IDE files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.log
+
+# Docker and local data
+infra/postgres_data/
+postgres_data/
+redis_data/
+jenkins_home/
+chroma_data/
+
+# Raw data files
+data/raw/
+*.csv
+
+# Claude / local tooling
+thoughts/
+.claude
+.tldr/
+.tldrignore
+
+# Python
+venv/
+__pycache__/
+
+# Local Gradle caches
+/.gradle-cache-backend/
+/.gradle-cache-frontend/
+
+# Android local files
+/.android-user-home/debug.keystore
+/.android-user-home/*.lock
+# Android build outputs
+frontend/app/build/
+frontend/wear/build/
+frontend/build/
+frontend/.gradle/
+
+
+# Markdown
+*.md
+!exec/porting_manual.md
+!dump.sql
