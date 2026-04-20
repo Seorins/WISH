@@ -1,55 +1,41 @@
-# Secrets and env files
+# ===== Secrets =====
 .env
-.env.*
+.env.local
+.env.*.local
 !.env.example
+!.env.*.example
 !.env.template
 *.pem
 *.key
 
-# OS and IDE files
+# ===== OS =====
 .DS_Store
 Thumbs.db
+desktop.ini
+
+# ===== IDE (루트 방어용, 각 모듈 .gitignore에도 있음) =====
 .idea/
 .vscode/
 *.swp
-*.log
 
-# Docker and local data
-infra/postgres_data/
+# ===== Docker local volumes (바인드 마운트 방어) =====
+postgres-data/
 postgres_data/
+redis-data/
 redis_data/
-jenkins_home/
-chroma_data/
 
-# Raw data files
-data/raw/
-*.csv
+# ===== Node =====
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 
-# Claude / local tooling
-thoughts/
-.claude
-.tldr/
-.tldrignore
+# ===== Logs =====
+*.log
+logs/
 
-# Python
+# ===== Python =====
 venv/
+.venv/
 __pycache__/
-
-# Local Gradle caches
-/.gradle-cache-backend/
-/.gradle-cache-frontend/
-
-# Android local files
-/.android-user-home/debug.keystore
-/.android-user-home/*.lock
-# Android build outputs
-frontend/app/build/
-frontend/wear/build/
-frontend/build/
-frontend/.gradle/
-
-
-# Markdown
-*.md
-!exec/porting_manual.md
-!dump.sql
