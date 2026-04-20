@@ -10,7 +10,7 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "format": "prettier --write \"**/*.{ts,tsx,js,json,md}\"",
-    "prepare": "husky"
+    "prepare": "cd .. && husky frontend/.husky"
   },
   "lint-staged": {
     "*.{ts,tsx}": [
