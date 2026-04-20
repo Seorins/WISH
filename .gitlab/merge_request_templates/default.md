@@ -8,7 +8,7 @@
 ---
 
 ## 🔗 Jira
-- Closes S14P21E108-
+- Closes S14P31E103-
 - Jira: https://ssafy.atlassian.net/browse/S14P31E103-
 
 ---
