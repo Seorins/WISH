@@ -1,14 +1,16 @@
 package com.comong.backend.domain.user.service;
 
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.comong.backend.domain.user.dto.UserResponse;
 import com.comong.backend.domain.user.dto.UserSignupRequest;
 import com.comong.backend.domain.user.entity.User;
 import com.comong.backend.domain.user.exception.UserErrorCode;
 import com.comong.backend.domain.user.repository.UserRepository;
 import com.comong.backend.global.exception.BusinessException;
+
 import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -30,8 +32,10 @@ public class UserService {
     }
 
     public UserResponse getUser(Long id) {
-        User user = userRepository.findById(id)
-                .orElseThrow(() -> new BusinessException(UserErrorCode.USER_NOT_FOUND));
+        User user =
+                userRepository
+                        .findById(id)
+                        .orElseThrow(() -> new BusinessException(UserErrorCode.USER_NOT_FOUND));
         return UserResponse.from(user);
     }
 }

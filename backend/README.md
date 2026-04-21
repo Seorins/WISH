@@ -72,6 +72,17 @@ backend/src/main/java/com/comong/backend
       └─ exception/        # UserErrorCode 등 도메인 에러 enum
 ```
 
+## 코드 포매팅
+
+Spotless + Google Java Format 으로 강제합니다.
+
+```bash
+./gradlew spotlessApply   # 자동 수정
+./gradlew spotlessCheck   # 검사만
+```
+
+빌드·CI 가 `spotlessCheck` 를 포함하므로 포맷이 어긋난 코드는 머지 불가입니다.
+
 ## 코드 컨벤션
 
 별도 문서 참고: [docs/conventions.md](docs/conventions.md)

@@ -144,7 +144,39 @@ User user = userRepository.findById(id)
 4. 엔티티 → 레포지토리 → DTO → 서비스 → 컨트롤러 순으로 구현
 5. 필요시 Flyway 마이그레이션 스크립트 추가 (도입 시점에 가이드 업데이트 예정)
 
-## 10. 커밋 메시지
+## 10. 코드 포매팅 (Spotless)
+
+[Spotless](https://github.com/diffplug/spotless) + **Google Java Format** 으로 전체 포맷을 강제한다.
+
+### 개발자 사용법
+
+```bash
+# 포맷 어긋나면 자동 수정
+./gradlew spotlessApply
+
+# 포맷 검사만 (CI 에서 동일하게 실행)
+./gradlew spotlessCheck
+```
+
+`./gradlew build`, `./gradlew check` 는 내부적으로 `spotlessCheck` 를 실행한다. **포맷이 어긋난 코드는 빌드 실패 → PR 머지 불가.**
+
+### 규칙 요약
+
+- Google Java Format 1.28 **AOSP variant** (4-space indent, 100자 라인)
+- import 순서: `java → javax → jakarta → org → com → (기타)`
+- 미사용 import 자동 제거
+- 파일 끝 개행 강제, trailing whitespace 제거
+
+### IntelliJ 연동 (선택)
+
+1. `Plugins → Marketplace` 에서 **google-java-format** 설치 후 재시작
+2. `Settings → Other Settings → google-java-format Settings` → Enable 체크, **Code style: AOSP**
+3. `Help → Edit Custom VM Options...` 에 JDK 16+ 용 `--add-exports` 옵션 5줄 추가 후 재시작
+4. `Settings → Tools → Actions on Save` → **Reformat code (Whole file)** + **Optimize imports** 체크
+
+이렇게 하면 커밋 전 `spotlessApply` 를 매번 돌리지 않아도 된다.
+
+## 11. 커밋 메시지
 
 ```
 [S14P31E103-<이슈번호>] BE/<타입>: <내용>
