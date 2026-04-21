@@ -171,7 +171,16 @@ User user = userRepository.findById(id)
 
 1. `Plugins → Marketplace` 에서 **google-java-format** 설치 후 재시작
 2. `Settings → Other Settings → google-java-format Settings` → Enable 체크, **Code style: AOSP**
-3. `Help → Edit Custom VM Options...` 에 JDK 16+ 용 `--add-exports` 옵션 5줄 추가 후 재시작
+3. `Help → Edit Custom VM Options...` 에 JDK 16+ 용 `--add-exports` 옵션 6줄 추가 후 **IntelliJ 완전 재시작**
+   ```
+   --add-exports=jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED
+   --add-exports=jdk.compiler/com.sun.tools.javac.code=ALL-UNNAMED
+   --add-exports=jdk.compiler/com.sun.tools.javac.file=ALL-UNNAMED
+   --add-exports=jdk.compiler/com.sun.tools.javac.parser=ALL-UNNAMED
+   --add-exports=jdk.compiler/com.sun.tools.javac.tree=ALL-UNNAMED
+   --add-exports=jdk.compiler/com.sun.tools.javac.util=ALL-UNNAMED
+   ```
+   ⚠️ 반드시 **`=` 포함 형식**으로 작성할 것 (공백 구분자는 JVM은 인식해도 플러그인 감지 로직이 못 잡아서 "Configure the JRE" 알림이 계속 뜸)
 4. `Settings → Tools → Actions on Save` → **Reformat code (Whole file)** + **Optimize imports** 체크
 
 이렇게 하면 커밋 전 `spotlessApply` 를 매번 돌리지 않아도 된다.
