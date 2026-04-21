@@ -41,7 +41,9 @@ IntelliJ `Run Configuration > Environment variables` 또는 쉘 `export` 로 주
 ```
 
 기본 포트: `8080`, 컨텍스트 경로: `/api/v1`
-헬스체크: `GET /api/v1/actuator/health`
+- 헬스체크: `GET /api/v1/actuator/health`
+- **API 문서 (Swagger UI)**: `http://localhost:8080/api/v1/swagger-ui.html` (local/dev 전용, prod 비활성화)
+- OpenAPI JSON: `http://localhost:8080/api/v1/v3/api-docs`
 
 ## 프로파일
 

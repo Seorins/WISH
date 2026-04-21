@@ -26,3 +26,16 @@ management:
       show-details: when-authorized
   server:
     base-path: /
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+    enabled: true
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: true
+    tags-sorter: alpha
+    operations-sorter: alpha
+    display-request-duration: true
+  default-consumes-media-type: application/json
+  default-produces-media-type: application/json

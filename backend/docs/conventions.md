@@ -185,7 +185,40 @@ User user = userRepository.findById(id)
 
 이렇게 하면 커밋 전 `spotlessApply` 를 매번 돌리지 않아도 된다.
 
-## 11. 커밋 메시지
+## 11. API 문서 (Springdoc OpenAPI)
+
+Swagger UI 가 `/swagger-ui.html` 에 자동 생성된다. 컨트롤러/DTO 만 제대로 작성해도 기본 문서는 나오지만, 프론트·기획자 가독성을 위해 어노테이션으로 설명을 추가한다.
+
+### 권장 어노테이션
+
+```java
+@Operation(summary = "회원가입", description = "이메일과 닉네임으로 신규 회원을 등록한다")
+@ApiResponse(responseCode = "201", description = "가입 성공")
+@ApiResponse(responseCode = "409", description = "이메일/닉네임 중복")
+@PostMapping
+public ResponseEntity<ApiResponse<UserResponse>> signup(@Valid @RequestBody UserSignupRequest request) { ... }
+```
+
+DTO 필드에도 설명 추가 가능:
+```java
+public record UserSignupRequest(
+        @Schema(description = "이메일 주소", example = "test@comong.com")
+        @NotBlank @Email String email,
+        ...
+) { }
+```
+
+### 프로파일별 활성화
+
+| 프로파일 | Swagger UI | OpenAPI JSON |
+| --- | --- | --- |
+| `local` / `dev` | ✅ 활성 | ✅ 활성 |
+| `prod` | ❌ 차단 | ❌ 차단 |
+
+`application-prod.yaml` 에서 `springdoc.*.enabled: false` 로 강제.
+운영 환경에 API 스펙을 외부 노출하지 않기 위함. 필요시 (파트너 공개 등) 팀 논의 후 해제.
+
+## 12. 커밋 메시지
 
 ```
 [S14P31E103-<이슈번호>] BE/<타입>: <내용>
