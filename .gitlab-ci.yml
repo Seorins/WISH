@@ -1,0 +1,62 @@
+# GitLab CI 파이프라인
+#
+# 파트별로 stage 를 나누고, 각 job 은 해당 디렉토리 변경 시에만 실행된다.
+# - backend/**  변경 시 backend 관련 job 실행
+# - frontend/** / infra/** 는 각 팀 리더가 추가 (placeholder 없음)
+#
+# 현재 Tier 1: spotlessCheck + build (테스트 미포함)
+# 테스트 stage 는 백엔드 테스트 인프라 구축 이슈에서 추가 예정.
+
+stages:
+  - verify
+  - build
+
+default:
+  tags:
+    - docker
+
+# ----------------------------------------------------------------------------
+# Backend
+# ----------------------------------------------------------------------------
+
+.backend-base:
+  image: gradle:9.4.1-jdk21
+  before_script:
+    - cd backend
+    - chmod +x ./gradlew
+  cache:
+    key:
+      files:
+        - backend/build.gradle
+        - backend/settings.gradle
+    paths:
+      - backend/.gradle/
+      - .gradle/caches/
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        - backend/**/*
+        - .gitlab-ci.yml
+    - if: $CI_COMMIT_BRANCH == "develop" || $CI_COMMIT_BRANCH == "master" || $CI_COMMIT_BRANCH == "main"
+      changes:
+        - backend/**/*
+        - .gitlab-ci.yml
+
+backend:format:
+  extends: .backend-base
+  stage: verify
+  script:
+    - ./gradlew spotlessCheck --no-daemon
+
+backend:build:
+  extends: .backend-base
+  stage: build
+  needs:
+    - backend:format
+  script:
+    - ./gradlew build -x test --no-daemon
+  artifacts:
+    when: on_success
+    expire_in: 1 week
+    paths:
+      - backend/build/libs/*.jar
