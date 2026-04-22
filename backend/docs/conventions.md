@@ -59,8 +59,9 @@ Jackson `@JsonInclude(NON_NULL)` 로 `null` 필드는 응답에서 제외된다.
 
 | 접두사 | 영역 | 예시 |
 | --- | --- | --- |
-| `G-` | 전역/공통 | `G-001` 입력값 오류 |
+| `G-` | 전역/공통 | `G-001` 입력값 오류, `G-003` 인증 필요, `G-004` 접근 권한 없음 |
 | `U-` | User 도메인 | `U-001` 사용자 없음 |
+| `A-` | Auth 도메인 | `A-001` 자격증명 불일치, `A-002` 토큰 만료 |
 | `(새 접두사)` | 새 도메인 | 신규 도메인 추가 시 팀 논의로 결정 |
 
 ### enum 정의
@@ -218,7 +219,70 @@ public record UserSignupRequest(
 `application-prod.yaml` 에서 `springdoc.*.enabled: false` 로 강제.
 운영 환경에 API 스펙을 외부 노출하지 않기 위함. 필요시 (파트너 공개 등) 팀 논의 후 해제.
 
-## 12. 커밋 메시지
+## 12. 인증 / 인가
+
+### 방식
+
+- **Stateless JWT** 기반. 세션/쿠키/CSRF/formLogin/httpBasic 모두 비활성.
+- `Authorization: Bearer <access_token>` 헤더로 인증.
+- 필터: `JwtAuthenticationFilter` 가 `UsernamePasswordAuthenticationFilter` 앞에서 토큰 검증.
+
+### 공개 엔드포인트
+
+`SecurityConfig.PUBLIC_ENDPOINTS` 에 정의. 변경 시 팀 리뷰 필수.
+
+- `POST /users` (회원가입)
+- `/auth/**` (로그인 등)
+- `/actuator/health`
+- `/v3/api-docs/**`, `/swagger-ui.html`, `/swagger-ui/**`
+
+그 외 모든 엔드포인트는 **인증 필요**.
+
+### 실패 응답
+
+| 상황 | 상태 | 코드 |
+| --- | --- | --- |
+| 토큰 없음 / 유효하지 않음 | 401 | `G-003` |
+| 인가 실패 (권한 부족) | 403 | `G-004` |
+| 로그인 자격증명 불일치 | 401 | `A-001` |
+| 토큰 만료 | 401 | `A-002` |
+
+→ `RestAuthenticationEntryPoint` / `RestAccessDeniedHandler` 가 `ApiResponse` 포맷으로 변환.
+
+### 비밀번호
+
+- 저장은 **BCrypt 해시**만 (`PasswordEncoder` 빈 사용). 평문 저장 금지.
+- DTO 검증: 영문/숫자/특수문자 각 1개 이상, 8~64자.
+
+### JWT 설정
+
+`application.yaml` → `security.jwt.*` 로 바인딩 (`JwtProperties`).
+
+| 키 | 설명 | 기본값 |
+| --- | --- | --- |
+| `security.jwt.secret` | HS256 서명 키 (32자 이상) | 로컬 기본값 존재, **운영은 반드시 `JWT_SECRET` 환경변수** |
+| `security.jwt.access-token-ttl-seconds` | Access 토큰 유효시간 | 3600 (1시간) |
+| `security.jwt.issuer` | 발급자 (iss) | `comong` |
+
+### Swagger 연동
+
+- `OpenApiConfig` 에 Bearer 스키마 등록 완료.
+- Swagger UI 우측 상단 **Authorize** 버튼 → 발급받은 토큰 입력 → 보호된 엔드포인트 호출 가능.
+
+### 인증된 사용자 조회
+
+컨트롤러/서비스에서 현재 사용자 필요 시:
+
+```java
+JwtTokenProvider.AuthenticatedUser user =
+        (JwtTokenProvider.AuthenticatedUser) SecurityContextHolder.getContext()
+                .getAuthentication().getPrincipal();
+Long userId = user.userId();
+```
+
+(추후 `@AuthenticationPrincipal` 용 커스텀 어노테이션 검토 — 새 이슈)
+
+## 13. 커밋 메시지
 
 ```
 [S14P31E103-<이슈번호>] BE/<타입>: <내용>
