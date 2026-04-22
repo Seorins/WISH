@@ -231,8 +231,7 @@ public record UserSignupRequest(
 
 `SecurityConfig.PUBLIC_ENDPOINTS` 에 정의. 변경 시 팀 리뷰 필수.
 
-- `POST /users` (회원가입)
-- `/auth/**` (로그인 등)
+- `/auth/**` (회원가입, 로그인 등)
 - `/actuator/health`
 - `/v3/api-docs/**`, `/swagger-ui.html`, `/swagger-ui/**`
 

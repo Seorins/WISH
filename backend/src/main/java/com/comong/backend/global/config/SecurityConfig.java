@@ -34,12 +34,7 @@ public class SecurityConfig {
 
     /** 인증/문서/헬스체크 관련 공개 엔드포인트. */
     private static final String[] PUBLIC_ENDPOINTS = {
-        "/auth/**",
-        "/users", // POST /users 회원가입
-        "/actuator/health",
-        "/v3/api-docs/**",
-        "/swagger-ui.html",
-        "/swagger-ui/**"
+        "/auth/**", "/actuator/health", "/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**"
     };
 
     @Bean

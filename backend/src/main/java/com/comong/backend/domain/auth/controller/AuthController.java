@@ -2,6 +2,7 @@ package com.comong.backend.domain.auth.controller;
 
 import jakarta.validation.Valid;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -9,21 +10,31 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.comong.backend.domain.auth.dto.LoginRequest;
+import com.comong.backend.domain.auth.dto.SignupRequest;
 import com.comong.backend.domain.auth.dto.TokenResponse;
 import com.comong.backend.domain.auth.service.AuthService;
+import com.comong.backend.domain.user.dto.UserResponse;
 import com.comong.backend.global.common.response.ApiResponse;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 
-@Tag(name = "Auth", description = "인증 API")
+@Tag(name = "Auth", description = "인증 API (회원가입, 로그인)")
 @RestController
 @RequestMapping("/auth")
 @RequiredArgsConstructor
 public class AuthController {
 
     private final AuthService authService;
+
+    @Operation(summary = "회원가입", description = "이메일/닉네임/비밀번호로 신규 계정을 생성한다.")
+    @PostMapping("/signup")
+    public ResponseEntity<ApiResponse<UserResponse>> signup(
+            @Valid @RequestBody SignupRequest request) {
+        UserResponse response = authService.signup(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(response));
+    }
 
     @Operation(summary = "로그인", description = "이메일/비밀번호로 JWT access 토큰을 발급한다.")
     @PostMapping("/login")

@@ -2,12 +2,10 @@ package com.comong.backend.domain.user.service;
 
 import java.util.Optional;
 
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.comong.backend.domain.user.dto.UserResponse;
-import com.comong.backend.domain.user.dto.UserSignupRequest;
 import com.comong.backend.domain.user.entity.User;
 import com.comong.backend.domain.user.exception.UserErrorCode;
 import com.comong.backend.domain.user.repository.UserRepository;
@@ -15,24 +13,40 @@ import com.comong.backend.global.exception.BusinessException;
 
 import lombok.RequiredArgsConstructor;
 
+/**
+ * User 도메인 유스케이스.
+ *
+ * <p>User 의 생명주기 중 '조회/수정/삭제' 를 담당한다. 계정 생성(회원가입)은 인증 영역이므로 {@code AuthService} 가 본 서비스의 {@link
+ * #create(String, String, String)} 을 호출해 수행한다. 비밀번호 암호화는 호출 측 책임.
+ */
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class UserService {
 
     private final UserRepository userRepository;
-    private final PasswordEncoder passwordEncoder;
 
+    /**
+     * 새 User 생성. 이메일/닉네임 중복 검사 후 저장. 비밀번호는 이미 암호화된 값이어야 한다 (평문 금지).
+     *
+     * @throws BusinessException {@link UserErrorCode#EMAIL_DUPLICATED} / {@link
+     *     UserErrorCode#NICKNAME_DUPLICATED}
+     */
     @Transactional
-    public UserResponse signup(UserSignupRequest request) {
-        if (userRepository.existsByEmail(request.email())) {
+    public UserResponse create(String email, String nickname, String encodedPassword) {
+        if (userRepository.existsByEmail(email)) {
             throw new BusinessException(UserErrorCode.EMAIL_DUPLICATED);
         }
-        if (userRepository.existsByNickname(request.nickname())) {
+        if (userRepository.existsByNickname(nickname)) {
             throw new BusinessException(UserErrorCode.NICKNAME_DUPLICATED);
         }
-        String encodedPassword = passwordEncoder.encode(request.password());
-        User saved = userRepository.save(request.toEntity(encodedPassword));
+        User saved =
+                userRepository.save(
+                        User.builder()
+                                .email(email)
+                                .nickname(nickname)
+                                .password(encodedPassword)
+                                .build());
         return UserResponse.from(saved);
     }
 
