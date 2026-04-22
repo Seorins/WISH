@@ -21,7 +21,7 @@
 
 ### 2. 환경 변수
 
-프로파일과 무관하게 아래 3개는 반드시 설정.
+#### 필수 (모든 프로파일)
 
 | 변수 | 설명 | 예시 |
 | --- | --- | --- |
@@ -29,6 +29,17 @@
 | `DB_USERNAME` | DB 사용자 | `comong` |
 | `DB_PASSWORD` | DB 비밀번호 | `comong` |
 | `SPRING_PROFILES_ACTIVE` | 프로파일 (미설정 시 `local`) | `local` / `dev` / `prod` |
+
+#### 선택 (기본값 존재)
+
+| 변수 | 설명 | 기본값 | 운영 권장 |
+| --- | --- | --- | --- |
+| `JWT_SECRET` | JWT 서명 키 (HS256, **32자 이상**) | 로컬 전용 플레이스홀더 | ✅ **반드시 강한 랜덤값으로 오버라이드** |
+| `JWT_ACCESS_TTL_SECONDS` | Access 토큰 유효시간 (초) | `3600` (1시간) | 정책에 맞춰 조정 |
+| `JWT_ISSUER` | 토큰 발급자 (`iss` 클레임) | `comong` | 필요 시 변경 |
+
+> ⚠️ `JWT_SECRET` 의 기본값은 로컬 개발 편의용 플레이스홀더입니다. `dev`/`prod` 환경에서는 외부에서 반드시 주입하세요. 유출되면 토큰 위조 가능.
+> 랜덤값 생성 예: `openssl rand -base64 48`
 
 IntelliJ `Run Configuration > Environment variables` 또는 쉘 `export` 로 주입.
 
