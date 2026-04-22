@@ -1,9 +1,9 @@
 package com.comong.backend.global.common.response;
 
+import java.util.Map;
+
 import com.comong.backend.global.exception.ErrorCode;
 import com.fasterxml.jackson.annotation.JsonInclude;
-
-import java.util.Map;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record ApiResponse<T>(String code, String message, T data, Map<String, String> errors) {

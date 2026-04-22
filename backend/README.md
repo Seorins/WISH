@@ -41,7 +41,9 @@ IntelliJ `Run Configuration > Environment variables` 또는 쉘 `export` 로 주
 ```
 
 기본 포트: `8080`, 컨텍스트 경로: `/api/v1`
-헬스체크: `GET /api/v1/actuator/health`
+- 헬스체크: `GET /api/v1/actuator/health`
+- **API 문서 (Swagger UI)**: `http://localhost:8080/api/v1/swagger-ui.html` (local/dev 전용, prod 비활성화)
+- OpenAPI JSON: `http://localhost:8080/api/v1/v3/api-docs`
 
 ## 프로파일
 
@@ -71,6 +73,17 @@ backend/src/main/java/com/comong/backend
       ├─ dto/
       └─ exception/        # UserErrorCode 등 도메인 에러 enum
 ```
+
+## 코드 포매팅
+
+Spotless + Google Java Format 으로 강제합니다.
+
+```bash
+./gradlew spotlessApply   # 자동 수정
+./gradlew spotlessCheck   # 검사만
+```
+
+빌드·CI 가 `spotlessCheck` 를 포함하므로 포맷이 어긋난 코드는 머지 불가입니다.
 
 ## 코드 컨벤션
 

@@ -144,7 +144,81 @@ User user = userRepository.findById(id)
 4. 엔티티 → 레포지토리 → DTO → 서비스 → 컨트롤러 순으로 구현
 5. 필요시 Flyway 마이그레이션 스크립트 추가 (도입 시점에 가이드 업데이트 예정)
 
-## 10. 커밋 메시지
+## 10. 코드 포매팅 (Spotless)
+
+[Spotless](https://github.com/diffplug/spotless) + **Google Java Format** 으로 전체 포맷을 강제한다.
+
+### 개발자 사용법
+
+```bash
+# 포맷 어긋나면 자동 수정
+./gradlew spotlessApply
+
+# 포맷 검사만 (CI 에서 동일하게 실행)
+./gradlew spotlessCheck
+```
+
+`./gradlew build`, `./gradlew check` 는 내부적으로 `spotlessCheck` 를 실행한다. **포맷이 어긋난 코드는 빌드 실패 → PR 머지 불가.**
+
+### 규칙 요약
+
+- Google Java Format 1.28 **AOSP variant** (4-space indent, 100자 라인)
+- import 순서: `java → javax → jakarta → org → com → (기타)`
+- 미사용 import 자동 제거
+- 파일 끝 개행 강제, trailing whitespace 제거
+
+### IntelliJ 연동 (선택)
+
+1. `Plugins → Marketplace` 에서 **google-java-format** 설치 후 재시작
+2. `Settings → Other Settings → google-java-format Settings` → Enable 체크, **Code style: AOSP**
+3. `Help → Edit Custom VM Options...` 에 JDK 16+ 용 `--add-exports` 옵션 6줄 추가 후 **IntelliJ 완전 재시작**
+   ```
+   --add-exports=jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED
+   --add-exports=jdk.compiler/com.sun.tools.javac.code=ALL-UNNAMED
+   --add-exports=jdk.compiler/com.sun.tools.javac.file=ALL-UNNAMED
+   --add-exports=jdk.compiler/com.sun.tools.javac.parser=ALL-UNNAMED
+   --add-exports=jdk.compiler/com.sun.tools.javac.tree=ALL-UNNAMED
+   --add-exports=jdk.compiler/com.sun.tools.javac.util=ALL-UNNAMED
+   ```
+   ⚠️ 반드시 **`=` 포함 형식**으로 작성할 것 (공백 구분자는 JVM은 인식해도 플러그인 감지 로직이 못 잡아서 "Configure the JRE" 알림이 계속 뜸)
+4. `Settings → Tools → Actions on Save` → **Reformat code (Whole file)** + **Optimize imports** 체크
+
+이렇게 하면 커밋 전 `spotlessApply` 를 매번 돌리지 않아도 된다.
+
+## 11. API 문서 (Springdoc OpenAPI)
+
+Swagger UI 가 `/swagger-ui.html` 에 자동 생성된다. 컨트롤러/DTO 만 제대로 작성해도 기본 문서는 나오지만, 프론트·기획자 가독성을 위해 어노테이션으로 설명을 추가한다.
+
+### 권장 어노테이션
+
+```java
+@Operation(summary = "회원가입", description = "이메일과 닉네임으로 신규 회원을 등록한다")
+@ApiResponse(responseCode = "201", description = "가입 성공")
+@ApiResponse(responseCode = "409", description = "이메일/닉네임 중복")
+@PostMapping
+public ResponseEntity<ApiResponse<UserResponse>> signup(@Valid @RequestBody UserSignupRequest request) { ... }
+```
+
+DTO 필드에도 설명 추가 가능:
+```java
+public record UserSignupRequest(
+        @Schema(description = "이메일 주소", example = "test@comong.com")
+        @NotBlank @Email String email,
+        ...
+) { }
+```
+
+### 프로파일별 활성화
+
+| 프로파일 | Swagger UI | OpenAPI JSON |
+| --- | --- | --- |
+| `local` / `dev` | ✅ 활성 | ✅ 활성 |
+| `prod` | ❌ 차단 | ❌ 차단 |
+
+`application-prod.yaml` 에서 `springdoc.*.enabled: false` 로 강제.
+운영 환경에 API 스펙을 외부 노출하지 않기 위함. 필요시 (파트너 공개 등) 팀 논의 후 해제.
+
+## 12. 커밋 메시지
 
 ```
 [S14P31E103-<이슈번호>] BE/<타입>: <내용>
