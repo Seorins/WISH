@@ -1,3 +1,1 @@
-cd frontend
-echo "push 전 검증 시작..."
-pnpm lint && pnpm typecheck && pnpm test && pnpm build
+echo "GitLab CI 파이프라인에서 검증합니다."
