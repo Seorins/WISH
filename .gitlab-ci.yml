@@ -73,10 +73,19 @@ backend:image:
   variables:
     BACKEND_IMAGE_NAME: ${CI_REGISTRY_IMAGE}/backend
   before_script:
+    - echo "CI_REGISTRY=${CI_REGISTRY:-<empty>}"
+    - echo "CI_REGISTRY_IMAGE=${CI_REGISTRY_IMAGE:-<empty>}"
+    - if [ -n "${CI_REGISTRY_USER}" ]; then echo "CI_REGISTRY_USER=set"; else echo "CI_REGISTRY_USER=<empty>"; fi
+    - if [ -n "${CI_REGISTRY_PASSWORD}" ]; then echo "CI_REGISTRY_PASSWORD=set"; else echo "CI_REGISTRY_PASSWORD=<empty>"; fi
+    - test -n "${CI_REGISTRY}" || (echo "CI_REGISTRY is empty" && exit 1)
+    - test -n "${CI_REGISTRY_IMAGE}" || (echo "CI_REGISTRY_IMAGE is empty" && exit 1)
+    - test -n "${CI_REGISTRY_USER}" || (echo "CI_REGISTRY_USER is empty" && exit 1)
+    - test -n "${CI_REGISTRY_PASSWORD}" || (echo "CI_REGISTRY_PASSWORD is empty" && exit 1)
     - mkdir -p /kaniko/.docker
     - echo "{\"auths\":{\"${CI_REGISTRY}\":{\"username\":\"${CI_REGISTRY_USER}\",\"password\":\"${CI_REGISTRY_PASSWORD}\"}}}" > /kaniko/.docker/config.json
   script:
     - |
+      echo "BACKEND_IMAGE_NAME=${BACKEND_IMAGE_NAME:-<empty>}"
       DESTINATIONS="--destination ${BACKEND_IMAGE_NAME}:${CI_COMMIT_SHORT_SHA}"
       if [ -n "${CI_COMMIT_BRANCH}" ]; then
         DESTINATIONS="${DESTINATIONS} --destination ${BACKEND_IMAGE_NAME}:${CI_COMMIT_REF_SLUG}-latest"
