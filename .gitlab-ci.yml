@@ -2,9 +2,9 @@
 #
 # 파트별로 stage 를 나누고, 각 job 은 해당 디렉토리 변경 시에만 실행된다.
 # - backend/**  변경 시 backend 관련 job 실행
-# - frontend/** / infra/** 는 각 팀 리더가 추가 (placeholder 없음)
+# - frontend/** 변경 시 frontend 관련 job 실행
 #
-# 현재 Tier 1: spotlessCheck + build (테스트 미포함)
+# 현재 Tier 1: spotlessCheck + build (백엔드 테스트 미포함)
 # 테스트 stage 는 백엔드 테스트 인프라 구축 이슈에서 추가 예정.
 
 stages:
@@ -60,3 +60,53 @@ backend:build:
     expire_in: 1 week
     paths:
       - backend/build/libs/*.jar
+
+# ----------------------------------------------------------------------------
+# Frontend
+# ----------------------------------------------------------------------------
+
+.frontend-base:
+  image: node:24-alpine
+  variables:
+    PNPM_HOME: "${CI_PROJECT_DIR}/.pnpm-store"
+  before_script:
+    - npm install -g pnpm@10.33.0
+    - cd frontend
+    - pnpm install --frozen-lockfile
+  cache:
+    key:
+      files:
+        - frontend/pnpm-lock.yaml
+    paths:
+      - .pnpm-store/
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        - frontend/**/*
+        - .gitlab-ci.yml
+    - if: $CI_COMMIT_BRANCH == "develop" || $CI_COMMIT_BRANCH == "master" || $CI_COMMIT_BRANCH == "main"
+      changes:
+        - frontend/**/*
+        - .gitlab-ci.yml
+
+frontend:verify:
+  extends: .frontend-base
+  stage: verify
+  script:
+    - pnpm lint
+    - pnpm typecheck
+
+frontend:test:
+  extends: .frontend-base
+  stage: verify
+  script:
+    - pnpm test
+
+frontend:build:
+  extends: .frontend-base
+  stage: build
+  needs:
+    - frontend:verify
+    - frontend:test
+  script:
+    - pnpm build
