@@ -27,6 +27,13 @@ management:
   server:
     base-path: /
 
+security:
+  jwt:
+    # 운영 환경에서는 반드시 환경변수로 주입할 것 (256비트 이상 랜덤)
+    secret: ${JWT_SECRET:local-dev-only-change-me-please-use-at-least-32-chars}
+    access-token-ttl-seconds: ${JWT_ACCESS_TTL_SECONDS:3600}
+    issuer: ${JWT_ISSUER:comong}
+
 springdoc:
   api-docs:
     path: /v3/api-docs

@@ -31,13 +31,18 @@ public class User {
     @Column(nullable = false, unique = true, length = 30)
     private String nickname;
 
+    /** BCrypt 해시된 비밀번호. 평문은 절대 저장하지 않는다. */
+    @Column(nullable = false, length = 100)
+    private String password;
+
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
     @Builder
-    private User(String email, String nickname) {
+    private User(String email, String nickname, String password) {
         this.email = email;
         this.nickname = nickname;
+        this.password = password;
     }
 
     @PrePersist
