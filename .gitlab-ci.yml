@@ -71,18 +71,16 @@ backend:image:
     - job: backend:build
       artifacts: true
   variables:
-    BACKEND_IMAGE_NAME: ${CI_REGISTRY_IMAGE}/backend
+    BACKEND_IMAGE_NAME: ${DOCKER_HUB_IMAGE}
   before_script:
-    - echo "CI_REGISTRY=${CI_REGISTRY:-<empty>}"
-    - echo "CI_REGISTRY_IMAGE=${CI_REGISTRY_IMAGE:-<empty>}"
-    - if [ -n "${CI_REGISTRY_USER}" ]; then echo "CI_REGISTRY_USER=set"; else echo "CI_REGISTRY_USER=<empty>"; fi
-    - if [ -n "${CI_REGISTRY_PASSWORD}" ]; then echo "CI_REGISTRY_PASSWORD=set"; else echo "CI_REGISTRY_PASSWORD=<empty>"; fi
-    - test -n "${CI_REGISTRY}" || (echo "CI_REGISTRY is empty" && exit 1)
-    - test -n "${CI_REGISTRY_IMAGE}" || (echo "CI_REGISTRY_IMAGE is empty" && exit 1)
-    - test -n "${CI_REGISTRY_USER}" || (echo "CI_REGISTRY_USER is empty" && exit 1)
-    - test -n "${CI_REGISTRY_PASSWORD}" || (echo "CI_REGISTRY_PASSWORD is empty" && exit 1)
+    - echo "DOCKER_HUB_IMAGE=${DOCKER_HUB_IMAGE:-<empty>}"
+    - if [ -n "${DOCKER_HUB_USER}" ]; then echo "DOCKER_HUB_USER=set"; else echo "DOCKER_HUB_USER=<empty>"; fi
+    - if [ -n "${DOCKER_HUB_TOKEN}" ]; then echo "DOCKER_HUB_TOKEN=set"; else echo "DOCKER_HUB_TOKEN=<empty>"; fi
+    - test -n "${DOCKER_HUB_IMAGE}" || (echo "DOCKER_HUB_IMAGE is empty" && exit 1)
+    - test -n "${DOCKER_HUB_USER}" || (echo "DOCKER_HUB_USER is empty" && exit 1)
+    - test -n "${DOCKER_HUB_TOKEN}" || (echo "DOCKER_HUB_TOKEN is empty" && exit 1)
     - mkdir -p /kaniko/.docker
-    - echo "{\"auths\":{\"${CI_REGISTRY}\":{\"username\":\"${CI_REGISTRY_USER}\",\"password\":\"${CI_REGISTRY_PASSWORD}\"}}}" > /kaniko/.docker/config.json
+    - echo "{\"auths\":{\"https://index.docker.io/v1/\":{\"username\":\"${DOCKER_HUB_USER}\",\"password\":\"${DOCKER_HUB_TOKEN}\"}}}" > /kaniko/.docker/config.json
   script:
     - |
       echo "BACKEND_IMAGE_NAME=${BACKEND_IMAGE_NAME:-<empty>}"
