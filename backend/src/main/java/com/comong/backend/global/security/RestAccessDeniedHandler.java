@@ -12,9 +12,9 @@ import org.springframework.stereotype.Component;
 
 import com.comong.backend.global.common.response.ApiResponse;
 import com.comong.backend.global.exception.GlobalErrorCode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import lombok.RequiredArgsConstructor;
+import tools.jackson.databind.ObjectMapper;
 
 /** 인가 실패(403) 시 {@link ApiResponse} 포맷으로 응답. */
 @Component
