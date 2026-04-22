@@ -1,5 +1,8 @@
 package com.comong.backend.domain.user.service;
 
+import java.util.Optional;
+
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,6 +21,7 @@ import lombok.RequiredArgsConstructor;
 public class UserService {
 
     private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
 
     @Transactional
     public UserResponse signup(UserSignupRequest request) {
@@ -27,7 +31,8 @@ public class UserService {
         if (userRepository.existsByNickname(request.nickname())) {
             throw new BusinessException(UserErrorCode.NICKNAME_DUPLICATED);
         }
-        User saved = userRepository.save(request.toEntity());
+        String encodedPassword = passwordEncoder.encode(request.password());
+        User saved = userRepository.save(request.toEntity(encodedPassword));
         return UserResponse.from(saved);
     }
 
@@ -37,5 +42,13 @@ public class UserService {
                         .findById(id)
                         .orElseThrow(() -> new BusinessException(UserErrorCode.USER_NOT_FOUND));
         return UserResponse.from(user);
+    }
+
+    /**
+     * 이메일로 User 엔티티 조회 (존재하지 않으면 빈 Optional). 로그인 등 "존재 여부 자체가 민감한" 흐름에서 호출 측이 자체 에러코드로 변환하기 위함. 일반
+     * 조회는 {@link #getUser(Long)} 사용.
+     */
+    public Optional<User> findEntityByEmail(String email) {
+        return userRepository.findByEmail(email);
     }
 }
