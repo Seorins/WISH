@@ -10,6 +10,7 @@
 stages:
   - verify
   - build
+  - package
 
 default:
   tags:
@@ -60,6 +61,36 @@ backend:build:
     expire_in: 1 week
     paths:
       - backend/build/libs/*.jar
+
+backend:image:
+  stage: package
+  image:
+    name: gcr.io/kaniko-project/executor:v1.23.2-debug
+    entrypoint: [""]
+  needs:
+    - job: backend:build
+      artifacts: true
+  variables:
+    BACKEND_IMAGE_NAME: ${CI_REGISTRY_IMAGE}/backend
+  before_script:
+    - mkdir -p /kaniko/.docker
+    - echo "{\"auths\":{\"${CI_REGISTRY}\":{\"username\":\"${CI_REGISTRY_USER}\",\"password\":\"${CI_REGISTRY_PASSWORD}\"}}}" > /kaniko/.docker/config.json
+  script:
+    - |
+      DESTINATIONS="--destination ${BACKEND_IMAGE_NAME}:${CI_COMMIT_SHORT_SHA}"
+      if [ -n "${CI_COMMIT_BRANCH}" ]; then
+        DESTINATIONS="${DESTINATIONS} --destination ${BACKEND_IMAGE_NAME}:${CI_COMMIT_REF_SLUG}-latest"
+      fi
+
+      /kaniko/executor \
+        --context "${CI_PROJECT_DIR}/backend" \
+        --dockerfile "${CI_PROJECT_DIR}/backend/Dockerfile" \
+        ${DESTINATIONS}
+  rules:
+    - if: $CI_COMMIT_BRANCH == "develop" || $CI_COMMIT_BRANCH == "master" || $CI_COMMIT_BRANCH == "main"
+      changes:
+        - backend/**/*
+        - .gitlab-ci.yml
 
 # ----------------------------------------------------------------------------
 # Frontend
