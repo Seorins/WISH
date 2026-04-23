@@ -84,9 +84,9 @@ backend:image:
   script:
     - |
       echo "BACKEND_IMAGE_NAME=${BACKEND_IMAGE_NAME:-<empty>}"
-      DESTINATIONS="--destination ${BACKEND_IMAGE_NAME}:${CI_COMMIT_SHORT_SHA}"
+      DESTINATIONS="--destination ${BACKEND_IMAGE_NAME}:backend-${CI_COMMIT_SHORT_SHA}"
       if [ -n "${CI_COMMIT_BRANCH}" ]; then
-        DESTINATIONS="${DESTINATIONS} --destination ${BACKEND_IMAGE_NAME}:${CI_COMMIT_REF_SLUG}-latest"
+        DESTINATIONS="${DESTINATIONS} --destination ${BACKEND_IMAGE_NAME}:backend-${CI_COMMIT_REF_SLUG}-latest"
       fi
 
       /kaniko/executor \
