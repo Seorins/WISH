@@ -1,6 +1,6 @@
 import Phaser from 'phaser'
-import { StartScene } from './scenes/StartScene'
-import { GameScene } from './scenes/GameScene'
+import { StartScene } from './scenes/start/StartScene'
+import { VillageScene } from './scenes/village/VillageScene'
 
 export function createGame(parent: HTMLElement): Phaser.Game {
   return new Phaser.Game({
@@ -14,7 +14,7 @@ export function createGame(parent: HTMLElement): Phaser.Game {
       default: 'arcade',
       arcade: { debug: false },
     },
-    scene: [StartScene, GameScene],
+    scene: [StartScene, VillageScene],
     scale: {
       mode: Phaser.Scale.RESIZE,
       autoCenter: Phaser.Scale.CENTER_BOTH,

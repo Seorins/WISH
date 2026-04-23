@@ -19,7 +19,7 @@ const OBSTACLES = [
   { x: 0.5, y: 0.94, w: 1.0, h: 0.12 },
 ]
 
-export class GameScene extends Phaser.Scene {
+export class VillageScene extends Phaser.Scene {
   private player!: Phaser.Types.Physics.Arcade.SpriteWithDynamicBody
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys
   private obstacles!: Phaser.Physics.Arcade.StaticGroup
@@ -31,7 +31,7 @@ export class GameScene extends Phaser.Scene {
   private dialogDismissed = false
 
   constructor() {
-    super({ key: 'GameScene' })
+    super({ key: 'VillageScene' })
   }
 
   preload() {
