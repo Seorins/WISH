@@ -2,6 +2,7 @@ package com.comong.backend.domain.user.service;
 
 import java.util.Optional;
 
+import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,12 +28,23 @@ public class UserService {
 
     private final UserRepository userRepository;
 
+    /** User 엔티티의 unique 제약 이름. {@code User} 의 {@code @UniqueConstraint} 와 반드시 일치해야 한다. */
+    private static final String UK_USERS_EMAIL = "uk_users_email";
+
+    private static final String UK_USERS_NICKNAME = "uk_users_nickname";
+
     /**
      * 새 User 생성. 이메일/닉네임 중복 검사 후 저장. 비밀번호는 이미 암호화된 값이어야 한다 (평문 금지).
      *
-     * <p>pre-check({@code existsByEmail/Nickname}) 와 {@code save} 사이에는 동시성 race 가 존재하므로, 최종 방어는 DB
-     * unique 제약이 담당한다. 두 번째 요청은 {@link DataIntegrityViolationException} 을 받게 되며, 여기서 해당 예외를 다시 중복
-     * 에러코드로 매핑한다. pre-check 는 흔한 중복 케이스를 DB 왕복 없이 빠르게 차단하기 위해 유지.
+     * <p>동시성 race 대응: pre-check({@code existsByEmail/Nickname}) 와 {@code save} 사이에는 race 가 존재한다. 최종
+     * 방어는 DB unique 제약이 담당하며, 두 번째 요청이 받게 되는 {@link DataIntegrityViolationException} 의 cause 에서
+     * constraint name 을 꺼내 중복 에러코드로 매핑한다.
+     *
+     * <p>왜 catch 안에서 재조회(existsByEmail 등)를 하지 않나: PostgreSQL 은 트랜잭션 내 statement 가 실패하면 해당 트랜잭션 전체가
+     * aborted 상태가 되어, 이후 같은 트랜잭션에서 던지는 모든 쿼리가 실패한다. 따라서 재조회는 작동하지 않는다. 대신 예외의 metadata (constraint
+     * name) 로 판별한다.
+     *
+     * <p>pre-check 는 흔한 중복 케이스를 DB 제약 위반 없이 빠르게 차단하는 UX 용으로 유지.
      *
      * @throws BusinessException {@link UserErrorCode#EMAIL_DUPLICATED} / {@link
      *     UserErrorCode#NICKNAME_DUPLICATED}
@@ -55,18 +67,34 @@ public class UserService {
                                     .build());
             return UserResponse.from(saved);
         } catch (DataIntegrityViolationException e) {
-            // 동시 가입 등으로 pre-check 통과 후 unique 제약에 걸린 경우.
-            // 어느 컬럼 제약 위반인지 예외 메시지로 판별하기엔 DB 벤더별로 포맷이 달라 신뢰할 수 없어,
-            // 다시 조회해서 정확한 에러코드를 고른다.
-            if (userRepository.existsByEmail(email)) {
-                throw new BusinessException(UserErrorCode.EMAIL_DUPLICATED);
-            }
-            if (userRepository.existsByNickname(nickname)) {
-                throw new BusinessException(UserErrorCode.NICKNAME_DUPLICATED);
-            }
-            // 이메일/닉네임 제약은 아닌데 무결성 위반 → 원인 미상, 그대로 전파해 500 으로 남기고 로그로 원인 추적.
-            throw e;
+            throw mapConstraintViolation(e);
         }
+    }
+
+    /**
+     * unique 제약 위반을 에러코드로 매핑.
+     *
+     * <p>{@link DataIntegrityViolationException} 은 Spring 이 감싼 상위 타입이고, 실제 constraint 정보는 Hibernate
+     * 의 {@link ConstraintViolationException} cause 에 담겨 있다. constraint name 이 추출되지 않거나 우리가 정의한 제약이
+     * 아니면 원본 예외를 그대로 던져 500 으로 로깅·추적되게 한다.
+     */
+    private RuntimeException mapConstraintViolation(DataIntegrityViolationException e) {
+        String constraintName = null;
+        for (Throwable cause = e.getCause(); cause != null; cause = cause.getCause()) {
+            if (cause instanceof ConstraintViolationException cve) {
+                constraintName = cve.getConstraintName();
+                break;
+            }
+        }
+        if (constraintName != null) {
+            if (UK_USERS_EMAIL.equalsIgnoreCase(constraintName)) {
+                return new BusinessException(UserErrorCode.EMAIL_DUPLICATED);
+            }
+            if (UK_USERS_NICKNAME.equalsIgnoreCase(constraintName)) {
+                return new BusinessException(UserErrorCode.NICKNAME_DUPLICATED);
+            }
+        }
+        return e;
     }
 
     public UserResponse getUser(Long id) {
