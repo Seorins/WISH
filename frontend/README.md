@@ -24,8 +24,7 @@ pnpm install
 # 개발 서버 (앱별 포트)
 pnpm dev             # 모든 앱 동시 실행
 pnpm --filter @wish/game dev        # 게임만 (http://localhost:3001)
-pnpm --filter @wish/guardian dev    # 보호자 (http://localhost:3002)
-pnpm --filter @wish/dashboard dev   # 대시보드 (http://localhost:3003)
+pnpm --filter @wish/admin dev       # 관리자 (http://localhost:3002)
 ```
 
 ## 폴더 구조
@@ -34,8 +33,7 @@ pnpm --filter @wish/dashboard dev   # 대시보드 (http://localhost:3003)
 frontend/
 ├── apps/
 │   ├── game/           # 환아용 게임 (React + Phaser + MediaPipe)
-│   ├── guardian/       # 보호자 앱 (React PWA)
-│   └── dashboard/      # 의료진 대시보드 (React + Recharts)
+│   └── admin/          # 관리자 앱 (React + Recharts)
 ├── packages/
 │   ├── domain/         # 공통 타입, enum
 │   ├── ui/             # 공통 컴포넌트
@@ -101,7 +99,7 @@ pnpm format      # Prettier로 전체 포맷
 
 ```bash
 pnpm --filter @wish/game lint
-pnpm --filter @wish/domain build
+pnpm --filter @wish/admin build
 ```
 
 ## Git 훅 (husky + lint-staged)

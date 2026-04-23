@@ -29,7 +29,6 @@ export class GameScene extends Phaser.Scene {
   private lastDirection = 'down'
   private isDialogVisible = false
   private dialogDismissed = false
-  private sehyunMusic!: Phaser.Sound.BaseSound
 
   constructor() {
     super({ key: 'GameScene' })
@@ -39,8 +38,6 @@ export class GameScene extends Phaser.Scene {
     this.load.image('main', '/assets/images/main.png')
     this.load.image('sehyun_talk', '/assets/images/sehyun_talk.png')
     this.load.image('profile', '/assets/images/profile.png')
-    this.load.image('menu', '/assets/images/menu.png')
-    this.load.audio('sehyun-music', '/assets/sounds/sehyun.mp3')
     this.load.spritesheet('sehyun', '/assets/images/sehyun.png', {
       frameWidth: 313,
       frameHeight: 313,
@@ -104,14 +101,14 @@ export class GameScene extends Phaser.Scene {
       repeat: -1,
     })
 
-    // sehyun NPC
+    // sehyun
     this.anims.create({
       key: 'sehyun-loop',
-      frames: this.anims.generateFrameNumbers('sehyun', { start: 8, end: 11 }),
-      frameRate: 4,
+      frames: this.anims.generateFrameNumbers('sehyun', { start: 0, end: 15 }),
+      frameRate: 6,
       repeat: -1,
     })
-    this.sehyunNpc = this.add.sprite(width * 0.2, height * 0.62, 'sehyun').setDepth(4)
+    this.sehyunNpc = this.add.sprite(width * 0.38, height * 0.55, 'sehyun').setDepth(4)
     this.sehyunNpc.setScale(0.38)
     this.sehyunNpc.anims.play('sehyun-loop')
 
@@ -122,31 +119,21 @@ export class GameScene extends Phaser.Scene {
     this.physics.add.existing(sehyunBox, true)
     this.obstacles.add(sehyunBox)
 
-    // 대화창 (하단 고정, 처음엔 숨김)
+    // 대화창
     const dialogW = Math.min(width * 0.75, 860)
     this.dialogBox = this.add.image(width / 2, height - 80, 'sehyun_talk')
     this.dialogBox.setDisplaySize(dialogW, dialogW * (821 / 1916))
     this.dialogBox.setDepth(20).setAlpha(0)
-    this.dialogBox.y = height - this.dialogBox.displayHeight / 2 + 50
+    this.dialogBox.y = height - this.dialogBox.displayHeight / 2 + 30
 
-    // 프로필 (좌상단)
-    const profileSize = Math.min(width * 0.15, 160)
+    // 프로필
+    const profileSize = Math.min(width * 0.16, 180)
     const profile = this.add.image(0, 0, 'profile')
     profile.setDisplaySize(profileSize, profileSize)
     profile.setDepth(20)
     profile.setScrollFactor(0)
     profile.x = profileSize / 2 + 12
     profile.y = profileSize / 2 + 12
-
-    // 메뉴 (프로필 바로 아래)
-    const menuW = profileSize * 0.6
-    const menuH = menuW * (1536 / 511)
-    const menu = this.add.image(0, 0, 'menu')
-    menu.setDisplaySize(menuW, menuH)
-    menu.setDepth(20)
-    menu.setScrollFactor(0)
-    menu.x = profile.x
-    menu.y = profile.y + profileSize / 2 + menuH / 2 - 8
 
     // 플레이어
     this.player = this.physics.add.sprite(width / 2, height * 0.65, 'character', 0)
@@ -159,16 +146,6 @@ export class GameScene extends Phaser.Scene {
 
     this.cursors = this.input.keyboard!.createCursorKeys()
 
-    this.input.keyboard!.on('keydown-ESC', () => {
-      if (this.isDialogVisible) {
-        this.isDialogVisible = false
-        this.dialogDismissed = true
-        this.tweens.killTweensOf(this.dialogBox)
-        this.tweens.add({ targets: this.dialogBox, alpha: 0, duration: 200, ease: 'Sine.easeIn' })
-        this.sehyunMusic.stop()
-      }
-    })
-
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       if (this.isDialogVisible) {
         const b = this.dialogBox.getBounds()
@@ -179,7 +156,6 @@ export class GameScene extends Phaser.Scene {
           this.dialogDismissed = true
           this.tweens.killTweensOf(this.dialogBox)
           this.tweens.add({ targets: this.dialogBox, alpha: 0, duration: 200, ease: 'Sine.easeIn' })
-          this.sehyunMusic.stop()
         }
         return
       }
@@ -193,8 +169,6 @@ export class GameScene extends Phaser.Scene {
         onComplete: () => marker.destroy(),
       })
     })
-
-    this.sehyunMusic = this.sound.add('sehyun-music', { loop: false, volume: 0.6 })
 
     this.cameras.main.fadeIn(400, 0, 0, 0)
   }
@@ -273,7 +247,6 @@ export class GameScene extends Phaser.Scene {
         this.isDialogVisible = true
         this.tweens.killTweensOf(this.dialogBox)
         this.tweens.add({ targets: this.dialogBox, alpha: 1, duration: 300, ease: 'Sine.easeOut' })
-        if (!this.sehyunMusic.isPlaying) this.sehyunMusic.play()
       }
     } else {
       this.dialogDismissed = false
@@ -281,7 +254,6 @@ export class GameScene extends Phaser.Scene {
         this.isDialogVisible = false
         this.tweens.killTweensOf(this.dialogBox)
         this.tweens.add({ targets: this.dialogBox, alpha: 0, duration: 200, ease: 'Sine.easeIn' })
-        this.sehyunMusic.stop()
       }
     }
   }
