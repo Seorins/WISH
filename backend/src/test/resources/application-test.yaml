@@ -1,0 +1,16 @@
+# 테스트 전용 최소 프로파일. 현재는 context-load 수준 테스트만 수행하므로
+# DB 없이 부팅 가능하도록 auto-configuration 을 비활성화한다. 실제 DB 기반
+# 통합 테스트 인프라(Testcontainers 등)는 Epic 4 에서 별도 구축한다.
+#
+# Spring Boot 4 에서 자동설정 클래스의 패키지가 재편돼 FQN 이 바뀌었다:
+#  - DataSource  : boot.autoconfigure.jdbc     → boot.jdbc.autoconfigure
+#  - Hibernate   : boot.autoconfigure.orm.jpa  → boot.hibernate.autoconfigure
+#  - DataJpaRepo : boot.autoconfigure.data.jpa → boot.data.jpa.autoconfigure
+#  - Flyway      : boot.autoconfigure.flyway   → boot.flyway.autoconfigure
+spring:
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration
+      - org.springframework.boot.hibernate.autoconfigure.HibernateJpaAutoConfiguration
+      - org.springframework.boot.data.jpa.autoconfigure.DataJpaRepositoriesAutoConfiguration
+      - org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration

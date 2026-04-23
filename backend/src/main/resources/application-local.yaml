@@ -6,7 +6,9 @@ spring:
     driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
-      ddl-auto: ${JPA_DDL_AUTO:update}
+      # Flyway 가 스키마 소유권을 가지므로 모든 프로파일에서 validate 로 통일.
+      # 엔티티와 실제 DB 스키마가 어긋나면 부팅 단계에서 실패시켜 drift 를 빠르게 잡는다.
+      ddl-auto: ${JPA_DDL_AUTO:validate}
     show-sql: true
 
 logging:
