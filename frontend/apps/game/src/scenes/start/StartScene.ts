@@ -1,0 +1,133 @@
+import Phaser from 'phaser'
+
+export class StartScene extends Phaser.Scene {
+  constructor() {
+    super({ key: 'StartScene' })
+  }
+
+  preload() {
+    this.load.image('home', '/assets/images/home.png')
+    this.load.image('logo', '/assets/images/logo.png')
+    this.load.image('startbtn', '/assets/images/startbtn.png')
+  }
+
+  create() {
+    const { width, height } = this.scale
+
+    // 배경
+    const bg = this.add.image(width / 2, height / 2, 'home')
+    bg.setScale(Math.max(width / bg.width, height / bg.height)).setDepth(0)
+
+    // 어두운 오버레이
+    this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.45).setDepth(10)
+
+    // 로고
+    const logo = this.add.image(width / 2, height / 2 - 60, 'logo')
+    logo.setScale((width * 0.35) / logo.width).setDepth(11)
+
+    this.tweens.add({
+      targets: logo,
+      y: logo.y - 10,
+      duration: 1800,
+      ease: 'Sine.easeInOut',
+      yoyo: true,
+      repeat: -1,
+    })
+
+    // 시작 버튼
+    const btn = this.add
+      .image(width / 2, logo.y + logo.displayHeight / 2 + 20, 'startbtn')
+      .setInteractive({ useHandCursor: true })
+      .setDepth(11)
+
+    const baseScale = (width * 0.26) / btn.width
+    btn.setScale(baseScale)
+    btn.y = logo.y + logo.displayHeight / 2 + btn.displayHeight / 2 + 20
+
+    btn.on('pointerover', () => {
+      this.tweens.killTweensOf(btn)
+      this.tweens.add({ targets: btn, scale: baseScale * 1.08, duration: 120 })
+    })
+    btn.on('pointerout', () => {
+      this.tweens.killTweensOf(btn)
+      this.tweens.add({ targets: btn, scale: baseScale, duration: 120 })
+    })
+    btn.on('pointerdown', () => {
+      this.cameras.main.fadeOut(400, 0, 0, 0)
+      this.cameras.main.once('camerafadeoutcomplete', () => {
+        this.scene.start('VillageScene')
+      })
+    })
+  }
+
+  // 낙엽: 위에서 아래로 살랑살랑
+  private spawnLeaf(width: number, height: number) {
+    const colors = [0xe8632a, 0xd4a017, 0xc0392b, 0xe67e22, 0xf1c40f]
+    const color = colors[Phaser.Math.Between(0, colors.length - 1)]
+    const size = Phaser.Math.FloatBetween(3, 6)
+    const startX = Phaser.Math.Between(0, width)
+    const duration = Phaser.Math.Between(4000, 8000)
+    const swayWidth = Phaser.Math.Between(30, 80)
+
+    const leaf = this.add.graphics().setDepth(8)
+    leaf.fillStyle(color, 0.75)
+    leaf.fillEllipse(0, 0, size * 2, size)
+    leaf.x = startX
+    leaf.y = -10
+
+    // 아래로 떨어지면서 좌우로 흔들림
+    this.tweens.add({
+      targets: leaf,
+      y: height + 20,
+      x: startX + Phaser.Math.Between(-swayWidth, swayWidth),
+      angle: Phaser.Math.Between(-180, 180),
+      duration,
+      ease: 'Sine.easeInOut',
+      onComplete: () => {
+        leaf.destroy()
+        this.time.delayedCall(Phaser.Math.Between(500, 2500), () => {
+          this.spawnLeaf(width, height)
+        })
+      },
+    })
+  }
+
+  // 반딧불이: 아래에서 위로 둥실둥실
+  private spawnFirefly(width: number, height: number) {
+    const startX = Phaser.Math.Between(width * 0.05, width * 0.95)
+    const startY = Phaser.Math.Between(height * 0.5, height + 10)
+    const duration = Phaser.Math.Between(3500, 6500)
+
+    const dot = this.add.graphics().setDepth(9)
+    dot.fillStyle(0xffee88, 1)
+    dot.fillCircle(0, 0, Phaser.Math.FloatBetween(1.5, 3))
+    dot.x = startX
+    dot.y = startY
+    dot.setAlpha(0)
+
+    // 위로 떠오르면서 좌우 흔들
+    this.tweens.add({
+      targets: dot,
+      y: startY - Phaser.Math.Between(150, 300),
+      x: startX + Phaser.Math.Between(-60, 60),
+      duration,
+      ease: 'Sine.easeInOut',
+      onComplete: () => {
+        dot.destroy()
+        this.time.delayedCall(Phaser.Math.Between(300, 2000), () => {
+          this.spawnFirefly(width, height)
+        })
+      },
+    })
+
+    // 깜빡이며 나타났다 사라짐
+    this.tweens.add({
+      targets: dot,
+      alpha: 0.9,
+      duration: 600,
+      ease: 'Sine.easeInOut',
+      yoyo: true,
+      repeat: Math.floor(duration / 1200),
+    })
+  }
+}
