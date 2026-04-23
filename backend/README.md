@@ -60,9 +60,11 @@ IntelliJ `Run Configuration > Environment variables` 또는 쉘 `export` 로 주
 
 | 프로파일 | 용도 | JPA `ddl-auto` | 로깅 |
 | --- | --- | --- | --- |
-| `local` | 개발자 로컬 | `update` + SQL 로그 | CONSOLE, 앱 DEBUG, SQL/바인딩 TRACE |
+| `local` | 개발자 로컬 | `validate` + SQL 로그 | CONSOLE, 앱 DEBUG, SQL/바인딩 TRACE |
 | `dev` | 통합 개발 서버 | `validate` | CONSOLE + FILE, 앱 DEBUG |
 | `prod` | 운영 | `validate` | CONSOLE + FILE, root WARN / 앱 INFO |
+
+> 스키마 변경은 Flyway 가 담당합니다. Hibernate 는 전 프로파일에서 `validate` 로 통일되어 DDL 을 만들지 않고 엔티티-스키마 일치 여부만 검증합니다. 자세한 운영 규칙은 [docs/flyway.md](docs/flyway.md) 참고.
 
 로그 파일은 `./logs/backend.log` 에 쌓이며 100MB/30일 기준으로 롤링됩니다.
 
