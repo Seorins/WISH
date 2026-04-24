@@ -21,7 +21,7 @@ export type PointerReference = {
 
 export function getPointerReference(
   hand: TrackedHand,
-  landmarkIndex = DEFAULT_POINTER_LANDMARK_INDEX,
+  landmarkIndex: number = DEFAULT_POINTER_LANDMARK_INDEX,
 ): PointerReference | null {
   const landmark = hand.landmarks[landmarkIndex]
 

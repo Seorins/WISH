@@ -112,4 +112,12 @@ public class UserService {
     public Optional<User> findEntityByEmail(String email) {
         return userRepository.findByEmail(email);
     }
+
+    /**
+     * ID 로 User 엔티티 조회. 다른 도메인(PatientProfile 등)에서 FK 연관관계를 맺기 위해 엔티티 레퍼런스가 필요할 때 사용한다. DTO 반환이 필요한
+     * 일반 조회는 {@link #getUser(Long)} 을 쓴다.
+     */
+    public Optional<User> findEntityById(Long id) {
+        return userRepository.findById(id);
+    }
 }
