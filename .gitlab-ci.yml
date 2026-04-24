@@ -11,6 +11,7 @@ stages:
   - verify
   - build
   - package
+  - deploy
 
 default:
   tags:
@@ -95,6 +96,33 @@ backend:image:
         ${DESTINATIONS}
   rules:
     - if: $CI_COMMIT_BRANCH == "develop" || $CI_COMMIT_BRANCH == "master" || $CI_COMMIT_BRANCH == "main"
+      changes:
+        - backend/**/*
+        - .gitlab-ci.yml
+
+backend:deploy-dev:
+  stage: deploy
+  image: curlimages/curl:8.12.1
+  needs:
+    - backend:image
+  script:
+    - test -n "${JENKINS_BASE_URL}" || (echo "JENKINS_BASE_URL is empty" && exit 1)
+    - test -n "${JENKINS_USER}" || (echo "JENKINS_USER is empty" && exit 1)
+    - test -n "${JENKINS_API_TOKEN}" || (echo "JENKINS_API_TOKEN is empty" && exit 1)
+    - |
+      BUILD_URL="${JENKINS_BASE_URL%/}/job/deploy-dev-backend/buildWithParameters"
+      IMAGE_TAG="backend-${CI_COMMIT_REF_SLUG}-latest"
+
+      echo "Triggering Jenkins deploy job: ${BUILD_URL}"
+      echo "IMAGE_TAG=${IMAGE_TAG}"
+
+      curl --fail --show-error --silent \
+        --request POST \
+        --user "${JENKINS_USER}:${JENKINS_API_TOKEN}" \
+        --data-urlencode "IMAGE_TAG=${IMAGE_TAG}" \
+        "${BUILD_URL}"
+  rules:
+    - if: $CI_COMMIT_BRANCH == "develop"
       changes:
         - backend/**/*
         - .gitlab-ci.yml

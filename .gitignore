@@ -7,6 +7,7 @@
 !.env.template
 *.pem
 *.key
+secrets/
 
 # ===== OS =====
 .DS_Store
