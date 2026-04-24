@@ -69,4 +69,20 @@ public class PatientProfile {
     void prePersist() {
         this.createdAt = LocalDateTime.now();
     }
+
+    /** PATCH 시맨틱: {@code null} 인 인자는 "변경 없음" 으로 간주하고 기존 값을 유지한다. */
+    public void update(String name, String nickname, LocalDate birthDate, Gender gender) {
+        if (name != null) {
+            this.name = name;
+        }
+        if (nickname != null) {
+            this.nickname = nickname;
+        }
+        if (birthDate != null) {
+            this.birthDate = birthDate;
+        }
+        if (gender != null) {
+            this.gender = gender;
+        }
+    }
 }

@@ -7,6 +7,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.comong.backend.domain.patient.dto.PatientProfileCreateRequest;
 import com.comong.backend.domain.patient.dto.PatientProfileResponse;
+import com.comong.backend.domain.patient.dto.PatientProfileUpdateRequest;
 import com.comong.backend.domain.patient.entity.PatientProfile;
 import com.comong.backend.domain.patient.exception.PatientErrorCode;
 import com.comong.backend.domain.patient.repository.PatientProfileRepository;
@@ -60,19 +61,31 @@ public class PatientProfileService {
                 .toList();
     }
 
-    /**
-     * 단건 조회. 존재하지 않거나 본인 소유가 아닌 경우 모두 404 로 응답한다. 403 을 반환하면 "ID 는 존재한다" 는 사실이 유출되어 순차 PK 를
-     * enumerate 하는 공격자에게 ID 공간 밀도를 알려줄 수 있기 때문.
-     */
     public PatientProfileResponse findOne(Long userId, Long profileId) {
-        PatientProfile profile =
-                patientProfileRepository
-                        .findById(profileId)
-                        .filter(p -> p.getUser().getId().equals(userId))
-                        .orElseThrow(
-                                () ->
-                                        new BusinessException(
-                                                PatientErrorCode.PATIENT_PROFILE_NOT_FOUND));
+        return PatientProfileResponse.from(findOwnedOrThrow(userId, profileId));
+    }
+
+    /**
+     * 부분 수정. 존재하지 않거나 본인 소유가 아닌 경우 모두 404. 요청 필드가 {@code null} 이면 해당 필드는 기존 값을 유지한다 (PATCH 시맨틱). 변경
+     * 감지로 flush.
+     */
+    @Transactional
+    public PatientProfileResponse update(
+            Long userId, Long profileId, PatientProfileUpdateRequest request) {
+        PatientProfile profile = findOwnedOrThrow(userId, profileId);
+        profile.update(request.name(), request.nickname(), request.birthDate(), request.gender());
         return PatientProfileResponse.from(profile);
+    }
+
+    /**
+     * 존재하지 않거나 본인 소유가 아닌 경우 모두 404. 403 을 반환하면 "ID 는 존재한다" 는 사실이 유출되어 순차 PK 를 enumerate 하는 공격자에게 ID
+     * 공간 밀도를 알려줄 수 있기 때문.
+     */
+    private PatientProfile findOwnedOrThrow(Long userId, Long profileId) {
+        return patientProfileRepository
+                .findById(profileId)
+                .filter(p -> p.getUser().getId().equals(userId))
+                .orElseThrow(
+                        () -> new BusinessException(PatientErrorCode.PATIENT_PROFILE_NOT_FOUND));
     }
 }
