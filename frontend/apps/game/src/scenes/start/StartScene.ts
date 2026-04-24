@@ -6,9 +6,9 @@ export class StartScene extends Phaser.Scene {
   }
 
   preload() {
-    this.load.image('home', '/assets/images/home.png')
-    this.load.image('logo', '/assets/images/logo.png')
-    this.load.image('startbtn', '/assets/images/startbtn.png')
+    this.load.image('home', '/assets/images/common/background/home.png')
+    this.load.image('logo', '/assets/images/common/logo.png')
+    this.load.image('startbtn', '/assets/images/ui/buttons/startbtn.png')
   }
 
   create() {
