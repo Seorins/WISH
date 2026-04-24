@@ -3,8 +3,6 @@ package com.comong.backend.domain.patient.entity;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
-import com.comong.backend.domain.user.entity.User;
-
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -17,6 +15,8 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
+
+import com.comong.backend.domain.user.entity.User;
 
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -56,7 +56,8 @@ public class PatientProfile {
     private LocalDateTime createdAt;
 
     @Builder
-    private PatientProfile(User user, String name, String nickname, LocalDate birthDate, Gender gender) {
+    private PatientProfile(
+            User user, String name, String nickname, LocalDate birthDate, Gender gender) {
         this.user = user;
         this.name = name;
         this.nickname = nickname;
