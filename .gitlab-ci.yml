@@ -12,10 +12,184 @@ stages:
   - build
   - package
   - deploy
+  - notify
 
 default:
   tags:
     - docker
+
+.backend-dev-rules: &backend_dev_rules
+  - if: $CI_COMMIT_BRANCH == "develop"
+    changes:
+      - backend/**/*
+      - .gitlab-ci.yml
+
+.resolve_backend_metadata: &resolve_backend_metadata |
+  eval "$(
+    python - <<'PY'
+    import json
+    import os
+    import shlex
+    import sys
+    import urllib.error
+    import urllib.parse
+    import urllib.request
+
+    commit_author = (os.environ.get("CI_COMMIT_AUTHOR") or "").strip()
+    commit_author_name = commit_author.split(" <")[0].strip() if commit_author else ""
+
+    exports = {
+        "CHANGE_ORIGIN": "direct-push",
+        "MR_IID": "",
+        "MR_TITLE": "",
+        "MR_URL": "",
+        "MR_AUTHOR_NAME": commit_author_name,
+        "MR_AUTHOR_USERNAME": "",
+        "MERGE_USER_NAME": (os.environ.get("GITLAB_USER_NAME") or "").strip(),
+        "MERGE_USER_USERNAME": (os.environ.get("GITLAB_USER_LOGIN") or "").strip(),
+    }
+
+    api_base = (os.environ.get("CI_API_V4_URL") or "").rstrip("/")
+    project_id = (os.environ.get("CI_PROJECT_ID") or "").strip()
+    commit_sha = (os.environ.get("CI_COMMIT_SHA") or "").strip()
+    target_branch = (os.environ.get("CI_COMMIT_REF_NAME") or "").strip()
+    job_token = (os.environ.get("CI_JOB_TOKEN") or "").strip()
+
+    if api_base and project_id and commit_sha and job_token:
+        project_id_enc = urllib.parse.quote(project_id, safe="")
+        commit_sha_enc = urllib.parse.quote(commit_sha, safe="")
+
+        try:
+            request = urllib.request.Request(
+                f"{api_base}/projects/{project_id_enc}/repository/commits/{commit_sha_enc}/merge_requests",
+                headers={"JOB-TOKEN": job_token},
+            )
+            with urllib.request.urlopen(request, timeout=10) as response:
+                merge_requests = json.load(response)
+
+            candidates = [mr for mr in merge_requests if mr.get("target_branch") == target_branch] or merge_requests
+            merged_candidates = [mr for mr in candidates if mr.get("state") == "merged"]
+            if merged_candidates:
+                candidates = merged_candidates
+
+            if candidates:
+                candidates.sort(
+                    key=lambda item: item.get("merged_at") or item.get("updated_at") or item.get("created_at") or "",
+                    reverse=True,
+                )
+                selected = candidates[0]
+                detail = selected
+                mr_iid = str(selected.get("iid") or "")
+
+                if mr_iid:
+                    detail_request = urllib.request.Request(
+                        f"{api_base}/projects/{project_id_enc}/merge_requests/{urllib.parse.quote(mr_iid, safe='')}",
+                        headers={"JOB-TOKEN": job_token},
+                    )
+                    with urllib.request.urlopen(detail_request, timeout=10) as response:
+                        detail = json.load(response)
+
+                author = detail.get("author") or selected.get("author") or {}
+                merge_user = detail.get("merge_user") or detail.get("merged_by") or {}
+
+                exports.update(
+                    {
+                        "CHANGE_ORIGIN": "merge-request",
+                        "MR_IID": mr_iid,
+                        "MR_TITLE": str(detail.get("title") or selected.get("title") or "").replace("\n", " ").strip(),
+                        "MR_URL": str(detail.get("web_url") or selected.get("web_url") or "").strip(),
+                        "MR_AUTHOR_NAME": str(author.get("name") or exports["MR_AUTHOR_NAME"]).strip(),
+                        "MR_AUTHOR_USERNAME": str(author.get("username") or "").strip(),
+                        "MERGE_USER_NAME": str(merge_user.get("name") or exports["MERGE_USER_NAME"]).strip(),
+                        "MERGE_USER_USERNAME": str(merge_user.get("username") or exports["MERGE_USER_USERNAME"]).strip(),
+                    }
+                )
+        except Exception as exc:
+            print(f"GitLab MR metadata lookup skipped: {exc}", file=sys.stderr)
+
+    for key, value in exports.items():
+        text = "" if value is None else str(value)
+        print(f"export {key}={shlex.quote(text)}")
+    PY
+  )"
+
+.send_backend_mattermost: &send_backend_mattermost |
+  python - <<'PY'
+  import json
+  import os
+  import sys
+  import urllib.request
+
+  webhook = (os.environ.get("MATTERMOST_WEBHOOK_DEV_BACK") or "").strip()
+  if not webhook:
+      print("MATTERMOST_WEBHOOK_DEV_BACK is empty; skipping Mattermost notification", file=sys.stderr)
+      sys.exit(0)
+
+  def format_user(name_key, username_key, fallback):
+      name = (os.environ.get(name_key) or "").strip()
+      username = (os.environ.get(username_key) or "").strip()
+      if name and username:
+          return f"{name} (@{username})"
+      if name:
+          return name
+      if username:
+          return f"@{username}"
+      return fallback
+
+  title = (os.environ.get("NOTIFY_TITLE") or "backend 알림").strip()
+  image = (os.environ.get("NOTIFY_IMAGE") or "").strip()
+  extra = (os.environ.get("NOTIFY_EXTRA") or "").strip()
+  link_label = (os.environ.get("NOTIFY_LINK_LABEL") or "").strip()
+  link_url = (os.environ.get("NOTIFY_LINK_URL") or "").strip()
+  change_origin = (os.environ.get("CHANGE_ORIGIN") or "unknown").strip()
+  mr_iid = (os.environ.get("MR_IID") or "").strip()
+  mr_title = (os.environ.get("MR_TITLE") or "").strip()
+  mr_url = (os.environ.get("MR_URL") or "").strip()
+
+  lines = [
+      f"[{title}]",
+      f"- project: {(os.environ.get('CI_PROJECT_PATH') or '').strip()}",
+      f"- branch: {(os.environ.get('CI_COMMIT_REF_NAME') or '').strip()}",
+      f"- commit: {(os.environ.get('CI_COMMIT_SHORT_SHA') or '').strip()}",
+  ]
+
+  if image:
+      lines.append(f"- image: {image}")
+
+  lines.append(f"- 변경 유형: {change_origin}")
+  lines.append(f"- 기능 작업자: {format_user('MR_AUTHOR_NAME', 'MR_AUTHOR_USERNAME', '확인 필요')}")
+  lines.append(f"- merge 수행자: {format_user('MERGE_USER_NAME', 'MERGE_USER_USERNAME', '확인 필요')}")
+
+  if mr_iid or mr_title or mr_url:
+      mr_text = ""
+      if mr_iid:
+          mr_text = f"!{mr_iid}"
+      if mr_title:
+          mr_text = f"{mr_text} {mr_title}".strip()
+      if mr_url:
+          mr_text = f"{mr_text} ({mr_url})".strip() if mr_text else mr_url
+      lines.append(f"- MR: {mr_text}")
+
+  if extra:
+      lines.append(f"- {extra}")
+
+  if link_label and link_url:
+      lines.append(f"- {link_label}: {link_url}")
+
+  payload = json.dumps({"text": "\n".join(lines)}).encode()
+  request = urllib.request.Request(
+      webhook,
+      data=payload,
+      headers={"Content-Type": "application/json"},
+  )
+
+  try:
+      with urllib.request.urlopen(request, timeout=10) as response:
+          response.read()
+  except Exception as exc:
+      print(f"Mattermost notification failed: {exc}", file=sys.stderr)
+      sys.exit(0)
+  PY
 
 # ----------------------------------------------------------------------------
 # Backend
@@ -102,7 +276,7 @@ backend:image:
 
 backend:deploy-dev:
   stage: deploy
-  image: curlimages/curl:8.12.1
+  image: python:3.12-alpine
   needs:
     - backend:image
   script:
@@ -110,22 +284,72 @@ backend:deploy-dev:
     - test -n "${JENKINS_USER}" || (echo "JENKINS_USER is empty" && exit 1)
     - test -n "${JENKINS_API_TOKEN}" || (echo "JENKINS_API_TOKEN is empty" && exit 1)
     - |
-      BUILD_URL="${JENKINS_BASE_URL%/}/job/deploy-dev-backend/buildWithParameters"
       IMAGE_TAG="backend-${CI_COMMIT_REF_SLUG}-latest"
+      export IMAGE_TAG
+    - *resolve_backend_metadata
+    - |
+      BUILD_URL="${JENKINS_BASE_URL%/}/job/deploy-dev-backend/buildWithParameters"
+      export BUILD_URL
 
       echo "Triggering Jenkins deploy job: ${BUILD_URL}"
       echo "IMAGE_TAG=${IMAGE_TAG}"
+      echo "CHANGE_ORIGIN=${CHANGE_ORIGIN}"
 
-      curl --fail --show-error --silent \
-        --request POST \
-        --user "${JENKINS_USER}:${JENKINS_API_TOKEN}" \
-        --data-urlencode "IMAGE_TAG=${IMAGE_TAG}" \
-        "${BUILD_URL}"
+      python - <<'PY'
+      import base64
+      import os
+      import urllib.parse
+      import urllib.request
+
+      build_url = os.environ["BUILD_URL"]
+      credentials = f"{os.environ['JENKINS_USER']}:{os.environ['JENKINS_API_TOKEN']}".encode()
+      headers = {
+          "Authorization": "Basic " + base64.b64encode(credentials).decode(),
+          "Content-Type": "application/x-www-form-urlencoded",
+      }
+      payload = urllib.parse.urlencode(
+          {
+              "IMAGE_TAG": os.environ["IMAGE_TAG"],
+              "CHANGE_ORIGIN": os.environ.get("CHANGE_ORIGIN", ""),
+              "MR_IID": os.environ.get("MR_IID", ""),
+              "MR_TITLE": os.environ.get("MR_TITLE", ""),
+              "MR_URL": os.environ.get("MR_URL", ""),
+              "MR_AUTHOR_NAME": os.environ.get("MR_AUTHOR_NAME", ""),
+              "MR_AUTHOR_USERNAME": os.environ.get("MR_AUTHOR_USERNAME", ""),
+              "MERGE_USER_NAME": os.environ.get("MERGE_USER_NAME", ""),
+              "MERGE_USER_USERNAME": os.environ.get("MERGE_USER_USERNAME", ""),
+          }
+      ).encode()
+      request = urllib.request.Request(build_url, data=payload, headers=headers, method="POST")
+
+      with urllib.request.urlopen(request, timeout=20) as response:
+          response.read()
+      PY
+    - export NOTIFY_TITLE="backend GitLab CI 성공"
+    - export NOTIFY_IMAGE="${DOCKER_HUB_IMAGE}:backend-${IMAGE_TAG}"
+    - export NOTIFY_EXTRA="Jenkins dev 배포 요청 완료"
+    - export NOTIFY_LINK_LABEL="pipeline"
+    - export NOTIFY_LINK_URL="${CI_PIPELINE_URL}"
+    - *send_backend_mattermost
+  rules: *backend_dev_rules
+
+backend:notify-failure:
+  stage: notify
+  image: python:3.12-alpine
+  script:
+    - *resolve_backend_metadata
+    - export NOTIFY_TITLE="backend GitLab CI 실패"
+    - export NOTIFY_IMAGE="${DOCKER_HUB_IMAGE}:backend-${CI_COMMIT_REF_SLUG}-latest"
+    - export NOTIFY_EXTRA="GitLab 단계에서 실패했습니다."
+    - export NOTIFY_LINK_LABEL="pipeline"
+    - export NOTIFY_LINK_URL="${CI_PIPELINE_URL}"
+    - *send_backend_mattermost
   rules:
     - if: $CI_COMMIT_BRANCH == "develop"
       changes:
         - backend/**/*
         - .gitlab-ci.yml
+      when: on_failure
 
 # ----------------------------------------------------------------------------
 # Frontend
