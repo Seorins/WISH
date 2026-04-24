@@ -4,20 +4,12 @@ const FRAME_SIZE = 313
 const SPEED = 180
 const TALK_DISTANCE = 55
 
-const OBSTACLES = [
-  { x: 0.16, y: 0.29, w: 0.25, h: 0.24 },
-  { x: 0.46, y: 0.14, w: 0.13, h: 0.18 },
-  { x: 0.85, y: 0.53, w: 0.11, h: 0.18 },
-  { x: 0.63, y: 0.27, w: 0.13, h: 0.15 },
-  { x: 0.84, y: 0.12, w: 0.14, h: 0.15 },
-  { x: 0.5, y: 0.47, w: 0.06, h: 0.1 },
-  { x: 0.04, y: 0.44, w: 0.06, h: 0.12 },
-  { x: 0.27, y: 0.75, w: 0.05, h: 0.06 },
-  { x: 0.5, y: 0.06, w: 1.0, h: 0.12 },
-  { x: 0.03, y: 0.5, w: 0.06, h: 1.0 },
-  { x: 0.96, y: 0.5, w: 0.08, h: 1.0 },
-  { x: 0.5, y: 0.94, w: 1.0, h: 0.12 },
-]
+type ObstacleRect = { x: number; y: number; w: number; h: number }
+
+// 맵별 내부 장애물 — 필요 시 채움 (외곽/빈 영역은 world bounds + emptyWall로 처리)
+const OBSTACLES_MIDDLE: ObstacleRect[] = []
+const OBSTACLES_LEFT: ObstacleRect[] = []
+const OBSTACLES_BOTTOM: ObstacleRect[] = []
 
 export class VillageScene extends Phaser.Scene {
   private player!: Phaser.Types.Physics.Arcade.SpriteWithDynamicBody
@@ -35,9 +27,12 @@ export class VillageScene extends Phaser.Scene {
   }
 
   preload() {
-    this.load.image('main', '/assets/images/main.png')
+    this.load.image('middle', '/assets/images/middle.png')
+    this.load.image('left', '/assets/images/left.png')
+    this.load.image('bottom', '/assets/images/bottom.png')
     this.load.image('sehyun_talk', '/assets/images/sehyun_talk.png')
     this.load.image('profile', '/assets/images/profile.png')
+    this.load.image('menu', '/assets/images/menu.png')
     this.load.spritesheet('sehyun', '/assets/images/sehyun.png', {
       frameWidth: 313,
       frameHeight: 313,
@@ -53,29 +48,60 @@ export class VillageScene extends Phaser.Scene {
   }
 
   create() {
-    const { width, height } = this.scale
+    const { width: vw, height: vh } = this.scale
 
-    // 배경
-    const bg = this.add.image(width / 2, height / 2, 'main')
-    const bgScale = Math.max(width / bg.width, height / bg.height)
-    bg.setScale(bgScale).setDepth(0)
+    // ── 맵 스케일: 한 맵이 화면을 꽉 채우는 비율 (세 이미지 해상도 동일)
+    const midImg = this.textures.get('middle').getSourceImage() as HTMLImageElement
+    const rawW = midImg.width
+    const rawH = midImg.height
+    const mapScale = Math.max(vw / rawW, vh / rawH)
 
-    const bgW = bg.width * bgScale
-    const bgH = bg.height * bgScale
-    const bgLeft = width / 2 - bgW / 2
-    const bgTop = height / 2 - bgH / 2
+    const W = rawW * mapScale
+    const H = rawH * mapScale
 
-    // 충돌 박스
+    // ── 월드 좌표계: 원점 = middle 맵의 top-left
+    //   middle: (0,0) ~ (W,H)
+    //   left  : (-W,0) ~ (0,H)
+    //   bottom: (0,H) ~ (W,2H)
+    //   (-W,H) ~ (0,2H) 는 빈 영역 → emptyWall로 막음
+    this.add
+      .image(W / 2, H / 2, 'middle')
+      .setScale(mapScale)
+      .setDepth(0)
+    this.add
+      .image(-W / 2, H / 2, 'left')
+      .setScale(mapScale)
+      .setDepth(0)
+    this.add
+      .image(W / 2, H + H / 2, 'bottom')
+      .setScale(mapScale)
+      .setDepth(0)
+
+    // ── 월드 & 카메라 바운드
+    this.physics.world.setBounds(-W, 0, 2 * W, 2 * H)
+    this.cameras.main.setBounds(-W, 0, 2 * W, 2 * H)
+
+    // ── 장애물 (맵별 offset 적용)
     this.obstacles = this.physics.add.staticGroup()
-    OBSTACLES.forEach(({ x, y, w, h }) => {
-      const box = this.add
-        .rectangle(bgLeft + x * bgW, bgTop + y * bgH, w * bgW, h * bgH, 0xff0000, 0)
-        .setDepth(1)
-      this.physics.add.existing(box, true)
-      this.obstacles.add(box)
-    })
+    const addObstacles = (list: ObstacleRect[], offsetX: number, offsetY: number) => {
+      list.forEach(({ x, y, w, h }) => {
+        const box = this.add
+          .rectangle(offsetX + x * W, offsetY + y * H, w * W, h * H, 0xff0000, 0)
+          .setDepth(1)
+        this.physics.add.existing(box, true)
+        this.obstacles.add(box)
+      })
+    }
+    addObstacles(OBSTACLES_MIDDLE, 0, 0)
+    addObstacles(OBSTACLES_LEFT, -W, 0)
+    addObstacles(OBSTACLES_BOTTOM, 0, H)
 
-    // 캐릭터 애니메이션
+    // ── left 아래 빈 영역 차단 벽
+    const emptyWall = this.add.rectangle(-W / 2, H + H / 2, W, H, 0x000000, 0).setDepth(1)
+    this.physics.add.existing(emptyWall, true)
+    this.obstacles.add(emptyWall)
+
+    // ── 캐릭터 애니메이션
     this.anims.create({
       key: 'walk-down',
       frames: this.anims.generateFrameNumbers('character', { start: 0, end: 3 }),
@@ -101,33 +127,32 @@ export class VillageScene extends Phaser.Scene {
       repeat: -1,
     })
 
-    // sehyun
+    // ── sehyun NPC (middle 맵 기준 월드 좌표)
     this.anims.create({
       key: 'sehyun-loop',
       frames: this.anims.generateFrameNumbers('sehyun', { start: 0, end: 15 }),
       frameRate: 6,
       repeat: -1,
     })
-    this.sehyunNpc = this.add.sprite(width * 0.38, height * 0.55, 'sehyun').setDepth(4)
+    this.sehyunNpc = this.add.sprite(0.38 * W, 0.55 * H, 'sehyun').setDepth(4)
     this.sehyunNpc.setScale(0.38)
     this.sehyunNpc.anims.play('sehyun-loop')
 
-    // sehyun 충돌 박스
     const sehyunBox = this.add
       .rectangle(this.sehyunNpc.x, this.sehyunNpc.y + 10, 40, 30, 0xff0000, 0)
       .setDepth(1)
     this.physics.add.existing(sehyunBox, true)
     this.obstacles.add(sehyunBox)
 
-    // 대화창
-    const dialogW = Math.min(width * 0.75, 860)
-    this.dialogBox = this.add.image(width / 2, height - 80, 'sehyun_talk')
+    // ── 대화창 (카메라 고정)
+    const dialogW = Math.min(vw * 0.75, 860)
+    this.dialogBox = this.add.image(vw / 2, vh - 80, 'sehyun_talk')
     this.dialogBox.setDisplaySize(dialogW, dialogW * (821 / 1916))
-    this.dialogBox.setDepth(20).setAlpha(0)
-    this.dialogBox.y = height - this.dialogBox.displayHeight / 2 + 30
+    this.dialogBox.setDepth(20).setAlpha(0).setScrollFactor(0)
+    this.dialogBox.y = vh - this.dialogBox.displayHeight / 2 + 30
 
-    // 프로필
-    const profileSize = Math.min(width * 0.16, 180)
+    // ── 프로필 (카메라 고정)
+    const profileSize = Math.min(vw * 0.16, 180)
     const profile = this.add.image(0, 0, 'profile')
     profile.setDisplaySize(profileSize, profileSize)
     profile.setDepth(20)
@@ -135,8 +160,16 @@ export class VillageScene extends Phaser.Scene {
     profile.x = profileSize / 2 + 12
     profile.y = profileSize / 2 + 12
 
-    // 플레이어
-    this.player = this.physics.add.sprite(width / 2, height * 0.65, 'character', 0)
+    // ── 메뉴 (프로필 아래, 카메라 고정)
+    const menu = this.add.image(0, 0, 'menu')
+    const menuW = profileSize * 0.65
+    menu.setDisplaySize(menuW, menuW * (menu.height / menu.width))
+    menu.setDepth(20).setScrollFactor(0)
+    menu.x = menuW / 2 + 12 + (profileSize - menuW) / 2
+    menu.y = profile.y + profileSize / 2 + menu.displayHeight / 2 - 4
+
+    // ── 플레이어 (middle 맵 중앙 부근 시작)
+    this.player = this.physics.add.sprite(W / 2, H * 0.65, 'character', 0)
     this.player.setScale(0.55).setDepth(5)
     this.player.setCollideWorldBounds(true)
     this.player.body.setSize(FRAME_SIZE * 0.35, FRAME_SIZE * 0.25)
@@ -144,7 +177,21 @@ export class VillageScene extends Phaser.Scene {
 
     this.physics.add.collider(this.player, this.obstacles)
 
+    // ── 카메라: 초기 중앙 정렬 후 플레이어 따라가기
+    this.cameras.main.centerOn(this.player.x, this.player.y)
+    this.cameras.main.startFollow(this.player, true, 0.12, 0.12)
+
     this.cursors = this.input.keyboard!.createCursorKeys()
+
+    // ── ESC 키로 대화창 닫기
+    this.input.keyboard!.on('keydown-ESC', () => {
+      if (this.isDialogVisible) {
+        this.isDialogVisible = false
+        this.dialogDismissed = true
+        this.tweens.killTweensOf(this.dialogBox)
+        this.tweens.add({ targets: this.dialogBox, alpha: 0, duration: 200, ease: 'Sine.easeIn' })
+      }
+    })
 
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       if (this.isDialogVisible) {
@@ -159,8 +206,9 @@ export class VillageScene extends Phaser.Scene {
         }
         return
       }
-      this.target = new Phaser.Math.Vector2(pointer.x, pointer.y)
-      const marker = this.add.circle(pointer.x, pointer.y, 6, 0xffffff, 0.6)
+      // 카메라 스크롤이 생기므로 월드 좌표 사용
+      this.target = new Phaser.Math.Vector2(pointer.worldX, pointer.worldY)
+      const marker = this.add.circle(pointer.worldX, pointer.worldY, 6, 0xffffff, 0.6)
       this.tweens.add({
         targets: marker,
         alpha: 0,
