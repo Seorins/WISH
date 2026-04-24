@@ -247,7 +247,8 @@ export class VillageScene extends Phaser.Scene {
     const moving = vx !== 0 || vy !== 0
     if (moving) {
       const anim = `walk-${this.lastDirection}`
-      if (this.player.anims.currentAnim?.key !== anim) this.player.anims.play(anim)
+      if (this.player.anims.currentAnim?.key !== anim || !this.player.anims.isPlaying)
+        this.player.anims.play(anim)
     } else {
       this.player.anims.stop()
     }
