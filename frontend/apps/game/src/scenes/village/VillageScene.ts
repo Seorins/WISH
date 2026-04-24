@@ -6,10 +6,7 @@ const TALK_DISTANCE = 55
 
 type ObstacleRect = { x: number; y: number; w: number; h: number }
 
-// 맵별 내부 장애물 — 필요 시 채움 (외곽/빈 영역은 world bounds + emptyWall로 처리)
-const OBSTACLES_MIDDLE: ObstacleRect[] = []
-const OBSTACLES_LEFT: ObstacleRect[] = []
-const OBSTACLES_BOTTOM: ObstacleRect[] = []
+const OBSTACLES: ObstacleRect[] = []
 
 export class VillageScene extends Phaser.Scene {
   private player!: Phaser.Types.Physics.Arcade.SpriteWithDynamicBody
@@ -27,9 +24,7 @@ export class VillageScene extends Phaser.Scene {
   }
 
   preload() {
-    this.load.image('middle', '/assets/images/middle.png')
-    this.load.image('left', '/assets/images/left.png')
-    this.load.image('bottom', '/assets/images/bottom.png')
+    this.load.image('map', '/assets/images/map.png')
     this.load.image('sehyun_talk', '/assets/images/sehyun_talk.png')
     this.load.image('profile', '/assets/images/profile.png')
     this.load.image('menu', '/assets/images/menu.png')
@@ -50,56 +45,30 @@ export class VillageScene extends Phaser.Scene {
   create() {
     const { width: vw, height: vh } = this.scale
 
-    // ── 맵 스케일: 한 맵이 화면을 꽉 채우는 비율 (세 이미지 해상도 동일)
-    const midImg = this.textures.get('middle').getSourceImage() as HTMLImageElement
-    const rawW = midImg.width
-    const rawH = midImg.height
-    const mapScale = Math.max(vw / rawW, vh / rawH)
+    const mapImg = this.textures.get('map').getSourceImage() as HTMLImageElement
+    const rawW = mapImg.width
+    const rawH = mapImg.height
+    const mapScale = Math.max(vw / rawW, vh / rawH) * 3
 
     const W = rawW * mapScale
     const H = rawH * mapScale
 
-    // ── 월드 좌표계: 원점 = middle 맵의 top-left
-    //   middle: (0,0) ~ (W,H)
-    //   left  : (-W,0) ~ (0,H)
-    //   bottom: (0,H) ~ (W,2H)
-    //   (-W,H) ~ (0,2H) 는 빈 영역 → emptyWall로 막음
     this.add
-      .image(W / 2, H / 2, 'middle')
-      .setScale(mapScale)
-      .setDepth(0)
-    this.add
-      .image(-W / 2, H / 2, 'left')
-      .setScale(mapScale)
-      .setDepth(0)
-    this.add
-      .image(W / 2, H + H / 2, 'bottom')
+      .image(W / 2, H / 2, 'map')
       .setScale(mapScale)
       .setDepth(0)
 
     // ── 월드 & 카메라 바운드
-    this.physics.world.setBounds(-W, 0, 2 * W, 2 * H)
-    this.cameras.main.setBounds(-W, 0, 2 * W, 2 * H)
+    this.physics.world.setBounds(0, 0, W, H)
+    this.cameras.main.setBounds(0, 0, W, H)
 
-    // ── 장애물 (맵별 offset 적용)
+    // ── 장애물
     this.obstacles = this.physics.add.staticGroup()
-    const addObstacles = (list: ObstacleRect[], offsetX: number, offsetY: number) => {
-      list.forEach(({ x, y, w, h }) => {
-        const box = this.add
-          .rectangle(offsetX + x * W, offsetY + y * H, w * W, h * H, 0xff0000, 0)
-          .setDepth(1)
-        this.physics.add.existing(box, true)
-        this.obstacles.add(box)
-      })
-    }
-    addObstacles(OBSTACLES_MIDDLE, 0, 0)
-    addObstacles(OBSTACLES_LEFT, -W, 0)
-    addObstacles(OBSTACLES_BOTTOM, 0, H)
-
-    // ── left 아래 빈 영역 차단 벽
-    const emptyWall = this.add.rectangle(-W / 2, H + H / 2, W, H, 0x000000, 0).setDepth(1)
-    this.physics.add.existing(emptyWall, true)
-    this.obstacles.add(emptyWall)
+    OBSTACLES.forEach(({ x, y, w, h }) => {
+      const box = this.add.rectangle(x * W, y * H, w * W, h * H, 0xff0000, 0).setDepth(1)
+      this.physics.add.existing(box, true)
+      this.obstacles.add(box)
+    })
 
     // ── 캐릭터 애니메이션
     this.anims.create({
@@ -127,7 +96,7 @@ export class VillageScene extends Phaser.Scene {
       repeat: -1,
     })
 
-    // ── sehyun NPC (middle 맵 기준 월드 좌표)
+    // ── sehyun NPC
     this.anims.create({
       key: 'sehyun-loop',
       frames: this.anims.generateFrameNumbers('sehyun', { start: 0, end: 15 }),
@@ -168,8 +137,8 @@ export class VillageScene extends Phaser.Scene {
     menu.x = menuW / 2 + 12 + (profileSize - menuW) / 2
     menu.y = profile.y + profileSize / 2 + menu.displayHeight / 2 - 4
 
-    // ── 플레이어 (middle 맵 중앙 부근 시작)
-    this.player = this.physics.add.sprite(W / 2, H * 0.65, 'character', 0)
+    // ── 플레이어
+    this.player = this.physics.add.sprite(W / 2, H * 0.47, 'character', 0)
     this.player.setScale(0.55).setDepth(5)
     this.player.setCollideWorldBounds(true)
     this.player.body.setSize(FRAME_SIZE * 0.35, FRAME_SIZE * 0.25)
@@ -206,7 +175,6 @@ export class VillageScene extends Phaser.Scene {
         }
         return
       }
-      // 카메라 스크롤이 생기므로 월드 좌표 사용
       this.target = new Phaser.Math.Vector2(pointer.worldX, pointer.worldY)
       const marker = this.add.circle(pointer.worldX, pointer.worldY, 6, 0xffffff, 0.6)
       this.tweens.add({
