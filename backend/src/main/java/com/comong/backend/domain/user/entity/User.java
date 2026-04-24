@@ -16,6 +16,10 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+/**
+ * 로그인 주체인 보호자 계정. MVP 에서는 User ≡ Guardian 이며, 실제 게임 플레이 대상자(아동)는 {@code PatientProfile} 로 분리해
+ * {@code patient_profiles.user_id} 로 참조한다. 의료진/관리자 역할이 추후 추가되면 role 컬럼을 도입하거나 별도 테이블로 확장한다.
+ */
 @Entity
 @Getter
 @Table(
