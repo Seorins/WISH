@@ -1,0 +1,40 @@
+version: "3.8"
+
+services:
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: e103-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx:/etc/nginx/conf.d:ro
+    networks:
+      - e103-platform-network
+
+  jenkins:
+    build:
+      context: ..
+      dockerfile: infra/jenkins/Dockerfile
+    image: e103-jenkins:dev
+    container_name: e103-jenkins
+    restart: unless-stopped
+    user: root
+    environment:
+      TZ: ${TZ:-Asia/Seoul}
+      JENKINS_OPTS: --prefix=/jenkins
+    volumes:
+      - jenkins_home:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /home/ubuntu/S14P31E103:/workspace
+    networks:
+      - e103-platform-network
+
+volumes:
+  jenkins_home:
+
+networks:
+  e103-platform-network:
+    name: e103-platform-network
+    driver: bridge
