@@ -87,6 +87,31 @@ backend/src/main/java/com/comong/backend
       └─ exception/        # UserErrorCode 등 도메인 에러 enum
 ```
 
+## 테스트
+
+Testcontainers 가 실제 Postgres 컨테이너를 띄워 Flyway 마이그레이션 적용 + JPA `ddl-auto=validate` 로
+엔티티-스키마 정합성을 검증합니다. 마이그레이션 SQL 또는 엔티티 매핑이 어긋나면 컨텍스트 로드 단계에서 실패합니다.
+
+```bash
+./gradlew test
+```
+
+### 필수 환경
+
+- **Docker** (Docker Desktop 등) 가 실행 중이어야 합니다. Testcontainers 가 Docker 데몬 API 로 컨테이너를 기동합니다.
+- 첫 실행은 `postgres:16-alpine` 이미지를 풀링하므로 수십 초 정도 걸릴 수 있습니다.
+
+### 트러블슈팅
+
+`Could not find a valid Docker environment` 또는 컨테이너 생성 실패가 뜨면:
+
+- Docker Desktop 이 켜져 있는지 (`docker info` 로 확인)
+- WSL 통합 / Linux containers 모드인지
+- 그래도 안 되면 셸에서 `DOCKER_HOST` 를 지정 후 재시도
+  - Windows PowerShell: `$env:DOCKER_HOST="npipe:////./pipe/dockerDesktopLinuxEngine"`
+  - Linux/macOS: `export DOCKER_HOST=unix:///var/run/docker.sock`
+- 통합 테스트는 GitLab CI 에서 DinD 로도 검증되므로, 로컬 Docker 디버깅이 막히면 일단 푸시 후 CI 로 확인 가능
+
 ## 코드 포매팅
 
 Spotless + Google Java Format 으로 강제합니다.
