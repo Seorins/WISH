@@ -326,7 +326,7 @@ backend:deploy-dev:
           response.read()
       PY
     - export NOTIFY_TITLE="backend GitLab CI 성공"
-    - export NOTIFY_IMAGE="${DOCKER_HUB_IMAGE}:backend-${IMAGE_TAG}"
+    - export NOTIFY_IMAGE="${DOCKER_HUB_IMAGE}:${IMAGE_TAG}"
     - export NOTIFY_EXTRA="Jenkins dev 배포 요청 완료"
     - export NOTIFY_LINK_LABEL="pipeline"
     - export NOTIFY_LINK_URL="${CI_PIPELINE_URL}"
