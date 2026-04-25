@@ -26,91 +26,91 @@ default:
 
 .resolve_backend_metadata: &resolve_backend_metadata |
   eval "$(
-    python - <<'PY'
-    import json
-    import os
-    import shlex
-    import sys
-    import urllib.error
-    import urllib.parse
-    import urllib.request
+  python - <<'PY'
+  import json
+  import os
+  import shlex
+  import sys
+  import urllib.error
+  import urllib.parse
+  import urllib.request
 
-    commit_author = (os.environ.get("CI_COMMIT_AUTHOR") or "").strip()
-    commit_author_name = commit_author.split(" <")[0].strip() if commit_author else ""
+  commit_author = (os.environ.get("CI_COMMIT_AUTHOR") or "").strip()
+  commit_author_name = commit_author.split(" <")[0].strip() if commit_author else ""
 
-    exports = {
-        "CHANGE_ORIGIN": "direct-push",
-        "MR_IID": "",
-        "MR_TITLE": "",
-        "MR_URL": "",
-        "MR_AUTHOR_NAME": commit_author_name,
-        "MR_AUTHOR_USERNAME": "",
-        "MERGE_USER_NAME": (os.environ.get("GITLAB_USER_NAME") or "").strip(),
-        "MERGE_USER_USERNAME": (os.environ.get("GITLAB_USER_LOGIN") or "").strip(),
-    }
+  exports = {
+      "CHANGE_ORIGIN": "direct-push",
+      "MR_IID": "",
+      "MR_TITLE": "",
+      "MR_URL": "",
+      "MR_AUTHOR_NAME": commit_author_name,
+      "MR_AUTHOR_USERNAME": "",
+      "MERGE_USER_NAME": (os.environ.get("GITLAB_USER_NAME") or "").strip(),
+      "MERGE_USER_USERNAME": (os.environ.get("GITLAB_USER_LOGIN") or "").strip(),
+  }
 
-    api_base = (os.environ.get("CI_API_V4_URL") or "").rstrip("/")
-    project_id = (os.environ.get("CI_PROJECT_ID") or "").strip()
-    commit_sha = (os.environ.get("CI_COMMIT_SHA") or "").strip()
-    target_branch = (os.environ.get("CI_COMMIT_REF_NAME") or "").strip()
-    job_token = (os.environ.get("CI_JOB_TOKEN") or "").strip()
+  api_base = (os.environ.get("CI_API_V4_URL") or "").rstrip("/")
+  project_id = (os.environ.get("CI_PROJECT_ID") or "").strip()
+  commit_sha = (os.environ.get("CI_COMMIT_SHA") or "").strip()
+  target_branch = (os.environ.get("CI_COMMIT_REF_NAME") or "").strip()
+  job_token = (os.environ.get("CI_JOB_TOKEN") or "").strip()
 
-    if api_base and project_id and commit_sha and job_token:
-        project_id_enc = urllib.parse.quote(project_id, safe="")
-        commit_sha_enc = urllib.parse.quote(commit_sha, safe="")
+  if api_base and project_id and commit_sha and job_token:
+      project_id_enc = urllib.parse.quote(project_id, safe="")
+      commit_sha_enc = urllib.parse.quote(commit_sha, safe="")
 
-        try:
-            request = urllib.request.Request(
-                f"{api_base}/projects/{project_id_enc}/repository/commits/{commit_sha_enc}/merge_requests",
-                headers={"JOB-TOKEN": job_token},
-            )
-            with urllib.request.urlopen(request, timeout=10) as response:
-                merge_requests = json.load(response)
+      try:
+          request = urllib.request.Request(
+              f"{api_base}/projects/{project_id_enc}/repository/commits/{commit_sha_enc}/merge_requests",
+              headers={"JOB-TOKEN": job_token},
+          )
+          with urllib.request.urlopen(request, timeout=10) as response:
+              merge_requests = json.load(response)
 
-            candidates = [mr for mr in merge_requests if mr.get("target_branch") == target_branch] or merge_requests
-            merged_candidates = [mr for mr in candidates if mr.get("state") == "merged"]
-            if merged_candidates:
-                candidates = merged_candidates
+          candidates = [mr for mr in merge_requests if mr.get("target_branch") == target_branch] or merge_requests
+          merged_candidates = [mr for mr in candidates if mr.get("state") == "merged"]
+          if merged_candidates:
+              candidates = merged_candidates
 
-            if candidates:
-                candidates.sort(
-                    key=lambda item: item.get("merged_at") or item.get("updated_at") or item.get("created_at") or "",
-                    reverse=True,
-                )
-                selected = candidates[0]
-                detail = selected
-                mr_iid = str(selected.get("iid") or "")
+          if candidates:
+              candidates.sort(
+                  key=lambda item: item.get("merged_at") or item.get("updated_at") or item.get("created_at") or "",
+                  reverse=True,
+              )
+              selected = candidates[0]
+              detail = selected
+              mr_iid = str(selected.get("iid") or "")
 
-                if mr_iid:
-                    detail_request = urllib.request.Request(
-                        f"{api_base}/projects/{project_id_enc}/merge_requests/{urllib.parse.quote(mr_iid, safe='')}",
-                        headers={"JOB-TOKEN": job_token},
-                    )
-                    with urllib.request.urlopen(detail_request, timeout=10) as response:
-                        detail = json.load(response)
+              if mr_iid:
+                  detail_request = urllib.request.Request(
+                      f"{api_base}/projects/{project_id_enc}/merge_requests/{urllib.parse.quote(mr_iid, safe='')}",
+                      headers={"JOB-TOKEN": job_token},
+                  )
+                  with urllib.request.urlopen(detail_request, timeout=10) as response:
+                      detail = json.load(response)
 
-                author = detail.get("author") or selected.get("author") or {}
-                merge_user = detail.get("merge_user") or detail.get("merged_by") or {}
+              author = detail.get("author") or selected.get("author") or {}
+              merge_user = detail.get("merge_user") or detail.get("merged_by") or {}
 
-                exports.update(
-                    {
-                        "CHANGE_ORIGIN": "merge-request",
-                        "MR_IID": mr_iid,
-                        "MR_TITLE": str(detail.get("title") or selected.get("title") or "").replace("\n", " ").strip(),
-                        "MR_URL": str(detail.get("web_url") or selected.get("web_url") or "").strip(),
-                        "MR_AUTHOR_NAME": str(author.get("name") or exports["MR_AUTHOR_NAME"]).strip(),
-                        "MR_AUTHOR_USERNAME": str(author.get("username") or "").strip(),
-                        "MERGE_USER_NAME": str(merge_user.get("name") or exports["MERGE_USER_NAME"]).strip(),
-                        "MERGE_USER_USERNAME": str(merge_user.get("username") or exports["MERGE_USER_USERNAME"]).strip(),
-                    }
-                )
-        except Exception as exc:
-            print(f"GitLab MR metadata lookup skipped: {exc}", file=sys.stderr)
+              exports.update(
+                  {
+                      "CHANGE_ORIGIN": "merge-request",
+                      "MR_IID": mr_iid,
+                      "MR_TITLE": str(detail.get("title") or selected.get("title") or "").replace("\n", " ").strip(),
+                      "MR_URL": str(detail.get("web_url") or selected.get("web_url") or "").strip(),
+                      "MR_AUTHOR_NAME": str(author.get("name") or exports["MR_AUTHOR_NAME"]).strip(),
+                      "MR_AUTHOR_USERNAME": str(author.get("username") or "").strip(),
+                      "MERGE_USER_NAME": str(merge_user.get("name") or exports["MERGE_USER_NAME"]).strip(),
+                      "MERGE_USER_USERNAME": str(merge_user.get("username") or exports["MERGE_USER_USERNAME"]).strip(),
+                  }
+              )
+      except Exception as exc:
+          print(f"GitLab MR metadata lookup skipped: {exc}", file=sys.stderr)
 
-    for key, value in exports.items():
-        text = "" if value is None else str(value)
-        print(f"export {key}={shlex.quote(text)}")
-    PY
+  for key, value in exports.items():
+      text = "" if value is None else str(value)
+      print(f"export {key}={shlex.quote(text)}")
+  PY
   )"
 
 .send_backend_mattermost: &send_backend_mattermost |
