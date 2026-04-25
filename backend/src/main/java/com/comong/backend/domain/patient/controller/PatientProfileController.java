@@ -8,6 +8,7 @@ import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -16,6 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.comong.backend.domain.patient.dto.PatientProfileCreateRequest;
 import com.comong.backend.domain.patient.dto.PatientProfileResponse;
+import com.comong.backend.domain.patient.dto.PatientProfileUpdateRequest;
 import com.comong.backend.domain.patient.service.PatientProfileService;
 import com.comong.backend.global.common.response.ApiResponse;
 import com.comong.backend.global.security.JwtTokenProvider.AuthenticatedUser;
@@ -57,5 +59,19 @@ public class PatientProfileController {
             @AuthenticationPrincipal AuthenticatedUser currentUser, @PathVariable Long id) {
         return ResponseEntity.ok(
                 ApiResponse.success(patientProfileService.findOne(currentUser.userId(), id)));
+    }
+
+    @Operation(
+            summary = "환자 프로필 부분 수정",
+            description =
+                    "ID 로 지정한 환자 프로필의 필드를 부분 수정한다. null 인 필드는 기존 값을 유지한다. 본인 소유가 아니면 404 로 응답한다.")
+    @PatchMapping("/{id}")
+    public ResponseEntity<ApiResponse<PatientProfileResponse>> update(
+            @AuthenticationPrincipal AuthenticatedUser currentUser,
+            @PathVariable Long id,
+            @Valid @RequestBody PatientProfileUpdateRequest request) {
+        return ResponseEntity.ok(
+                ApiResponse.success(
+                        patientProfileService.update(currentUser.userId(), id, request)));
     }
 }
