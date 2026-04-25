@@ -15,6 +15,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 
 import com.comong.backend.domain.user.entity.User;
 
@@ -25,7 +26,14 @@ import lombok.NoArgsConstructor;
 
 @Entity
 @Getter
-@Table(name = "patient_profiles")
+@Table(
+        name = "patient_profiles",
+        uniqueConstraints = {
+            // 보호자 1명당 환자 1명 정책을 DB 레벨에서 강제. 서비스 선검사와의 race 를 차단한다.
+            // 위반 시 DataIntegrityViolationException 의 cause 에서 이 이름을 꺼내 P-002 로 매핑한다
+            // (PatientProfileService.create 참고).
+            @UniqueConstraint(name = "uk_patient_profiles_user_id", columnNames = "user_id")
+        })
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class PatientProfile {
 
