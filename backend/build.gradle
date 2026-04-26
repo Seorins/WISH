@@ -44,6 +44,12 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-starter-validation-test'
     testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
     testImplementation 'org.springframework.security:spring-security-test'
+    // Testcontainers: 실제 Postgres 컨테이너로 Flyway 마이그레이션 + JPA validate 정합성 검증.
+    // spring-boot-testcontainers 가 @ServiceConnection 을 제공하며, Boot 4 는 Testcontainers 2.x 를
+    // 관리한다. 2.x 부터 GA artifact 이름이 testcontainers-* prefix 로 변경됐다.
+    testImplementation 'org.springframework.boot:spring-boot-testcontainers'
+    testImplementation 'org.testcontainers:testcontainers-junit-jupiter'
+    testImplementation 'org.testcontainers:testcontainers-postgresql'
     testCompileOnly 'org.projectlombok:lombok'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     testAnnotationProcessor 'org.projectlombok:lombok'

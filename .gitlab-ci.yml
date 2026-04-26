@@ -224,11 +224,39 @@ backend:format:
   script:
     - ./gradlew spotlessCheck --no-daemon
 
+# Testcontainers Postgres 위에서 Flyway 마이그레이션 적용 + JPA ddl-auto=validate 로
+# 엔티티-스키마 정합성을 검증한다. 도메인 단위/슬라이스 테스트도 함께 실행된다.
+# DinD 가 필요하므로 GitLab Runner 가 privileged 모드로 등록돼 있어야 한다.
+backend:test:
+  extends: .backend-base
+  stage: verify
+  needs:
+    - backend:format
+  services:
+    - name: docker:27-dind
+      alias: docker
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+    TESTCONTAINERS_HOST_OVERRIDE: docker
+    TESTCONTAINERS_RYUK_DISABLED: "true"
+  script:
+    - ./gradlew test --no-daemon
+  artifacts:
+    when: always
+    expire_in: 1 week
+    reports:
+      junit:
+        - backend/build/test-results/test/TEST-*.xml
+    paths:
+      - backend/build/reports/tests/test/
+
 backend:build:
   extends: .backend-base
   stage: build
   needs:
     - backend:format
+    - backend:test
   script:
     - ./gradlew build -x test --no-daemon
   artifacts:
