@@ -1,8 +1,10 @@
 import Phaser from 'phaser'
+import { villageDialogs } from './dialog/villageDialogs'
 
 const FRAME_SIZE = 313
 const SPEED = 180
 const TALK_DISTANCE = 55
+const DIALOG_TEXT_BOX = { x: 830, y: 470, width: 780, height: 190 }
 
 type ObstacleRect = { x: number; y: number; w: number; h: number }
 
@@ -14,6 +16,11 @@ export class VillageScene extends Phaser.Scene {
   private obstacles!: Phaser.Physics.Arcade.StaticGroup
   private sehyunNpc!: Phaser.GameObjects.Sprite
   private dialogBox!: Phaser.GameObjects.Image
+  private dialogText!: Phaser.GameObjects.Text
+  private dialogTextBaseX = 0
+  private dialogTextBaseY = 0
+  private dialogTextBoxHeight = 0
+  private dialogScale = 1
   private target: Phaser.Math.Vector2 | null = null
   private lastDirection = 'down'
   private isDialogVisible = false
@@ -24,17 +31,17 @@ export class VillageScene extends Phaser.Scene {
   }
 
   preload() {
-    this.load.image('map', '/assets/images/map.png')
-    this.load.image('sehyun_talk', '/assets/images/sehyun_talk.png')
-    this.load.image('profile', '/assets/images/profile.png')
-    this.load.image('menu', '/assets/images/menu.png')
-    this.load.spritesheet('sehyun', '/assets/images/sehyun.png', {
+    this.load.image('map', '/assets/images/village/background/map.png')
+    this.load.image('sehyun_talk', '/assets/images/npcs/sehyun/dialog-frame.png')
+    this.load.image('profile', '/assets/images/common/profile.png')
+    this.load.image('menu', '/assets/images/ui/buttons/menu.png')
+    this.load.spritesheet('sehyun', '/assets/images/npcs/sehyun/sprite.png', {
       frameWidth: 313,
       frameHeight: 313,
       margin: 1,
       spacing: 0,
     })
-    this.load.spritesheet('character', '/assets/images/character_sheet.png', {
+    this.load.spritesheet('character', '/assets/images/common/player/character_sheet.png', {
       frameWidth: FRAME_SIZE,
       frameHeight: FRAME_SIZE,
       margin: 0,
@@ -58,11 +65,9 @@ export class VillageScene extends Phaser.Scene {
       .setScale(mapScale)
       .setDepth(0)
 
-    // ── 월드 & 카메라 바운드
     this.physics.world.setBounds(0, 0, W, H)
     this.cameras.main.setBounds(0, 0, W, H)
 
-    // ── 장애물
     this.obstacles = this.physics.add.staticGroup()
     OBSTACLES.forEach(({ x, y, w, h }) => {
       const box = this.add.rectangle(x * W, y * H, w * W, h * H, 0xff0000, 0).setDepth(1)
@@ -70,7 +75,6 @@ export class VillageScene extends Phaser.Scene {
       this.obstacles.add(box)
     })
 
-    // ── 캐릭터 애니메이션
     this.anims.create({
       key: 'walk-down',
       frames: this.anims.generateFrameNumbers('character', { start: 0, end: 3 }),
@@ -96,7 +100,6 @@ export class VillageScene extends Phaser.Scene {
       repeat: -1,
     })
 
-    // ── sehyun NPC
     this.anims.create({
       key: 'sehyun-loop',
       frames: this.anims.generateFrameNumbers('sehyun', { start: 0, end: 15 }),
@@ -113,14 +116,29 @@ export class VillageScene extends Phaser.Scene {
     this.physics.add.existing(sehyunBox, true)
     this.obstacles.add(sehyunBox)
 
-    // ── 대화창 (카메라 고정)
     const dialogW = Math.min(vw * 0.75, 860)
     this.dialogBox = this.add.image(vw / 2, vh - 80, 'sehyun_talk')
-    this.dialogBox.setDisplaySize(dialogW, dialogW * (821 / 1916))
+    const dialogSource = this.dialogBox.texture.getSourceImage() as HTMLImageElement
+    this.dialogBox.setDisplaySize(dialogW, dialogW * (dialogSource.height / dialogSource.width))
     this.dialogBox.setDepth(20).setAlpha(0).setScrollFactor(0)
     this.dialogBox.y = vh - this.dialogBox.displayHeight / 2 + 30
 
-    // ── 프로필 (카메라 고정)
+    const dialogScale = this.dialogBox.displayWidth / dialogSource.width
+    this.dialogScale = dialogScale
+    const dialogLeft = this.dialogBox.x - this.dialogBox.displayWidth / 2
+    const dialogTop = this.dialogBox.y - this.dialogBox.displayHeight / 2
+    this.dialogTextBaseX = dialogLeft + DIALOG_TEXT_BOX.x * dialogScale
+    this.dialogTextBaseY = dialogTop + DIALOG_TEXT_BOX.y * dialogScale
+    this.dialogTextBoxHeight = DIALOG_TEXT_BOX.height * dialogScale
+    this.dialogText = this.add.text(this.dialogTextBaseX, this.dialogTextBaseY, '', {
+      fontFamily: 'sans-serif',
+      fontSize: `${Math.round(44 * dialogScale)}px`,
+      color: '#3b2a1f',
+      wordWrap: { width: DIALOG_TEXT_BOX.width * dialogScale, useAdvancedWrap: true },
+      lineSpacing: Math.round(6 * dialogScale),
+    })
+    this.dialogText.setDepth(21).setAlpha(0).setScrollFactor(0).setOrigin(0, 0)
+
     const profileSize = Math.min(vw * 0.16, 180)
     const profile = this.add.image(0, 0, 'profile')
     profile.setDisplaySize(profileSize, profileSize)
@@ -129,7 +147,6 @@ export class VillageScene extends Phaser.Scene {
     profile.x = profileSize / 2 + 12
     profile.y = profileSize / 2 + 12
 
-    // ── 메뉴 (프로필 아래, 카메라 고정)
     const menu = this.add.image(0, 0, 'menu')
     const menuW = profileSize * 0.65
     menu.setDisplaySize(menuW, menuW * (menu.height / menu.width))
@@ -137,7 +154,6 @@ export class VillageScene extends Phaser.Scene {
     menu.x = menuW / 2 + 12 + (profileSize - menuW) / 2
     menu.y = profile.y + profileSize / 2 + menu.displayHeight / 2 - 4
 
-    // ── 플레이어
     this.player = this.physics.add.sprite(W / 2, H * 0.47, 'character', 0)
     this.player.setScale(0.55).setDepth(5)
     this.player.setCollideWorldBounds(true)
@@ -146,19 +162,14 @@ export class VillageScene extends Phaser.Scene {
 
     this.physics.add.collider(this.player, this.obstacles)
 
-    // ── 카메라: 초기 중앙 정렬 후 플레이어 따라가기
     this.cameras.main.centerOn(this.player.x, this.player.y)
     this.cameras.main.startFollow(this.player, true, 0.12, 0.12)
 
     this.cursors = this.input.keyboard!.createCursorKeys()
 
-    // ── ESC 키로 대화창 닫기
     this.input.keyboard!.on('keydown-ESC', () => {
       if (this.isDialogVisible) {
-        this.isDialogVisible = false
-        this.dialogDismissed = true
-        this.tweens.killTweensOf(this.dialogBox)
-        this.tweens.add({ targets: this.dialogBox, alpha: 0, duration: 200, ease: 'Sine.easeIn' })
+        this.hideDialog(true)
       }
     })
 
@@ -168,13 +179,11 @@ export class VillageScene extends Phaser.Scene {
         const outside =
           pointer.x < b.left || pointer.x > b.right || pointer.y < b.top || pointer.y > b.bottom
         if (outside) {
-          this.isDialogVisible = false
-          this.dialogDismissed = true
-          this.tweens.killTweensOf(this.dialogBox)
-          this.tweens.add({ targets: this.dialogBox, alpha: 0, duration: 200, ease: 'Sine.easeIn' })
+          this.hideDialog(true)
         }
         return
       }
+
       this.target = new Phaser.Math.Vector2(pointer.worldX, pointer.worldY)
       const marker = this.add.circle(pointer.worldX, pointer.worldY, 6, 0xffffff, 0.6)
       this.tweens.add({
@@ -247,13 +256,13 @@ export class VillageScene extends Phaser.Scene {
     const moving = vx !== 0 || vy !== 0
     if (moving) {
       const anim = `walk-${this.lastDirection}`
-      if (this.player.anims.currentAnim?.key !== anim || !this.player.anims.isPlaying)
+      if (this.player.anims.currentAnim?.key !== anim || !this.player.anims.isPlaying) {
         this.player.anims.play(anim)
+      }
     } else {
       this.player.anims.stop()
     }
 
-    // sehyun 근접 감지 → 대화창
     const dx = this.player.x - this.sehyunNpc.x
     const dy = this.player.y - this.sehyunNpc.y
     const dist = Math.sqrt(dx * dx + dy * dy)
@@ -261,17 +270,59 @@ export class VillageScene extends Phaser.Scene {
 
     if (near) {
       if (!this.isDialogVisible && !this.dialogDismissed) {
-        this.isDialogVisible = true
-        this.tweens.killTweensOf(this.dialogBox)
-        this.tweens.add({ targets: this.dialogBox, alpha: 1, duration: 300, ease: 'Sine.easeOut' })
+        this.showSehyunDialog()
       }
     } else {
       this.dialogDismissed = false
       if (this.isDialogVisible) {
-        this.isDialogVisible = false
-        this.tweens.killTweensOf(this.dialogBox)
-        this.tweens.add({ targets: this.dialogBox, alpha: 0, duration: 200, ease: 'Sine.easeIn' })
+        this.hideDialog(false)
       }
     }
+  }
+
+  private showSehyunDialog() {
+    const line = Phaser.Utils.Array.GetRandom(villageDialogs.sehyun)
+    this.dialogText.setText(line.text)
+    this.layoutDialogText()
+    this.isDialogVisible = true
+
+    this.tweens.killTweensOf(this.dialogBox)
+    this.tweens.killTweensOf(this.dialogText)
+    this.tweens.add({
+      targets: [this.dialogBox, this.dialogText],
+      alpha: 1,
+      duration: 300,
+      ease: 'Sine.easeOut',
+    })
+  }
+
+  private hideDialog(markDismissed: boolean) {
+    this.isDialogVisible = false
+    this.dialogDismissed = markDismissed
+
+    this.tweens.killTweensOf(this.dialogBox)
+    this.tweens.killTweensOf(this.dialogText)
+    this.tweens.add({
+      targets: [this.dialogBox, this.dialogText],
+      alpha: 0,
+      duration: 200,
+      ease: 'Sine.easeIn',
+    })
+  }
+
+  private layoutDialogText() {
+    const lineCount = this.dialogText.getWrappedText(this.dialogText.text).length
+    const opticalOffset =
+      lineCount <= 1
+        ? 34 * this.dialogScale
+        : lineCount === 2
+          ? 28 * this.dialogScale
+          : 8 * this.dialogScale
+    const centeredY =
+      this.dialogTextBaseY +
+      Math.max(0, (this.dialogTextBoxHeight - this.dialogText.height) / 2) -
+      opticalOffset
+
+    this.dialogText.setPosition(this.dialogTextBaseX, centeredY)
   }
 }
