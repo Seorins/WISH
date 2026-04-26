@@ -1,4 +1,12 @@
 import Phaser from 'phaser'
+import {
+  artChoiceOptions,
+  rumiContentDialogs,
+  rumiSelectDialogs,
+  type ArtChoiceOption,
+  type ArtContentMode,
+  type RumiDialogLine,
+} from '../dialog/rumiDialogs'
 
 const FRAME_SIZE = 313
 const SPEED = 180
@@ -6,6 +14,21 @@ const ART_ROOM_SPAWN = { xRatio: 0.5, yRatio: 0.76 }
 const ART_EXIT_PORTAL = { xRatio: 0.44, yRatio: 0.86, widthRatio: 0.12, heightRatio: 0.12 }
 const ART_RETURN_SPAWN = { xRatio: 0.585, yRatio: 0.855 }
 const RUMI_TALK_ICON = { xRatio: 0.335, yRatio: 0.33 }
+const RUMI_INTERACTION = { xRatio: 0.335, yRatio: 0.55, radiusRatio: 0.06 }
+const DIALOG_TEXT_BOX = {
+  withChoicesX: 790,
+  withChoicesWidth: 1260,
+  withChoicesY: 410,
+  withoutChoicesX: 900,
+  withoutChoicesWidth: 1040,
+  withoutChoicesY: 445,
+}
+const DIALOG_BUTTON_ROW_Y = 548
+
+type RumiDialogStep = {
+  line: RumiDialogLine
+  choices?: ArtChoiceOption[]
+}
 
 export class ArtSelectScene extends Phaser.Scene {
   private player!: Phaser.Types.Physics.Arcade.SpriteWithDynamicBody
@@ -15,6 +38,67 @@ export class ArtSelectScene extends Phaser.Scene {
   private exitPortal!: Phaser.Geom.Rectangle
   private isTransitioning = false
 
+  private talkIcon!: Phaser.GameObjects.Image
+  private rumiAnchor = new Phaser.Math.Vector2()
+  private rumiInteractionRadius = 0
+
+  private dialogFrame!: Phaser.GameObjects.Image
+  private dialogText!: Phaser.GameObjects.Text
+  private dialogEnterHint!: Phaser.GameObjects.Image
+  private dialogChoiceButtons: Phaser.GameObjects.Container[] = []
+  private dialogTextBaseX = 0
+  private dialogTextBaseY = 0
+  private dialogFrameTop = 0
+  private dialogTextWrapWidth = 0
+  private dialogScale = 1
+
+  private isDialogVisible = false
+  private dialogDismissed = false
+  private dialogSteps: RumiDialogStep[] = []
+  private dialogStepIndex = 0
+
+  private readonly handlePointerDown = (pointer: Phaser.Input.Pointer) => {
+    if (this.isDialogVisible) {
+      const step = this.dialogSteps[this.dialogStepIndex]
+      const bounds = this.dialogFrame.getBounds()
+      const clickedDialog = Phaser.Geom.Rectangle.Contains(bounds, pointer.x, pointer.y)
+
+      if (clickedDialog && step && !step.choices) {
+        this.advanceDialog()
+      } else if (!clickedDialog) {
+        this.closeDialog(true)
+      }
+
+      return
+    }
+
+    this.target = new Phaser.Math.Vector2(pointer.x, pointer.y)
+    const marker = this.add.circle(pointer.x, pointer.y, 6, 0xffffff, 0.6)
+    this.tweens.add({
+      targets: marker,
+      alpha: 0,
+      scale: 2,
+      duration: 400,
+      onComplete: () => marker.destroy(),
+    })
+  }
+
+  private readonly handleEnterDown = () => {
+    if (!this.isDialogVisible) {
+      return
+    }
+
+    this.advanceDialog()
+  }
+
+  private readonly handleEscDown = () => {
+    if (!this.isDialogVisible) {
+      return
+    }
+
+    this.closeDialog(true)
+  }
+
   constructor() {
     super({ key: 'ArtSelectScene' })
   }
@@ -22,6 +106,10 @@ export class ArtSelectScene extends Phaser.Scene {
   preload() {
     this.load.image('art-room-background', '/assets/images/themes/art/background/background.png')
     this.load.image('talk-icon', '/assets/images/ui/icons/talk.png')
+    this.load.image('talking-icon', '/assets/images/ui/icons/talking.png')
+    this.load.image('rumi-dialog-frame', '/assets/images/npcs/rumi/dialog-frame.png')
+    this.load.image('dialog-enter', '/assets/images/ui/dialog/enter.png')
+    this.load.image('dialog-select', '/assets/images/ui/dialog/select.png')
     this.load.spritesheet('character', '/assets/images/common/player/character_sheet.png', {
       frameWidth: FRAME_SIZE,
       frameHeight: FRAME_SIZE,
@@ -33,7 +121,11 @@ export class ArtSelectScene extends Phaser.Scene {
   create() {
     const { width: vw, height: vh } = this.scale
     this.isTransitioning = false
+    this.isDialogVisible = false
+    this.dialogDismissed = false
     this.target = null
+    this.dialogSteps = []
+    this.dialogStepIndex = 0
 
     const background = this.add.image(vw / 2, vh / 2, 'art-room-background')
     const source = background.texture.getSourceImage() as HTMLImageElement
@@ -42,7 +134,8 @@ export class ArtSelectScene extends Phaser.Scene {
 
     const backgroundLeft = background.x - background.displayWidth / 2
     const backgroundTop = background.y - background.displayHeight / 2
-    const talkIcon = this.add
+
+    this.talkIcon = this.add
       .image(
         backgroundLeft + background.displayWidth * RUMI_TALK_ICON.xRatio,
         backgroundTop + background.displayHeight * RUMI_TALK_ICON.yRatio,
@@ -50,18 +143,27 @@ export class ArtSelectScene extends Phaser.Scene {
       )
       .setDepth(12)
       .setDisplaySize(56, 56)
+
     this.tweens.add({
-      targets: talkIcon,
-      y: talkIcon.y - 10,
+      targets: this.talkIcon,
+      y: this.talkIcon.y - 10,
       duration: 700,
       yoyo: true,
       repeat: -1,
       ease: 'Sine.easeInOut',
     })
 
+    this.rumiAnchor.set(
+      backgroundLeft + background.displayWidth * RUMI_INTERACTION.xRatio,
+      backgroundTop + background.displayHeight * RUMI_INTERACTION.yRatio,
+    )
+    this.rumiInteractionRadius =
+      Math.min(background.displayWidth, background.displayHeight) * RUMI_INTERACTION.radiusRatio
+
     this.physics.world.setBounds(0, 0, vw, vh)
 
     this.ensureCharacterAnimations()
+    this.createDialogUi(vw, vh)
 
     this.player = this.physics.add.sprite(
       vw * ART_ROOM_SPAWN.xRatio,
@@ -82,17 +184,14 @@ export class ArtSelectScene extends Phaser.Scene {
     )
 
     this.cursors = this.input.keyboard!.createCursorKeys()
+    this.input.on('pointerdown', this.handlePointerDown)
+    this.input.keyboard!.on('keydown-ENTER', this.handleEnterDown)
+    this.input.keyboard!.on('keydown-ESC', this.handleEscDown)
 
-    this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      this.target = new Phaser.Math.Vector2(pointer.x, pointer.y)
-      const marker = this.add.circle(pointer.x, pointer.y, 6, 0xffffff, 0.6)
-      this.tweens.add({
-        targets: marker,
-        alpha: 0,
-        scale: 2,
-        duration: 400,
-        onComplete: () => marker.destroy(),
-      })
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.input.off('pointerdown', this.handlePointerDown)
+      this.input.keyboard?.off('keydown-ENTER', this.handleEnterDown)
+      this.input.keyboard?.off('keydown-ESC', this.handleEscDown)
     })
 
     this.cameras.main.fadeIn(250, 0, 0, 0)
@@ -145,6 +244,12 @@ export class ArtSelectScene extends Phaser.Scene {
       }
     }
 
+    if (this.isDialogVisible) {
+      vx = 0
+      vy = 0
+      this.target = null
+    }
+
     this.player.setVelocity(vx, vy)
 
     const moving = vx !== 0 || vy !== 0
@@ -157,9 +262,270 @@ export class ArtSelectScene extends Phaser.Scene {
       this.player.anims.stop()
     }
 
-    if (Phaser.Geom.Rectangle.Contains(this.exitPortal, this.player.x, this.player.y)) {
+    this.updateRumiConversation()
+
+    if (
+      !this.isDialogVisible &&
+      Phaser.Geom.Rectangle.Contains(this.exitPortal, this.player.x, this.player.y)
+    ) {
       this.returnToVillage()
     }
+  }
+
+  private updateRumiConversation() {
+    const distanceToRumi = Phaser.Math.Distance.Between(
+      this.player.x,
+      this.player.y,
+      this.rumiAnchor.x,
+      this.rumiAnchor.y,
+    )
+    const isNearRumi = distanceToRumi <= this.rumiInteractionRadius
+
+    if (!isNearRumi) {
+      this.dialogDismissed = false
+      return
+    }
+
+    if (!this.isDialogVisible && !this.dialogDismissed) {
+      this.startRumiConversation()
+    }
+  }
+
+  private startRumiConversation() {
+    this.dialogSteps = [
+      { line: Phaser.Utils.Array.GetRandom(rumiSelectDialogs.greeting) },
+      {
+        line: Phaser.Utils.Array.GetRandom(rumiSelectDialogs['choice-prompt']),
+        choices: artChoiceOptions,
+      },
+    ]
+    this.dialogStepIndex = 0
+    this.isDialogVisible = true
+    this.talkIcon.setTexture('talking-icon')
+    this.renderDialogStep()
+    this.fadeDialog(1, 220)
+  }
+
+  private renderDialogStep() {
+    const step = this.dialogSteps[this.dialogStepIndex]
+    if (!step) {
+      return
+    }
+
+    const showChoices = Boolean(step.choices?.length)
+    this.dialogTextBaseX =
+      this.dialogFrame.x -
+      this.dialogFrame.displayWidth / 2 +
+      (showChoices ? DIALOG_TEXT_BOX.withChoicesX : DIALOG_TEXT_BOX.withoutChoicesX) *
+        this.dialogScale
+    this.dialogTextWrapWidth =
+      (showChoices ? DIALOG_TEXT_BOX.withChoicesWidth : DIALOG_TEXT_BOX.withoutChoicesWidth) *
+      this.dialogScale
+    this.dialogTextBaseY =
+      this.dialogFrameTop +
+      (showChoices ? DIALOG_TEXT_BOX.withChoicesY : DIALOG_TEXT_BOX.withoutChoicesY) *
+        this.dialogScale
+    this.dialogText.setText(step.line.text)
+    this.dialogText.setWordWrapWidth(this.dialogTextWrapWidth, true)
+    this.layoutDialogText()
+    this.dialogEnterHint.setVisible(!showChoices)
+    this.setChoiceButtonsVisible(false)
+
+    if (showChoices && step.choices) {
+      this.renderChoiceButtons(step.choices)
+    }
+  }
+
+  private renderChoiceButtons(choices: ArtChoiceOption[]) {
+    this.setChoiceButtonsVisible(false)
+
+    const dialogTop = this.dialogFrame.y - this.dialogFrame.displayHeight
+    const buttonWidth = 430 * this.dialogScale
+    const buttonHeight = buttonWidth * (887 / 1774)
+    const gap = 36 * this.dialogScale
+    const totalWidth = buttonWidth * choices.length + gap * Math.max(0, choices.length - 1)
+    const firstCenterX =
+      this.dialogTextBaseX + this.dialogTextWrapWidth / 2 - totalWidth / 2 + buttonWidth / 2
+    const buttonCenterY = dialogTop + DIALOG_BUTTON_ROW_Y * this.dialogScale
+
+    choices.forEach((choice, index) => {
+      const button = this.dialogChoiceButtons[index]
+      if (!button) {
+        return
+      }
+
+      button.setPosition(firstCenterX + index * (buttonWidth + gap), buttonCenterY)
+      const background = button.list[0] as Phaser.GameObjects.Image
+      const label = button.list[1] as Phaser.GameObjects.Text
+
+      background.setDisplaySize(buttonWidth, buttonHeight)
+      label.setText(choice.label)
+      label.setStyle({ fontSize: `${Math.max(22, Math.round(34 * this.dialogScale))}px` })
+      button.setData('mode', choice.mode)
+      button.setVisible(true)
+      button.setAlpha(1)
+    })
+  }
+
+  private setChoiceButtonsVisible(visible: boolean) {
+    this.dialogChoiceButtons.forEach(button => {
+      button.setVisible(visible)
+      button.setAlpha(visible ? 1 : 0)
+    })
+  }
+
+  private handleChoiceSelected(mode: ArtContentMode) {
+    const confirmLine = Phaser.Utils.Array.GetRandom(rumiContentDialogs[mode].confirm)
+    this.dialogSteps = [...this.dialogSteps, { line: confirmLine }]
+    this.dialogStepIndex = this.dialogSteps.length - 1
+    this.renderDialogStep()
+  }
+
+  private advanceDialog() {
+    const step = this.dialogSteps[this.dialogStepIndex]
+    if (!step || step.choices) {
+      return
+    }
+
+    if (this.dialogStepIndex < this.dialogSteps.length - 1) {
+      this.dialogStepIndex += 1
+      this.renderDialogStep()
+      return
+    }
+
+    this.closeDialog(true)
+  }
+
+  private closeDialog(markDismissed: boolean) {
+    this.isDialogVisible = false
+    this.dialogDismissed = markDismissed
+    this.dialogSteps = []
+    this.dialogStepIndex = 0
+    this.talkIcon.setTexture('talk-icon')
+    this.setChoiceButtonsVisible(false)
+    this.fadeDialog(0, 180)
+  }
+
+  private fadeDialog(alpha: number, duration: number) {
+    const targets: Phaser.GameObjects.GameObject[] = [
+      this.dialogFrame,
+      this.dialogText,
+      this.dialogEnterHint,
+      ...this.dialogChoiceButtons,
+    ]
+
+    this.tweens.killTweensOf(targets)
+    this.tweens.add({
+      targets,
+      alpha,
+      duration,
+      ease: alpha > 0 ? 'Sine.easeOut' : 'Sine.easeIn',
+    })
+  }
+
+  private createDialogUi(vw: number, vh: number) {
+    const dialogSource = this.textures.get('rumi-dialog-frame').getSourceImage() as HTMLImageElement
+    const dialogWidth = Math.min(vw * 0.78, 1080)
+
+    this.dialogFrame = this.add.image(vw / 2, vh - 18, 'rumi-dialog-frame')
+    this.dialogFrame.setDisplaySize(
+      dialogWidth,
+      dialogWidth * (dialogSource.height / dialogSource.width),
+    )
+    this.dialogFrame.setOrigin(0.5, 1).setDepth(30).setScrollFactor(0).setAlpha(0)
+    this.dialogFrame.setInteractive({ useHandCursor: true })
+    this.dialogFrame.on(
+      'pointerdown',
+      (
+        _pointer: Phaser.Input.Pointer,
+        _x: number,
+        _y: number,
+        event: Phaser.Types.Input.EventData,
+      ) => {
+        event.stopPropagation()
+
+        if (!this.isDialogVisible) {
+          return
+        }
+
+        const step = this.dialogSteps[this.dialogStepIndex]
+        if (step && !step.choices) {
+          this.advanceDialog()
+        }
+      },
+    )
+
+    this.dialogScale = this.dialogFrame.displayWidth / dialogSource.width
+    const dialogLeft = this.dialogFrame.x - this.dialogFrame.displayWidth / 2
+    const dialogTop = this.dialogFrame.y - this.dialogFrame.displayHeight
+    this.dialogFrameTop = dialogTop
+
+    this.dialogTextBaseX = dialogLeft + DIALOG_TEXT_BOX.withChoicesX * this.dialogScale
+    this.dialogTextWrapWidth = DIALOG_TEXT_BOX.withChoicesWidth * this.dialogScale
+
+    this.dialogText = this.add.text(this.dialogTextBaseX, this.dialogTextBaseY, '', {
+      fontFamily: 'sans-serif',
+      fontSize: `${Math.max(18, Math.round(40 * this.dialogScale))}px`,
+      color: '#3b2a1f',
+      wordWrap: { width: this.dialogTextWrapWidth, useAdvancedWrap: true },
+      lineSpacing: Math.round(4 * this.dialogScale),
+    })
+    this.dialogText.setDepth(31).setScrollFactor(0).setOrigin(0, 0).setAlpha(0)
+
+    this.dialogEnterHint = this.add.image(
+      dialogLeft + this.dialogFrame.displayWidth - 92 * this.dialogScale,
+      dialogTop + this.dialogFrame.displayHeight - 86 * this.dialogScale,
+      'dialog-enter',
+    )
+    this.dialogEnterHint
+      .setDisplaySize(38 * this.dialogScale, 26 * this.dialogScale)
+      .setOrigin(0.5)
+      .setDepth(31)
+      .setScrollFactor(0)
+      .setAlpha(0)
+
+    this.dialogChoiceButtons = artChoiceOptions.map(choice => {
+      const background = this.add.image(0, 0, 'dialog-select').setDepth(31)
+      const label = this.add
+        .text(0, 0, choice.label, {
+          fontFamily: 'sans-serif',
+          fontSize: `${Math.max(18, Math.round(32 * this.dialogScale))}px`,
+          color: '#5d3c22',
+          align: 'center',
+        })
+        .setDepth(32)
+        .setOrigin(0.5)
+      const mode = choice.mode
+
+      background.setInteractive({ useHandCursor: true })
+      background.on('pointerover', () => background.setTint(0xf8edd6))
+      background.on('pointerout', () => background.clearTint())
+      background.on(
+        'pointerdown',
+        (
+          _pointer: Phaser.Input.Pointer,
+          _x: number,
+          _y: number,
+          event: Phaser.Types.Input.EventData,
+        ) => {
+          event.stopPropagation()
+          this.handleChoiceSelected(mode)
+        },
+      )
+
+      const container = this.add.container(0, 0, [background, label])
+      container.setDepth(31).setAlpha(0).setVisible(false).setScrollFactor(0)
+      return container
+    })
+  }
+
+  private layoutDialogText() {
+    const step = this.dialogSteps[this.dialogStepIndex]
+    const lineCount = this.dialogText.getWrappedText(this.dialogText.text).length
+    const hasChoices = Boolean(step?.choices?.length)
+    const yOffset = hasChoices && lineCount >= 2 ? 18 * this.dialogScale : 0
+
+    this.dialogText.setPosition(this.dialogTextBaseX, this.dialogTextBaseY - yOffset)
   }
 
   private returnToVillage() {
@@ -170,6 +536,10 @@ export class ArtSelectScene extends Phaser.Scene {
     this.isTransitioning = true
     this.target = null
     this.player.setVelocity(0, 0)
+
+    if (this.isDialogVisible) {
+      this.closeDialog(false)
+    }
 
     this.cameras.main.fadeOut(250, 0, 0, 0)
     this.time.delayedCall(250, () => {
