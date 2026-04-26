@@ -5,8 +5,14 @@ const FRAME_SIZE = 313
 const SPEED = 180
 const TALK_DISTANCE = 55
 const DIALOG_TEXT_BOX = { x: 830, y: 470, width: 780, height: 190 }
+const DEFAULT_PLAYER_SPAWN = { xRatio: 0.5, yRatio: 0.47 }
+const ART_PORTAL = { xRatio: 0.545, yRatio: 0.655, widthRatio: 0.08, heightRatio: 0.125 }
 
 type ObstacleRect = { x: number; y: number; w: number; h: number }
+type VillageSceneData = {
+  spawn?: { xRatio: number; yRatio: number }
+  portalCooldownMs?: number
+}
 
 const OBSTACLES: ObstacleRect[] = []
 
@@ -21,6 +27,9 @@ export class VillageScene extends Phaser.Scene {
   private dialogTextBaseY = 0
   private dialogTextBoxHeight = 0
   private dialogScale = 1
+  private artPortal!: Phaser.Geom.Rectangle
+  private portalCooldownUntil = 0
+  private isTransitioning = false
   private target: Phaser.Math.Vector2 | null = null
   private lastDirection = 'down'
   private isDialogVisible = false
@@ -49,8 +58,10 @@ export class VillageScene extends Phaser.Scene {
     })
   }
 
-  create() {
+  create(data: VillageSceneData = {}) {
     const { width: vw, height: vh } = this.scale
+    this.isTransitioning = false
+    this.target = null
 
     const mapImg = this.textures.get('map').getSourceImage() as HTMLImageElement
     const rawW = mapImg.width
@@ -67,6 +78,13 @@ export class VillageScene extends Phaser.Scene {
 
     this.physics.world.setBounds(0, 0, W, H)
     this.cameras.main.setBounds(0, 0, W, H)
+    this.portalCooldownUntil = this.time.now + (data.portalCooldownMs ?? 0)
+    this.artPortal = new Phaser.Geom.Rectangle(
+      ART_PORTAL.xRatio * W,
+      ART_PORTAL.yRatio * H,
+      ART_PORTAL.widthRatio * W,
+      ART_PORTAL.heightRatio * H,
+    )
 
     this.obstacles = this.physics.add.staticGroup()
     OBSTACLES.forEach(({ x, y, w, h }) => {
@@ -154,7 +172,8 @@ export class VillageScene extends Phaser.Scene {
     menu.x = menuW / 2 + 12 + (profileSize - menuW) / 2
     menu.y = profile.y + profileSize / 2 + menu.displayHeight / 2 - 4
 
-    this.player = this.physics.add.sprite(W / 2, H * 0.47, 'character', 0)
+    const spawn = data.spawn ?? DEFAULT_PLAYER_SPAWN
+    this.player = this.physics.add.sprite(W * spawn.xRatio, H * spawn.yRatio, 'character', 0)
     this.player.setScale(0.55).setDepth(5)
     this.player.setCollideWorldBounds(true)
     this.player.body.setSize(FRAME_SIZE * 0.35, FRAME_SIZE * 0.25)
@@ -278,6 +297,8 @@ export class VillageScene extends Phaser.Scene {
         this.hideDialog(false)
       }
     }
+
+    this.tryEnterArtScene()
   }
 
   private showSehyunDialog() {
@@ -307,6 +328,29 @@ export class VillageScene extends Phaser.Scene {
       alpha: 0,
       duration: 200,
       ease: 'Sine.easeIn',
+    })
+  }
+
+  private tryEnterArtScene() {
+    if (this.isTransitioning || this.time.now < this.portalCooldownUntil) {
+      return
+    }
+
+    if (!Phaser.Geom.Rectangle.Contains(this.artPortal, this.player.x, this.player.y)) {
+      return
+    }
+
+    this.isTransitioning = true
+    this.target = null
+    this.player.setVelocity(0, 0)
+
+    if (this.isDialogVisible) {
+      this.hideDialog(false)
+    }
+
+    this.cameras.main.fadeOut(250, 0, 0, 0)
+    this.time.delayedCall(250, () => {
+      this.scene.start('ArtSelectScene')
     })
   }
 
