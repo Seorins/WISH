@@ -10,8 +10,12 @@ class PoseLandmarkRequest(BaseModel):
 
 
 class PoseFrameRequest(BaseModel):
-    timestamp_ms: int = Field(..., description="Frame timestamp in milliseconds")
-    landmarks: list[PoseLandmarkRequest] = Field(..., description="Pose landmarks for one frame")
+    timestamp_ms: int = Field(..., ge=0, description="Frame timestamp in milliseconds")
+    landmarks: list[PoseLandmarkRequest] = Field(
+        ...,
+        min_length=1,
+        description="Pose landmarks for one frame",
+    )
     mirrored: bool = Field(
         default=True,
         description="Whether the source frame is mirrored like a front camera preview",
