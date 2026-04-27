@@ -7,6 +7,7 @@ const TALK_DISTANCE = 55
 const DIALOG_TEXT_BOX = { x: 830, y: 470, width: 780, height: 190 }
 const DEFAULT_PLAYER_SPAWN = { xRatio: 0.5, yRatio: 0.47 }
 const ART_PORTAL = { xRatio: 0.545, yRatio: 0.655, widthRatio: 0.08, heightRatio: 0.125 }
+const TAEKWONDO_PORTAL = { xRatio: 0.49, yRatio: 0.06, widthRatio: 0.09, heightRatio: 0.11 }
 
 type ObstacleRect = { x: number; y: number; w: number; h: number }
 type VillageSceneData = {
@@ -28,6 +29,7 @@ export class VillageScene extends Phaser.Scene {
   private dialogTextBoxHeight = 0
   private dialogScale = 1
   private artPortal!: Phaser.Geom.Rectangle
+  private taekwondoPortal!: Phaser.Geom.Rectangle
   private portalCooldownUntil = 0
   private isTransitioning = false
   private target: Phaser.Math.Vector2 | null = null
@@ -84,6 +86,12 @@ export class VillageScene extends Phaser.Scene {
       ART_PORTAL.yRatio * H,
       ART_PORTAL.widthRatio * W,
       ART_PORTAL.heightRatio * H,
+    )
+    this.taekwondoPortal = new Phaser.Geom.Rectangle(
+      TAEKWONDO_PORTAL.xRatio * W,
+      TAEKWONDO_PORTAL.yRatio * H,
+      TAEKWONDO_PORTAL.widthRatio * W,
+      TAEKWONDO_PORTAL.heightRatio * H,
     )
 
     this.obstacles = this.physics.add.staticGroup()
@@ -299,6 +307,7 @@ export class VillageScene extends Phaser.Scene {
     }
 
     this.tryEnterArtScene()
+    this.tryEnterTaekwondoScene()
   }
 
   private showSehyunDialog() {
@@ -351,6 +360,29 @@ export class VillageScene extends Phaser.Scene {
     this.cameras.main.fadeOut(250, 0, 0, 0)
     this.time.delayedCall(250, () => {
       this.scene.start('ArtSelectScene')
+    })
+  }
+
+  private tryEnterTaekwondoScene() {
+    if (this.isTransitioning || this.time.now < this.portalCooldownUntil) {
+      return
+    }
+
+    if (!Phaser.Geom.Rectangle.Contains(this.taekwondoPortal, this.player.x, this.player.y)) {
+      return
+    }
+
+    this.isTransitioning = true
+    this.target = null
+    this.player.setVelocity(0, 0)
+
+    if (this.isDialogVisible) {
+      this.hideDialog(false)
+    }
+
+    this.cameras.main.fadeOut(250, 0, 0, 0)
+    this.time.delayedCall(250, () => {
+      this.scene.start('TaekwondoSelectScene')
     })
   }
 
