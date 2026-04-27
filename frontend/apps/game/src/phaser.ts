@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
 import { StartScene } from './scenes/start/StartScene'
+import { ArtFreeDrawingScene } from './scenes/themes/art/free-drawing/ArtFreeDrawingScene'
 import { ArtSelectScene } from './scenes/themes/art/select/ArtSelectScene'
 import { VillageScene } from './scenes/village/VillageScene'
 
@@ -15,7 +16,7 @@ export function createGame(parent: HTMLElement): Phaser.Game {
       default: 'arcade',
       arcade: { debug: false },
     },
-    scene: [StartScene, VillageScene, ArtSelectScene],
+    scene: [StartScene, VillageScene, ArtSelectScene, ArtFreeDrawingScene],
     scale: {
       mode: Phaser.Scale.RESIZE,
       autoCenter: Phaser.Scale.CENTER_BOTH,
