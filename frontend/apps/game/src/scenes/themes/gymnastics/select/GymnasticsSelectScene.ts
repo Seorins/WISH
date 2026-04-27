@@ -291,7 +291,6 @@ export class GymnasticsSelectScene extends Phaser.Scene {
     this.time.delayedCall(250, () => {
       this.scene.start('VillageScene', {
         spawn: GYMNASTICS_RETURN_SPAWN,
-        portalCooldownMs: 1500,
       })
     })
   }
