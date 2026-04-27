@@ -2,17 +2,20 @@ import Phaser from 'phaser'
 
 const FRAME_SIZE = 313
 const SPEED = 180
+const TALK_DISTANCE = 100
 const TAEKWONDO_SPRITE_FRAME = { width: 384, height: 512 }
 const ROOM_SPAWN = { xRatio: 0.5, yRatio: 0.78 }
 const EXIT_PORTAL = { xRatio: 0.45, yRatio: 0.8, widthRatio: 0.11, heightRatio: 0.26 }
 const RETURN_SPAWN = { xRatio: 0.49, yRatio: 0.2 }
-const PRACTICE_CHARACTER = { xRatio: 0.52, yRatio: 0.58, scaleRatio: 0.34 }
-const PRACTICE_POSES = [0, 1, 2]
+const SEOKJAE = { xRatio: 0.52, yRatio: 0.58, scaleRatio: 0.34 }
+const SEOKJAE_TALK_ICON_OFFSET = { yRatio: 0.15 }
+const SEOKJAE_POSES = [0, 1, 2]
 const RANDOM_POSE_DELAY = 500
 
 export class TaekwondoSelectScene extends Phaser.Scene {
   private player!: Phaser.Types.Physics.Arcade.SpriteWithDynamicBody
-  private practiceCharacter!: Phaser.GameObjects.Sprite
+  private seokjaeNpc!: Phaser.GameObjects.Sprite
+  private talkIcon!: Phaser.GameObjects.Image
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys
   private target: Phaser.Math.Vector2 | null = null
   private lastDirection = 'down'
@@ -41,9 +44,11 @@ export class TaekwondoSelectScene extends Phaser.Scene {
       'taekwondo-room-background',
       '/assets/images/themes/taekwondo/background/taekwondo_inside.png',
     )
+    this.load.image('talk-icon', '/assets/images/ui/icons/talk.png')
+    this.load.image('talking-icon', '/assets/images/ui/icons/talking.png')
     this.load.spritesheet(
-      'taekwondo-practice-character',
-      '/assets/images/themes/taekwondo/characters/taekwondo_sprite.png',
+      'seokjae',
+      '/assets/images/themes/taekwondo/characters/seokjae_sprite.png',
       {
         frameWidth: TAEKWONDO_SPRITE_FRAME.width,
         frameHeight: TAEKWONDO_SPRITE_FRAME.height,
@@ -71,7 +76,7 @@ export class TaekwondoSelectScene extends Phaser.Scene {
 
     this.physics.world.setBounds(0, 0, vw, vh)
     this.ensureCharacterAnimations()
-    this.createPracticeCharacter(vw, vh)
+    this.createSeokjaeNpc(vw, vh)
 
     this.player = this.physics.add.sprite(
       vw * ROOM_SPAWN.xRatio,
@@ -161,6 +166,8 @@ export class TaekwondoSelectScene extends Phaser.Scene {
       this.player.anims.stop()
     }
 
+    this.updateSeokjaeTalkIcon()
+
     if (
       !this.isTransitioning &&
       Phaser.Geom.Rectangle.Contains(this.exitPortal, this.player.x, this.player.y)
@@ -169,27 +176,57 @@ export class TaekwondoSelectScene extends Phaser.Scene {
     }
   }
 
-  private createPracticeCharacter(vw: number, vh: number) {
-    this.practiceCharacter = this.add
-      .sprite(
-        vw * PRACTICE_CHARACTER.xRatio,
-        vh * PRACTICE_CHARACTER.yRatio,
-        'taekwondo-practice-character',
-        0,
-      )
+  private createSeokjaeNpc(vw: number, vh: number) {
+    this.seokjaeNpc = this.add
+      .sprite(vw * SEOKJAE.xRatio, vh * SEOKJAE.yRatio, 'seokjae', 0)
       .setDepth(6)
-    const scale = (Math.min(vw, vh) / TAEKWONDO_SPRITE_FRAME.height) * PRACTICE_CHARACTER.scaleRatio
-    this.practiceCharacter.setScale(scale)
-    this.startRandomPracticePose()
+    const scale = (Math.min(vw, vh) / TAEKWONDO_SPRITE_FRAME.height) * SEOKJAE.scaleRatio
+    this.seokjaeNpc.setScale(scale)
+    this.createSeokjaeTalkIcon(vh)
+    this.startRandomSeokjaePose()
   }
 
-  private startRandomPracticePose() {
-    this.practiceCharacter.setFrame(Phaser.Utils.Array.GetRandom(PRACTICE_POSES))
+  private createSeokjaeTalkIcon(vh: number) {
+    this.talkIcon = this.add
+      .image(
+        this.seokjaeNpc.x,
+        this.seokjaeNpc.y - vh * SEOKJAE_TALK_ICON_OFFSET.yRatio,
+        'talk-icon',
+      )
+      .setDepth(12)
+      .setDisplaySize(56, 56)
+
+    this.tweens.add({
+      targets: this.talkIcon,
+      y: this.talkIcon.y - 10,
+      duration: 700,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    })
+  }
+
+  private updateSeokjaeTalkIcon() {
+    const distanceToSeokjae = Phaser.Math.Distance.Between(
+      this.player.x,
+      this.player.y,
+      this.seokjaeNpc.x,
+      this.seokjaeNpc.y,
+    )
+    const textureKey = distanceToSeokjae <= TALK_DISTANCE ? 'talking-icon' : 'talk-icon'
+
+    if (this.talkIcon.texture.key !== textureKey) {
+      this.talkIcon.setTexture(textureKey)
+    }
+  }
+
+  private startRandomSeokjaePose() {
+    this.seokjaeNpc.setFrame(Phaser.Utils.Array.GetRandom(SEOKJAE_POSES))
     this.randomPoseTimer = this.time.addEvent({
       delay: RANDOM_POSE_DELAY,
       loop: true,
       callback: () => {
-        this.practiceCharacter.setFrame(Phaser.Utils.Array.GetRandom(PRACTICE_POSES))
+        this.seokjaeNpc.setFrame(Phaser.Utils.Array.GetRandom(SEOKJAE_POSES))
       },
     })
   }
