@@ -25,6 +25,7 @@ const DIALOG_TEXT_BOX = {
   withoutChoicesY: 445,
 }
 const DIALOG_BUTTON_ROW_Y = 548
+const CONTENT_CONFIRM_VISIBLE_MS = 1400
 
 type ArtSelectSceneData = {
   spawn?: { xRatio: number; yRatio: number }
@@ -65,6 +66,9 @@ export class ArtSelectScene extends Phaser.Scene {
   private dialogSteps: RumiDialogStep[] = []
   private dialogStepIndex = 0
   private selectedMode: ArtContentMode | null = null
+  private isWaitingContentStart = false
+  private contentStartReadyAt = 0
+  private contentStartTimer: Phaser.Time.TimerEvent | null = null
 
   private readonly handlePointerDown = (pointer: Phaser.Input.Pointer) => {
     if (this.isDialogVisible) {
@@ -147,6 +151,9 @@ export class ArtSelectScene extends Phaser.Scene {
     this.dialogSteps = []
     this.dialogStepIndex = 0
     this.selectedMode = null
+    this.isWaitingContentStart = false
+    this.contentStartReadyAt = 0
+    this.clearContentStartTimer()
     const spawn = data.spawn ?? ART_ROOM_SPAWN
 
     const background = this.add.image(vw / 2, vh / 2, 'art-room-background')
@@ -298,7 +305,7 @@ export class ArtSelectScene extends Phaser.Scene {
   }
 
   private updateRumiConversation() {
-    if (this.isAlbumVisible) {
+    if (this.isTransitioning || this.isAlbumVisible) {
       return
     }
 
@@ -326,6 +333,8 @@ export class ArtSelectScene extends Phaser.Scene {
     }
 
     this.selectedMode = null
+    this.isWaitingContentStart = false
+    this.contentStartReadyAt = 0
     this.dialogSteps = [
       { line: Phaser.Utils.Array.GetRandom(rumiSelectDialogs.greeting) },
       {
@@ -409,11 +418,29 @@ export class ArtSelectScene extends Phaser.Scene {
   }
 
   private handleChoiceSelected(mode: ArtContentMode) {
+    if (this.isTransitioning) {
+      return
+    }
+
+    this.clearContentStartTimer()
     this.selectedMode = mode
+    this.isWaitingContentStart = true
+    this.contentStartReadyAt = this.time.now + CONTENT_CONFIRM_VISIBLE_MS
     const confirmLine = Phaser.Utils.Array.GetRandom(rumiContentDialogs[mode].confirm)
     this.dialogSteps = [...this.dialogSteps, { line: confirmLine }]
     this.dialogStepIndex = this.dialogSteps.length - 1
     this.renderDialogStep()
+    this.dialogEnterHint.setVisible(false)
+    this.contentStartTimer = this.time.delayedCall(CONTENT_CONFIRM_VISIBLE_MS, () => {
+      if (
+        this.isDialogVisible &&
+        this.isWaitingContentStart &&
+        this.selectedMode === mode &&
+        !this.isTransitioning
+      ) {
+        this.startSelectedContent(mode)
+      }
+    })
   }
 
   private advanceDialog() {
@@ -428,7 +455,11 @@ export class ArtSelectScene extends Phaser.Scene {
       return
     }
 
-    if (this.selectedMode === 'free-drawing') {
+    if (this.isWaitingContentStart && this.selectedMode) {
+      if (this.time.now < this.contentStartReadyAt) {
+        return
+      }
+
       this.startSelectedContent(this.selectedMode)
       return
     }
@@ -437,14 +468,22 @@ export class ArtSelectScene extends Phaser.Scene {
   }
 
   private closeDialog(markDismissed: boolean) {
+    this.clearContentStartTimer()
     this.isDialogVisible = false
     this.dialogDismissed = markDismissed
     this.dialogSteps = []
     this.dialogStepIndex = 0
     this.selectedMode = null
+    this.isWaitingContentStart = false
+    this.contentStartReadyAt = 0
     this.talkIcon.setTexture('talk-icon')
     this.setChoiceButtonsVisible(false)
     this.fadeDialog(0, 180)
+  }
+
+  private clearContentStartTimer() {
+    this.contentStartTimer?.remove(false)
+    this.contentStartTimer = null
   }
 
   private startSelectedContent(mode: ArtContentMode) {
@@ -452,7 +491,10 @@ export class ArtSelectScene extends Phaser.Scene {
       return
     }
 
+    this.clearContentStartTimer()
     this.isTransitioning = true
+    this.isWaitingContentStart = false
+    this.contentStartReadyAt = 0
     this.target = null
     this.player.setVelocity(0, 0)
     this.closeDialog(false)
@@ -460,11 +502,11 @@ export class ArtSelectScene extends Phaser.Scene {
 
     this.time.delayedCall(220, () => {
       if (mode === 'free-drawing') {
-        this.scene.start('ArtFreeDrawingScene')
+        this.scene.start('ArtFreeDrawingScene', { suppressIntroDialog: true })
         return
       }
 
-      this.isTransitioning = false
+      this.scene.start('ArtColoringSelectScene', { suppressIntroDialog: true })
     })
   }
 

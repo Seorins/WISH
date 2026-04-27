@@ -12,6 +12,7 @@ import { rumiContentDialogs, type RumiContentDialogStage } from '../dialog/rumiD
 const ART_ROOM_RETURN_SPAWN = { xRatio: 0.5, yRatio: 0.76 }
 const CANVAS_SOURCE_SIZE = { width: 1535, height: 1024 }
 const CANVAS_DRAW_AREA = { x: 120, y: 150, width: 1288, height: 620 }
+const DELETE_BUTTON_SIZE = { width: 344, height: 336 }
 const PALETTE_SWATCHES = [
   { color: 0xff2b2b, sourceX: 1470, sourceY: 262 },
   { color: 0xff4d9a, sourceX: 1902, sourceY: 262 },
@@ -31,6 +32,9 @@ type PalettePoint = { color: number; x: number; y: number }
 type HandPointerState = {
   point: Phaser.Math.Vector2
   isDrawingGesture: boolean
+}
+type ArtFreeDrawingSceneData = {
+  suppressIntroDialog?: boolean
 }
 type HandActionKind = 'save' | 'reset' | 'exit'
 type ExportedDrawingPng = {
@@ -78,6 +82,7 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
   private pendingHandActionStartedAt = 0
   private activatedHandAction: HandActionKind | null = null
   private isSavingDrawing = false
+  private suppressStartupDialogs = false
   private saveButtonBaseScale = { x: 1, y: 1 }
   private resetButtonBaseScale = { x: 1, y: 1 }
   private exitButtonBaseScale = { x: 1, y: 1 }
@@ -96,7 +101,9 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
 
     if (!this.hasStartedDrawing) {
       this.hasStartedDrawing = true
-      this.showRumiLine('first-action')
+      if (!this.suppressStartupDialogs) {
+        this.showRumiLine('first-action')
+      }
     } else if (this.strokeCount % 4 === 0) {
       this.showRumiLine('encourage')
     }
@@ -146,8 +153,9 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
     this.load.image('art-ui-save-btn', '/assets/images/themes/art/ui/save_btn.png')
   }
 
-  create() {
+  create(data: ArtFreeDrawingSceneData = {}) {
     const { width: vw, height: vh } = this.scale
+    this.suppressStartupDialogs = Boolean(data.suppressIntroDialog)
     this.lastInteractionAt = this.time.now
     this.lastIdlePromptAt = this.time.now
     this.handTrackingDisposed = false
@@ -167,7 +175,11 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
     this.createRumiArea(vw, vh)
     this.createBrushCursor()
 
-    this.showRumiLine('intro')
+    if (this.suppressStartupDialogs) {
+      this.setRumiBubbleVisible(false)
+    } else {
+      this.showRumiLine('intro')
+    }
 
     this.input.on('pointerdown', this.handlePointerDown)
     this.input.on('pointermove', this.handlePointerMove)
@@ -463,7 +475,9 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
 
   private createExitButton(vw: number, _vh: number) {
     const buttonHeight = Math.max(48, Math.round(vw * 0.034))
-    const buttonWidth = Math.round(buttonHeight * (745 / 497))
+    const buttonWidth = Math.round(
+      buttonHeight * (DELETE_BUTTON_SIZE.width / DELETE_BUTTON_SIZE.height),
+    )
     const button = this.add
       .image(vw - 26 - buttonWidth / 2, 26 + buttonHeight / 2, 'art-ui-delete-btn')
       .setDepth(16)
@@ -647,7 +661,9 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
 
       if (!this.hasStartedDrawing) {
         this.hasStartedDrawing = true
-        this.showRumiLine('first-action')
+        if (!this.suppressStartupDialogs) {
+          this.showRumiLine('first-action')
+        }
       } else if (this.strokeCount % 4 === 0) {
         this.showRumiLine('encourage')
       }
@@ -797,6 +813,12 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
   private showRumiLine(stage: RumiContentDialogStage) {
     const line = Phaser.Utils.Array.GetRandom(rumiContentDialogs['free-drawing'][stage])
     this.rumiBubbleText.setText(line.text)
+    this.setRumiBubbleVisible(true)
+  }
+
+  private setRumiBubbleVisible(visible: boolean) {
+    this.rumiBubble.setVisible(visible)
+    this.rumiBubbleText.setVisible(visible)
   }
 
   private selectColor(color: number, _x: number, _y: number) {
