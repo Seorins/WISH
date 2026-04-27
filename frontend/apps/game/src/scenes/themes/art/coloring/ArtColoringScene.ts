@@ -1,0 +1,1331 @@
+import Phaser from 'phaser'
+import { HandTracker, type TrackedHand } from '@/game/motion/handTracker'
+import { detectIndexFingerGesture } from '@/game/motion/indexFingerGesture'
+import { toPointerCanvasCoordinates } from '@/game/motion/pointerCanvasCoordinates'
+import { toPointerConfidence } from '@/game/motion/pointerConfidence'
+import { toPointerCoordinates } from '@/game/motion/pointerCoordinates'
+import { getPointerReference } from '@/game/motion/pointerReference'
+import { PointerSmoother } from '@/game/motion/pointerSmoother'
+import { PointerTrackingGuard } from '@/game/motion/pointerTrackingGuard'
+import { rumiContentDialogs, type RumiContentDialogStage } from '../dialog/rumiDialogs'
+import { getColoringOption, coloringOptions, type ColoringOption } from './coloringOptions'
+
+const CANVAS_SOURCE_SIZE = { width: 1535, height: 1024 }
+const CANVAS_DRAW_AREA = { x: 120, y: 150, width: 1288, height: 620 }
+const DELETE_BUTTON_SIZE = { width: 344, height: 336 }
+const FILLABLE_WHITE_THRESHOLD = 245
+const HAND_FILL_COOLDOWN_MS = 320
+const PALETTE_SWATCHES = [
+  { color: 0xff2b2b, sourceX: 1470, sourceY: 262 },
+  { color: 0xff4d9a, sourceX: 1902, sourceY: 262 },
+  { color: 0xff6a1f, sourceX: 1467, sourceY: 588 },
+  { color: 0xffd12c, sourceX: 1903, sourceY: 589 },
+  { color: 0x7bdd1e, sourceX: 1476, sourceY: 905 },
+  { color: 0x138f2d, sourceX: 1890, sourceY: 895 },
+  { color: 0x36b7ff, sourceX: 1467, sourceY: 1253 },
+  { color: 0x3679ff, sourceX: 1895, sourceY: 1249 },
+  { color: 0x9a43d9, sourceX: 1483, sourceY: 1609 },
+  { color: 0xffb05a, sourceX: 1900, sourceY: 1598 },
+  { color: 0x8e5c32, sourceX: 1490, sourceY: 1968 },
+  { color: 0x2f2f2f, sourceX: 1873, sourceY: 2006 },
+] as const
+
+type ArtColoringSceneData = {
+  coloringId?: string
+  suppressIntroDialog?: boolean
+}
+
+type PalettePoint = { color: number; x: number; y: number }
+type HandPointerState = {
+  point: Phaser.Math.Vector2
+  isColoringGesture: boolean
+}
+type HandActionKind = 'save' | 'reset' | 'exit'
+type CachedFillRegion = {
+  pixelIndices: Uint32Array
+  bounds: { minX: number; minY: number; maxX: number; maxY: number }
+}
+
+export class ArtColoringScene extends Phaser.Scene {
+  private selectedOption: ColoringOption = coloringOptions[0]
+  private suppressIntroDialog = false
+  private drawBounds = new Phaser.Geom.Rectangle()
+  private coloringBaseBounds = new Phaser.Geom.Rectangle()
+  private coloringTexture!: Phaser.GameObjects.RenderTexture
+  private paletteSelection!: Phaser.GameObjects.Arc
+  private rumiBubble!: Phaser.GameObjects.Graphics
+  private rumiBubbleText!: Phaser.GameObjects.Text
+  private brushCursor!: Phaser.GameObjects.Image
+  private saveButton: Phaser.GameObjects.Image | null = null
+  private resetButton: Phaser.GameObjects.Image | null = null
+  private exitButton: Phaser.GameObjects.Image | null = null
+  private currentColor: number = PALETTE_SWATCHES[0].color
+  private palettePoints: PalettePoint[] = []
+  private suppressStartupDialogs = false
+  private handTracker: HandTracker | null = null
+  private readonly handPointerSmoother = new PointerSmoother({ alpha: 0.38 })
+  private readonly handTrackingGuard = new PointerTrackingGuard<Phaser.Math.Vector2>({
+    holdDurationMs: 120,
+  })
+  private isTransitioning = false
+  private isDrawing = false
+  private isStartingHandTracker = false
+  private handTrackingDisposed = false
+  private hasStartedColoring = false
+  private strokeCount = 0
+  private saveButtonBaseScale = { x: 1, y: 1 }
+  private resetButtonBaseScale = { x: 1, y: 1 }
+  private exitButtonBaseScale = { x: 1, y: 1 }
+  private sourceImageData: ImageData | null = null
+  private sourceImageSize = { width: 0, height: 0 }
+  private sourceFillBounds = { minX: 0, minY: 0, maxX: 0, maxY: 0 }
+  private regionIdByPixel: Int32Array | null = null
+  private cachedFillRegions: CachedFillRegion[] = []
+  private filledRegionColorById: Int32Array | null = null
+  private fillTextureIndex = 0
+  private lastHandColorSelectedAt = 0
+  private pendingHandColor: number | null = null
+  private pendingHandColorStartedAt = 0
+  private pendingHandAction: HandActionKind | null = null
+  private pendingHandActionStartedAt = 0
+  private activatedHandAction: HandActionKind | null = null
+  private lastHandFillRegionId: number | null = null
+  private lastHandFillAt = 0
+
+  private readonly handlePointerDown = (pointer: Phaser.Input.Pointer) => {
+    if (!this.handTracker?.isStarted && !this.isStartingHandTracker) {
+      this.startHandColoringMode()
+    }
+
+    if (!Phaser.Geom.Rectangle.Contains(this.drawBounds, pointer.x, pointer.y)) {
+      return
+    }
+
+    if (this.fillRegionAt(pointer.x, pointer.y)) {
+      this.handleSuccessfulFill()
+    }
+  }
+
+  private readonly handlePointerMove = (_pointer: Phaser.Input.Pointer) => {}
+
+  private readonly handlePointerUp = () => {
+    this.stopDrawing()
+  }
+
+  private readonly handleEscDown = () => {
+    this.returnToColoringSelect()
+  }
+
+  constructor() {
+    super({ key: 'ArtColoringScene' })
+  }
+
+  init(data: ArtColoringSceneData = {}) {
+    this.selectedOption = getColoringOption(data.coloringId)
+    this.suppressIntroDialog = Boolean(data.suppressIntroDialog)
+  }
+
+  preload() {
+    this.load.image('art-room-background', '/assets/images/themes/art/background/background.png')
+    this.load.image('art-ui-canvas', '/assets/images/themes/art/ui/canvas.png')
+    this.load.image('art-ui-palette', '/assets/images/themes/art/ui/palette.png')
+    this.load.image('art-ui-rumi', '/assets/images/themes/art/ui/rumi.png')
+    this.load.image('art-ui-brush', '/assets/images/themes/art/ui/brush.png')
+    this.load.image('art-ui-delete-btn', '/assets/images/themes/art/ui/delete_btn.png')
+    this.load.image('art-ui-reset-btn', '/assets/images/themes/art/ui/reset.png')
+    this.load.image('art-ui-save-btn', '/assets/images/themes/art/ui/save_btn.png')
+    coloringOptions.forEach(option => {
+      this.load.image(option.assetKey, option.imagePath)
+    })
+  }
+
+  create() {
+    this.isTransitioning = false
+    this.isDrawing = false
+    this.hasStartedColoring = false
+    this.strokeCount = 0
+    this.handTrackingDisposed = false
+    this.suppressStartupDialogs = this.suppressIntroDialog
+    this.lastHandFillRegionId = null
+    this.lastHandFillAt = 0
+    this.sourceImageData = null
+    this.sourceImageSize = { width: 0, height: 0 }
+    this.sourceFillBounds = { minX: 0, minY: 0, maxX: 0, maxY: 0 }
+    this.regionIdByPixel = null
+    this.cachedFillRegions = []
+    this.filledRegionColorById = null
+    this.fillTextureIndex = 0
+    const { width: vw, height: vh } = this.scale
+
+    const background = this.add.image(vw / 2, vh / 2, 'art-room-background')
+    const backgroundSource = background.texture.getSourceImage() as HTMLImageElement
+    const backgroundScale = Math.max(vw / backgroundSource.width, vh / backgroundSource.height)
+    background.setScale(backgroundScale).setDepth(0)
+
+    this.add.rectangle(vw / 2, vh / 2, vw, vh, 0xf4ead7, 0.08).setDepth(1)
+    this.createCanvas(vw, vh)
+    this.createHeader(vw)
+    this.createExitButton(vw)
+    this.createColoringBase()
+    this.createPalette(vw, vh)
+    this.createActionButtons()
+    this.createRumiArea(vw, vh)
+    this.createBrushCursor()
+    if (this.suppressIntroDialog) {
+      this.setRumiBubbleVisible(false)
+    } else {
+      this.showRumiLine('intro')
+    }
+
+    this.input.on('pointerdown', this.handlePointerDown)
+    this.input.on('pointermove', this.handlePointerMove)
+    this.input.on('pointerup', this.handlePointerUp)
+    this.input.on('pointerupoutside', this.handlePointerUp)
+    this.input.keyboard!.on('keydown-ESC', this.handleEscDown)
+    this.startHandColoringMode()
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.input.off('pointerdown', this.handlePointerDown)
+      this.input.off('pointermove', this.handlePointerMove)
+      this.input.off('pointerup', this.handlePointerUp)
+      this.input.off('pointerupoutside', this.handlePointerUp)
+      this.input.keyboard?.off('keydown-ESC', this.handleEscDown)
+      this.input.setDefaultCursor('default')
+      this.stopHandTracking()
+    })
+
+    this.cameras.main.fadeIn(220, 0, 0, 0)
+  }
+
+  update(time: number) {
+    const pointer = this.input.activePointer
+    if (this.brushCursor) {
+      this.brushCursor.setPosition(pointer.x, pointer.y)
+    }
+
+    this.updateHandColoring(time)
+  }
+
+  private createCanvas(vw: number, vh: number) {
+    const leftMargin = vw * 0.055
+    const rightPanelLeft = vw * 0.805
+    const availableLeftWidth = rightPanelLeft - leftMargin
+    const maxWidthByHeight = vh * 1.72
+    const maxWidth = Math.min(availableLeftWidth, maxWidthByHeight)
+    const canvasX = leftMargin + maxWidth / 2
+
+    const canvas = this.add.image(canvasX, vh * 0.528, 'art-ui-canvas').setDepth(5)
+    canvas.setDisplaySize(
+      maxWidth,
+      maxWidth * (CANVAS_SOURCE_SIZE.height / CANVAS_SOURCE_SIZE.width),
+    )
+
+    const scaleX = canvas.displayWidth / CANVAS_SOURCE_SIZE.width
+    const scaleY = canvas.displayHeight / CANVAS_SOURCE_SIZE.height
+
+    this.drawBounds.setTo(
+      canvas.x - canvas.displayWidth / 2 + CANVAS_DRAW_AREA.x * scaleX,
+      canvas.y - canvas.displayHeight / 2 + CANVAS_DRAW_AREA.y * scaleY,
+      CANVAS_DRAW_AREA.width * scaleX,
+      CANVAS_DRAW_AREA.height * scaleY,
+    )
+
+    this.coloringTexture = this.add
+      .renderTexture(
+        this.drawBounds.x,
+        this.drawBounds.y,
+        this.drawBounds.width,
+        this.drawBounds.height,
+      )
+      .setOrigin(0, 0)
+      .setDepth(8)
+  }
+
+  private createHeader(vw: number) {
+    const headerX = this.drawBounds.left
+    const headerTop = Math.max(28, this.drawBounds.top - 108)
+
+    this.add
+      .text(headerX, headerTop, '색칠하기', {
+        fontFamily: 'sans-serif',
+        fontSize: `${Math.max(28, Math.round(vw * 0.02))}px`,
+        color: '#fff8ec',
+        stroke: '#59361d',
+        strokeThickness: 6,
+      })
+      .setDepth(10)
+      .setOrigin(0, 0)
+
+    this.add
+      .text(headerX, headerTop + 44, `${this.selectedOption.label} 도안에 예쁜 색을 채워봐.`, {
+        fontFamily: 'sans-serif',
+        fontSize: `${Math.max(16, Math.round(vw * 0.01))}px`,
+        color: '#fff6ea',
+        stroke: '#5f4129',
+        strokeThickness: 4,
+      })
+      .setDepth(10)
+      .setOrigin(0, 0)
+  }
+
+  private createExitButton(vw: number) {
+    const buttonHeight = Math.max(48, Math.round(vw * 0.034))
+    const buttonWidth = Math.round(
+      buttonHeight * (DELETE_BUTTON_SIZE.width / DELETE_BUTTON_SIZE.height),
+    )
+    const button = this.add
+      .image(vw - 26 - buttonWidth / 2, 26 + buttonHeight / 2, 'art-ui-delete-btn')
+      .setDepth(16)
+      .setDisplaySize(buttonWidth, buttonHeight)
+      .setInteractive({ useHandCursor: true })
+    this.exitButton = button
+    this.exitButtonBaseScale = { x: button.scaleX, y: button.scaleY }
+
+    button.on('pointerover', () => button.setTint(0xf9f1d9))
+    button.on('pointerout', () => button.clearTint())
+    button.on(
+      'pointerdown',
+      (
+        _pointer: Phaser.Input.Pointer,
+        _x: number,
+        _y: number,
+        event: Phaser.Types.Input.EventData,
+      ) => {
+        event.stopPropagation()
+        this.returnToColoringSelect()
+      },
+    )
+  }
+
+  private createColoringBase() {
+    const source = this.textures
+      .get(this.selectedOption.assetKey)
+      .getSourceImage() as HTMLImageElement
+    const scale = Math.min(
+      (this.drawBounds.width * 0.82) / source.width,
+      (this.drawBounds.height * 0.9) / source.height,
+    )
+    const displayWidth = source.width * scale
+    const displayHeight = source.height * scale
+
+    this.coloringBaseBounds.setTo(
+      this.drawBounds.centerX - displayWidth / 2,
+      this.drawBounds.centerY - displayHeight / 2,
+      displayWidth,
+      displayHeight,
+    )
+    this.add
+      .rectangle(
+        this.coloringBaseBounds.centerX,
+        this.coloringBaseBounds.centerY,
+        this.coloringBaseBounds.width,
+        this.coloringBaseBounds.height,
+        0xffffff,
+        1,
+      )
+      .setDepth(6)
+    this.prepareSourceImageData(source)
+  }
+
+  private createPalette(vw: number, vh: number) {
+    const paletteHeight = Math.min(this.drawBounds.height * 0.88, vh * 0.41)
+    const panelCenterX = vw * 0.878
+    const paletteTargetTop = this.drawBounds.top + 2
+    const palette = this.add
+      .image(panelCenterX, paletteTargetTop + paletteHeight / 2, 'art-ui-palette')
+      .setDepth(8)
+    palette.setDisplaySize(paletteHeight * (3429 / 2286), paletteHeight)
+
+    const paletteLeft = palette.x - palette.displayWidth / 2
+    const paletteBoundsTop = palette.y - palette.displayHeight / 2
+    const scaleX = palette.displayWidth / 3429
+    const scaleY = palette.displayHeight / 2286
+    const selectionRadius = Math.max(11, palette.displayWidth * 0.034)
+    const hitWidth = palette.displayWidth * 0.115
+    const hitHeight = palette.displayHeight * 0.06
+
+    this.paletteSelection = this.add
+      .circle(0, 0, selectionRadius, 0xffffff, 0)
+      .setStrokeStyle(Math.max(3, selectionRadius * 0.14), 0xfff4da)
+      .setDepth(10)
+      .setVisible(false)
+
+    this.palettePoints = []
+
+    PALETTE_SWATCHES.forEach(swatch => {
+      const x = paletteLeft + swatch.sourceX * scaleX
+      const y = paletteBoundsTop + swatch.sourceY * scaleY
+      this.palettePoints.push({ color: swatch.color, x, y })
+
+      const hitArea = this.add
+        .rectangle(x, y, hitWidth, hitHeight, 0xffffff, 0.001)
+        .setDepth(9)
+        .setInteractive({ useHandCursor: true })
+
+      hitArea.on(
+        'pointerdown',
+        (
+          _pointer: Phaser.Input.Pointer,
+          _localX: number,
+          _localY: number,
+          event: Phaser.Types.Input.EventData,
+        ) => {
+          event.stopPropagation()
+          this.selectColor(swatch.color)
+        },
+      )
+    })
+
+    const firstPoint = this.palettePoints[0]
+    if (firstPoint) {
+      this.selectColor(this.currentColor)
+    }
+  }
+
+  private createActionButtons() {
+    const saveSource = this.textures.get('art-ui-save-btn').getSourceImage() as HTMLImageElement
+    const resetSource = this.textures.get('art-ui-reset-btn').getSourceImage() as HTMLImageElement
+    const resetButtonHeight = 48
+    const resetButtonWidth = Math.round(
+      resetButtonHeight * (resetSource.width / resetSource.height),
+    )
+    const saveButtonHeight = 44
+    const saveButtonWidth = Math.round(saveButtonHeight * (saveSource.width / saveSource.height))
+    const buttonGap = 2
+    const buttonY = Math.min(
+      this.scale.height - saveButtonHeight / 2 - 18,
+      this.drawBounds.bottom + saveButtonHeight / 2 + 6,
+    )
+    const rowRight = this.drawBounds.right - 54
+    const resetButtonX = rowRight - resetButtonWidth / 2
+    const saveButtonX = rowRight - resetButtonWidth - buttonGap - saveButtonWidth / 2
+
+    const saveButton = this.add.image(saveButtonX, buttonY, 'art-ui-save-btn').setDepth(15)
+    saveButton.setDisplaySize(saveButtonWidth, saveButtonHeight)
+    this.saveButton = saveButton
+    this.saveButtonBaseScale = { x: saveButton.scaleX, y: saveButton.scaleY }
+    saveButton.setInteractive({ useHandCursor: true })
+    saveButton.on('pointerover', () =>
+      this.applyActionButtonEffect(saveButton, this.saveButtonBaseScale, true),
+    )
+    saveButton.on('pointerout', () =>
+      this.applyActionButtonEffect(saveButton, this.saveButtonBaseScale, false),
+    )
+    saveButton.on(
+      'pointerdown',
+      (
+        _pointer: Phaser.Input.Pointer,
+        _localX: number,
+        _localY: number,
+        event: Phaser.Types.Input.EventData,
+      ) => {
+        event.stopPropagation()
+        this.saveColoring()
+      },
+    )
+
+    const resetButton = this.add.image(resetButtonX, buttonY, 'art-ui-reset-btn').setDepth(15)
+    resetButton.setDisplaySize(resetButtonWidth, resetButtonHeight)
+    this.resetButton = resetButton
+    this.resetButtonBaseScale = { x: resetButton.scaleX, y: resetButton.scaleY }
+    resetButton.setInteractive({ useHandCursor: true })
+    resetButton.on('pointerover', () =>
+      this.applyActionButtonEffect(resetButton, this.resetButtonBaseScale, true),
+    )
+    resetButton.on('pointerout', () =>
+      this.applyActionButtonEffect(resetButton, this.resetButtonBaseScale, false),
+    )
+    resetButton.on(
+      'pointerdown',
+      (
+        _pointer: Phaser.Input.Pointer,
+        _localX: number,
+        _localY: number,
+        event: Phaser.Types.Input.EventData,
+      ) => {
+        event.stopPropagation()
+        this.resetColoring()
+      },
+    )
+  }
+
+  private createRumiArea(vw: number, vh: number) {
+    const panelCenterX = vw * 0.878
+    const paletteHeight = Math.min(this.drawBounds.height * 0.88, vh * 0.41)
+    const paletteBottom = this.drawBounds.top + 2 + paletteHeight
+    const bubbleWidth = Math.min(vw * 0.19, 320)
+    const bubbleHeight = Math.min(vh * 0.14, 148)
+    const bubbleX = panelCenterX
+    const bubbleY = Math.min(vh * 0.71, paletteBottom + bubbleHeight / 2 + 10)
+    const rumiHeight = Math.min(vh * 0.24, 252)
+    const rumiY = Math.min(
+      vh - rumiHeight / 2 - 10,
+      bubbleY + bubbleHeight / 2 + rumiHeight / 2 - 28,
+    )
+
+    this.rumiBubble = this.add.graphics().setDepth(8)
+    this.drawSpeechBubble(bubbleX, bubbleY, bubbleWidth, bubbleHeight)
+    this.rumiBubbleText = this.add
+      .text(bubbleX, bubbleY, '', {
+        fontFamily: 'sans-serif',
+        fontSize: `${Math.max(16, Math.round(vw * 0.01))}px`,
+        color: '#4e321f',
+        align: 'center',
+        wordWrap: { width: bubbleWidth - 42, useAdvancedWrap: true },
+        lineSpacing: 6,
+      })
+      .setDepth(9)
+      .setOrigin(0.5)
+
+    const rumi = this.add.image(panelCenterX, rumiY, 'art-ui-rumi').setDepth(8)
+    rumi.setDisplaySize(rumiHeight * (871 / 1024), rumiHeight)
+  }
+
+  private drawSpeechBubble(x: number, y: number, width: number, height: number) {
+    this.rumiBubble.clear()
+    this.rumiBubble.fillStyle(0xfff6e8, 0.96)
+    this.rumiBubble.lineStyle(4, 0x8f6c48, 1)
+    this.rumiBubble.fillRoundedRect(x - width / 2, y - height / 2, width, height, 22)
+    this.rumiBubble.strokeRoundedRect(x - width / 2, y - height / 2, width, height, 22)
+  }
+
+  private createBrushCursor() {
+    this.input.setDefaultCursor('none')
+    this.brushCursor = this.add.image(0, 0, 'art-ui-brush').setDepth(20)
+    this.brushCursor.setDisplaySize(48, 48)
+    this.brushCursor.setOrigin(0.18, 0.88)
+    this.brushCursor.setScrollFactor(0)
+  }
+
+  private startHandColoringMode(delegate: 'GPU' | 'CPU' = 'GPU') {
+    if (this.handTracker || this.isStartingHandTracker) {
+      return
+    }
+
+    const tracker = new HandTracker({ delegate })
+    this.handTracker = tracker
+    this.isStartingHandTracker = true
+
+    void tracker
+      .start()
+      .then(() => {
+        this.isStartingHandTracker = false
+
+        if (this.handTrackingDisposed) {
+          tracker.stop()
+          if (this.handTracker === tracker) {
+            this.handTracker = null
+          }
+        }
+      })
+      .catch(error => {
+        this.isStartingHandTracker = false
+        tracker.stop()
+
+        if (this.handTracker === tracker) {
+          this.handTracker = null
+        }
+
+        if (!this.handTrackingDisposed && delegate === 'GPU') {
+          console.warn('Hand tracking GPU start failed, retrying with CPU.', error)
+          this.startHandColoringMode('CPU')
+          return
+        }
+
+        console.warn('Hand tracking start failed.', error)
+      })
+  }
+
+  private stopHandTracking() {
+    this.handTrackingDisposed = true
+    this.isStartingHandTracker = false
+    this.clearPendingHandAction()
+    this.clearPendingHandColor()
+    this.handPointerSmoother.reset()
+    this.handTrackingGuard.reset()
+    this.handTracker?.stop()
+    this.handTracker = null
+    this.lastHandFillRegionId = null
+  }
+
+  private updateHandColoring(timestampMs: number) {
+    const tracker = this.handTracker
+    if (!tracker?.isStarted || this.isDrawing) {
+      return
+    }
+
+    const result = tracker.detect(timestampMs)
+    const handState = result.hands[0] ? this.getHandPointerState(result.hands[0]) : null
+    const tracking = this.handTrackingGuard.update(handState?.point ?? null, result.timestampMs)
+
+    if (tracking.shouldResetSmoother) {
+      this.handPointerSmoother.reset()
+      this.lastHandFillRegionId = null
+    }
+
+    if (!tracking.point) {
+      this.clearPendingHandAction()
+      this.lastHandFillRegionId = null
+      return
+    }
+
+    const smoothedPoint = this.handPointerSmoother.smooth(tracking.point)
+    this.brushCursor?.setPosition(smoothedPoint.x, smoothedPoint.y)
+
+    if (tracking.status !== 'tracked') {
+      return
+    }
+
+    if (!handState?.isColoringGesture) {
+      this.clearPendingHandAction()
+      this.lastHandFillRegionId = null
+      return
+    }
+
+    if (this.tryActivateActionButtonFromHand(smoothedPoint, result.timestampMs)) {
+      this.lastHandFillRegionId = null
+      return
+    }
+
+    if (this.trySelectColorFromHand(smoothedPoint, result.timestampMs)) {
+      this.lastHandFillRegionId = null
+      return
+    }
+
+    if (!Phaser.Geom.Rectangle.Contains(this.drawBounds, smoothedPoint.x, smoothedPoint.y)) {
+      this.lastHandFillRegionId = null
+      return
+    }
+
+    this.tryFillFromHand(smoothedPoint, result.timestampMs)
+  }
+
+  private getHandPointerState(hand: TrackedHand): HandPointerState | null {
+    const confidence = toPointerConfidence(hand.score, { activeThreshold: 0.35 })
+    if (hand.score !== undefined && !confidence.isConfident) {
+      return null
+    }
+
+    const pointerReference = getPointerReference(hand)
+    if (!pointerReference) {
+      return null
+    }
+
+    const pointerCoordinates = toPointerCoordinates(
+      pointerReference,
+      { width: this.scale.width, height: this.scale.height },
+      { mirrorX: true },
+    )
+    const canvasCoordinates = toPointerCanvasCoordinates(
+      pointerCoordinates,
+      {
+        left: this.drawBounds.left,
+        top: this.drawBounds.top,
+        width: this.drawBounds.width,
+        height: this.drawBounds.height,
+      },
+      undefined,
+      { clampToCanvas: false },
+    )
+
+    return {
+      point: new Phaser.Math.Vector2(
+        this.drawBounds.left + canvasCoordinates.canvasX,
+        this.drawBounds.top + canvasCoordinates.canvasY,
+      ),
+      isColoringGesture: detectIndexFingerGesture(hand).isIndexOnlyGesture,
+    }
+  }
+
+  private tryActivateActionButtonFromHand(point: Phaser.Math.Vector2, timestampMs: number) {
+    const action = this.getHandActionAt(point)
+    if (!action) {
+      this.clearPendingHandAction()
+      return false
+    }
+
+    this.setActionButtonHover(action)
+
+    if (this.pendingHandAction !== action) {
+      this.pendingHandAction = action
+      this.pendingHandActionStartedAt = timestampMs
+      this.activatedHandAction = null
+      return true
+    }
+
+    if (
+      this.activatedHandAction === action ||
+      timestampMs - this.pendingHandActionStartedAt < 600
+    ) {
+      return true
+    }
+
+    this.activatedHandAction = action
+    if (action === 'save') {
+      this.saveColoring()
+    } else if (action === 'reset') {
+      this.resetColoring()
+    } else {
+      this.returnToColoringSelect()
+    }
+
+    return true
+  }
+
+  private getHandActionAt(point: Phaser.Math.Vector2): HandActionKind | null {
+    if (this.saveButton?.getBounds().contains(point.x, point.y)) {
+      return 'save'
+    }
+
+    if (this.resetButton?.getBounds().contains(point.x, point.y)) {
+      return 'reset'
+    }
+
+    if (this.exitButton?.getBounds().contains(point.x, point.y)) {
+      return 'exit'
+    }
+
+    return null
+  }
+
+  private setActionButtonHover(action: HandActionKind | null) {
+    this.applyActionButtonEffect(this.saveButton, this.saveButtonBaseScale, action === 'save')
+    this.applyActionButtonEffect(this.resetButton, this.resetButtonBaseScale, action === 'reset')
+    this.applyActionButtonEffect(this.exitButton, this.exitButtonBaseScale, action === 'exit')
+  }
+
+  private clearPendingHandAction() {
+    this.pendingHandAction = null
+    this.pendingHandActionStartedAt = 0
+    this.activatedHandAction = null
+    this.setActionButtonHover(null)
+  }
+
+  private trySelectColorFromHand(point: Phaser.Math.Vector2, timestampMs: number) {
+    const nearest = this.getNearestPaletteColor(point.x, point.y)
+    if (!nearest) {
+      return false
+    }
+
+    const distance = Phaser.Math.Distance.Between(point.x, point.y, nearest.x, nearest.y)
+    const hitRadius = Math.max(24, Math.min(this.scale.width, this.scale.height) * 0.034)
+    if (distance > hitRadius) {
+      this.clearPendingHandColor()
+      return false
+    }
+
+    if (this.pendingHandColor !== nearest.color) {
+      this.pendingHandColor = nearest.color
+      this.pendingHandColorStartedAt = timestampMs
+      return true
+    }
+
+    if (timestampMs - this.pendingHandColorStartedAt < 600) {
+      return true
+    }
+
+    if (nearest.color === this.currentColor && timestampMs - this.lastHandColorSelectedAt < 220) {
+      return true
+    }
+
+    this.selectColor(nearest.color)
+    this.lastHandColorSelectedAt = timestampMs
+    this.clearPendingHandColor()
+    return true
+  }
+
+  private clearPendingHandColor() {
+    this.pendingHandColor = null
+    this.pendingHandColorStartedAt = 0
+  }
+
+  private tryFillFromHand(point: Phaser.Math.Vector2, timestampMs: number) {
+    const regionId = this.getRegionIdAt(point.x, point.y)
+    if (regionId < 0) {
+      this.lastHandFillRegionId = null
+      return
+    }
+
+    if (
+      this.lastHandFillRegionId === regionId ||
+      timestampMs - this.lastHandFillAt < HAND_FILL_COOLDOWN_MS
+    ) {
+      return
+    }
+
+    this.lastHandFillRegionId = regionId
+    this.lastHandFillAt = timestampMs
+    if (this.fillRegionById(regionId)) {
+      this.handleSuccessfulFill()
+    }
+  }
+
+  private applyActionButtonEffect(
+    button: Phaser.GameObjects.Image | null,
+    baseScale: { x: number; y: number },
+    isActive: boolean,
+  ) {
+    if (!button) {
+      return
+    }
+
+    if (isActive) {
+      button.setTint(0xf9f1d9)
+      button.setScale(baseScale.x * 1.06, baseScale.y * 1.06)
+      return
+    }
+
+    button.clearTint()
+    button.setScale(baseScale.x, baseScale.y)
+  }
+
+  private selectColor(color: number) {
+    this.currentColor = color
+    this.paletteSelection.setVisible(false)
+  }
+
+  private getNearestPaletteColor(x: number, y: number): PalettePoint | null {
+    let nearest: PalettePoint | null = null
+    let nearestDistance = Number.POSITIVE_INFINITY
+
+    for (const point of this.palettePoints) {
+      const distance = Phaser.Math.Distance.Between(x, y, point.x, point.y)
+      if (distance < nearestDistance) {
+        nearest = point
+        nearestDistance = distance
+      }
+    }
+
+    return nearest
+  }
+
+  private showRumiLine(stage: RumiContentDialogStage) {
+    const line = Phaser.Utils.Array.GetRandom(rumiContentDialogs.coloring[stage])
+    this.rumiBubbleText.setText(line.text)
+    this.setRumiBubbleVisible(true)
+  }
+
+  private setRumiBubbleVisible(visible: boolean) {
+    this.rumiBubble.setVisible(visible)
+    this.rumiBubbleText.setVisible(visible)
+  }
+
+  private handleSuccessfulFill() {
+    this.strokeCount += 1
+
+    if (!this.hasStartedColoring) {
+      this.hasStartedColoring = true
+      if (!this.suppressStartupDialogs) {
+        this.showRumiLine('first-action')
+      }
+    } else if (this.strokeCount % 4 === 0) {
+      this.showRumiLine('encourage')
+    }
+  }
+
+  private prepareSourceImageData(source: HTMLImageElement) {
+    const sourceWidth = Math.max(1, Math.round(this.drawBounds.width))
+    const sourceHeight = Math.max(1, Math.round(this.drawBounds.height))
+    const sourceCanvas = document.createElement('canvas')
+    sourceCanvas.width = sourceWidth
+    sourceCanvas.height = sourceHeight
+    const context = sourceCanvas.getContext('2d', { willReadFrequently: true })
+
+    if (!context) {
+      this.sourceImageData = null
+      return
+    }
+
+    const imageOffsetX = this.coloringBaseBounds.x - this.drawBounds.x
+    const imageOffsetY = this.coloringBaseBounds.y - this.drawBounds.y
+
+    context.drawImage(
+      source,
+      imageOffsetX,
+      imageOffsetY,
+      this.coloringBaseBounds.width,
+      this.coloringBaseBounds.height,
+    )
+
+    this.sourceImageData = context.getImageData(0, 0, sourceWidth, sourceHeight)
+    this.sourceImageSize = { width: sourceWidth, height: sourceHeight }
+    this.sourceFillBounds = {
+      minX: Math.max(0, Math.floor(imageOffsetX)),
+      minY: Math.max(0, Math.floor(imageOffsetY)),
+      maxX: Math.min(sourceWidth - 1, Math.ceil(imageOffsetX + this.coloringBaseBounds.width) - 1),
+      maxY: Math.min(
+        sourceHeight - 1,
+        Math.ceil(imageOffsetY + this.coloringBaseBounds.height) - 1,
+      ),
+    }
+    this.createMaskedColoringLayers(this.sourceImageData)
+    this.prepareFillRegions()
+  }
+
+  private isFillableSourcePixel(dataIndex: number) {
+    if (!this.sourceImageData) {
+      return false
+    }
+
+    const data = this.sourceImageData.data
+    const alpha = data[dataIndex + 3]
+    const red = data[dataIndex]
+    const green = data[dataIndex + 1]
+    const blue = data[dataIndex + 2]
+
+    return (
+      alpha > 16 &&
+      red >= FILLABLE_WHITE_THRESHOLD &&
+      green >= FILLABLE_WHITE_THRESHOLD &&
+      blue >= FILLABLE_WHITE_THRESHOLD
+    )
+  }
+
+  private prepareFillRegions() {
+    if (!this.sourceImageData) {
+      this.regionIdByPixel = null
+      this.cachedFillRegions = []
+      this.filledRegionColorById = null
+      return
+    }
+
+    const { width, height } = this.sourceImageSize
+    const totalPixels = width * height
+    const fillablePixelMask = new Uint8Array(totalPixels)
+    const visitedPixels = new Uint8Array(totalPixels)
+    const regionIdByPixel = new Int32Array(totalPixels).fill(-1)
+    const cachedFillRegions: CachedFillRegion[] = []
+    const { minX, minY, maxX, maxY } = this.sourceFillBounds
+
+    if (maxX < minX || maxY < minY) {
+      this.regionIdByPixel = regionIdByPixel
+      this.cachedFillRegions = cachedFillRegions
+      this.filledRegionColorById = new Int32Array(0)
+      return
+    }
+
+    for (let y = minY; y <= maxY; y += 1) {
+      for (let x = minX; x <= maxX; x += 1) {
+        const pixelIndex = y * width + x
+        if (this.isFillableSourcePixel(pixelIndex * 4)) {
+          fillablePixelMask[pixelIndex] = 1
+        }
+      }
+    }
+
+    const stack = new Int32Array(totalPixels)
+    for (let y = minY; y <= maxY; y += 1) {
+      for (let x = minX; x <= maxX; x += 1) {
+        const seedIndex = y * width + x
+        if (!fillablePixelMask[seedIndex] || visitedPixels[seedIndex]) {
+          continue
+        }
+
+        const pixelIndices: number[] = []
+        let stackLength = 1
+        let minRegionX = x
+        let maxRegionX = x
+        let minRegionY = y
+        let maxRegionY = y
+        let touchesExterior = false
+        stack[0] = seedIndex
+        visitedPixels[seedIndex] = 1
+
+        while (stackLength > 0) {
+          stackLength -= 1
+          const pixelIndex = stack[stackLength]
+          pixelIndices.push(pixelIndex)
+
+          const pixelX = pixelIndex % width
+          const pixelY = Math.floor(pixelIndex / width)
+          minRegionX = Math.min(minRegionX, pixelX)
+          maxRegionX = Math.max(maxRegionX, pixelX)
+          minRegionY = Math.min(minRegionY, pixelY)
+          maxRegionY = Math.max(maxRegionY, pixelY)
+          if (pixelX <= minX || pixelX >= maxX || pixelY <= minY || pixelY >= maxY) {
+            touchesExterior = true
+          }
+
+          stackLength = this.pushFillNeighbor(
+            pixelIndex - 1,
+            stack,
+            stackLength,
+            fillablePixelMask,
+            visitedPixels,
+            pixelX > minX,
+          )
+          stackLength = this.pushFillNeighbor(
+            pixelIndex + 1,
+            stack,
+            stackLength,
+            fillablePixelMask,
+            visitedPixels,
+            pixelX < maxX,
+          )
+          stackLength = this.pushFillNeighbor(
+            pixelIndex - width,
+            stack,
+            stackLength,
+            fillablePixelMask,
+            visitedPixels,
+            pixelY > minY,
+          )
+          stackLength = this.pushFillNeighbor(
+            pixelIndex + width,
+            stack,
+            stackLength,
+            fillablePixelMask,
+            visitedPixels,
+            pixelY < maxY,
+          )
+        }
+
+        if (touchesExterior) {
+          continue
+        }
+
+        const regionId = cachedFillRegions.length
+        for (const pixelIndex of pixelIndices) {
+          regionIdByPixel[pixelIndex] = regionId
+        }
+
+        cachedFillRegions.push({
+          pixelIndices: Uint32Array.from(pixelIndices),
+          bounds: {
+            minX: minRegionX,
+            minY: minRegionY,
+            maxX: maxRegionX,
+            maxY: maxRegionY,
+          },
+        })
+      }
+    }
+
+    this.regionIdByPixel = regionIdByPixel
+    this.cachedFillRegions = cachedFillRegions
+    this.filledRegionColorById = new Int32Array(cachedFillRegions.length).fill(-1)
+  }
+
+  private pushFillNeighbor(
+    pixelIndex: number,
+    stack: Int32Array,
+    stackLength: number,
+    fillablePixelMask: Uint8Array,
+    visitedPixels: Uint8Array,
+    canPush: boolean,
+  ) {
+    if (!canPush || !fillablePixelMask[pixelIndex] || visitedPixels[pixelIndex]) {
+      return stackLength
+    }
+
+    visitedPixels[pixelIndex] = 1
+    stack[stackLength] = pixelIndex
+    return stackLength + 1
+  }
+
+  private createMaskedColoringLayers(sourceImageData: ImageData) {
+    const { width, height } = sourceImageData
+    const maskCanvas = document.createElement('canvas')
+    const lineCanvas = document.createElement('canvas')
+    maskCanvas.width = width
+    maskCanvas.height = height
+    lineCanvas.width = width
+    lineCanvas.height = height
+
+    const maskContext = maskCanvas.getContext('2d')
+    const lineContext = lineCanvas.getContext('2d')
+    if (!maskContext || !lineContext) {
+      return
+    }
+
+    const maskImageData = maskContext.createImageData(width, height)
+    const lineImageData = lineContext.createImageData(width, height)
+    const sourceData = sourceImageData.data
+    const maskData = maskImageData.data
+    const lineData = lineImageData.data
+
+    for (let dataIndex = 0; dataIndex < sourceData.length; dataIndex += 4) {
+      const alpha = sourceData[dataIndex + 3]
+      if (alpha <= 16) {
+        continue
+      }
+
+      const red = sourceData[dataIndex]
+      const green = sourceData[dataIndex + 1]
+      const blue = sourceData[dataIndex + 2]
+      const isFillable =
+        red >= FILLABLE_WHITE_THRESHOLD &&
+        green >= FILLABLE_WHITE_THRESHOLD &&
+        blue >= FILLABLE_WHITE_THRESHOLD
+
+      if (isFillable) {
+        maskData[dataIndex] = 255
+        maskData[dataIndex + 1] = 255
+        maskData[dataIndex + 2] = 255
+        maskData[dataIndex + 3] = 255
+        continue
+      }
+
+      lineData[dataIndex] = red
+      lineData[dataIndex + 1] = green
+      lineData[dataIndex + 2] = blue
+      lineData[dataIndex + 3] = alpha
+    }
+
+    maskContext.putImageData(maskImageData, 0, 0)
+    lineContext.putImageData(lineImageData, 0, 0)
+
+    const maskTextureKey = `art-coloring-mask-${this.selectedOption.id}`
+    if (this.replaceCanvasTexture(maskTextureKey, maskCanvas)) {
+      const maskImage = this.add
+        .image(this.drawBounds.x, this.drawBounds.y, maskTextureKey)
+        .setOrigin(0, 0)
+        .setVisible(false)
+      this.coloringTexture.setMask(maskImage.createBitmapMask())
+    }
+
+    const lineTextureKey = `art-coloring-line-${this.selectedOption.id}`
+    if (this.replaceCanvasTexture(lineTextureKey, lineCanvas)) {
+      this.add
+        .image(this.drawBounds.x, this.drawBounds.y, lineTextureKey)
+        .setOrigin(0, 0)
+        .setDepth(9)
+    }
+  }
+
+  private replaceCanvasTexture(textureKey: string, canvas: HTMLCanvasElement) {
+    if (this.textures.exists(textureKey)) {
+      this.textures.remove(textureKey)
+    }
+
+    const texture = this.textures.addCanvas(textureKey, canvas)
+    if (!texture) {
+      return false
+    }
+
+    texture.refresh()
+    return true
+  }
+
+  private fillRegionAt(sceneX: number, sceneY: number) {
+    const regionId = this.getRegionIdAt(sceneX, sceneY)
+    if (regionId < 0) {
+      return false
+    }
+
+    return this.fillRegionById(regionId)
+  }
+
+  private getRegionIdAt(sceneX: number, sceneY: number) {
+    const regionIdByPixel = this.regionIdByPixel
+    if (
+      !regionIdByPixel ||
+      !Phaser.Geom.Rectangle.Contains(this.drawBounds, sceneX, sceneY) ||
+      !Phaser.Geom.Rectangle.Contains(this.coloringBaseBounds, sceneX, sceneY)
+    ) {
+      return -1
+    }
+
+    const sourceX = Phaser.Math.Clamp(
+      Math.floor(sceneX - this.drawBounds.x),
+      0,
+      this.sourceImageSize.width - 1,
+    )
+    const sourceY = Phaser.Math.Clamp(
+      Math.floor(sceneY - this.drawBounds.y),
+      0,
+      this.sourceImageSize.height - 1,
+    )
+
+    return regionIdByPixel[sourceY * this.sourceImageSize.width + sourceX] ?? -1
+  }
+
+  private fillRegionById(regionId: number) {
+    const fillRegion = this.cachedFillRegions[regionId]
+    if (!fillRegion) {
+      return false
+    }
+
+    if (this.filledRegionColorById?.[regionId] === this.currentColor) {
+      return false
+    }
+
+    const { bounds, pixelIndices } = fillRegion
+    const textureWidth = bounds.maxX - bounds.minX + 1
+    const textureHeight = bounds.maxY - bounds.minY + 1
+    const fillCanvas = document.createElement('canvas')
+    fillCanvas.width = textureWidth
+    fillCanvas.height = textureHeight
+    const context = fillCanvas.getContext('2d')
+
+    if (!context) {
+      return false
+    }
+
+    const fillImageData = context.createImageData(textureWidth, textureHeight)
+    const data = fillImageData.data
+    const red = (this.currentColor >> 16) & 0xff
+    const green = (this.currentColor >> 8) & 0xff
+    const blue = this.currentColor & 0xff
+
+    for (const pixelIndex of pixelIndices) {
+      const pixelX = (pixelIndex % this.sourceImageSize.width) - bounds.minX
+      const pixelY = Math.floor(pixelIndex / this.sourceImageSize.width) - bounds.minY
+      const dataIndex = (pixelY * textureWidth + pixelX) * 4
+      data[dataIndex] = red
+      data[dataIndex + 1] = green
+      data[dataIndex + 2] = blue
+      data[dataIndex + 3] = 255
+    }
+
+    context.putImageData(fillImageData, 0, 0)
+    const textureKey = `art-coloring-fill-${this.selectedOption.id}-${this.fillTextureIndex}`
+    this.fillTextureIndex += 1
+    const fillTexture = this.textures.addCanvas(textureKey, fillCanvas)
+    if (!fillTexture) {
+      return false
+    }
+
+    fillTexture.refresh()
+
+    const fillImage = this.add
+      .image(bounds.minX, bounds.minY, textureKey)
+      .setOrigin(0, 0)
+      .setVisible(false)
+    this.coloringTexture.draw(fillImage)
+    fillImage.destroy()
+    this.textures.remove(textureKey)
+    if (this.filledRegionColorById) {
+      this.filledRegionColorById[regionId] = this.currentColor
+    }
+    return true
+  }
+
+  private stopDrawing() {
+    this.isDrawing = false
+  }
+
+  private resetColoring() {
+    this.stopDrawing()
+    this.clearPendingHandAction()
+    this.clearPendingHandColor()
+    this.handPointerSmoother.reset()
+    this.handTrackingGuard.reset()
+    this.lastHandFillRegionId = null
+    this.lastHandFillAt = 0
+    this.filledRegionColorById?.fill(-1)
+    this.coloringTexture.clear()
+    this.hasStartedColoring = false
+    this.strokeCount = 0
+    this.showRumiLine('intro')
+  }
+
+  private saveColoring() {
+    const outputCanvas = this.createSavedColoringCanvas()
+    if (!outputCanvas) {
+      return
+    }
+
+    const link = document.createElement('a')
+    link.href = outputCanvas.toDataURL('image/png')
+    link.download = `coloring-${this.selectedOption.id}-${Date.now()}.png`
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    this.showRumiLine('complete')
+  }
+
+  private createSavedColoringCanvas() {
+    if (!this.sourceImageData) {
+      return null
+    }
+
+    const outputCanvas = document.createElement('canvas')
+    outputCanvas.width = this.sourceImageSize.width
+    outputCanvas.height = this.sourceImageSize.height
+    const context = outputCanvas.getContext('2d')
+
+    if (!context) {
+      return null
+    }
+
+    const outputImageData = context.createImageData(outputCanvas.width, outputCanvas.height)
+    const outputData = outputImageData.data
+
+    for (let dataIndex = 0; dataIndex < outputData.length; dataIndex += 4) {
+      outputData[dataIndex] = 255
+      outputData[dataIndex + 1] = 255
+      outputData[dataIndex + 2] = 255
+      outputData[dataIndex + 3] = 255
+    }
+
+    this.drawSavedFillRegions(outputData)
+    this.drawSavedLineArt(outputData)
+    context.putImageData(outputImageData, 0, 0)
+    return outputCanvas
+  }
+
+  private drawSavedFillRegions(outputData: Uint8ClampedArray) {
+    if (!this.filledRegionColorById) {
+      return
+    }
+
+    this.cachedFillRegions.forEach((fillRegion, regionId) => {
+      const color = this.filledRegionColorById?.[regionId] ?? -1
+      if (color < 0) {
+        return
+      }
+
+      const red = (color >> 16) & 0xff
+      const green = (color >> 8) & 0xff
+      const blue = color & 0xff
+
+      for (const pixelIndex of fillRegion.pixelIndices) {
+        const dataIndex = pixelIndex * 4
+        outputData[dataIndex] = red
+        outputData[dataIndex + 1] = green
+        outputData[dataIndex + 2] = blue
+        outputData[dataIndex + 3] = 255
+      }
+    })
+  }
+
+  private drawSavedLineArt(outputData: Uint8ClampedArray) {
+    if (!this.sourceImageData) {
+      return
+    }
+
+    const sourceData = this.sourceImageData.data
+    for (let dataIndex = 0; dataIndex < sourceData.length; dataIndex += 4) {
+      const alpha = sourceData[dataIndex + 3]
+      if (alpha <= 16 || this.isFillableSourcePixel(dataIndex)) {
+        continue
+      }
+
+      const sourceAlpha = alpha / 255
+      const inverseAlpha = 1 - sourceAlpha
+      outputData[dataIndex] = Math.round(
+        sourceData[dataIndex] * sourceAlpha + outputData[dataIndex] * inverseAlpha,
+      )
+      outputData[dataIndex + 1] = Math.round(
+        sourceData[dataIndex + 1] * sourceAlpha + outputData[dataIndex + 1] * inverseAlpha,
+      )
+      outputData[dataIndex + 2] = Math.round(
+        sourceData[dataIndex + 2] * sourceAlpha + outputData[dataIndex + 2] * inverseAlpha,
+      )
+      outputData[dataIndex + 3] = 255
+    }
+  }
+
+  private returnToColoringSelect() {
+    if (this.isTransitioning) {
+      return
+    }
+
+    this.stopHandTracking()
+    this.isTransitioning = true
+    this.cameras.main.fadeOut(180, 0, 0, 0)
+    this.time.delayedCall(180, () => {
+      this.scene.start('ArtColoringSelectScene')
+    })
+  }
+}

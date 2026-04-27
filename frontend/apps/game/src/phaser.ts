@@ -1,5 +1,7 @@
 import Phaser from 'phaser'
 import { StartScene } from './scenes/start/StartScene'
+import { ArtColoringScene } from './scenes/themes/art/coloring/ArtColoringScene'
+import { ArtColoringSelectScene } from './scenes/themes/art/coloring/ArtColoringSelectScene'
 import { ArtFreeDrawingScene } from './scenes/themes/art/free-drawing/ArtFreeDrawingScene'
 import { ArtSelectScene } from './scenes/themes/art/select/ArtSelectScene'
 import { TaekwondoSelectScene } from './scenes/themes/taekwondo/select/TaekwondoSelectScene'
@@ -17,7 +19,15 @@ export function createGame(parent: HTMLElement): Phaser.Game {
       default: 'arcade',
       arcade: { debug: false },
     },
-    scene: [StartScene, VillageScene, ArtSelectScene, ArtFreeDrawingScene, TaekwondoSelectScene],
+    scene: [
+      StartScene,
+      VillageScene,
+      ArtSelectScene,
+      ArtFreeDrawingScene,
+      ArtColoringSelectScene,
+      ArtColoringScene,
+      TaekwondoSelectScene,
+    ],
     scale: {
       mode: Phaser.Scale.RESIZE,
       autoCenter: Phaser.Scale.CENTER_BOTH,
