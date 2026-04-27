@@ -15,6 +15,7 @@ const ART_EXIT_PORTAL = { xRatio: 0.44, yRatio: 0.86, widthRatio: 0.12, heightRa
 const ART_RETURN_SPAWN = { xRatio: 0.585, yRatio: 0.855 }
 const RUMI_TALK_ICON = { xRatio: 0.335, yRatio: 0.33 }
 const RUMI_INTERACTION = { xRatio: 0.335, yRatio: 0.55, radiusRatio: 0.06 }
+const ALBUM_OBJECT = { xRatio: 0.757, yRatio: 0.603, sizeRatio: 0.105 }
 const DIALOG_TEXT_BOX = {
   withChoicesX: 790,
   withChoicesWidth: 1260,
@@ -24,6 +25,11 @@ const DIALOG_TEXT_BOX = {
   withoutChoicesY: 445,
 }
 const DIALOG_BUTTON_ROW_Y = 548
+
+type ArtSelectSceneData = {
+  spawn?: { xRatio: number; yRatio: number }
+  suppressRumiDialog?: boolean
+}
 
 type RumiDialogStep = {
   line: RumiDialogLine
@@ -51,11 +57,14 @@ export class ArtSelectScene extends Phaser.Scene {
   private dialogFrameTop = 0
   private dialogTextWrapWidth = 0
   private dialogScale = 1
+  private albumOverlay: Phaser.GameObjects.Container | null = null
+  private isAlbumVisible = false
 
   private isDialogVisible = false
   private dialogDismissed = false
   private dialogSteps: RumiDialogStep[] = []
   private dialogStepIndex = 0
+  private selectedMode: ArtContentMode | null = null
 
   private readonly handlePointerDown = (pointer: Phaser.Input.Pointer) => {
     if (this.isDialogVisible) {
@@ -69,6 +78,11 @@ export class ArtSelectScene extends Phaser.Scene {
         this.closeDialog(true)
       }
 
+      return
+    }
+
+    if (this.isAlbumVisible) {
+      this.closeAlbum()
       return
     }
 
@@ -92,6 +106,11 @@ export class ArtSelectScene extends Phaser.Scene {
   }
 
   private readonly handleEscDown = () => {
+    if (this.isAlbumVisible) {
+      this.closeAlbum()
+      return
+    }
+
     if (!this.isDialogVisible) {
       return
     }
@@ -110,6 +129,7 @@ export class ArtSelectScene extends Phaser.Scene {
     this.load.image('rumi-dialog-frame', '/assets/images/npcs/rumi/dialog-frame.png')
     this.load.image('dialog-enter', '/assets/images/ui/dialog/enter.png')
     this.load.image('dialog-select', '/assets/images/ui/dialog/select.png')
+    this.load.image('art-ui-album', '/assets/images/themes/art/ui/album.png')
     this.load.spritesheet('character', '/assets/images/common/player/character_sheet.png', {
       frameWidth: FRAME_SIZE,
       frameHeight: FRAME_SIZE,
@@ -118,14 +138,16 @@ export class ArtSelectScene extends Phaser.Scene {
     })
   }
 
-  create() {
+  create(data: ArtSelectSceneData = {}) {
     const { width: vw, height: vh } = this.scale
     this.isTransitioning = false
     this.isDialogVisible = false
-    this.dialogDismissed = false
+    this.dialogDismissed = Boolean(data.suppressRumiDialog)
     this.target = null
     this.dialogSteps = []
     this.dialogStepIndex = 0
+    this.selectedMode = null
+    const spawn = data.spawn ?? ART_ROOM_SPAWN
 
     const background = this.add.image(vw / 2, vh / 2, 'art-room-background')
     const source = background.texture.getSourceImage() as HTMLImageElement
@@ -134,6 +156,13 @@ export class ArtSelectScene extends Phaser.Scene {
 
     const backgroundLeft = background.x - background.displayWidth / 2
     const backgroundTop = background.y - background.displayHeight / 2
+
+    this.createAlbumObject(
+      backgroundLeft,
+      backgroundTop,
+      background.displayWidth,
+      background.displayHeight,
+    )
 
     this.talkIcon = this.add
       .image(
@@ -165,12 +194,7 @@ export class ArtSelectScene extends Phaser.Scene {
     this.ensureCharacterAnimations()
     this.createDialogUi(vw, vh)
 
-    this.player = this.physics.add.sprite(
-      vw * ART_ROOM_SPAWN.xRatio,
-      vh * ART_ROOM_SPAWN.yRatio,
-      'character',
-      0,
-    )
+    this.player = this.physics.add.sprite(vw * spawn.xRatio, vh * spawn.yRatio, 'character', 0)
     this.player.setScale(0.55).setDepth(10)
     this.player.setCollideWorldBounds(true)
     this.player.body.setSize(FRAME_SIZE * 0.35, FRAME_SIZE * 0.25)
@@ -192,6 +216,7 @@ export class ArtSelectScene extends Phaser.Scene {
       this.input.off('pointerdown', this.handlePointerDown)
       this.input.keyboard?.off('keydown-ENTER', this.handleEnterDown)
       this.input.keyboard?.off('keydown-ESC', this.handleEscDown)
+      this.closeAlbum()
     })
 
     this.cameras.main.fadeIn(250, 0, 0, 0)
@@ -244,7 +269,7 @@ export class ArtSelectScene extends Phaser.Scene {
       }
     }
 
-    if (this.isDialogVisible) {
+    if (this.isDialogVisible || this.isAlbumVisible) {
       vx = 0
       vy = 0
       this.target = null
@@ -273,6 +298,10 @@ export class ArtSelectScene extends Phaser.Scene {
   }
 
   private updateRumiConversation() {
+    if (this.isAlbumVisible) {
+      return
+    }
+
     const distanceToRumi = Phaser.Math.Distance.Between(
       this.player.x,
       this.player.y,
@@ -292,6 +321,11 @@ export class ArtSelectScene extends Phaser.Scene {
   }
 
   private startRumiConversation() {
+    if (this.isAlbumVisible) {
+      return
+    }
+
+    this.selectedMode = null
     this.dialogSteps = [
       { line: Phaser.Utils.Array.GetRandom(rumiSelectDialogs.greeting) },
       {
@@ -375,6 +409,7 @@ export class ArtSelectScene extends Phaser.Scene {
   }
 
   private handleChoiceSelected(mode: ArtContentMode) {
+    this.selectedMode = mode
     const confirmLine = Phaser.Utils.Array.GetRandom(rumiContentDialogs[mode].confirm)
     this.dialogSteps = [...this.dialogSteps, { line: confirmLine }]
     this.dialogStepIndex = this.dialogSteps.length - 1
@@ -393,6 +428,11 @@ export class ArtSelectScene extends Phaser.Scene {
       return
     }
 
+    if (this.selectedMode === 'free-drawing') {
+      this.startSelectedContent(this.selectedMode)
+      return
+    }
+
     this.closeDialog(true)
   }
 
@@ -401,9 +441,31 @@ export class ArtSelectScene extends Phaser.Scene {
     this.dialogDismissed = markDismissed
     this.dialogSteps = []
     this.dialogStepIndex = 0
+    this.selectedMode = null
     this.talkIcon.setTexture('talk-icon')
     this.setChoiceButtonsVisible(false)
     this.fadeDialog(0, 180)
+  }
+
+  private startSelectedContent(mode: ArtContentMode) {
+    if (this.isTransitioning) {
+      return
+    }
+
+    this.isTransitioning = true
+    this.target = null
+    this.player.setVelocity(0, 0)
+    this.closeDialog(false)
+    this.cameras.main.fadeOut(220, 0, 0, 0)
+
+    this.time.delayedCall(220, () => {
+      if (mode === 'free-drawing') {
+        this.scene.start('ArtFreeDrawingScene')
+        return
+      }
+
+      this.isTransitioning = false
+    })
   }
 
   private fadeDialog(alpha: number, duration: number) {
@@ -421,6 +483,119 @@ export class ArtSelectScene extends Phaser.Scene {
       duration,
       ease: alpha > 0 ? 'Sine.easeOut' : 'Sine.easeIn',
     })
+  }
+
+  private createAlbumObject(
+    backgroundLeft: number,
+    backgroundTop: number,
+    backgroundWidth: number,
+    backgroundHeight: number,
+  ) {
+    const albumSize = backgroundWidth * ALBUM_OBJECT.sizeRatio
+    const album = this.add
+      .image(
+        backgroundLeft + backgroundWidth * ALBUM_OBJECT.xRatio,
+        backgroundTop + backgroundHeight * ALBUM_OBJECT.yRatio,
+        'art-ui-album',
+      )
+      .setDepth(8)
+      .setDisplaySize(albumSize, albumSize)
+      .setInteractive({ useHandCursor: true })
+
+    const baseScale = { x: album.scaleX, y: album.scaleY }
+
+    album.on('pointerover', () => {
+      album.setTint(0xfff3c4)
+      album.setScale(baseScale.x * 1.05, baseScale.y * 1.05)
+    })
+    album.on('pointerout', () => {
+      album.clearTint()
+      album.setScale(baseScale.x, baseScale.y)
+    })
+    album.on(
+      'pointerdown',
+      (
+        _pointer: Phaser.Input.Pointer,
+        _x: number,
+        _y: number,
+        event: Phaser.Types.Input.EventData,
+      ) => {
+        event.stopPropagation()
+        this.openAlbum()
+      },
+    )
+  }
+
+  private openAlbum() {
+    if (this.isTransitioning || this.isAlbumVisible) {
+      return
+    }
+
+    this.target = null
+    this.player.setVelocity(0, 0)
+
+    if (this.isDialogVisible) {
+      this.closeDialog(false)
+    }
+
+    const { width: vw, height: vh } = this.scale
+    const dim = this.add
+      .rectangle(vw / 2, vh / 2, vw, vh, 0x000000, 0.52)
+      .setDepth(40)
+      .setScrollFactor(0)
+      .setInteractive()
+
+    const albumSize = Math.min(vw * 0.58, vh * 0.78)
+    const album = this.add
+      .image(vw / 2, vh / 2, 'art-ui-album')
+      .setDepth(41)
+      .setDisplaySize(albumSize, albumSize)
+      .setScrollFactor(0)
+      .setInteractive({ useHandCursor: true })
+
+    album.on(
+      'pointerdown',
+      (
+        _pointer: Phaser.Input.Pointer,
+        _x: number,
+        _y: number,
+        event: Phaser.Types.Input.EventData,
+      ) => event.stopPropagation(),
+    )
+
+    dim.on(
+      'pointerdown',
+      (
+        _pointer: Phaser.Input.Pointer,
+        _x: number,
+        _y: number,
+        event: Phaser.Types.Input.EventData,
+      ) => {
+        event.stopPropagation()
+        this.closeAlbum()
+      },
+    )
+
+    this.albumOverlay = this.add.container(0, 0, [dim, album]).setDepth(40).setAlpha(0)
+    this.isAlbumVisible = true
+
+    this.tweens.add({
+      targets: this.albumOverlay,
+      alpha: 1,
+      duration: 160,
+      ease: 'Sine.easeOut',
+    })
+  }
+
+  private closeAlbum() {
+    if (!this.albumOverlay) {
+      this.isAlbumVisible = false
+      return
+    }
+
+    this.albumOverlay.destroy(true)
+    this.albumOverlay = null
+    this.isAlbumVisible = false
   }
 
   private createDialogUi(vw: number, vh: number) {
