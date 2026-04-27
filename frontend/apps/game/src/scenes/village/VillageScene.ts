@@ -8,6 +8,7 @@ const DIALOG_TEXT_BOX = { x: 830, y: 470, width: 780, height: 190 }
 const DEFAULT_PLAYER_SPAWN = { xRatio: 0.5, yRatio: 0.47 }
 const ART_PORTAL = { xRatio: 0.545, yRatio: 0.655, widthRatio: 0.08, heightRatio: 0.125 }
 const TAEKWONDO_PORTAL = { xRatio: 0.49, yRatio: 0.06, widthRatio: 0.09, heightRatio: 0.11 }
+const GYMNASTICS_PORTAL = { xRatio: 0.72, yRatio: 0.53, widthRatio: 0.04, heightRatio: 0.05 }
 
 type ObstacleRect = { x: number; y: number; w: number; h: number }
 type VillageSceneData = {
@@ -31,6 +32,9 @@ export class VillageScene extends Phaser.Scene {
   private artPortal!: Phaser.Geom.Rectangle
   private taekwondoPortal!: Phaser.Geom.Rectangle
   private portalCooldownUntil = 0
+  private gymnasticsPortal!: Phaser.Geom.Rectangle
+  private playerWasInArtPortal = true
+  private playerWasInGymnasticsPortal = true
   private isTransitioning = false
   private target: Phaser.Math.Vector2 | null = null
   private lastDirection = 'down'
@@ -80,7 +84,8 @@ export class VillageScene extends Phaser.Scene {
 
     this.physics.world.setBounds(0, 0, W, H)
     this.cameras.main.setBounds(0, 0, W, H)
-    this.portalCooldownUntil = this.time.now + (data.portalCooldownMs ?? 0)
+    this.playerWasInArtPortal = true
+    this.playerWasInGymnasticsPortal = true
     this.artPortal = new Phaser.Geom.Rectangle(
       ART_PORTAL.xRatio * W,
       ART_PORTAL.yRatio * H,
@@ -92,6 +97,12 @@ export class VillageScene extends Phaser.Scene {
       TAEKWONDO_PORTAL.yRatio * H,
       TAEKWONDO_PORTAL.widthRatio * W,
       TAEKWONDO_PORTAL.heightRatio * H,
+    )
+    this.gymnasticsPortal = new Phaser.Geom.Rectangle(
+      GYMNASTICS_PORTAL.xRatio * W,
+      GYMNASTICS_PORTAL.yRatio * H,
+      GYMNASTICS_PORTAL.widthRatio * W,
+      GYMNASTICS_PORTAL.heightRatio * H,
     )
 
     this.obstacles = this.physics.add.staticGroup()
@@ -306,8 +317,23 @@ export class VillageScene extends Phaser.Scene {
       }
     }
 
-    this.tryEnterArtScene()
+    const inArt = Phaser.Geom.Rectangle.Contains(this.artPortal, this.player.x, this.player.y)
+    if (!this.isTransitioning && inArt && !this.playerWasInArtPortal) {
+      this.enterArtScene()
+    }
+    this.playerWasInArtPortal = inArt
+
     this.tryEnterTaekwondoScene()
+
+    const inGym = Phaser.Geom.Rectangle.Contains(
+      this.gymnasticsPortal,
+      this.player.x,
+      this.player.y,
+    )
+    if (!this.isTransitioning && inGym && !this.playerWasInGymnasticsPortal) {
+      this.enterGymnasticsScene()
+    }
+    this.playerWasInGymnasticsPortal = inGym
   }
 
   private showSehyunDialog() {
@@ -340,15 +366,22 @@ export class VillageScene extends Phaser.Scene {
     })
   }
 
-  private tryEnterArtScene() {
-    if (this.isTransitioning || this.time.now < this.portalCooldownUntil) {
-      return
+  private enterGymnasticsScene() {
+    this.isTransitioning = true
+    this.target = null
+    this.player.setVelocity(0, 0)
+
+    if (this.isDialogVisible) {
+      this.hideDialog(false)
     }
 
-    if (!Phaser.Geom.Rectangle.Contains(this.artPortal, this.player.x, this.player.y)) {
-      return
-    }
+    this.cameras.main.fadeOut(250, 0, 0, 0)
+    this.time.delayedCall(250, () => {
+      this.scene.start('GymnasticsSelectScene')
+    })
+  }
 
+  private enterArtScene() {
     this.isTransitioning = true
     this.target = null
     this.player.setVelocity(0, 0)
