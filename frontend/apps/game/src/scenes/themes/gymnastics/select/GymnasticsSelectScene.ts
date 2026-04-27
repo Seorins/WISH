@@ -254,6 +254,11 @@ export class GymnasticsSelectScene extends Phaser.Scene {
   private hideDialog() {
     this.isDialogVisible = false
     this.talkIcon.setTexture('talk-icon')
+    this.playerWasInExitPortal = Phaser.Geom.Rectangle.Contains(
+      this.exitPortal,
+      this.player.x,
+      this.player.y,
+    )
 
     this.tweens.killTweensOf(this.dialogBox)
     this.tweens.killTweensOf(this.dialogText)
