@@ -17,6 +17,7 @@ export class TaekwondoSelectScene extends Phaser.Scene {
   private target: Phaser.Math.Vector2 | null = null
   private lastDirection = 'down'
   private exitPortal!: Phaser.Geom.Rectangle
+  private randomPoseTimer?: Phaser.Time.TimerEvent
   private isTransitioning = false
 
   private readonly handlePointerDown = (pointer: Phaser.Input.Pointer) => {
@@ -94,6 +95,8 @@ export class TaekwondoSelectScene extends Phaser.Scene {
     this.input.on('pointerdown', this.handlePointerDown)
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.input.off('pointerdown', this.handlePointerDown)
+      this.randomPoseTimer?.remove(false)
+      this.randomPoseTimer = undefined
     })
 
     this.cameras.main.fadeIn(250, 0, 0, 0)
@@ -158,7 +161,10 @@ export class TaekwondoSelectScene extends Phaser.Scene {
       this.player.anims.stop()
     }
 
-    if (Phaser.Geom.Rectangle.Contains(this.exitPortal, this.player.x, this.player.y)) {
+    if (
+      !this.isTransitioning &&
+      Phaser.Geom.Rectangle.Contains(this.exitPortal, this.player.x, this.player.y)
+    ) {
       this.returnToVillage()
     }
   }
@@ -179,7 +185,7 @@ export class TaekwondoSelectScene extends Phaser.Scene {
 
   private startRandomPracticePose() {
     this.practiceCharacter.setFrame(Phaser.Utils.Array.GetRandom(PRACTICE_POSES))
-    this.time.addEvent({
+    this.randomPoseTimer = this.time.addEvent({
       delay: RANDOM_POSE_DELAY,
       loop: true,
       callback: () => {
