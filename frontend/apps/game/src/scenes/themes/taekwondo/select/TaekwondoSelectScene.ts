@@ -1,7 +1,22 @@
 import Phaser from 'phaser'
+import {
+  createClickTargetMarker,
+  createPlayer,
+  ensurePlayerWalkAnimations,
+  loadPlayerSpritesheet,
+  type PlayerDirection,
+  type PlayerSprite,
+  updatePlayerMovement,
+} from '@/game/entities/player'
+import { fadeToScene } from '@/game/systems/sceneTransition'
+import {
+  createFloatingInteractionIcon,
+  loadInteractionIcons,
+  setInteractionIconActive,
+} from '@/game/ui/interactionIcon'
+import { addCoverBackground } from '@/game/world/background'
+import { createRatioRectangle, isPointInRectangle } from '@/game/world/portal'
 
-const FRAME_SIZE = 313
-const SPEED = 180
 const TALK_DISTANCE = 100
 const TAEKWONDO_SPRITE_FRAME = { width: 384, height: 512 }
 const ROOM_SPAWN = { xRatio: 0.5, yRatio: 0.78 }
@@ -13,26 +28,19 @@ const SEOKJAE_POSES = [0, 1, 2]
 const RANDOM_POSE_DELAY = 500
 
 export class TaekwondoSelectScene extends Phaser.Scene {
-  private player!: Phaser.Types.Physics.Arcade.SpriteWithDynamicBody
+  private player!: PlayerSprite
   private seokjaeNpc!: Phaser.GameObjects.Sprite
   private talkIcon!: Phaser.GameObjects.Image
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys
   private target: Phaser.Math.Vector2 | null = null
-  private lastDirection = 'down'
+  private lastDirection: PlayerDirection = 'down'
   private exitPortal!: Phaser.Geom.Rectangle
   private randomPoseTimer?: Phaser.Time.TimerEvent
   private isTransitioning = false
 
   private readonly handlePointerDown = (pointer: Phaser.Input.Pointer) => {
     this.target = new Phaser.Math.Vector2(pointer.x, pointer.y)
-    const marker = this.add.circle(pointer.x, pointer.y, 6, 0xffffff, 0.6)
-    this.tweens.add({
-      targets: marker,
-      alpha: 0,
-      scale: 2,
-      duration: 400,
-      onComplete: () => marker.destroy(),
-    })
+    createClickTargetMarker(this, pointer.x, pointer.y)
   }
 
   constructor() {
@@ -44,8 +52,7 @@ export class TaekwondoSelectScene extends Phaser.Scene {
       'taekwondo-room-background',
       '/assets/images/themes/taekwondo/background/taekwondo_inside.png',
     )
-    this.load.image('talk-icon', '/assets/images/ui/icons/talk.png')
-    this.load.image('talking-icon', '/assets/images/ui/icons/talking.png')
+    loadInteractionIcons(this)
     this.load.spritesheet(
       'seokjae',
       '/assets/images/themes/taekwondo/characters/seokjae_sprite.png',
@@ -56,12 +63,7 @@ export class TaekwondoSelectScene extends Phaser.Scene {
         spacing: 0,
       },
     )
-    this.load.spritesheet('character', '/assets/images/common/player/character_sheet.png', {
-      frameWidth: FRAME_SIZE,
-      frameHeight: FRAME_SIZE,
-      margin: 0,
-      spacing: 0,
-    })
+    loadPlayerSpritesheet(this)
   }
 
   create() {
@@ -69,32 +71,15 @@ export class TaekwondoSelectScene extends Phaser.Scene {
     this.isTransitioning = false
     this.target = null
 
-    const background = this.add.image(vw / 2, vh / 2, 'taekwondo-room-background')
-    const source = background.texture.getSourceImage() as HTMLImageElement
-    const scale = Math.max(vw / source.width, vh / source.height)
-    background.setScale(scale).setDepth(0)
+    addCoverBackground(this, 'taekwondo-room-background')
 
     this.physics.world.setBounds(0, 0, vw, vh)
-    this.ensureCharacterAnimations()
+    ensurePlayerWalkAnimations(this)
     this.createSeokjaeNpc(vw, vh)
 
-    this.player = this.physics.add.sprite(
-      vw * ROOM_SPAWN.xRatio,
-      vh * ROOM_SPAWN.yRatio,
-      'character',
-      0,
-    )
-    this.player.setScale(0.55).setDepth(10)
-    this.player.setCollideWorldBounds(true)
-    this.player.body.setSize(FRAME_SIZE * 0.35, FRAME_SIZE * 0.25)
-    this.player.body.setOffset(FRAME_SIZE * 0.33, FRAME_SIZE * 0.65)
+    this.player = createPlayer(this, vw * ROOM_SPAWN.xRatio, vh * ROOM_SPAWN.yRatio)
 
-    this.exitPortal = new Phaser.Geom.Rectangle(
-      vw * EXIT_PORTAL.xRatio,
-      vh * EXIT_PORTAL.yRatio,
-      vw * EXIT_PORTAL.widthRatio,
-      vh * EXIT_PORTAL.heightRatio,
-    )
+    this.exitPortal = createRatioRectangle(vw, vh, EXIT_PORTAL)
 
     this.cursors = this.input.keyboard!.createCursorKeys()
     this.input.on('pointerdown', this.handlePointerDown)
@@ -108,69 +93,20 @@ export class TaekwondoSelectScene extends Phaser.Scene {
   }
 
   update() {
-    const { left, right, up, down } = this.cursors
-    const isKeyPressed = left.isDown || right.isDown || up.isDown || down.isDown
-
-    let vx = 0
-    let vy = 0
-
-    if (isKeyPressed) {
-      this.target = null
-      if (left.isDown) {
-        vx -= SPEED
-        this.lastDirection = 'left'
-      }
-      if (right.isDown) {
-        vx += SPEED
-        this.lastDirection = 'right'
-      }
-      if (up.isDown) {
-        vy -= SPEED
-        this.lastDirection = 'up'
-      }
-      if (down.isDown) {
-        vy += SPEED
-        this.lastDirection = 'down'
-      }
-      if (vx !== 0 && vy !== 0) {
-        vx *= 0.707
-        vy *= 0.707
-      }
-    } else if (this.target) {
-      const dx = this.target.x - this.player.x
-      const dy = this.target.y - this.player.y
-      const dist = Math.sqrt(dx * dx + dy * dy)
-      if (dist < 6) {
-        this.target = null
-      } else {
-        const speed = Math.min(SPEED, dist * 5)
-        vx = (dx / dist) * speed
-        vy = (dy / dist) * speed
-        if (Math.abs(dx) > Math.abs(dy)) {
-          this.lastDirection = dx > 0 ? 'right' : 'left'
-        } else {
-          this.lastDirection = dy > 0 ? 'down' : 'up'
-        }
-      }
-    }
-
-    this.player.setVelocity(vx, vy)
-
-    const moving = vx !== 0 || vy !== 0
-    if (moving) {
-      const anim = `walk-${this.lastDirection}`
-      if (this.player.anims.currentAnim?.key !== anim || !this.player.anims.isPlaying) {
-        this.player.anims.play(anim)
-      }
-    } else {
-      this.player.anims.stop()
-    }
+    const movement = updatePlayerMovement({
+      player: this.player,
+      cursors: this.cursors,
+      target: this.target,
+      lastDirection: this.lastDirection,
+    })
+    this.target = movement.target
+    this.lastDirection = movement.lastDirection
 
     this.updateSeokjaeTalkIcon()
 
     if (
       !this.isTransitioning &&
-      Phaser.Geom.Rectangle.Contains(this.exitPortal, this.player.x, this.player.y)
+      isPointInRectangle(this.exitPortal, this.player.x, this.player.y)
     ) {
       this.returnToVillage()
     }
@@ -187,22 +123,9 @@ export class TaekwondoSelectScene extends Phaser.Scene {
   }
 
   private createSeokjaeTalkIcon(vh: number) {
-    this.talkIcon = this.add
-      .image(
-        this.seokjaeNpc.x,
-        this.seokjaeNpc.y - vh * SEOKJAE_TALK_ICON_OFFSET.yRatio,
-        'talk-icon',
-      )
-      .setDepth(12)
-      .setDisplaySize(56, 56)
-
-    this.tweens.add({
-      targets: this.talkIcon,
-      y: this.talkIcon.y - 10,
-      duration: 700,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
+    this.talkIcon = createFloatingInteractionIcon(this, {
+      x: this.seokjaeNpc.x,
+      y: this.seokjaeNpc.y - vh * SEOKJAE_TALK_ICON_OFFSET.yRatio,
     })
   }
 
@@ -213,11 +136,7 @@ export class TaekwondoSelectScene extends Phaser.Scene {
       this.seokjaeNpc.x,
       this.seokjaeNpc.y,
     )
-    const textureKey = distanceToSeokjae <= TALK_DISTANCE ? 'talking-icon' : 'talk-icon'
-
-    if (this.talkIcon.texture.key !== textureKey) {
-      this.talkIcon.setTexture(textureKey)
-    }
+    setInteractionIconActive(this.talkIcon, distanceToSeokjae <= TALK_DISTANCE)
   }
 
   private startRandomSeokjaePose() {
@@ -240,47 +159,12 @@ export class TaekwondoSelectScene extends Phaser.Scene {
     this.target = null
     this.player.setVelocity(0, 0)
 
-    this.cameras.main.fadeOut(250, 0, 0, 0)
-    this.time.delayedCall(250, () => {
-      this.scene.start('VillageScene', {
+    fadeToScene(this, 'VillageScene', {
+      duration: 250,
+      data: {
         spawn: RETURN_SPAWN,
         portalCooldownMs: 250,
-      })
+      },
     })
-  }
-
-  private ensureCharacterAnimations() {
-    if (!this.anims.exists('walk-down')) {
-      this.anims.create({
-        key: 'walk-down',
-        frames: this.anims.generateFrameNumbers('character', { start: 0, end: 3 }),
-        frameRate: 8,
-        repeat: -1,
-      })
-    }
-    if (!this.anims.exists('walk-left')) {
-      this.anims.create({
-        key: 'walk-left',
-        frames: this.anims.generateFrameNumbers('character', { start: 4, end: 7 }),
-        frameRate: 8,
-        repeat: -1,
-      })
-    }
-    if (!this.anims.exists('walk-right')) {
-      this.anims.create({
-        key: 'walk-right',
-        frames: this.anims.generateFrameNumbers('character', { start: 8, end: 11 }),
-        frameRate: 8,
-        repeat: -1,
-      })
-    }
-    if (!this.anims.exists('walk-up')) {
-      this.anims.create({
-        key: 'walk-up',
-        frames: this.anims.generateFrameNumbers('character', { start: 12, end: 15 }),
-        frameRate: 8,
-        repeat: -1,
-      })
-    }
   }
 }

@@ -1,8 +1,28 @@
 import Phaser from 'phaser'
+import {
+  createClickTargetMarker,
+  createPlayer,
+  ensurePlayerWalkAnimations,
+  loadPlayerSpritesheet,
+  type PlayerDirection,
+  type PlayerSprite,
+  type RatioPoint,
+  updatePlayerMovement,
+} from '@/game/entities/player'
+import { fadeToScene } from '@/game/systems/sceneTransition'
+import {
+  createSimpleDialogUi,
+  fadeSimpleDialog,
+  setCenteredDialogText,
+  type SimpleDialogUi,
+} from '@/game/ui/simpleDialog'
+import {
+  createRatioRectangle,
+  getRectangleEntryState,
+  isPointInRectangle,
+} from '@/game/world/portal'
 import { villageDialogs } from './dialog/villageDialogs'
 
-const FRAME_SIZE = 313
-const SPEED = 180
 const TALK_DISTANCE = 55
 const DIALOG_TEXT_BOX = { x: 830, y: 470, width: 780, height: 190 }
 const DEFAULT_PLAYER_SPAWN = { xRatio: 0.5, yRatio: 0.47 }
@@ -12,23 +32,18 @@ const GYMNASTICS_PORTAL = { xRatio: 0.72, yRatio: 0.53, widthRatio: 0.04, height
 
 type ObstacleRect = { x: number; y: number; w: number; h: number }
 type VillageSceneData = {
-  spawn?: { xRatio: number; yRatio: number }
+  spawn?: RatioPoint
   portalCooldownMs?: number
 }
 
 const OBSTACLES: ObstacleRect[] = []
 
 export class VillageScene extends Phaser.Scene {
-  private player!: Phaser.Types.Physics.Arcade.SpriteWithDynamicBody
+  private player!: PlayerSprite
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys
   private obstacles!: Phaser.Physics.Arcade.StaticGroup
   private sehyunNpc!: Phaser.GameObjects.Sprite
-  private dialogBox!: Phaser.GameObjects.Image
-  private dialogText!: Phaser.GameObjects.Text
-  private dialogTextBaseX = 0
-  private dialogTextBaseY = 0
-  private dialogTextBoxHeight = 0
-  private dialogScale = 1
+  private dialog!: SimpleDialogUi
   private artPortal!: Phaser.Geom.Rectangle
   private taekwondoPortal!: Phaser.Geom.Rectangle
   private portalCooldownUntil = 0
@@ -37,7 +52,7 @@ export class VillageScene extends Phaser.Scene {
   private playerWasInGymnasticsPortal = true
   private isTransitioning = false
   private target: Phaser.Math.Vector2 | null = null
-  private lastDirection = 'down'
+  private lastDirection: PlayerDirection = 'down'
   private isDialogVisible = false
   private dialogDismissed = false
 
@@ -56,18 +71,14 @@ export class VillageScene extends Phaser.Scene {
       margin: 1,
       spacing: 0,
     })
-    this.load.spritesheet('character', '/assets/images/common/player/character_sheet.png', {
-      frameWidth: FRAME_SIZE,
-      frameHeight: FRAME_SIZE,
-      margin: 0,
-      spacing: 0,
-    })
+    loadPlayerSpritesheet(this)
   }
 
   create(data: VillageSceneData = {}) {
     const { width: vw, height: vh } = this.scale
     this.isTransitioning = false
     this.target = null
+    this.portalCooldownUntil = this.time.now + (data.portalCooldownMs ?? 0)
 
     const mapImg = this.textures.get('map').getSourceImage() as HTMLImageElement
     const rawW = mapImg.width
@@ -86,24 +97,9 @@ export class VillageScene extends Phaser.Scene {
     this.cameras.main.setBounds(0, 0, W, H)
     this.playerWasInArtPortal = true
     this.playerWasInGymnasticsPortal = true
-    this.artPortal = new Phaser.Geom.Rectangle(
-      ART_PORTAL.xRatio * W,
-      ART_PORTAL.yRatio * H,
-      ART_PORTAL.widthRatio * W,
-      ART_PORTAL.heightRatio * H,
-    )
-    this.taekwondoPortal = new Phaser.Geom.Rectangle(
-      TAEKWONDO_PORTAL.xRatio * W,
-      TAEKWONDO_PORTAL.yRatio * H,
-      TAEKWONDO_PORTAL.widthRatio * W,
-      TAEKWONDO_PORTAL.heightRatio * H,
-    )
-    this.gymnasticsPortal = new Phaser.Geom.Rectangle(
-      GYMNASTICS_PORTAL.xRatio * W,
-      GYMNASTICS_PORTAL.yRatio * H,
-      GYMNASTICS_PORTAL.widthRatio * W,
-      GYMNASTICS_PORTAL.heightRatio * H,
-    )
+    this.artPortal = createRatioRectangle(W, H, ART_PORTAL)
+    this.taekwondoPortal = createRatioRectangle(W, H, TAEKWONDO_PORTAL)
+    this.gymnasticsPortal = createRatioRectangle(W, H, GYMNASTICS_PORTAL)
 
     this.obstacles = this.physics.add.staticGroup()
     OBSTACLES.forEach(({ x, y, w, h }) => {
@@ -112,30 +108,7 @@ export class VillageScene extends Phaser.Scene {
       this.obstacles.add(box)
     })
 
-    this.anims.create({
-      key: 'walk-down',
-      frames: this.anims.generateFrameNumbers('character', { start: 0, end: 3 }),
-      frameRate: 8,
-      repeat: -1,
-    })
-    this.anims.create({
-      key: 'walk-left',
-      frames: this.anims.generateFrameNumbers('character', { start: 4, end: 7 }),
-      frameRate: 8,
-      repeat: -1,
-    })
-    this.anims.create({
-      key: 'walk-right',
-      frames: this.anims.generateFrameNumbers('character', { start: 8, end: 11 }),
-      frameRate: 8,
-      repeat: -1,
-    })
-    this.anims.create({
-      key: 'walk-up',
-      frames: this.anims.generateFrameNumbers('character', { start: 12, end: 15 }),
-      frameRate: 8,
-      repeat: -1,
-    })
+    ensurePlayerWalkAnimations(this)
 
     this.anims.create({
       key: 'sehyun-loop',
@@ -153,28 +126,10 @@ export class VillageScene extends Phaser.Scene {
     this.physics.add.existing(sehyunBox, true)
     this.obstacles.add(sehyunBox)
 
-    const dialogW = Math.min(vw * 0.75, 860)
-    this.dialogBox = this.add.image(vw / 2, vh - 80, 'sehyun_talk')
-    const dialogSource = this.dialogBox.texture.getSourceImage() as HTMLImageElement
-    this.dialogBox.setDisplaySize(dialogW, dialogW * (dialogSource.height / dialogSource.width))
-    this.dialogBox.setDepth(20).setAlpha(0).setScrollFactor(0)
-    this.dialogBox.y = vh - this.dialogBox.displayHeight / 2 + 30
-
-    const dialogScale = this.dialogBox.displayWidth / dialogSource.width
-    this.dialogScale = dialogScale
-    const dialogLeft = this.dialogBox.x - this.dialogBox.displayWidth / 2
-    const dialogTop = this.dialogBox.y - this.dialogBox.displayHeight / 2
-    this.dialogTextBaseX = dialogLeft + DIALOG_TEXT_BOX.x * dialogScale
-    this.dialogTextBaseY = dialogTop + DIALOG_TEXT_BOX.y * dialogScale
-    this.dialogTextBoxHeight = DIALOG_TEXT_BOX.height * dialogScale
-    this.dialogText = this.add.text(this.dialogTextBaseX, this.dialogTextBaseY, '', {
-      fontFamily: 'sans-serif',
-      fontSize: `${Math.round(44 * dialogScale)}px`,
-      color: '#3b2a1f',
-      wordWrap: { width: DIALOG_TEXT_BOX.width * dialogScale, useAdvancedWrap: true },
-      lineSpacing: Math.round(6 * dialogScale),
+    this.dialog = createSimpleDialogUi(this, {
+      frameKey: 'sehyun_talk',
+      textBox: DIALOG_TEXT_BOX,
     })
-    this.dialogText.setDepth(21).setAlpha(0).setScrollFactor(0).setOrigin(0, 0)
 
     const profileSize = Math.min(vw * 0.16, 180)
     const profile = this.add.image(0, 0, 'profile')
@@ -192,11 +147,7 @@ export class VillageScene extends Phaser.Scene {
     menu.y = profile.y + profileSize / 2 + menu.displayHeight / 2 - 4
 
     const spawn = data.spawn ?? DEFAULT_PLAYER_SPAWN
-    this.player = this.physics.add.sprite(W * spawn.xRatio, H * spawn.yRatio, 'character', 0)
-    this.player.setScale(0.55).setDepth(5)
-    this.player.setCollideWorldBounds(true)
-    this.player.body.setSize(FRAME_SIZE * 0.35, FRAME_SIZE * 0.25)
-    this.player.body.setOffset(FRAME_SIZE * 0.33, FRAME_SIZE * 0.65)
+    this.player = createPlayer(this, W * spawn.xRatio, H * spawn.yRatio, { depth: 5 })
 
     this.physics.add.collider(this.player, this.obstacles)
 
@@ -213,7 +164,7 @@ export class VillageScene extends Phaser.Scene {
 
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       if (this.isDialogVisible) {
-        const b = this.dialogBox.getBounds()
+        const b = this.dialog.frame.getBounds()
         const outside =
           pointer.x < b.left || pointer.x > b.right || pointer.y < b.top || pointer.y > b.bottom
         if (outside) {
@@ -223,83 +174,22 @@ export class VillageScene extends Phaser.Scene {
       }
 
       this.target = new Phaser.Math.Vector2(pointer.worldX, pointer.worldY)
-      const marker = this.add.circle(pointer.worldX, pointer.worldY, 6, 0xffffff, 0.6)
-      this.tweens.add({
-        targets: marker,
-        alpha: 0,
-        scale: 2,
-        duration: 400,
-        onComplete: () => marker.destroy(),
-      })
+      createClickTargetMarker(this, pointer.worldX, pointer.worldY)
     })
 
     this.cameras.main.fadeIn(400, 0, 0, 0)
   }
 
   update() {
-    const { left, right, up, down } = this.cursors
-    const isKeyPressed = left.isDown || right.isDown || up.isDown || down.isDown
-
-    let vx = 0
-    let vy = 0
-
-    if (isKeyPressed) {
-      this.target = null
-      if (left.isDown) {
-        vx -= SPEED
-        this.lastDirection = 'left'
-      }
-      if (right.isDown) {
-        vx += SPEED
-        this.lastDirection = 'right'
-      }
-      if (up.isDown) {
-        vy -= SPEED
-        this.lastDirection = 'up'
-      }
-      if (down.isDown) {
-        vy += SPEED
-        this.lastDirection = 'down'
-      }
-      if (vx !== 0 && vy !== 0) {
-        vx *= 0.707
-        vy *= 0.707
-      }
-    } else if (this.target) {
-      const dx = this.target.x - this.player.x
-      const dy = this.target.y - this.player.y
-      const dist = Math.sqrt(dx * dx + dy * dy)
-      if (dist < 6) {
-        this.target = null
-      } else {
-        const speed = Math.min(SPEED, dist * 5)
-        vx = (dx / dist) * speed
-        vy = (dy / dist) * speed
-        if (Math.abs(dx) > Math.abs(dy)) {
-          this.lastDirection = dx > 0 ? 'right' : 'left'
-        } else {
-          this.lastDirection = dy > 0 ? 'down' : 'up'
-        }
-      }
-    }
-
-    if (this.isDialogVisible) {
-      vx = 0
-      vy = 0
-      this.target = null
-    }
-
-    this.player.setVelocity(vx, vy)
-
-    const moving = vx !== 0 || vy !== 0
-    if (moving) {
-      const anim = `walk-${this.lastDirection}`
-      if (this.player.anims.currentAnim?.key !== anim || !this.player.anims.isPlaying) {
-        this.player.anims.play(anim)
-      }
-    } else {
-      this.player.anims.stop()
-    }
+    const movement = updatePlayerMovement({
+      player: this.player,
+      cursors: this.cursors,
+      target: this.target,
+      lastDirection: this.lastDirection,
+      blocked: this.isDialogVisible,
+    })
+    this.target = movement.target
+    this.lastDirection = movement.lastDirection
 
     const dx = this.player.x - this.sehyunNpc.x
     const dy = this.player.y - this.sehyunNpc.y
@@ -317,53 +207,44 @@ export class VillageScene extends Phaser.Scene {
       }
     }
 
-    const inArt = Phaser.Geom.Rectangle.Contains(this.artPortal, this.player.x, this.player.y)
-    if (!this.isTransitioning && inArt && !this.playerWasInArtPortal) {
+    const artState = getRectangleEntryState(
+      this.artPortal,
+      this.player.x,
+      this.player.y,
+      this.playerWasInArtPortal,
+    )
+    if (!this.isTransitioning && artState.didEnter) {
       this.enterArtScene()
     }
-    this.playerWasInArtPortal = inArt
+    this.playerWasInArtPortal = artState.isInside
 
     this.tryEnterTaekwondoScene()
 
-    const inGym = Phaser.Geom.Rectangle.Contains(
+    const gymState = getRectangleEntryState(
       this.gymnasticsPortal,
       this.player.x,
       this.player.y,
+      this.playerWasInGymnasticsPortal,
     )
-    if (!this.isTransitioning && inGym && !this.playerWasInGymnasticsPortal) {
+    if (!this.isTransitioning && gymState.didEnter) {
       this.enterGymnasticsScene()
     }
-    this.playerWasInGymnasticsPortal = inGym
+    this.playerWasInGymnasticsPortal = gymState.isInside
   }
 
   private showSehyunDialog() {
     const line = Phaser.Utils.Array.GetRandom(villageDialogs.sehyun)
-    this.dialogText.setText(line.text)
-    this.layoutDialogText()
+    setCenteredDialogText(this.dialog, line.text)
     this.isDialogVisible = true
 
-    this.tweens.killTweensOf(this.dialogBox)
-    this.tweens.killTweensOf(this.dialogText)
-    this.tweens.add({
-      targets: [this.dialogBox, this.dialogText],
-      alpha: 1,
-      duration: 300,
-      ease: 'Sine.easeOut',
-    })
+    fadeSimpleDialog(this, this.dialog, 1, 300)
   }
 
   private hideDialog(markDismissed: boolean) {
     this.isDialogVisible = false
     this.dialogDismissed = markDismissed
 
-    this.tweens.killTweensOf(this.dialogBox)
-    this.tweens.killTweensOf(this.dialogText)
-    this.tweens.add({
-      targets: [this.dialogBox, this.dialogText],
-      alpha: 0,
-      duration: 200,
-      ease: 'Sine.easeIn',
-    })
+    fadeSimpleDialog(this, this.dialog, 0, 200)
   }
 
   private enterGymnasticsScene() {
@@ -375,10 +256,7 @@ export class VillageScene extends Phaser.Scene {
       this.hideDialog(false)
     }
 
-    this.cameras.main.fadeOut(250, 0, 0, 0)
-    this.time.delayedCall(250, () => {
-      this.scene.start('GymnasticsSelectScene')
-    })
+    fadeToScene(this, 'GymnasticsSelectScene', { duration: 250 })
   }
 
   private enterArtScene() {
@@ -390,10 +268,7 @@ export class VillageScene extends Phaser.Scene {
       this.hideDialog(false)
     }
 
-    this.cameras.main.fadeOut(250, 0, 0, 0)
-    this.time.delayedCall(250, () => {
-      this.scene.start('ArtSelectScene')
-    })
+    fadeToScene(this, 'ArtSelectScene', { duration: 250 })
   }
 
   private tryEnterTaekwondoScene() {
@@ -401,7 +276,7 @@ export class VillageScene extends Phaser.Scene {
       return
     }
 
-    if (!Phaser.Geom.Rectangle.Contains(this.taekwondoPortal, this.player.x, this.player.y)) {
+    if (!isPointInRectangle(this.taekwondoPortal, this.player.x, this.player.y)) {
       return
     }
 
@@ -413,25 +288,6 @@ export class VillageScene extends Phaser.Scene {
       this.hideDialog(false)
     }
 
-    this.cameras.main.fadeOut(250, 0, 0, 0)
-    this.time.delayedCall(250, () => {
-      this.scene.start('TaekwondoSelectScene')
-    })
-  }
-
-  private layoutDialogText() {
-    const lineCount = this.dialogText.getWrappedText(this.dialogText.text).length
-    const opticalOffset =
-      lineCount <= 1
-        ? 34 * this.dialogScale
-        : lineCount === 2
-          ? 28 * this.dialogScale
-          : 8 * this.dialogScale
-    const centeredY =
-      this.dialogTextBaseY +
-      Math.max(0, (this.dialogTextBoxHeight - this.dialogText.height) / 2) -
-      opticalOffset
-
-    this.dialogText.setPosition(this.dialogTextBaseX, centeredY)
+    fadeToScene(this, 'TaekwondoSelectScene', { duration: 250 })
   }
 }

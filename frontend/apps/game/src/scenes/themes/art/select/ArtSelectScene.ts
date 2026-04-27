@@ -1,5 +1,23 @@
 import Phaser from 'phaser'
 import {
+  createClickTargetMarker,
+  createPlayer,
+  ensurePlayerWalkAnimations,
+  loadPlayerSpritesheet,
+  type PlayerDirection,
+  type PlayerSprite,
+  type RatioPoint,
+  updatePlayerMovement,
+} from '@/game/entities/player'
+import { fadeToScene } from '@/game/systems/sceneTransition'
+import {
+  createFloatingInteractionIcon,
+  loadInteractionIcons,
+  setInteractionIconActive,
+} from '@/game/ui/interactionIcon'
+import { addCoverBackground } from '@/game/world/background'
+import { createRatioRectangle, isPointInRectangle } from '@/game/world/portal'
+import {
   artChoiceOptions,
   rumiContentDialogs,
   rumiSelectDialogs,
@@ -8,8 +26,6 @@ import {
   type RumiDialogLine,
 } from '../dialog/rumiDialogs'
 
-const FRAME_SIZE = 313
-const SPEED = 180
 const ART_ROOM_SPAWN = { xRatio: 0.5, yRatio: 0.76 }
 const ART_EXIT_PORTAL = { xRatio: 0.44, yRatio: 0.86, widthRatio: 0.12, heightRatio: 0.12 }
 const ART_RETURN_SPAWN = { xRatio: 0.585, yRatio: 0.855 }
@@ -28,7 +44,7 @@ const DIALOG_BUTTON_ROW_Y = 548
 const CONTENT_CONFIRM_VISIBLE_MS = 1400
 
 type ArtSelectSceneData = {
-  spawn?: { xRatio: number; yRatio: number }
+  spawn?: RatioPoint
   suppressRumiDialog?: boolean
 }
 
@@ -38,10 +54,10 @@ type RumiDialogStep = {
 }
 
 export class ArtSelectScene extends Phaser.Scene {
-  private player!: Phaser.Types.Physics.Arcade.SpriteWithDynamicBody
+  private player!: PlayerSprite
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys
   private target: Phaser.Math.Vector2 | null = null
-  private lastDirection = 'down'
+  private lastDirection: PlayerDirection = 'down'
   private exitPortal!: Phaser.Geom.Rectangle
   private isTransitioning = false
 
@@ -74,7 +90,7 @@ export class ArtSelectScene extends Phaser.Scene {
     if (this.isDialogVisible) {
       const step = this.dialogSteps[this.dialogStepIndex]
       const bounds = this.dialogFrame.getBounds()
-      const clickedDialog = Phaser.Geom.Rectangle.Contains(bounds, pointer.x, pointer.y)
+      const clickedDialog = isPointInRectangle(bounds, pointer.x, pointer.y)
 
       if (clickedDialog && step && !step.choices) {
         this.advanceDialog()
@@ -91,14 +107,7 @@ export class ArtSelectScene extends Phaser.Scene {
     }
 
     this.target = new Phaser.Math.Vector2(pointer.x, pointer.y)
-    const marker = this.add.circle(pointer.x, pointer.y, 6, 0xffffff, 0.6)
-    this.tweens.add({
-      targets: marker,
-      alpha: 0,
-      scale: 2,
-      duration: 400,
-      onComplete: () => marker.destroy(),
-    })
+    createClickTargetMarker(this, pointer.x, pointer.y)
   }
 
   private readonly handleEnterDown = () => {
@@ -128,18 +137,12 @@ export class ArtSelectScene extends Phaser.Scene {
 
   preload() {
     this.load.image('art-room-background', '/assets/images/themes/art/background/background.png')
-    this.load.image('talk-icon', '/assets/images/ui/icons/talk.png')
-    this.load.image('talking-icon', '/assets/images/ui/icons/talking.png')
+    loadInteractionIcons(this)
     this.load.image('rumi-dialog-frame', '/assets/images/npcs/rumi/dialog-frame.png')
     this.load.image('dialog-enter', '/assets/images/ui/dialog/enter.png')
     this.load.image('dialog-select', '/assets/images/ui/dialog/select.png')
     this.load.image('art-ui-album', '/assets/images/themes/art/ui/album.png')
-    this.load.spritesheet('character', '/assets/images/common/player/character_sheet.png', {
-      frameWidth: FRAME_SIZE,
-      frameHeight: FRAME_SIZE,
-      margin: 0,
-      spacing: 0,
-    })
+    loadPlayerSpritesheet(this)
   }
 
   create(data: ArtSelectSceneData = {}) {
@@ -156,10 +159,7 @@ export class ArtSelectScene extends Phaser.Scene {
     this.clearContentStartTimer()
     const spawn = data.spawn ?? ART_ROOM_SPAWN
 
-    const background = this.add.image(vw / 2, vh / 2, 'art-room-background')
-    const source = background.texture.getSourceImage() as HTMLImageElement
-    const scale = Math.max(vw / source.width, vh / source.height)
-    background.setScale(scale).setDepth(0)
+    const background = addCoverBackground(this, 'art-room-background')
 
     const backgroundLeft = background.x - background.displayWidth / 2
     const backgroundTop = background.y - background.displayHeight / 2
@@ -171,22 +171,9 @@ export class ArtSelectScene extends Phaser.Scene {
       background.displayHeight,
     )
 
-    this.talkIcon = this.add
-      .image(
-        backgroundLeft + background.displayWidth * RUMI_TALK_ICON.xRatio,
-        backgroundTop + background.displayHeight * RUMI_TALK_ICON.yRatio,
-        'talk-icon',
-      )
-      .setDepth(12)
-      .setDisplaySize(56, 56)
-
-    this.tweens.add({
-      targets: this.talkIcon,
-      y: this.talkIcon.y - 10,
-      duration: 700,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
+    this.talkIcon = createFloatingInteractionIcon(this, {
+      x: backgroundLeft + background.displayWidth * RUMI_TALK_ICON.xRatio,
+      y: backgroundTop + background.displayHeight * RUMI_TALK_ICON.yRatio,
     })
 
     this.rumiAnchor.set(
@@ -198,21 +185,12 @@ export class ArtSelectScene extends Phaser.Scene {
 
     this.physics.world.setBounds(0, 0, vw, vh)
 
-    this.ensureCharacterAnimations()
+    ensurePlayerWalkAnimations(this)
     this.createDialogUi(vw, vh)
 
-    this.player = this.physics.add.sprite(vw * spawn.xRatio, vh * spawn.yRatio, 'character', 0)
-    this.player.setScale(0.55).setDepth(10)
-    this.player.setCollideWorldBounds(true)
-    this.player.body.setSize(FRAME_SIZE * 0.35, FRAME_SIZE * 0.25)
-    this.player.body.setOffset(FRAME_SIZE * 0.33, FRAME_SIZE * 0.65)
+    this.player = createPlayer(this, vw * spawn.xRatio, vh * spawn.yRatio)
 
-    this.exitPortal = new Phaser.Geom.Rectangle(
-      vw * ART_EXIT_PORTAL.xRatio,
-      vh * ART_EXIT_PORTAL.yRatio,
-      vw * ART_EXIT_PORTAL.widthRatio,
-      vh * ART_EXIT_PORTAL.heightRatio,
-    )
+    this.exitPortal = createRatioRectangle(vw, vh, ART_EXIT_PORTAL)
 
     this.cursors = this.input.keyboard!.createCursorKeys()
     this.input.on('pointerdown', this.handlePointerDown)
@@ -230,75 +208,21 @@ export class ArtSelectScene extends Phaser.Scene {
   }
 
   update() {
-    const { left, right, up, down } = this.cursors
-    const isKeyPressed = left.isDown || right.isDown || up.isDown || down.isDown
-
-    let vx = 0
-    let vy = 0
-
-    if (isKeyPressed) {
-      this.target = null
-      if (left.isDown) {
-        vx -= SPEED
-        this.lastDirection = 'left'
-      }
-      if (right.isDown) {
-        vx += SPEED
-        this.lastDirection = 'right'
-      }
-      if (up.isDown) {
-        vy -= SPEED
-        this.lastDirection = 'up'
-      }
-      if (down.isDown) {
-        vy += SPEED
-        this.lastDirection = 'down'
-      }
-      if (vx !== 0 && vy !== 0) {
-        vx *= 0.707
-        vy *= 0.707
-      }
-    } else if (this.target) {
-      const dx = this.target.x - this.player.x
-      const dy = this.target.y - this.player.y
-      const dist = Math.sqrt(dx * dx + dy * dy)
-      if (dist < 6) {
-        this.target = null
-      } else {
-        const speed = Math.min(SPEED, dist * 5)
-        vx = (dx / dist) * speed
-        vy = (dy / dist) * speed
-        if (Math.abs(dx) > Math.abs(dy)) {
-          this.lastDirection = dx > 0 ? 'right' : 'left'
-        } else {
-          this.lastDirection = dy > 0 ? 'down' : 'up'
-        }
-      }
-    }
-
-    if (this.isDialogVisible || this.isAlbumVisible) {
-      vx = 0
-      vy = 0
-      this.target = null
-    }
-
-    this.player.setVelocity(vx, vy)
-
-    const moving = vx !== 0 || vy !== 0
-    if (moving) {
-      const anim = `walk-${this.lastDirection}`
-      if (this.player.anims.currentAnim?.key !== anim || !this.player.anims.isPlaying) {
-        this.player.anims.play(anim)
-      }
-    } else {
-      this.player.anims.stop()
-    }
+    const movement = updatePlayerMovement({
+      player: this.player,
+      cursors: this.cursors,
+      target: this.target,
+      lastDirection: this.lastDirection,
+      blocked: this.isDialogVisible || this.isAlbumVisible,
+    })
+    this.target = movement.target
+    this.lastDirection = movement.lastDirection
 
     this.updateRumiConversation()
 
     if (
       !this.isDialogVisible &&
-      Phaser.Geom.Rectangle.Contains(this.exitPortal, this.player.x, this.player.y)
+      isPointInRectangle(this.exitPortal, this.player.x, this.player.y)
     ) {
       this.returnToVillage()
     }
@@ -344,7 +268,7 @@ export class ArtSelectScene extends Phaser.Scene {
     ]
     this.dialogStepIndex = 0
     this.isDialogVisible = true
-    this.talkIcon.setTexture('talking-icon')
+    setInteractionIconActive(this.talkIcon, true)
     this.renderDialogStep()
     this.fadeDialog(1, 220)
   }
@@ -476,7 +400,7 @@ export class ArtSelectScene extends Phaser.Scene {
     this.selectedMode = null
     this.isWaitingContentStart = false
     this.contentStartReadyAt = 0
-    this.talkIcon.setTexture('talk-icon')
+    setInteractionIconActive(this.talkIcon, false)
     this.setChoiceButtonsVisible(false)
     this.fadeDialog(0, 180)
   }
@@ -498,15 +422,9 @@ export class ArtSelectScene extends Phaser.Scene {
     this.target = null
     this.player.setVelocity(0, 0)
     this.closeDialog(false)
-    this.cameras.main.fadeOut(220, 0, 0, 0)
-
-    this.time.delayedCall(220, () => {
-      if (mode === 'free-drawing') {
-        this.scene.start('ArtFreeDrawingScene', { suppressIntroDialog: true })
-        return
-      }
-
-      this.scene.start('ArtColoringSelectScene', { suppressIntroDialog: true })
+    fadeToScene(this, mode === 'free-drawing' ? 'ArtFreeDrawingScene' : 'ArtColoringSelectScene', {
+      duration: 220,
+      data: { suppressIntroDialog: true },
     })
   }
 
@@ -758,47 +676,12 @@ export class ArtSelectScene extends Phaser.Scene {
       this.closeDialog(false)
     }
 
-    this.cameras.main.fadeOut(250, 0, 0, 0)
-    this.time.delayedCall(250, () => {
-      this.scene.start('VillageScene', {
+    fadeToScene(this, 'VillageScene', {
+      duration: 250,
+      data: {
         spawn: ART_RETURN_SPAWN,
         portalCooldownMs: 250,
-      })
+      },
     })
-  }
-
-  private ensureCharacterAnimations() {
-    if (!this.anims.exists('walk-down')) {
-      this.anims.create({
-        key: 'walk-down',
-        frames: this.anims.generateFrameNumbers('character', { start: 0, end: 3 }),
-        frameRate: 8,
-        repeat: -1,
-      })
-    }
-    if (!this.anims.exists('walk-left')) {
-      this.anims.create({
-        key: 'walk-left',
-        frames: this.anims.generateFrameNumbers('character', { start: 4, end: 7 }),
-        frameRate: 8,
-        repeat: -1,
-      })
-    }
-    if (!this.anims.exists('walk-right')) {
-      this.anims.create({
-        key: 'walk-right',
-        frames: this.anims.generateFrameNumbers('character', { start: 8, end: 11 }),
-        frameRate: 8,
-        repeat: -1,
-      })
-    }
-    if (!this.anims.exists('walk-up')) {
-      this.anims.create({
-        key: 'walk-up',
-        frames: this.anims.generateFrameNumbers('character', { start: 12, end: 15 }),
-        frameRate: 8,
-        repeat: -1,
-      })
-    }
   }
 }
