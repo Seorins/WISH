@@ -5,6 +5,7 @@ import { ArtColoringSelectScene } from './scenes/themes/art/coloring/ArtColoring
 import { ArtFreeDrawingScene } from './scenes/themes/art/free-drawing/ArtFreeDrawingScene'
 import { ArtSelectScene } from './scenes/themes/art/select/ArtSelectScene'
 import { TaekwondoSelectScene } from './scenes/themes/taekwondo/select/TaekwondoSelectScene'
+import { GymnasticsSelectScene } from './scenes/themes/gymnastics/select/GymnasticsSelectScene'
 import { VillageScene } from './scenes/village/VillageScene'
 
 export function createGame(parent: HTMLElement): Phaser.Game {
@@ -27,6 +28,7 @@ export function createGame(parent: HTMLElement): Phaser.Game {
       ArtColoringSelectScene,
       ArtColoringScene,
       TaekwondoSelectScene,
+      GymnasticsSelectScene,
     ],
     scale: {
       mode: Phaser.Scale.RESIZE,
