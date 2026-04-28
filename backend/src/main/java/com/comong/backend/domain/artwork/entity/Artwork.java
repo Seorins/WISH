@@ -86,6 +86,20 @@ public class Artwork {
         this.isPublic = isPublic;
     }
 
+    /**
+     * 주어진 사용자가 본 작품의 소유자인지 판단. {@code patientProfile.user.id} 와 비교한다. 비로그인 등으로 {@code userId} 가
+     * null 이면 항상 false. 권한 체크 컴포넌트({@link
+     * com.comong.backend.domain.artwork.service.ArtworkAccessChecker}) 가 사용한다.
+     */
+    public boolean isOwnedBy(Long userId) {
+        if (userId == null) {
+            return false;
+        }
+        return patientProfile != null
+                && patientProfile.getUser() != null
+                && userId.equals(patientProfile.getUser().getId());
+    }
+
     @PrePersist
     void prePersist() {
         LocalDateTime now = LocalDateTime.now();

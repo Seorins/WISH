@@ -1,0 +1,82 @@
+package com.comong.backend.domain.artwork.service;
+
+import static org.assertj.core.api.Assertions.assertThatNoException;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+import org.junit.jupiter.api.Test;
+
+import com.comong.backend.domain.artwork.entity.Artwork;
+import com.comong.backend.global.exception.BusinessException;
+import com.comong.backend.global.exception.GlobalErrorCode;
+
+class ArtworkAccessCheckerTest {
+
+    private final ArtworkAccessChecker checker = new ArtworkAccessChecker();
+
+    @Test
+    void publicArtworkIsReadableByAnyone() {
+        Artwork artwork = publicArtwork();
+
+        assertThatNoException().isThrownBy(() -> checker.verifyReadable(artwork, 1L));
+        assertThatNoException().isThrownBy(() -> checker.verifyReadable(artwork, 999L));
+        assertThatNoException().isThrownBy(() -> checker.verifyReadable(artwork, null));
+    }
+
+    @Test
+    void privateArtworkIsReadableOnlyByOwner() {
+        Artwork artwork = privateArtworkOwnedBy(1L);
+
+        assertThatNoException().isThrownBy(() -> checker.verifyReadable(artwork, 1L));
+
+        assertThatThrownBy(() -> checker.verifyReadable(artwork, 2L))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(GlobalErrorCode.FORBIDDEN);
+        assertThatThrownBy(() -> checker.verifyReadable(artwork, null))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(GlobalErrorCode.FORBIDDEN);
+    }
+
+    @Test
+    void onlyOwnerCanModifyOrDelete() {
+        // 공개 작품이라도 수정/삭제는 작성자만
+        Artwork artwork = publicArtworkOwnedBy(1L);
+
+        assertThatNoException().isThrownBy(() -> checker.verifyOwner(artwork, 1L));
+
+        assertThatThrownBy(() -> checker.verifyOwner(artwork, 2L))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(GlobalErrorCode.FORBIDDEN);
+        assertThatThrownBy(() -> checker.verifyOwner(artwork, null))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(GlobalErrorCode.FORBIDDEN);
+    }
+
+    private Artwork publicArtwork() {
+        Artwork artwork = mock(Artwork.class);
+        when(artwork.isPublic()).thenReturn(true);
+        return artwork;
+    }
+
+    private Artwork privateArtworkOwnedBy(long ownerId) {
+        Artwork artwork = mock(Artwork.class);
+        when(artwork.isPublic()).thenReturn(false);
+        when(artwork.isOwnedBy(ownerId)).thenReturn(true);
+        // null/다른 id 는 default false
+        return artwork;
+    }
+
+    private Artwork publicArtworkOwnedBy(long ownerId) {
+        Artwork artwork = mock(Artwork.class);
+        // verifyOwner 는 isPublic 을 보지 않지만, 테스트 시그널 명확화를 위해 stub
+        lenient().when(artwork.isPublic()).thenReturn(true);
+        when(artwork.isOwnedBy(ownerId)).thenReturn(true);
+        return artwork;
+    }
+}
