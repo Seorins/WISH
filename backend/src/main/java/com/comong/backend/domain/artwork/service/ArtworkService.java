@@ -69,7 +69,6 @@ public class ArtworkService {
                         Artwork.builder()
                                 .patientProfile(profile)
                                 .sketchCode(request.sketchCode())
-                                .title(request.title())
                                 .imageUrl(stored.url())
                                 .playDurationSeconds(request.playDurationSeconds())
                                 .isPublic(request.isPublic())
@@ -106,7 +105,7 @@ public class ArtworkService {
         }
         registerImageReplacementCleanup(newImageUrl, oldImageUrl);
 
-        artwork.update(request.title(), request.isPublic());
+        artwork.update(request.isPublic());
         if (request.additionalPlayDurationSeconds() != null) {
             artwork.addPlayDuration(request.additionalPlayDurationSeconds());
         }

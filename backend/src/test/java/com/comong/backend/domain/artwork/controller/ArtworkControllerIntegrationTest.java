@@ -87,6 +87,25 @@ class ArtworkControllerIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
+    void createArtwork_withoutSketchCode_succeedsAsFreeDrawing() throws Exception {
+        // V5: sketch_code nullable. 자유 그리기 (밑그림 없는 작품) 시나리오.
+        String token = setupUserWithProfile("free@example.com", "freeArtist", "Free", "free-kid");
+
+        mockMvc.perform(
+                        artworkMultipart(HttpMethod.POST, "/artworks")
+                                .file(imagePart())
+                                .file(
+                                        requestPart(
+                                                "{\"playDurationSeconds\":30,\"isPublic\":false}"))
+                                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.id").isNumber())
+                .andExpect(jsonPath("$.data.sketchCode").value(org.hamcrest.Matchers.nullValue()))
+                .andExpect(jsonPath("$.data.playDurationSeconds").value(30));
+    }
+
+    @Test
     void createArtwork_rejectsNegativePlayDuration() throws Exception {
         String token = setupUserWithProfile("bob@example.com", "bob", "Bob", "bob-kid");
 
