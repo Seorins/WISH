@@ -1,6 +1,7 @@
 package com.comong.backend.domain.artwork.entity;
 
 import java.time.LocalDateTime;
+import java.util.Objects;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -78,14 +79,17 @@ public class Artwork {
             String imageUrl,
             int playDurationSeconds,
             boolean isPublic) {
+        // 빌더 단계 invariant — @ManyToOne(optional=false) / @Column(nullable=false) 만으로는 build()
+        // 시점에 null 차단이 안 되므로 fail-fast. title 은 NULL 허용이라 제외.
+        this.patientProfile =
+                Objects.requireNonNull(patientProfile, "patientProfile must not be null");
+        this.sketchCode = Objects.requireNonNull(sketchCode, "sketchCode must not be null");
+        this.imageUrl = Objects.requireNonNull(imageUrl, "imageUrl must not be null");
         // 도메인 invariant: 누적 카운터라 음수는 논리 오류 (216 MR AI 리뷰 #2 후속).
         if (playDurationSeconds < 0) {
             throw new IllegalArgumentException("플레이 시간은 0 이상이어야 합니다.");
         }
-        this.patientProfile = patientProfile;
-        this.sketchCode = sketchCode;
         this.title = title;
-        this.imageUrl = imageUrl;
         this.playDurationSeconds = playDurationSeconds;
         this.isPublic = isPublic;
     }
