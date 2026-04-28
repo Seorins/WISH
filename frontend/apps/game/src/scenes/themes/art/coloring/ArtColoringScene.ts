@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { createArtwork, updateArtwork } from '@wish/api-client'
 import { HandTracker, type TrackedHand } from '@/game/motion/handTracker'
 import { detectIndexFingerGesture } from '@/game/motion/indexFingerGesture'
 import { toPointerCanvasCoordinates } from '@/game/motion/pointerCanvasCoordinates'
@@ -8,6 +9,7 @@ import { getPointerReference } from '@/game/motion/pointerReference'
 import { PointerSmoother } from '@/game/motion/pointerSmoother'
 import { PointerTrackingGuard } from '@/game/motion/pointerTrackingGuard'
 import { rumiContentDialogs, type RumiContentDialogStage } from '../dialog/rumiDialogs'
+import { createArtConfirmDialog, type ArtConfirmDialog } from '../ui/artConfirmDialog'
 import { getColoringOption, coloringOptions, type ColoringOption } from './coloringOptions'
 
 const CANVAS_SOURCE_SIZE = { width: 1535, height: 1024 }
@@ -15,6 +17,7 @@ const CANVAS_DRAW_AREA = { x: 120, y: 150, width: 1288, height: 620 }
 const DELETE_BUTTON_SIZE = { width: 344, height: 336 }
 const FILLABLE_WHITE_THRESHOLD = 245
 const HAND_FILL_COOLDOWN_MS = 320
+const EXIT_CONFIRM_DEPTH = 60
 type ColoringTool = 'brush' | 'eraser'
 const COLORING_TOOLS: ColoringTool[] = ['brush', 'eraser']
 const PALETTE_SWATCHES = [
@@ -35,6 +38,12 @@ const PALETTE_SWATCHES = [
 type ArtColoringSceneData = {
   coloringId?: string
   suppressIntroDialog?: boolean
+  editArtwork?: EditableArtworkSceneData
+}
+type EditableArtworkSceneData = {
+  id: number
+  imageTextureKey: string
+  isPublic: boolean
 }
 
 type PalettePoint = { color: number; x: number; y: number }
@@ -46,6 +55,12 @@ type HandActionKind = 'save' | 'reset' | 'exit'
 type CachedFillRegion = {
   pixelIndices: Uint32Array
   bounds: { minX: number; minY: number; maxX: number; maxY: number }
+}
+type ExportedColoringPng = {
+  blob: Blob
+  filename: string
+  isPublic: boolean
+  playDurationSeconds: number
 }
 
 export class ArtColoringScene extends Phaser.Scene {
@@ -103,8 +118,23 @@ export class ArtColoringScene extends Phaser.Scene {
   private lastHandFillRegionId: number | null = null
   private lastHandFillAt = 0
   private isSavingColoring = false
+  private isExitConfirmOpen = false
+  private exitConfirmDialog: ArtConfirmDialog | null = null
+  private isSaveVisibilityConfirmOpen = false
+  private saveVisibilityConfirmDialog: ArtConfirmDialog | null = null
+  private editingArtwork: EditableArtworkSceneData | null = null
+  private contentStartedAt = 0
 
   private readonly handlePointerDown = (pointer: Phaser.Input.Pointer) => {
+    if (
+      this.isTransitioning ||
+      this.isSavingColoring ||
+      this.isExitConfirmOpen ||
+      this.isSaveVisibilityConfirmOpen
+    ) {
+      return
+    }
+
     if (!this.handTracker?.isStarted && !this.isStartingHandTracker) {
       this.startHandColoringMode()
     }
@@ -127,6 +157,16 @@ export class ArtColoringScene extends Phaser.Scene {
   }
 
   private readonly handlePointerMove = (pointer: Phaser.Input.Pointer) => {
+    if (
+      this.isTransitioning ||
+      this.isSavingColoring ||
+      this.isExitConfirmOpen ||
+      this.isSaveVisibilityConfirmOpen
+    ) {
+      this.stopDrawing()
+      return
+    }
+
     if (this.currentTool !== 'eraser' || !this.isDrawing || !pointer.isDown) {
       return
     }
@@ -146,7 +186,17 @@ export class ArtColoringScene extends Phaser.Scene {
   }
 
   private readonly handleEscDown = () => {
-    this.returnToColoringSelect()
+    if (this.isSaveVisibilityConfirmOpen) {
+      this.hideSaveVisibilityConfirm()
+      return
+    }
+
+    if (this.isExitConfirmOpen) {
+      this.hideExitConfirm()
+      return
+    }
+
+    this.requestReturnToColoringSelect()
   }
 
   constructor() {
@@ -156,6 +206,7 @@ export class ArtColoringScene extends Phaser.Scene {
   init(data: ArtColoringSceneData = {}) {
     this.selectedOption = getColoringOption(data.coloringId)
     this.suppressIntroDialog = Boolean(data.suppressIntroDialog)
+    this.editingArtwork = data.editArtwork ?? null
   }
 
   preload() {
@@ -174,6 +225,7 @@ export class ArtColoringScene extends Phaser.Scene {
   }
 
   create() {
+    this.contentStartedAt = this.time.now
     this.isTransitioning = false
     this.isDrawing = false
     this.hasStartedColoring = false
@@ -191,6 +243,10 @@ export class ArtColoringScene extends Phaser.Scene {
     this.pendingHandToolStartedAt = 0
     this.lastHandToolSelectedAt = 0
     this.isSavingColoring = false
+    this.isExitConfirmOpen = false
+    this.exitConfirmDialog = null
+    this.isSaveVisibilityConfirmOpen = false
+    this.saveVisibilityConfirmDialog = null
     this.sourceImageData = null
     this.sourceImageSize = { width: 0, height: 0 }
     this.sourceFillBounds = { minX: 0, minY: 0, maxX: 0, maxY: 0 }
@@ -210,6 +266,9 @@ export class ArtColoringScene extends Phaser.Scene {
     this.createHeader(vw)
     this.createExitButton(vw)
     this.createColoringBase()
+    if (this.applyInitialArtworkImage()) {
+      this.hasStartedColoring = true
+    }
     this.createPalette(vw, vh)
     this.createActionButtons()
     this.createToolSelector()
@@ -234,6 +293,8 @@ export class ArtColoringScene extends Phaser.Scene {
       this.input.off('pointerupoutside', this.handlePointerUp)
       this.input.keyboard?.off('keydown-ESC', this.handleEscDown)
       this.input.setDefaultCursor('default')
+      this.hideExitConfirm()
+      this.hideSaveVisibilityConfirm()
       this.stopHandTracking()
     })
 
@@ -335,7 +396,7 @@ export class ArtColoringScene extends Phaser.Scene {
         event: Phaser.Types.Input.EventData,
       ) => {
         event.stopPropagation()
-        this.returnToColoringSelect()
+        this.requestReturnToColoringSelect()
       },
     )
   }
@@ -368,6 +429,21 @@ export class ArtColoringScene extends Phaser.Scene {
       )
       .setDepth(6)
     this.prepareSourceImageData(source)
+  }
+
+  private applyInitialArtworkImage() {
+    if (!this.editingArtwork || !this.textures.exists(this.editingArtwork.imageTextureKey)) {
+      return false
+    }
+
+    const image = this.add
+      .image(0, 0, this.editingArtwork.imageTextureKey)
+      .setOrigin(0, 0)
+      .setDisplaySize(this.drawBounds.width, this.drawBounds.height)
+      .setVisible(false)
+    this.coloringTexture.draw(image)
+    image.destroy()
+    return true
   }
 
   private createPalette(vw: number, vh: number) {
@@ -485,7 +561,7 @@ export class ArtColoringScene extends Phaser.Scene {
         event: Phaser.Types.Input.EventData,
       ) => {
         event.stopPropagation()
-        this.saveColoring()
+        this.requestSaveColoring()
       },
     )
 
@@ -725,7 +801,14 @@ export class ArtColoringScene extends Phaser.Scene {
 
   private updateHandColoring(timestampMs: number) {
     const tracker = this.handTracker
-    if (!tracker?.isStarted || this.isDrawing) {
+    if (
+      !tracker?.isStarted ||
+      this.isDrawing ||
+      this.isTransitioning ||
+      this.isSavingColoring ||
+      this.isExitConfirmOpen ||
+      this.isSaveVisibilityConfirmOpen
+    ) {
       return
     }
 
@@ -851,11 +934,11 @@ export class ArtColoringScene extends Phaser.Scene {
 
     this.activatedHandAction = action
     if (action === 'save') {
-      this.saveColoring()
+      this.requestSaveColoring()
     } else if (action === 'reset') {
       this.resetColoring()
     } else {
-      this.returnToColoringSelect()
+      this.requestReturnToColoringSelect()
     }
 
     return true
@@ -1459,35 +1542,69 @@ export class ArtColoringScene extends Phaser.Scene {
     this.showRumiLine('intro')
   }
 
-  private saveColoring() {
+  private requestSaveColoring() {
+    if (
+      this.isTransitioning ||
+      this.isSavingColoring ||
+      this.isExitConfirmOpen ||
+      this.isSaveVisibilityConfirmOpen
+    ) {
+      return
+    }
+
+    this.stopDrawing()
+    this.showSaveVisibilityConfirm()
+  }
+
+  private saveColoring(isPublic: boolean) {
     if (this.isSavingColoring) {
       return
     }
 
     this.isSavingColoring = true
-    void this.createSavedColoringCanvas()
-      .then(outputCanvas => {
-        if (!outputCanvas) {
-          return
+    const playDurationSeconds = this.getPlayDurationSeconds()
+    void this.exportColoringPng(playDurationSeconds, isPublic)
+      .then(exportedColoring => {
+        if (!exportedColoring) {
+          throw new Error('Failed to create coloring export image.')
         }
 
-        const link = document.createElement('a')
-        link.href = outputCanvas.toDataURL('image/png')
-        link.download = `coloring-${this.selectedOption.id}-${Date.now()}.png`
-        document.body.appendChild(link)
-        link.click()
-        link.remove()
+        if (this.editingArtwork) {
+          return updateArtwork({
+            id: this.editingArtwork.id,
+            image: exportedColoring.blob,
+            filename: exportedColoring.filename,
+            additionalPlayDurationSeconds: exportedColoring.playDurationSeconds,
+            isPublic: exportedColoring.isPublic,
+          })
+        }
+
+        return createArtwork({
+          image: exportedColoring.blob,
+          filename: exportedColoring.filename,
+          sketchCode: this.getSelectedSketchCode(),
+          playDurationSeconds: exportedColoring.playDurationSeconds,
+          isPublic: exportedColoring.isPublic,
+        })
+      })
+      .then(() => {
         this.showRumiLine('complete')
+        this.hasStartedColoring = false
+        this.returnToColoringSelect()
       })
       .catch(error => {
-        console.error('Failed to export coloring PNG.', error)
+        console.error('Failed to save coloring artwork.', error)
+        this.showSaveError()
       })
       .finally(() => {
         this.isSavingColoring = false
       })
   }
 
-  private createSavedColoringCanvas(): Promise<HTMLCanvasElement | null> {
+  private exportColoringPng(
+    playDurationSeconds: number,
+    isPublic: boolean,
+  ): Promise<ExportedColoringPng | null> {
     if (!this.sourceImageData) {
       return Promise.resolve(null)
     }
@@ -1514,9 +1631,30 @@ export class ArtColoringScene extends Phaser.Scene {
         const outputImageData = context.getImageData(0, 0, outputCanvas.width, outputCanvas.height)
         this.drawSavedLineArt(outputImageData.data)
         context.putImageData(outputImageData, 0, 0)
-        resolve(outputCanvas)
+        outputCanvas.toBlob(blob => {
+          if (!blob) {
+            resolve(null)
+            return
+          }
+
+          resolve({
+            blob,
+            filename: `coloring-${this.selectedOption.id}-${Date.now()}.png`,
+            isPublic,
+            playDurationSeconds,
+          })
+        }, 'image/png')
       }, 'image/png')
     })
+  }
+
+  private getSelectedSketchCode() {
+    const selectedIndex = coloringOptions.findIndex(option => option.id === this.selectedOption.id)
+    return Math.max(1, selectedIndex + 1)
+  }
+
+  private getPlayDurationSeconds() {
+    return Math.max(0, Math.floor((this.time.now - this.contentStartedAt) / 1000))
   }
 
   private drawSavedLineArt(outputData: Uint8ClampedArray) {
@@ -1546,11 +1684,108 @@ export class ArtColoringScene extends Phaser.Scene {
     }
   }
 
+  private requestReturnToColoringSelect() {
+    if (this.isTransitioning || this.isSavingColoring || this.isSaveVisibilityConfirmOpen) {
+      return
+    }
+
+    this.stopDrawing()
+
+    if (this.hasStartedColoring) {
+      this.showExitConfirm()
+      return
+    }
+
+    this.returnToColoringSelect()
+  }
+
+  private showExitConfirm() {
+    if (this.isExitConfirmOpen) {
+      return
+    }
+
+    this.isExitConfirmOpen = true
+    this.exitConfirmDialog = createArtConfirmDialog(this, {
+      depth: EXIT_CONFIRM_DEPTH,
+      title: '아직 저장하지 않았어요',
+      message: '나가면 지금 색칠한 그림은 사라져요.',
+      secondaryButton: {
+        label: '계속 색칠하기',
+        fillColor: 0xfffbf1,
+        strokeColor: 0xaa875b,
+        textColor: '#5f3b22',
+        onSelect: () => this.hideExitConfirm(),
+      },
+      primaryButton: {
+        label: '나가기',
+        fillColor: 0xb7603b,
+        strokeColor: 0x7c3f27,
+        textColor: '#ffffff',
+        onSelect: () => {
+          this.hideExitConfirm()
+          this.returnToColoringSelect()
+        },
+      },
+    })
+  }
+
+  private showSaveVisibilityConfirm() {
+    if (this.isSaveVisibilityConfirmOpen) {
+      return
+    }
+
+    this.isSaveVisibilityConfirmOpen = true
+    this.saveVisibilityConfirmDialog = createArtConfirmDialog(this, {
+      depth: EXIT_CONFIRM_DEPTH,
+      title: '공개 범위를 선택해줘',
+      message: '저장한 그림을 다른 사람에게 보여줄까요?',
+      secondaryButton: {
+        label: '나만 보기',
+        fillColor: 0xfffbf1,
+        strokeColor: 0xaa875b,
+        textColor: '#5f3b22',
+        onSelect: () => {
+          this.hideSaveVisibilityConfirm()
+          this.saveColoring(false)
+        },
+      },
+      primaryButton: {
+        label: '공개하기',
+        fillColor: 0x65a843,
+        strokeColor: 0x3f752a,
+        textColor: '#ffffff',
+        onSelect: () => {
+          this.hideSaveVisibilityConfirm()
+          this.saveColoring(true)
+        },
+      },
+    })
+  }
+
+  private hideExitConfirm() {
+    this.exitConfirmDialog?.destroy()
+    this.exitConfirmDialog = null
+    this.isExitConfirmOpen = false
+  }
+
+  private hideSaveVisibilityConfirm() {
+    this.saveVisibilityConfirmDialog?.destroy()
+    this.saveVisibilityConfirmDialog = null
+    this.isSaveVisibilityConfirmOpen = false
+  }
+
+  private showSaveError() {
+    this.rumiBubbleText.setText('저장에 실패했어요. 잠시 후 다시 시도해줘.')
+    this.setRumiBubbleVisible(true)
+  }
+
   private returnToColoringSelect() {
     if (this.isTransitioning) {
       return
     }
 
+    this.hideExitConfirm()
+    this.hideSaveVisibilityConfirm()
     this.stopHandTracking()
     this.isTransitioning = true
     this.cameras.main.fadeOut(180, 0, 0, 0)
