@@ -9,8 +9,8 @@ import static org.mockito.Mockito.when;
 import org.junit.jupiter.api.Test;
 
 import com.comong.backend.domain.artwork.entity.Artwork;
+import com.comong.backend.domain.artwork.exception.ArtworkErrorCode;
 import com.comong.backend.global.exception.BusinessException;
-import com.comong.backend.global.exception.GlobalErrorCode;
 
 class ArtworkAccessCheckerTest {
 
@@ -34,11 +34,11 @@ class ArtworkAccessCheckerTest {
         assertThatThrownBy(() -> checker.verifyReadable(artwork, 2L))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
-                .isEqualTo(GlobalErrorCode.FORBIDDEN);
+                .isEqualTo(ArtworkErrorCode.ARTWORK_ACCESS_DENIED);
         assertThatThrownBy(() -> checker.verifyReadable(artwork, null))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
-                .isEqualTo(GlobalErrorCode.FORBIDDEN);
+                .isEqualTo(ArtworkErrorCode.ARTWORK_ACCESS_DENIED);
     }
 
     @Test
@@ -60,11 +60,11 @@ class ArtworkAccessCheckerTest {
         assertThatThrownBy(() -> checker.verifyOwner(artwork, 2L))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
-                .isEqualTo(GlobalErrorCode.FORBIDDEN);
+                .isEqualTo(ArtworkErrorCode.ARTWORK_ACCESS_DENIED);
         assertThatThrownBy(() -> checker.verifyOwner(artwork, null))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
-                .isEqualTo(GlobalErrorCode.FORBIDDEN);
+                .isEqualTo(ArtworkErrorCode.ARTWORK_ACCESS_DENIED);
     }
 
     private Artwork publicArtwork() {

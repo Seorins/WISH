@@ -5,8 +5,8 @@ import java.util.Objects;
 import org.springframework.stereotype.Component;
 
 import com.comong.backend.domain.artwork.entity.Artwork;
+import com.comong.backend.domain.artwork.exception.ArtworkErrorCode;
 import com.comong.backend.global.exception.BusinessException;
-import com.comong.backend.global.exception.GlobalErrorCode;
 
 /**
  * Artwork 도메인의 접근 권한 체크 컴포넌트.
@@ -20,8 +20,8 @@ import com.comong.backend.global.exception.GlobalErrorCode;
  * </ul>
  *
  * <p>현재 사용자 식별은 호출자가 책임지고 {@code currentUserId} 인자로 전달한다 (비로그인은 {@code null}). 본 컴포넌트는 권한 위반 시
- * {@code BusinessException(GlobalErrorCode.FORBIDDEN)} 을 던지고, 이는 GlobalExceptionHandler 가 403 응답으로
- * 매핑한다.
+ * {@code BusinessException(ArtworkErrorCode.ARTWORK_ACCESS_DENIED)} 을 던지고, 이는
+ * GlobalExceptionHandler 가 403 응답으로 매핑한다.
  *
  * <p>currentUserId 추출 방식 (SecurityContext 에서 꺼내는 헬퍼 또는 {@code @AuthenticationPrincipal} 커스텀 어노테이션)
  * 은 S14P31E103-218 작업 시 결정한다.
@@ -43,7 +43,7 @@ public class ArtworkAccessChecker {
             return;
         }
         if (!artwork.isOwnedBy(currentUserId)) {
-            throw new BusinessException(GlobalErrorCode.FORBIDDEN);
+            throw new BusinessException(ArtworkErrorCode.ARTWORK_ACCESS_DENIED);
         }
     }
 
@@ -58,7 +58,7 @@ public class ArtworkAccessChecker {
     public void verifyOwner(Artwork artwork, Long currentUserId) {
         Objects.requireNonNull(artwork, "artwork must not be null");
         if (!artwork.isOwnedBy(currentUserId)) {
-            throw new BusinessException(GlobalErrorCode.FORBIDDEN);
+            throw new BusinessException(ArtworkErrorCode.ARTWORK_ACCESS_DENIED);
         }
     }
 }
