@@ -45,7 +45,7 @@ type StateLogEntry = {
 }
 
 const DEFAULT_AI_BASE_URL = 'http://localhost:8001/api/v1'
-const DEFAULT_TARGET_STEPS = 8
+const DEFAULT_TARGET_STEPS = 30
 const DEFAULT_WARMUP_FRAMES = 15
 const MAX_STATE_LOGS = 12
 

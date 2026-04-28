@@ -16,9 +16,17 @@ class EvaluatorResult:
     last_seen_side: str | None = None
     left_armed: bool = True
     right_armed: bool = True
-    warmup_frames_remaining: int = 0
-    baseline_left_knee_y: float | None = None
-    baseline_right_knee_y: float | None = None
+    # Raw hip center position captured on the first valid frame — used for in-place check
+    reference_hip_x: float | None = None
+    reference_hip_y: float | None = None
+    reference_scale: float | None = None
+    # Feedback stabilizer state (persisted across API calls to avoid flicker)
+    displayed_feedback_code: str | None = None
+    displayed_feedback_text: str | None = None
+    displayed_feedback_frames: int = 0
+    candidate_feedback_code: str | None = None
+    candidate_feedback_text: str | None = None
+    candidate_feedback_streak: int = 0
 
 
 class BaseEvaluator(ABC):
@@ -35,8 +43,14 @@ class BaseEvaluator(ABC):
         last_seen_side: str | None = None,
         left_armed: bool = True,
         right_armed: bool = True,
-        warmup_frames_remaining: int = 0,
-        baseline_left_knee_y: float | None = None,
-        baseline_right_knee_y: float | None = None,
+        reference_hip_x: float | None = None,
+        reference_hip_y: float | None = None,
+        reference_scale: float | None = None,
+        displayed_feedback_code: str | None = None,
+        displayed_feedback_text: str | None = None,
+        displayed_feedback_frames: int = 0,
+        candidate_feedback_code: str | None = None,
+        candidate_feedback_text: str | None = None,
+        candidate_feedback_streak: int = 0,
     ) -> EvaluatorResult:
         raise NotImplementedError
