@@ -60,13 +60,14 @@ def test_taekwondo_normalize_returns_tracking_low_when_required_landmark_missing
     assert response.json()["tracking"] == "tracking_low"
 
 
-def test_taekwondo_normalize_returns_tracking_low_when_visibility_is_too_low() -> None:
+def test_taekwondo_normalize_returns_tracking_lost_when_visibility_is_too_low() -> None:
+    # 모든 랜드마크가 필터링되면 completeness=0 → tracking_lost
     payload = build_payload(visibility=0.2)
 
     response = client.post("/api/v1/taekwondo/normalize", json=payload)
 
     assert response.status_code == 200
-    assert response.json()["tracking"] == "tracking_low"
+    assert response.json()["tracking"] == "tracking_lost"
 
 
 def test_taekwondo_normalize_keeps_side_orientation_when_not_mirrored() -> None:
