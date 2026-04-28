@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { createArtwork, updateArtwork } from '@wish/api-client'
 import { HandTracker, type TrackedHand } from '@/game/motion/handTracker'
 import { detectIndexFingerGesture } from '@/game/motion/indexFingerGesture'
 import { toPointerCanvasCoordinates } from '@/game/motion/pointerCanvasCoordinates'
@@ -39,6 +40,12 @@ type HandPointerState = {
 }
 type ArtFreeDrawingSceneData = {
   suppressIntroDialog?: boolean
+  editArtwork?: EditableArtworkSceneData
+}
+type EditableArtworkSceneData = {
+  id: number
+  imageTextureKey: string
+  isPublic: boolean
 }
 type HandActionKind = 'save' | 'reset' | 'exit'
 type ExportedDrawingPng = {
@@ -102,6 +109,7 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
   private exitConfirmDialog: ArtConfirmDialog | null = null
   private isSaveVisibilityConfirmOpen = false
   private saveVisibilityConfirmDialog: ArtConfirmDialog | null = null
+  private editingArtwork: EditableArtworkSceneData | null = null
   private suppressStartupDialogs = false
   private contentStartedAt = 0
   private saveButtonBaseScale = { x: 1, y: 1 }
@@ -207,6 +215,7 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
   create(data: ArtFreeDrawingSceneData = {}) {
     const { width: vw, height: vh } = this.scale
     this.suppressStartupDialogs = Boolean(data.suppressIntroDialog)
+    this.editingArtwork = data.editArtwork ?? null
     this.contentStartedAt = this.time.now
     this.isTransitioning = false
     this.isSavingDrawing = false
@@ -236,6 +245,9 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
     this.add.rectangle(vw / 2, vh / 2, vw, vh, 0xf4ead7, 0.08).setDepth(1)
 
     this.createCanvas(vw, vh)
+    if (this.applyInitialArtworkImage()) {
+      this.hasStartedDrawing = true
+    }
     this.createHeader(vw, vh)
     this.createExitButton(vw, vh)
     this.createPalette(vw, vh)
@@ -370,6 +382,32 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
       .setDepth(6)
 
     this.brushStroke = this.add.graphics().setVisible(false)
+  }
+
+  private applyInitialArtworkImage() {
+    if (!this.editingArtwork || !this.textures.exists(this.editingArtwork.imageTextureKey)) {
+      return false
+    }
+
+    const source = this.textures
+      .get(this.editingArtwork.imageTextureKey)
+      .getSourceImage() as HTMLImageElement
+    const scale = Math.min(
+      this.drawBounds.width / source.width,
+      this.drawBounds.height / source.height,
+    )
+    const image = this.add
+      .image(0, 0, this.editingArtwork.imageTextureKey)
+      .setOrigin(0, 0)
+      .setDisplaySize(source.width * scale, source.height * scale)
+      .setVisible(false)
+    image.setPosition(
+      (this.drawBounds.width - image.displayWidth) / 2,
+      (this.drawBounds.height - image.displayHeight) / 2,
+    )
+    this.drawingTexture.draw(image)
+    image.destroy()
+    return true
   }
 
   private createPalette(vw: number, vh: number) {
@@ -1188,13 +1226,32 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
     const playDurationSeconds = this.getPlayDurationSeconds()
     void this.exportDrawingPng(playDurationSeconds, isPublic)
       .then(exportedDrawing => {
-        this.downloadBlob(exportedDrawing.blob, exportedDrawing.filename)
+        if (this.editingArtwork) {
+          return updateArtwork({
+            id: this.editingArtwork.id,
+            image: exportedDrawing.blob,
+            filename: exportedDrawing.filename,
+            additionalPlayDurationSeconds: exportedDrawing.playDurationSeconds,
+            isPublic: exportedDrawing.isPublic,
+          })
+        }
+
+        return createArtwork({
+          image: exportedDrawing.blob,
+          filename: exportedDrawing.filename,
+          sketchCode: null,
+          playDurationSeconds: exportedDrawing.playDurationSeconds,
+          isPublic: exportedDrawing.isPublic,
+        })
+      })
+      .then(() => {
         this.showRumiLine('complete')
         this.hasStartedDrawing = false
         this.returnToArtRoom()
       })
       .catch(error => {
-        console.error('Failed to export free drawing PNG.', error)
+        console.error('Failed to save free drawing artwork.', error)
+        this.showSaveError()
       })
       .finally(() => {
         this.isSavingDrawing = false
@@ -1257,17 +1314,6 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
     }
 
     return new Blob([bytes], { type: mimeType })
-  }
-
-  private downloadBlob(blob: Blob, filename: string) {
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = filename
-    document.body.appendChild(link)
-    link.click()
-    link.remove()
-    window.setTimeout(() => URL.revokeObjectURL(url), 1000)
   }
 
   private requestReturnToArtRoom() {
@@ -1359,6 +1405,11 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
     this.saveVisibilityConfirmDialog?.destroy()
     this.saveVisibilityConfirmDialog = null
     this.isSaveVisibilityConfirmOpen = false
+  }
+
+  private showSaveError() {
+    this.rumiBubbleText.setText('저장에 실패했어요. 잠시 후 다시 시도해줘.')
+    this.setRumiBubbleVisible(true)
   }
 
   private returnToArtRoom() {

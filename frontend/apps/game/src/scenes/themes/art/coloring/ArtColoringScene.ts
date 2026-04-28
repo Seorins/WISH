@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { createArtwork, updateArtwork } from '@wish/api-client'
 import { HandTracker, type TrackedHand } from '@/game/motion/handTracker'
 import { detectIndexFingerGesture } from '@/game/motion/indexFingerGesture'
 import { toPointerCanvasCoordinates } from '@/game/motion/pointerCanvasCoordinates'
@@ -37,6 +38,12 @@ const PALETTE_SWATCHES = [
 type ArtColoringSceneData = {
   coloringId?: string
   suppressIntroDialog?: boolean
+  editArtwork?: EditableArtworkSceneData
+}
+type EditableArtworkSceneData = {
+  id: number
+  imageTextureKey: string
+  isPublic: boolean
 }
 
 type PalettePoint = { color: number; x: number; y: number }
@@ -50,7 +57,7 @@ type CachedFillRegion = {
   bounds: { minX: number; minY: number; maxX: number; maxY: number }
 }
 type ExportedColoringPng = {
-  canvas: HTMLCanvasElement
+  blob: Blob
   filename: string
   isPublic: boolean
   playDurationSeconds: number
@@ -115,6 +122,7 @@ export class ArtColoringScene extends Phaser.Scene {
   private exitConfirmDialog: ArtConfirmDialog | null = null
   private isSaveVisibilityConfirmOpen = false
   private saveVisibilityConfirmDialog: ArtConfirmDialog | null = null
+  private editingArtwork: EditableArtworkSceneData | null = null
   private contentStartedAt = 0
 
   private readonly handlePointerDown = (pointer: Phaser.Input.Pointer) => {
@@ -198,6 +206,7 @@ export class ArtColoringScene extends Phaser.Scene {
   init(data: ArtColoringSceneData = {}) {
     this.selectedOption = getColoringOption(data.coloringId)
     this.suppressIntroDialog = Boolean(data.suppressIntroDialog)
+    this.editingArtwork = data.editArtwork ?? null
   }
 
   preload() {
@@ -257,6 +266,9 @@ export class ArtColoringScene extends Phaser.Scene {
     this.createHeader(vw)
     this.createExitButton(vw)
     this.createColoringBase()
+    if (this.applyInitialArtworkImage()) {
+      this.hasStartedColoring = true
+    }
     this.createPalette(vw, vh)
     this.createActionButtons()
     this.createToolSelector()
@@ -417,6 +429,21 @@ export class ArtColoringScene extends Phaser.Scene {
       )
       .setDepth(6)
     this.prepareSourceImageData(source)
+  }
+
+  private applyInitialArtworkImage() {
+    if (!this.editingArtwork || !this.textures.exists(this.editingArtwork.imageTextureKey)) {
+      return false
+    }
+
+    const image = this.add
+      .image(0, 0, this.editingArtwork.imageTextureKey)
+      .setOrigin(0, 0)
+      .setDisplaySize(this.drawBounds.width, this.drawBounds.height)
+      .setVisible(false)
+    this.coloringTexture.draw(image)
+    image.destroy()
+    return true
   }
 
   private createPalette(vw: number, vh: number) {
@@ -1539,21 +1566,35 @@ export class ArtColoringScene extends Phaser.Scene {
     void this.exportColoringPng(playDurationSeconds, isPublic)
       .then(exportedColoring => {
         if (!exportedColoring) {
-          return
+          throw new Error('Failed to create coloring export image.')
         }
 
-        const link = document.createElement('a')
-        link.href = exportedColoring.canvas.toDataURL('image/png')
-        link.download = exportedColoring.filename
-        document.body.appendChild(link)
-        link.click()
-        link.remove()
+        if (this.editingArtwork) {
+          return updateArtwork({
+            id: this.editingArtwork.id,
+            image: exportedColoring.blob,
+            filename: exportedColoring.filename,
+            additionalPlayDurationSeconds: exportedColoring.playDurationSeconds,
+            isPublic: exportedColoring.isPublic,
+          })
+        }
+
+        return createArtwork({
+          image: exportedColoring.blob,
+          filename: exportedColoring.filename,
+          sketchCode: this.getSelectedSketchCode(),
+          playDurationSeconds: exportedColoring.playDurationSeconds,
+          isPublic: exportedColoring.isPublic,
+        })
+      })
+      .then(() => {
         this.showRumiLine('complete')
         this.hasStartedColoring = false
         this.returnToColoringSelect()
       })
       .catch(error => {
-        console.error('Failed to export coloring PNG.', error)
+        console.error('Failed to save coloring artwork.', error)
+        this.showSaveError()
       })
       .finally(() => {
         this.isSavingColoring = false
@@ -1590,14 +1631,26 @@ export class ArtColoringScene extends Phaser.Scene {
         const outputImageData = context.getImageData(0, 0, outputCanvas.width, outputCanvas.height)
         this.drawSavedLineArt(outputImageData.data)
         context.putImageData(outputImageData, 0, 0)
-        resolve({
-          canvas: outputCanvas,
-          filename: `coloring-${this.selectedOption.id}-${Date.now()}.png`,
-          isPublic,
-          playDurationSeconds,
-        })
+        outputCanvas.toBlob(blob => {
+          if (!blob) {
+            resolve(null)
+            return
+          }
+
+          resolve({
+            blob,
+            filename: `coloring-${this.selectedOption.id}-${Date.now()}.png`,
+            isPublic,
+            playDurationSeconds,
+          })
+        }, 'image/png')
       }, 'image/png')
     })
+  }
+
+  private getSelectedSketchCode() {
+    const selectedIndex = coloringOptions.findIndex(option => option.id === this.selectedOption.id)
+    return Math.max(1, selectedIndex + 1)
   }
 
   private getPlayDurationSeconds() {
@@ -1719,6 +1772,11 @@ export class ArtColoringScene extends Phaser.Scene {
     this.saveVisibilityConfirmDialog?.destroy()
     this.saveVisibilityConfirmDialog = null
     this.isSaveVisibilityConfirmOpen = false
+  }
+
+  private showSaveError() {
+    this.rumiBubbleText.setText('저장에 실패했어요. 잠시 후 다시 시도해줘.')
+    this.setRumiBubbleVisible(true)
   }
 
   private returnToColoringSelect() {
