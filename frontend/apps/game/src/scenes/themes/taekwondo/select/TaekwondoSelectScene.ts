@@ -49,6 +49,12 @@ type SeokjaeDialogStep = {
   choices?: TaekwondoChoiceOption[]
 }
 
+type DialogChoiceButton = {
+  container: Phaser.GameObjects.Container
+  background: Phaser.GameObjects.Image
+  label: Phaser.GameObjects.Text
+}
+
 export class TaekwondoSelectScene extends Phaser.Scene {
   private player!: PlayerSprite
   private seokjaeNpc!: Phaser.GameObjects.Sprite
@@ -64,7 +70,7 @@ export class TaekwondoSelectScene extends Phaser.Scene {
   private dialogFrame!: Phaser.GameObjects.Image
   private dialogText!: Phaser.GameObjects.Text
   private dialogEnterHint!: Phaser.GameObjects.Image
-  private dialogChoiceButtons: Phaser.GameObjects.Container[] = []
+  private dialogChoiceButtons: DialogChoiceButton[] = []
   private dialogTextBaseX = 0
   private dialogTextBaseY = 0
   private dialogFrameTop = 0
@@ -305,26 +311,24 @@ export class TaekwondoSelectScene extends Phaser.Scene {
     choices.forEach((choice, index) => {
       const button = this.dialogChoiceButtons[index]
       if (!button) {
+        console.error(`Missing taekwondo dialog choice button for index ${index}`)
         return
       }
 
-      button.setPosition(firstCenterX + index * (buttonWidth + gap), buttonCenterY)
-      const background = button.list[0] as Phaser.GameObjects.Image
-      const label = button.list[1] as Phaser.GameObjects.Text
-
-      background.setDisplaySize(buttonWidth, buttonHeight)
-      label.setText(choice.label)
-      label.setStyle({ fontSize: `${Math.max(22, Math.round(34 * this.dialogScale))}px` })
-      button.setData('mode', choice.mode)
-      button.setVisible(true)
-      button.setAlpha(1)
+      button.container.setPosition(firstCenterX + index * (buttonWidth + gap), buttonCenterY)
+      button.background.setDisplaySize(buttonWidth, buttonHeight)
+      button.label.setText(choice.label)
+      button.label.setStyle({ fontSize: `${Math.max(22, Math.round(34 * this.dialogScale))}px` })
+      button.container.setData('mode', choice.mode)
+      button.container.setVisible(true)
+      button.container.setAlpha(1)
     })
   }
 
   private setChoiceButtonsVisible(visible: boolean) {
     this.dialogChoiceButtons.forEach(button => {
-      button.setVisible(visible)
-      button.setAlpha(visible ? 1 : 0)
+      button.container.setVisible(visible)
+      button.container.setAlpha(visible ? 1 : 0)
     })
   }
 
@@ -365,7 +369,7 @@ export class TaekwondoSelectScene extends Phaser.Scene {
       this.dialogFrame,
       this.dialogText,
       this.dialogEnterHint,
-      ...this.dialogChoiceButtons,
+      ...this.dialogChoiceButtons.map(button => button.container),
     ]
 
     this.tweens.killTweensOf(targets)
@@ -381,6 +385,22 @@ export class TaekwondoSelectScene extends Phaser.Scene {
     const dialogSource = this.textures
       .get('seokjae-dialog-frame')
       .getSourceImage() as HTMLImageElement
+    this.createDialogFrame(vw, vh, dialogSource)
+
+    this.dialogScale = this.dialogFrame.displayWidth / dialogSource.width
+    const dialogLeft = this.dialogFrame.x - this.dialogFrame.displayWidth / 2
+    const dialogTop = this.dialogFrame.y - this.dialogFrame.displayHeight
+    this.dialogFrameTop = dialogTop
+
+    this.dialogTextBaseX = dialogLeft + DIALOG_TEXT_BOX.withChoicesX * this.dialogScale
+    this.dialogTextWrapWidth = DIALOG_TEXT_BOX.withChoicesWidth * this.dialogScale
+
+    this.createDialogText()
+    this.createDialogEnterHint(dialogLeft, dialogTop)
+    this.createChoiceButtons()
+  }
+
+  private createDialogFrame(vw: number, vh: number, dialogSource: HTMLImageElement) {
     const dialogWidth = Math.min(vw * 0.78, 1080)
 
     this.dialogFrame = this.add.image(vw / 2, vh - 18, 'seokjae-dialog-frame')
@@ -410,15 +430,9 @@ export class TaekwondoSelectScene extends Phaser.Scene {
         }
       },
     )
+  }
 
-    this.dialogScale = this.dialogFrame.displayWidth / dialogSource.width
-    const dialogLeft = this.dialogFrame.x - this.dialogFrame.displayWidth / 2
-    const dialogTop = this.dialogFrame.y - this.dialogFrame.displayHeight
-    this.dialogFrameTop = dialogTop
-
-    this.dialogTextBaseX = dialogLeft + DIALOG_TEXT_BOX.withChoicesX * this.dialogScale
-    this.dialogTextWrapWidth = DIALOG_TEXT_BOX.withChoicesWidth * this.dialogScale
-
+  private createDialogText() {
     this.dialogText = this.add.text(this.dialogTextBaseX, this.dialogTextBaseY, '', {
       fontFamily: 'sans-serif',
       fontSize: `${Math.max(18, Math.round(40 * this.dialogScale))}px`,
@@ -427,7 +441,9 @@ export class TaekwondoSelectScene extends Phaser.Scene {
       lineSpacing: Math.round(4 * this.dialogScale),
     })
     this.dialogText.setDepth(31).setScrollFactor(0).setOrigin(0, 0).setAlpha(0)
+  }
 
+  private createDialogEnterHint(dialogLeft: number, dialogTop: number) {
     this.dialogEnterHint = this.add.image(
       dialogLeft + this.dialogFrame.displayWidth - 92 * this.dialogScale,
       dialogTop + this.dialogFrame.displayHeight - 86 * this.dialogScale,
@@ -439,7 +455,9 @@ export class TaekwondoSelectScene extends Phaser.Scene {
       .setDepth(31)
       .setScrollFactor(0)
       .setAlpha(0)
+  }
 
+  private createChoiceButtons() {
     this.dialogChoiceButtons = taekwondoChoiceOptions.map(choice => {
       const background = this.add.image(0, 0, 'dialog-select').setDepth(31)
       const label = this.add
@@ -471,7 +489,7 @@ export class TaekwondoSelectScene extends Phaser.Scene {
 
       const container = this.add.container(0, 0, [background, label])
       container.setDepth(31).setAlpha(0).setVisible(false).setScrollFactor(0)
-      return container
+      return { container, background, label }
     })
   }
 
