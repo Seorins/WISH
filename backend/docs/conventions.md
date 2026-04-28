@@ -114,6 +114,7 @@ User user = userRepository.findById(id)
 - setter 는 쓰지 않고, 상태 변경은 의미 있는 메서드(`user.changeNickname(...)`)로 표현
 - 테이블명은 **복수형** (`users`, `games`) 으로 통일
 - `createdAt` / `updatedAt` 은 `@PrePersist` / `@PreUpdate` 또는 JPA Auditing 사용
+- **빌더 필수 필드 검증**: `@ManyToOne(optional = false)` / `@Column(nullable = false)` 만으로는 `build()` 시점에 null 차단이 안 되고 JPA save 단계의 `PropertyValueException` 으로 늦게 발견된다. 빌더 생성자에서 `Objects.requireNonNull(field, "field must not be null")` 로 즉시 fail-fast. 도메인 invariant (`playDurationSeconds >= 0` 등) 도 같은 위치에서 검사 (예: `User`, `PatientProfile`, `Artwork` 참고)
 
 ## 6. DTO 규칙
 

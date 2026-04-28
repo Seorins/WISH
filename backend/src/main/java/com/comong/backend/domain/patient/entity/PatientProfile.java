@@ -2,6 +2,7 @@ package com.comong.backend.domain.patient.entity;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Objects;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -66,11 +67,13 @@ public class PatientProfile {
     @Builder
     private PatientProfile(
             User user, String name, String nickname, LocalDate birthDate, Gender gender) {
-        this.user = user;
-        this.name = name;
-        this.nickname = nickname;
-        this.birthDate = birthDate;
-        this.gender = gender;
+        // 빌더 단계 invariant — @ManyToOne(optional=false) / @Column(nullable=false) 만으로는 build()
+        // 시점에 null 차단이 안 되므로 fail-fast 로 강제.
+        this.user = Objects.requireNonNull(user, "user must not be null");
+        this.name = Objects.requireNonNull(name, "name must not be null");
+        this.nickname = Objects.requireNonNull(nickname, "nickname must not be null");
+        this.birthDate = Objects.requireNonNull(birthDate, "birthDate must not be null");
+        this.gender = Objects.requireNonNull(gender, "gender must not be null");
     }
 
     @PrePersist

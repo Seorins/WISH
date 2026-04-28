@@ -383,6 +383,36 @@ backend:notify-failure:
 # Frontend
 # ----------------------------------------------------------------------------
 
+.frontend-game-dev-rules: &frontend_game_dev_rules
+  - if: $CI_COMMIT_BRANCH == "develop"
+    changes:
+      - frontend/apps/game/**/*
+      - frontend/packages/**/*
+      - frontend/package.json
+      - frontend/pnpm-lock.yaml
+      - frontend/pnpm-workspace.yaml
+      - frontend/turbo.json
+      - frontend/tsconfig.base.json
+      - frontend/.npmrc
+      - frontend/eslint.config.js
+      - frontend/Dockerfile
+      - .gitlab-ci.yml
+
+.frontend-admin-dev-rules: &frontend_admin_dev_rules
+  - if: $CI_COMMIT_BRANCH == "develop"
+    changes:
+      - frontend/apps/admin/**/*
+      - frontend/packages/**/*
+      - frontend/package.json
+      - frontend/pnpm-lock.yaml
+      - frontend/pnpm-workspace.yaml
+      - frontend/turbo.json
+      - frontend/tsconfig.base.json
+      - frontend/.npmrc
+      - frontend/eslint.config.js
+      - frontend/Dockerfile
+      - .gitlab-ci.yml
+
 .frontend-base:
   image: node:24-alpine
   variables:
@@ -428,3 +458,179 @@ frontend:build:
     - frontend:test
   script:
     - pnpm build
+
+frontend:image:game:
+  stage: package
+  image:
+    name: gcr.io/kaniko-project/executor:v1.23.2-debug
+    entrypoint: [""]
+  needs:
+    - frontend:build
+  variables:
+    FRONTEND_IMAGE_NAME: ${DOCKER_HUB_IMAGE}
+  before_script:
+    - echo "DOCKER_HUB_IMAGE=${DOCKER_HUB_IMAGE:-<empty>}"
+    - if [ -n "${DOCKER_HUB_USER}" ]; then echo "DOCKER_HUB_USER=set"; else echo "DOCKER_HUB_USER=<empty>"; fi
+    - if [ -n "${DOCKER_HUB_TOKEN}" ]; then echo "DOCKER_HUB_TOKEN=set"; else echo "DOCKER_HUB_TOKEN=<empty>"; fi
+    - test -n "${DOCKER_HUB_IMAGE}" || (echo "DOCKER_HUB_IMAGE is empty" && exit 1)
+    - test -n "${DOCKER_HUB_USER}" || (echo "DOCKER_HUB_USER is empty" && exit 1)
+    - test -n "${DOCKER_HUB_TOKEN}" || (echo "DOCKER_HUB_TOKEN is empty" && exit 1)
+    - mkdir -p /kaniko/.docker
+    - echo "{\"auths\":{\"https://index.docker.io/v1/\":{\"username\":\"${DOCKER_HUB_USER}\",\"password\":\"${DOCKER_HUB_TOKEN}\"}}}" > /kaniko/.docker/config.json
+  script:
+    - |
+      echo "FRONTEND_IMAGE_NAME=${FRONTEND_IMAGE_NAME:-<empty>}"
+      DESTINATIONS="--destination ${FRONTEND_IMAGE_NAME}:frontend-game-${CI_COMMIT_SHORT_SHA}"
+      if [ -n "${CI_COMMIT_BRANCH}" ]; then
+        DESTINATIONS="${DESTINATIONS} --destination ${FRONTEND_IMAGE_NAME}:frontend-game-${CI_COMMIT_REF_SLUG}-latest"
+      fi
+
+      /kaniko/executor \
+        --context "${CI_PROJECT_DIR}/frontend" \
+        --dockerfile "${CI_PROJECT_DIR}/frontend/Dockerfile" \
+        --build-arg APP_NAME=game \
+        --build-arg VITE_APP_BASE_PATH=/dev/game/ \
+        --build-arg VITE_API_BASE_URL=/dev/api/v1 \
+        ${DESTINATIONS}
+  rules: *frontend_game_dev_rules
+
+frontend:image:admin:
+  stage: package
+  image:
+    name: gcr.io/kaniko-project/executor:v1.23.2-debug
+    entrypoint: [""]
+  needs:
+    - frontend:build
+  variables:
+    FRONTEND_IMAGE_NAME: ${DOCKER_HUB_IMAGE}
+  before_script:
+    - echo "DOCKER_HUB_IMAGE=${DOCKER_HUB_IMAGE:-<empty>}"
+    - if [ -n "${DOCKER_HUB_USER}" ]; then echo "DOCKER_HUB_USER=set"; else echo "DOCKER_HUB_USER=<empty>"; fi
+    - if [ -n "${DOCKER_HUB_TOKEN}" ]; then echo "DOCKER_HUB_TOKEN=set"; else echo "DOCKER_HUB_TOKEN=<empty>"; fi
+    - test -n "${DOCKER_HUB_IMAGE}" || (echo "DOCKER_HUB_IMAGE is empty" && exit 1)
+    - test -n "${DOCKER_HUB_USER}" || (echo "DOCKER_HUB_USER is empty" && exit 1)
+    - test -n "${DOCKER_HUB_TOKEN}" || (echo "DOCKER_HUB_TOKEN is empty" && exit 1)
+    - mkdir -p /kaniko/.docker
+    - echo "{\"auths\":{\"https://index.docker.io/v1/\":{\"username\":\"${DOCKER_HUB_USER}\",\"password\":\"${DOCKER_HUB_TOKEN}\"}}}" > /kaniko/.docker/config.json
+  script:
+    - |
+      echo "FRONTEND_IMAGE_NAME=${FRONTEND_IMAGE_NAME:-<empty>}"
+      DESTINATIONS="--destination ${FRONTEND_IMAGE_NAME}:frontend-admin-${CI_COMMIT_SHORT_SHA}"
+      if [ -n "${CI_COMMIT_BRANCH}" ]; then
+        DESTINATIONS="${DESTINATIONS} --destination ${FRONTEND_IMAGE_NAME}:frontend-admin-${CI_COMMIT_REF_SLUG}-latest"
+      fi
+
+      /kaniko/executor \
+        --context "${CI_PROJECT_DIR}/frontend" \
+        --dockerfile "${CI_PROJECT_DIR}/frontend/Dockerfile" \
+        --build-arg APP_NAME=admin \
+        --build-arg VITE_APP_BASE_PATH=/dev/admin/ \
+        --build-arg VITE_API_BASE_URL=/dev/api/v1 \
+        ${DESTINATIONS}
+  rules: *frontend_admin_dev_rules
+
+frontend:deploy-dev:game:
+  stage: deploy
+  image: python:3.12-alpine
+  needs:
+    - frontend:image:game
+  script:
+    - test -n "${JENKINS_BASE_URL}" || (echo "JENKINS_BASE_URL is empty" && exit 1)
+    - test -n "${JENKINS_USER}" || (echo "JENKINS_USER is empty" && exit 1)
+    - test -n "${JENKINS_API_TOKEN}" || (echo "JENKINS_API_TOKEN is empty" && exit 1)
+    - |
+      IMAGE_TAG="frontend-game-${CI_COMMIT_REF_SLUG}-latest"
+      export IMAGE_TAG
+    - *resolve_backend_metadata
+    - |
+      BUILD_URL="${JENKINS_BASE_URL%/}/job/deploy-dev-frontend-game/buildWithParameters"
+      export BUILD_URL
+
+      echo "Triggering Jenkins deploy job: ${BUILD_URL}"
+      echo "IMAGE_TAG=${IMAGE_TAG}"
+      echo "CHANGE_ORIGIN=${CHANGE_ORIGIN}"
+
+      python - <<'PY'
+      import base64
+      import os
+      import urllib.parse
+      import urllib.request
+
+      build_url = os.environ["BUILD_URL"]
+      credentials = f"{os.environ['JENKINS_USER']}:{os.environ['JENKINS_API_TOKEN']}".encode()
+      headers = {
+          "Authorization": "Basic " + base64.b64encode(credentials).decode(),
+          "Content-Type": "application/x-www-form-urlencoded",
+      }
+      payload = urllib.parse.urlencode(
+          {
+              "IMAGE_TAG": os.environ["IMAGE_TAG"],
+              "CHANGE_ORIGIN": os.environ.get("CHANGE_ORIGIN", ""),
+              "MR_IID": os.environ.get("MR_IID", ""),
+              "MR_TITLE": os.environ.get("MR_TITLE", ""),
+              "MR_URL": os.environ.get("MR_URL", ""),
+              "MR_AUTHOR_NAME": os.environ.get("MR_AUTHOR_NAME", ""),
+              "MR_AUTHOR_USERNAME": os.environ.get("MR_AUTHOR_USERNAME", ""),
+              "MERGE_USER_NAME": os.environ.get("MERGE_USER_NAME", ""),
+              "MERGE_USER_USERNAME": os.environ.get("MERGE_USER_USERNAME", ""),
+          }
+      ).encode()
+      request = urllib.request.Request(build_url, data=payload, headers=headers, method="POST")
+
+      with urllib.request.urlopen(request, timeout=20) as response:
+          response.read()
+      PY
+  rules: *frontend_game_dev_rules
+
+frontend:deploy-dev:admin:
+  stage: deploy
+  image: python:3.12-alpine
+  needs:
+    - frontend:image:admin
+  script:
+    - test -n "${JENKINS_BASE_URL}" || (echo "JENKINS_BASE_URL is empty" && exit 1)
+    - test -n "${JENKINS_USER}" || (echo "JENKINS_USER is empty" && exit 1)
+    - test -n "${JENKINS_API_TOKEN}" || (echo "JENKINS_API_TOKEN is empty" && exit 1)
+    - |
+      IMAGE_TAG="frontend-admin-${CI_COMMIT_REF_SLUG}-latest"
+      export IMAGE_TAG
+    - *resolve_backend_metadata
+    - |
+      BUILD_URL="${JENKINS_BASE_URL%/}/job/deploy-dev-frontend-admin/buildWithParameters"
+      export BUILD_URL
+
+      echo "Triggering Jenkins deploy job: ${BUILD_URL}"
+      echo "IMAGE_TAG=${IMAGE_TAG}"
+      echo "CHANGE_ORIGIN=${CHANGE_ORIGIN}"
+
+      python - <<'PY'
+      import base64
+      import os
+      import urllib.parse
+      import urllib.request
+
+      build_url = os.environ["BUILD_URL"]
+      credentials = f"{os.environ['JENKINS_USER']}:{os.environ['JENKINS_API_TOKEN']}".encode()
+      headers = {
+          "Authorization": "Basic " + base64.b64encode(credentials).decode(),
+          "Content-Type": "application/x-www-form-urlencoded",
+      }
+      payload = urllib.parse.urlencode(
+          {
+              "IMAGE_TAG": os.environ["IMAGE_TAG"],
+              "CHANGE_ORIGIN": os.environ.get("CHANGE_ORIGIN", ""),
+              "MR_IID": os.environ.get("MR_IID", ""),
+              "MR_TITLE": os.environ.get("MR_TITLE", ""),
+              "MR_URL": os.environ.get("MR_URL", ""),
+              "MR_AUTHOR_NAME": os.environ.get("MR_AUTHOR_NAME", ""),
+              "MR_AUTHOR_USERNAME": os.environ.get("MR_AUTHOR_USERNAME", ""),
+              "MERGE_USER_NAME": os.environ.get("MERGE_USER_NAME", ""),
+              "MERGE_USER_USERNAME": os.environ.get("MERGE_USER_USERNAME", ""),
+          }
+      ).encode()
+      request = urllib.request.Request(build_url, data=payload, headers=headers, method="POST")
+
+      with urllib.request.urlopen(request, timeout=20) as response:
+          response.read()
+      PY
+  rules: *frontend_admin_dev_rules
