@@ -80,6 +80,7 @@ export class TaekwondoSelectScene extends Phaser.Scene {
   private dialogDismissed = false
   private dialogSteps: SeokjaeDialogStep[] = []
   private dialogStepIndex = 0
+  private selectedMode: TaekwondoContentMode | null = null
 
   private readonly handlePointerDown = (pointer: Phaser.Input.Pointer) => {
     if (this.isDialogVisible) {
@@ -150,6 +151,7 @@ export class TaekwondoSelectScene extends Phaser.Scene {
     this.dialogDismissed = false
     this.dialogSteps = []
     this.dialogStepIndex = 0
+    this.selectedMode = null
 
     const background = addCoverBackground(this, 'taekwondo-room-background')
     this.seokjaeInteractionRadius =
@@ -219,6 +221,7 @@ export class TaekwondoSelectScene extends Phaser.Scene {
   }
 
   private startSeokjaeConversation() {
+    this.selectedMode = null
     this.dialogSteps = [
       { line: Phaser.Utils.Array.GetRandom(seokjaeSelectDialogs.greeting) },
       {
@@ -333,6 +336,7 @@ export class TaekwondoSelectScene extends Phaser.Scene {
   }
 
   private handleChoiceSelected(mode: TaekwondoContentMode) {
+    this.selectedMode = mode
     const confirmLine = Phaser.Utils.Array.GetRandom(seokjaeContentDialogs[mode].confirm)
     this.dialogSteps = [...this.dialogSteps, { line: confirmLine }]
     this.dialogStepIndex = this.dialogSteps.length - 1
@@ -351,6 +355,11 @@ export class TaekwondoSelectScene extends Phaser.Scene {
       return
     }
 
+    if (this.selectedMode === 'practice') {
+      this.startPoomsaeSelectScene()
+      return
+    }
+
     this.closeDialog(true)
   }
 
@@ -359,6 +368,7 @@ export class TaekwondoSelectScene extends Phaser.Scene {
     this.dialogDismissed = markDismissed
     this.dialogSteps = []
     this.dialogStepIndex = 0
+    this.selectedMode = null
     setInteractionIconActive(this.talkIcon, false)
     this.setChoiceButtonsVisible(false)
     this.fadeDialog(0, 180)
@@ -512,6 +522,18 @@ export class TaekwondoSelectScene extends Phaser.Scene {
         this.seokjaeNpc.setFrame(Phaser.Utils.Array.GetRandom(SEOKJAE_POSES))
       },
     })
+  }
+
+  private startPoomsaeSelectScene() {
+    if (this.isTransitioning) {
+      return
+    }
+
+    this.isTransitioning = true
+    this.target = null
+    this.player.setVelocity(0, 0)
+    this.closeDialog(false)
+    fadeToScene(this, 'TaekwondoPoomsaeSelectScene', { duration: 220 })
   }
 
   private returnToVillage() {
