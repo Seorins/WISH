@@ -4,57 +4,105 @@ import { addCoverBackground } from '@/game/world/background'
 
 type PoomsaeOption = {
   id: string
+  chapter: string
   name: string
   belt: string
   description: string
   estimatedMinutes: number
   difficulty: 'easy' | 'normal' | 'hard'
+  seokjaeFrame: number
 }
 
 type PoomsaeCard = {
   container: Phaser.GameObjects.Container
-  background: Phaser.GameObjects.Rectangle
+  background: Phaser.GameObjects.Image
+  glow: Phaser.GameObjects.Graphics
+  tabLabel: Phaser.GameObjects.Text
+  title: Phaser.GameObjects.Text
+  meta: Phaser.GameObjects.Text
+  sprite: Phaser.GameObjects.Sprite
+  description: Phaser.GameObjects.Text
 }
 
+const ASSET_KEYS = {
+  background: 'taekwondo-room-background',
+  sign: 'taekwondo-poomsae-select-sign',
+  card: 'taekwondo-poomsae-card',
+  cardCropped: 'taekwondo-poomsae-card-cropped',
+  arrowLeft: 'taekwondo-poomsae-arrow-left',
+  arrowRight: 'taekwondo-poomsae-arrow-right',
+  backButton: 'taekwondo-poomsae-back-button',
+  backPressed: 'taekwondo-poomsae-back-pressed',
+  startButton: 'taekwondo-poomsae-start-button',
+  startPressed: 'taekwondo-poomsae-start-pressed',
+  seokjae: 'taekwondo-poomsae-seokjae',
+} as const
+
+const SEOKJAE_FRAME_SIZE = { width: 384, height: 512 }
 const FADE_DURATION = 220
-const OVERLAY_ALPHA = 0.68
-const HEADER_TITLE_Y = 54
-const HEADER_SUBTITLE_Y = 98
-const ACTION_STATUS_OFFSET_Y = 104
-const ACTION_BUTTON_OFFSET_Y = 54
+const OVERLAY_ALPHA = 0.06
+const CARD_GAP = 44
+const CARD_CROP = { x: 477, y: 46, width: 580, height: 935 }
+const CARD_ASPECT_RATIO = CARD_CROP.width / CARD_CROP.height
+const CARD_VISIBLE_COUNT = 3
+const CARD_SELECTED_SCALE = 1.04
+const CARD_NORMAL_SCALE = 0.98
+const CARD_SCROLL_STEP = 1
+const SIGN_Y_RATIO = 0.105
+const LIST_Y_RATIO = 0.535
+const ACTION_Y_RATIO = 0.89
+const ACTION_BUTTON_SIZE = { widthRatio: 0.18, maxWidth: 260, heightRatio: 0.078, maxHeight: 70 }
 
 const TEST_POOMSAE_OPTIONS: PoomsaeOption[] = [
   {
     id: 'taegeuk-1',
+    chapter: '1장',
     name: '태극 1장',
     belt: '흰띠',
     description: '기본 서기와 아래막기, 몸통지르기를 익히는 첫 품새',
     estimatedMinutes: 3,
     difficulty: 'easy',
+    seokjaeFrame: 0,
   },
   {
     id: 'taegeuk-2',
+    chapter: '2장',
     name: '태극 2장',
     belt: '노란띠',
     description: '앞차기와 방향 전환을 자연스럽게 이어가는 품새',
     estimatedMinutes: 4,
     difficulty: 'easy',
+    seokjaeFrame: 1,
   },
   {
     id: 'taegeuk-3',
+    chapter: '3장',
     name: '태극 3장',
     belt: '초록띠',
     description: '손날막기와 연속 동작의 리듬을 연습하는 품새',
     estimatedMinutes: 5,
     difficulty: 'normal',
+    seokjaeFrame: 4,
   },
   {
     id: 'taegeuk-4',
+    chapter: '4장',
     name: '태극 4장',
     belt: '파란띠',
-    description: '막기와 지르기를 더 빠르게 연결하는 중급 품새',
+    description: '옆차기와 손날 동작을 균형 있게 연결하는 품새',
     estimatedMinutes: 6,
     difficulty: 'normal',
+    seokjaeFrame: 6,
+  },
+  {
+    id: 'taegeuk-5',
+    chapter: '5장',
+    name: '태극 5장',
+    belt: '빨간띠',
+    description: '팔굽 동작과 강약 조절을 함께 익히는 품새',
+    estimatedMinutes: 7,
+    difficulty: 'hard',
+    seokjaeFrame: 2,
   },
 ]
 
@@ -68,11 +116,11 @@ export class TaekwondoPoomsaeSelectScene extends Phaser.Scene {
   private selectedOptionId = TEST_POOMSAE_OPTIONS[0]?.id ?? ''
   private optionCards: PoomsaeCard[] = []
   private rail!: Phaser.GameObjects.Container
-  private statusText!: Phaser.GameObjects.Text
   private scrollX = 0
   private maxScrollX = 0
   private viewportX = 0
   private viewportWidth = 0
+  private cardStep = 0
   private isDragging = false
   private dragStartX = 0
   private dragStartScrollX = 0
@@ -108,19 +156,42 @@ export class TaekwondoPoomsaeSelectScene extends Phaser.Scene {
 
   preload() {
     this.load.image(
-      'taekwondo-room-background',
+      ASSET_KEYS.background,
       '/assets/images/themes/taekwondo/background/taekwondo_inside.png',
+    )
+    this.load.image(ASSET_KEYS.sign, '/assets/images/themes/taekwondo/ui/poomsae_select.png')
+    this.load.image(ASSET_KEYS.card, '/assets/images/themes/taekwondo/ui/tkd_list.png')
+    this.load.image(
+      ASSET_KEYS.arrowLeft,
+      '/assets/images/themes/taekwondo/ui/poomsae_arrow_left.png',
+    )
+    this.load.image(
+      ASSET_KEYS.arrowRight,
+      '/assets/images/themes/taekwondo/ui/poomsae_arrow_right.png',
+    )
+    this.load.image(ASSET_KEYS.backButton, '/assets/images/themes/taekwondo/ui/back_button.png')
+    this.load.image(ASSET_KEYS.backPressed, '/assets/images/themes/taekwondo/ui/back_pressed.png')
+    this.load.image(ASSET_KEYS.startButton, '/assets/images/themes/taekwondo/ui/start_button.png')
+    this.load.image(ASSET_KEYS.startPressed, '/assets/images/themes/taekwondo/ui/start_pressed.png')
+    this.load.spritesheet(
+      ASSET_KEYS.seokjae,
+      '/assets/images/themes/taekwondo/characters/seokjae_sprite.png',
+      {
+        frameWidth: SEOKJAE_FRAME_SIZE.width,
+        frameHeight: SEOKJAE_FRAME_SIZE.height,
+      },
     )
   }
 
   create() {
     const { width: vw, height: vh } = this.scale
-    addCoverBackground(this, 'taekwondo-room-background')
-    this.add.rectangle(vw / 2, vh / 2, vw, vh, 0x1c1712, OVERLAY_ALPHA).setDepth(1)
+    addCoverBackground(this, ASSET_KEYS.background)
+    this.add.rectangle(vw / 2, vh / 2, vw, vh, 0x120d08, OVERLAY_ALPHA).setDepth(1)
+    this.createCroppedCardTexture()
 
-    this.createHeader(vw)
+    this.createHeader(vw, vh)
     this.createHorizontalOptionList(vw, vh)
-    this.createActionBar(vw, vh)
+    this.createActionButtons(vw, vh)
 
     if (TEST_POOMSAE_OPTIONS.length === 0) {
       this.showEmptyState(vw, vh)
@@ -133,66 +204,66 @@ export class TaekwondoPoomsaeSelectScene extends Phaser.Scene {
     this.input.on('pointermove', this.handlePointerMove)
     this.input.on('pointerup', this.handlePointerUp)
     this.input.on('pointerupoutside', this.handlePointerUp)
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-      this.isDragging = false
-      this.input.keyboard?.off('keydown-ESC', this.handleEscDown)
-      this.input.off('wheel', this.handleWheel)
-      this.input.off('pointermove', this.handlePointerMove)
-      this.input.off('pointerup', this.handlePointerUp)
-      this.input.off('pointerupoutside', this.handlePointerUp)
-    })
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.removeSceneListeners())
 
     this.cameras.main.fadeIn(FADE_DURATION, 0, 0, 0)
   }
 
-  private createHeader(vw: number) {
-    this.add
-      .text(vw / 2, HEADER_TITLE_Y, '품새 선택', {
-        fontFamily: 'sans-serif',
-        fontSize: '38px',
-        color: '#fff6df',
-        fontStyle: '700',
-      })
+  private createHeader(vw: number, vh: number) {
+    const sign = this.add
+      .image(vw / 2, vh * SIGN_Y_RATIO, ASSET_KEYS.sign)
       .setOrigin(0.5)
       .setDepth(3)
 
-    this.add
-      .text(vw / 2, HEADER_SUBTITLE_Y, '연습할 품새를 고르고 시작해보자', {
-        fontFamily: 'sans-serif',
-        fontSize: '20px',
-        color: '#e6d3af',
-      })
-      .setOrigin(0.5)
-      .setDepth(3)
+    sign.setScale(Math.min(vh * 0.18, 170) / sign.height)
   }
 
   private createHorizontalOptionList(vw: number, vh: number) {
-    this.viewportWidth = Math.min(vw * 0.78, 1040)
+    const cardHeight = Phaser.Math.Clamp(vh * 0.58, 330, 450)
+    const cardWidth = cardHeight * CARD_ASPECT_RATIO
+    const viewportHeight = cardHeight * CARD_SELECTED_SCALE + 28
+    const viewportY = vh * LIST_Y_RATIO
+
+    this.cardStep = cardWidth + CARD_GAP
+    this.viewportWidth = Math.min(
+      vw * 0.66,
+      cardWidth * CARD_VISIBLE_COUNT + CARD_GAP * (CARD_VISIBLE_COUNT - 1),
+    )
     this.viewportX = vw / 2 - this.viewportWidth / 2
-    const viewportY = Math.max(160, vh * 0.23)
-    const viewportHeight = Math.min(250, vh * 0.34)
-    const cardWidth = Math.min(310, this.viewportWidth * 0.34)
-    const cardHeight = viewportHeight - 20
-    const gap = 18
-    const contentWidth =
-      TEST_POOMSAE_OPTIONS.length * cardWidth + Math.max(0, TEST_POOMSAE_OPTIONS.length - 1) * gap
 
     const maskShape = this.add
-      .rectangle(this.viewportX, viewportY, this.viewportWidth, viewportHeight, 0xffffff, 0)
+      .rectangle(
+        this.viewportX,
+        viewportY - viewportHeight / 2,
+        this.viewportWidth,
+        viewportHeight,
+        0xffffff,
+        0,
+      )
       .setOrigin(0)
       .setVisible(false)
     const mask = maskShape.createGeometryMask()
 
-    this.rail = this.add.container(this.viewportX, viewportY + 10).setDepth(3)
+    this.rail = this.add.container(this.viewportX, viewportY).setDepth(3)
     this.rail.setMask(mask)
+
+    const contentWidth =
+      TEST_POOMSAE_OPTIONS.length * cardWidth +
+      Math.max(0, TEST_POOMSAE_OPTIONS.length - 1) * CARD_GAP
     this.maxScrollX = Math.max(0, contentWidth - this.viewportWidth)
 
     this.optionCards = TEST_POOMSAE_OPTIONS.map((option, index) =>
-      this.createOptionCard(option, index * (cardWidth + gap), 0, cardWidth, cardHeight),
+      this.createOptionCard(
+        option,
+        index * this.cardStep + cardWidth / 2,
+        0,
+        cardWidth,
+        cardHeight,
+      ),
     )
 
     const dragZone = this.add
-      .zone(this.viewportX, viewportY, this.viewportWidth, viewportHeight)
+      .zone(this.viewportX, viewportY - viewportHeight / 2, this.viewportWidth, viewportHeight)
       .setOrigin(0)
       .setInteractive({ useHandCursor: true })
       .setDepth(2)
@@ -202,14 +273,22 @@ export class TaekwondoPoomsaeSelectScene extends Phaser.Scene {
       this.dragStartScrollX = this.scrollX
     })
 
-    this.createScrollButton(this.viewportX - 42, viewportY + viewportHeight / 2, '<', () =>
-      this.setScroll(this.scrollX - cardWidth - gap),
+    const arrowSize = { width: Math.min(vw * 0.06, 76), height: Math.min(vw * 0.06, 76) }
+    this.createImageButton(
+      vw / 2 - this.viewportWidth / 2 - Math.min(vw * 0.055, 74),
+      viewportY,
+      ASSET_KEYS.arrowLeft,
+      ASSET_KEYS.arrowLeft,
+      arrowSize,
+      () => this.scrollByCards(-CARD_SCROLL_STEP),
     )
-    this.createScrollButton(
-      this.viewportX + this.viewportWidth + 42,
-      viewportY + viewportHeight / 2,
-      '>',
-      () => this.setScroll(this.scrollX + cardWidth + gap),
+    this.createImageButton(
+      vw / 2 + this.viewportWidth / 2 + Math.min(vw * 0.055, 74),
+      viewportY,
+      ASSET_KEYS.arrowRight,
+      ASSET_KEYS.arrowRight,
+      arrowSize,
+      () => this.scrollByCards(CARD_SCROLL_STEP),
     )
   }
 
@@ -219,74 +298,164 @@ export class TaekwondoPoomsaeSelectScene extends Phaser.Scene {
     y: number,
     width: number,
     height: number,
-  ) {
+  ): PoomsaeCard {
+    const glow = this.add.graphics()
     const background = this.add
-      .rectangle(0, 0, width, height, 0x2c251d, 0.94)
-      .setStrokeStyle(2, 0x8a6a3e, 0.75)
-      .setOrigin(0)
+      .image(0, 0, ASSET_KEYS.cardCropped)
+      .setDisplaySize(width, height)
       .setInteractive({ useHandCursor: true })
-      .setData('optionId', option.id)
 
-    const title = this.add.text(22, 22, option.name, {
-      fontFamily: 'sans-serif',
-      fontSize: '25px',
-      color: '#fff3d7',
-      fontStyle: '700',
-    })
-
-    const meta = this.add.text(
-      22,
-      60,
-      `${option.belt} · ${DIFFICULTY_LABEL[option.difficulty]} · 약 ${option.estimatedMinutes}분`,
-      {
+    const tabLabel = this.add
+      .text(0, -height * 0.435, option.chapter, {
         fontFamily: 'sans-serif',
-        fontSize: '16px',
-        color: '#d5bf98',
-      },
-    )
+        fontSize: `${Math.round(width * 0.07)}px`,
+        color: '#fff3cf',
+        fontStyle: '700',
+      })
+      .setOrigin(0.5)
+      .setStroke('#3b1f08', 4)
 
-    const description = this.add.text(22, 102, option.description, {
-      fontFamily: 'sans-serif',
-      fontSize: '17px',
-      color: '#f2e4c8',
-      wordWrap: { width: width - 44, useAdvancedWrap: true },
-      lineSpacing: 5,
-    })
+    const title = this.add
+      .text(0, -height * 0.29, option.name, {
+        fontFamily: 'sans-serif',
+        fontSize: `${Math.round(width * 0.105)}px`,
+        color: '#2d1606',
+        fontStyle: '700',
+      })
+      .setOrigin(0.5)
 
-    const container = this.add.container(x, y, [background, title, meta, description])
-    container.setSize(width, height).setData('optionId', option.id)
+    const meta = this.add
+      .text(
+        0,
+        -height * 0.205,
+        `${option.belt} · ${DIFFICULTY_LABEL[option.difficulty]} · 약 ${option.estimatedMinutes}분`,
+        {
+          fontFamily: 'sans-serif',
+          fontSize: `${Math.round(width * 0.052)}px`,
+          color: '#3d210a',
+          fontStyle: '700',
+        },
+      )
+      .setOrigin(0.5)
+
+    const sprite = this.add
+      .sprite(0, height * 0.035, ASSET_KEYS.seokjae, option.seokjaeFrame)
+      .setScale((height * 0.43) / SEOKJAE_FRAME_SIZE.height)
+
+    const description = this.add
+      .text(0, height * 0.33, option.description, {
+        fontFamily: 'sans-serif',
+        fontSize: `${Math.round(width * 0.054)}px`,
+        color: '#3a1e09',
+        fontStyle: '700',
+        align: 'center',
+        wordWrap: { width: width * 0.8, useAdvancedWrap: true },
+        lineSpacing: 4,
+      })
+      .setOrigin(0.5)
+
+    const container = this.add
+      .container(x, y, [glow, background, tabLabel, title, meta, sprite, description])
+      .setSize(width, height)
+      .setData('optionId', option.id)
     this.rail.add(container)
 
     background.on('pointerdown', () => this.updateSelection(option.id))
     background.on('pointerover', () => {
       if (this.selectedOptionId !== option.id) {
-        background.setFillStyle(0x3b3024, 0.98)
+        container.setScale(1.01)
       }
     })
-    background.on('pointerout', () => this.updateCardStyle({ container, background }))
+    background.on('pointerout', () => this.updateCardStyle(card))
 
-    return { container, background }
+    const card = { container, background, glow, tabLabel, title, meta, sprite, description }
+    return card
   }
 
-  private createScrollButton(x: number, y: number, labelText: string, onClick: () => void) {
-    const background = this.add
-      .circle(0, 0, 24, 0x5f4424, 0.96)
-      .setStrokeStyle(2, 0xb98b45, 0.85)
-      .setInteractive({ useHandCursor: true })
-    const label = this.add
-      .text(0, -1, labelText, {
-        fontFamily: 'sans-serif',
-        fontSize: '25px',
-        color: '#fff6df',
-        fontStyle: '700',
-      })
+  private createActionButtons(vw: number, vh: number) {
+    const buttonY = vh * ACTION_Y_RATIO
+    const buttonSize = {
+      width: Math.min(vw * ACTION_BUTTON_SIZE.widthRatio, ACTION_BUTTON_SIZE.maxWidth),
+      height: Math.min(vh * ACTION_BUTTON_SIZE.heightRatio, ACTION_BUTTON_SIZE.maxHeight),
+    }
+
+    this.createImageButton(
+      vw / 2 - Math.min(vw * 0.13, 210),
+      buttonY,
+      ASSET_KEYS.backButton,
+      ASSET_KEYS.backPressed,
+      buttonSize,
+      () => this.returnToDojang(),
+    )
+    this.createImageButton(
+      vw / 2 + Math.min(vw * 0.13, 210),
+      buttonY,
+      ASSET_KEYS.startButton,
+      ASSET_KEYS.startPressed,
+      buttonSize,
+      () => this.showReadyMessage(),
+    )
+  }
+
+  private createCroppedCardTexture() {
+    if (this.textures.exists(ASSET_KEYS.cardCropped)) {
+      return
+    }
+
+    const source = this.textures.get(ASSET_KEYS.card).getSourceImage() as HTMLImageElement
+    const texture = this.textures.createCanvas(
+      ASSET_KEYS.cardCropped,
+      CARD_CROP.width,
+      CARD_CROP.height,
+    )
+
+    if (!texture) {
+      return
+    }
+
+    texture
+      .getContext()
+      .drawImage(
+        source,
+        CARD_CROP.x,
+        CARD_CROP.y,
+        CARD_CROP.width,
+        CARD_CROP.height,
+        0,
+        0,
+        CARD_CROP.width,
+        CARD_CROP.height,
+      )
+    texture.refresh()
+  }
+
+  private createImageButton(
+    x: number,
+    y: number,
+    defaultTexture: string,
+    pressedTexture: string,
+    displaySize: { width: number; height: number },
+    onClick: () => void,
+  ) {
+    const button = this.add
+      .image(x, y, defaultTexture)
       .setOrigin(0.5)
+      .setScale(this.getContainScale(defaultTexture, displaySize.width, displaySize.height))
+      .setInteractive({ useHandCursor: true })
+      .setDepth(4)
 
-    background.on('pointerover', () => background.setFillStyle(0x76552b, 1))
-    background.on('pointerout', () => background.setFillStyle(0x5f4424, 0.96))
-    background.on('pointerdown', onClick)
+    button.on('pointerdown', () => button.setTexture(pressedTexture))
+    button.on('pointerup', () => {
+      button.setTexture(defaultTexture)
+      onClick()
+    })
+    button.on('pointerout', () => button.setTexture(defaultTexture))
 
-    return this.add.container(x, y, [background, label]).setDepth(4)
+    return button
+  }
+
+  private scrollByCards(direction: number) {
+    this.setScroll(this.scrollX + this.cardStep * direction)
   }
 
   private setScroll(scrollX: number) {
@@ -294,83 +463,103 @@ export class TaekwondoPoomsaeSelectScene extends Phaser.Scene {
     this.rail.x = this.viewportX - this.scrollX
   }
 
-  private createActionBar(vw: number, vh: number) {
-    this.statusText = this.add
-      .text(vw / 2, vh - ACTION_STATUS_OFFSET_Y, '', {
-        fontFamily: 'sans-serif',
-        fontSize: '18px',
-        color: '#f6ddac',
-      })
-      .setOrigin(0.5)
-      .setDepth(3)
-
-    const buttonY = vh - ACTION_BUTTON_OFFSET_Y
-    this.createTextButton(vw / 2 - 120, buttonY, 170, '돌아가기', () => this.returnToDojang())
-    this.createTextButton(vw / 2 + 120, buttonY, 170, '시작하기', () => this.showReadyMessage())
-  }
-
-  private createTextButton(
-    x: number,
-    y: number,
-    width: number,
-    labelText: string,
-    onClick: () => void,
-  ) {
-    const background = this.add
-      .rectangle(0, 0, width, 46, 0x5f4424, 0.96)
-      .setStrokeStyle(2, 0xb98b45, 0.85)
-      .setInteractive({ useHandCursor: true })
-    const label = this.add
-      .text(0, 0, labelText, {
-        fontFamily: 'sans-serif',
-        fontSize: '19px',
-        color: '#fff6df',
-        fontStyle: '700',
-      })
-      .setOrigin(0.5)
-
-    background.on('pointerover', () => background.setFillStyle(0x76552b, 1))
-    background.on('pointerout', () => background.setFillStyle(0x5f4424, 0.96))
-    background.on('pointerdown', onClick)
-
-    return this.add.container(x, y, [background, label]).setDepth(3)
-  }
-
   private updateSelection(optionId: string) {
     this.selectedOptionId = optionId
     this.optionCards.forEach(card => this.updateCardStyle(card))
-    const selectedOption = TEST_POOMSAE_OPTIONS.find(option => option.id === optionId)
-    this.statusText?.setText(selectedOption ? `${selectedOption.name} 선택됨` : '')
   }
 
   private updateCardStyle(card: PoomsaeCard) {
     const isSelected = card.container.getData('optionId') === this.selectedOptionId
-    card.background.setFillStyle(isSelected ? 0x60431f : 0x2c251d, isSelected ? 1 : 0.94)
-    card.background.setStrokeStyle(2, isSelected ? 0xffd47b : 0x8a6a3e, isSelected ? 1 : 0.75)
+    const { width, height } = card.container
+    const targetScale = isSelected ? CARD_SELECTED_SCALE : CARD_NORMAL_SCALE
+
+    card.container.setScale(targetScale)
+    card.background.clearTint()
+    card.tabLabel.setColor(isSelected ? '#fff7d6' : '#f4dfbd')
+    card.title.setColor(isSelected ? '#1f0e02' : '#2d1606')
+    card.meta.setColor(isSelected ? '#2a1504' : '#3d210a')
+    card.description.setColor(isSelected ? '#2d1606' : '#3a1e09')
+    card.glow.clear()
+
+    if (!isSelected) {
+      return
+    }
+
+    card.glow.lineStyle(5, 0xffd65c, 0.95)
+    card.glow.strokeRoundedRect(-width / 2 + 17, -height / 2 + 16, width - 34, height - 32, 12)
+    card.glow.lineStyle(13, 0xffbb33, 0.18)
+    card.glow.strokeRoundedRect(-width / 2 + 11, -height / 2 + 10, width - 22, height - 20, 18)
+    card.glow.fillStyle(0xffe27a, 0.9)
+    card.glow.fillCircle(-width / 2 + 20, -height / 2 + 20, 4)
+    card.glow.fillCircle(width / 2 - 18, -height / 2 + 42, 3)
+    card.glow.fillCircle(-width / 2 + 28, height / 2 - 34, 3)
+    card.glow.fillCircle(width / 2 - 28, height / 2 - 22, 4)
   }
 
   private showReadyMessage() {
     this.isDragging = false
     const selectedOption = TEST_POOMSAE_OPTIONS.find(option => option.id === this.selectedOptionId)
-    this.statusText.setText(
-      selectedOption ? `${selectedOption.name} 연습 화면은 아직 준비 중이야.` : '품새를 선택해줘.',
-    )
+
+    if (!selectedOption) {
+      this.showTemporaryNotice('품새를 선택해줘.')
+      return
+    }
+
+    this.showTemporaryNotice(`${selectedOption.name} 연습 화면은 곧 연결할게!`)
+  }
+
+  private showTemporaryNotice(message: string) {
+    const { width: vw, height: vh } = this.scale
+    const notice = this.add
+      .text(vw / 2, vh * 0.78, message, {
+        fontFamily: 'sans-serif',
+        fontSize: `${Math.round(Phaser.Math.Clamp(vh * 0.026, 17, 24))}px`,
+        color: '#fff3cf',
+        fontStyle: '700',
+      })
+      .setOrigin(0.5)
+      .setStroke('#3b1f08', 5)
+      .setDepth(5)
+
+    this.tweens.add({
+      targets: notice,
+      alpha: 0,
+      y: notice.y - 18,
+      duration: 900,
+      delay: 900,
+      onComplete: () => notice.destroy(),
+    })
   }
 
   private showEmptyState(vw: number, vh: number) {
-    this.statusText.setText('표시할 품새가 아직 없어.')
     this.add
-      .text(vw / 2, vh * 0.45, '품새 테스트 데이터가 비어 있어.', {
+      .text(vw / 2, vh * 0.5, '아직 불러올 품새가 없어.', {
         fontFamily: 'sans-serif',
-        fontSize: '22px',
-        color: '#fff6df',
+        fontSize: `${Math.round(Phaser.Math.Clamp(vh * 0.03, 20, 30))}px`,
+        color: '#fff3cf',
+        fontStyle: '700',
       })
       .setOrigin(0.5)
-      .setDepth(3)
+      .setStroke('#3b1f08', 5)
+      .setDepth(4)
   }
 
   private returnToDojang() {
     this.isDragging = false
     fadeToScene(this, 'TaekwondoSelectScene', { duration: FADE_DURATION })
+  }
+
+  private removeSceneListeners() {
+    this.isDragging = false
+    this.input.keyboard?.off('keydown-ESC', this.handleEscDown)
+    this.input.off('wheel', this.handleWheel)
+    this.input.off('pointermove', this.handlePointerMove)
+    this.input.off('pointerup', this.handlePointerUp)
+    this.input.off('pointerupoutside', this.handlePointerUp)
+  }
+
+  private getContainScale(textureKey: string, maxWidth: number, maxHeight: number) {
+    const source = this.textures.get(textureKey).getSourceImage() as HTMLImageElement
+    return Math.min(maxWidth / source.width, maxHeight / source.height)
   }
 }

@@ -23,7 +23,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 /**
- * 사용자가 색칠한 작품. 도안(sketchCode 로 FE 정적 자산과 매칭)과 합성된 결과 이미지(imageUrl), 누적 플레이 시간, 공개 여부를 보관한다.
+ * 사용자가 색칠한 작품. 도안(sketchCode 정수 코드로 FE 정적 자산과 매칭)과 합성된 결과 이미지(imageUrl), 누적 플레이 시간, 공개 여부를 보관한다.
  *
  * <p>영역별 색상 데이터는 저장하지 않는다. FE 가 imageUrl PNG 를 캔버스에 깔고 덧칠/빈 칸 형태로 수정 UX 를 처리한다.
  */
@@ -45,13 +45,12 @@ public class Artwork {
     @JoinColumn(name = "patient_profile_id", nullable = false)
     private PatientProfile patientProfile;
 
-    /** FE 정적 자산의 도안 식별자 (예: "cat-01"). 한 번 정해진 코드는 재사용/변경 금지. */
-    @Column(name = "sketch_code", nullable = false, length = 50)
-    private String sketchCode;
-
-    /** 사용자 지정 작품 제목. NULL 허용 — 비어있으면 FE 에서 도안명 + 날짜 등으로 표시. */
-    @Column(length = 50)
-    private String title;
+    /**
+     * FE 정적 자산의 도안 식별자 (정수 코드). 자유 그리기 (밑그림 없는 작품) 케이스에서는 {@code null}. 도안 기반 작품의 경우 한 번 정해진 코드는
+     * 재사용/변경 금지.
+     */
+    @Column(name = "sketch_code")
+    private Integer sketchCode;
 
     /** 합성된 결과 이미지의 URL. 실제 파일은 별도 스토리지에 저장된다. */
     @Column(name = "image_url", nullable = false, length = 500)
@@ -74,22 +73,20 @@ public class Artwork {
     @Builder
     private Artwork(
             PatientProfile patientProfile,
-            String sketchCode,
-            String title,
+            Integer sketchCode,
             String imageUrl,
             int playDurationSeconds,
             boolean isPublic) {
         // 빌더 단계 invariant — @ManyToOne(optional=false) / @Column(nullable=false) 만으로는 build()
-        // 시점에 null 차단이 안 되므로 fail-fast. title 은 NULL 허용이라 제외.
+        // 시점에 null 차단이 안 되므로 fail-fast. sketchCode 는 V5 부터 자유 그리기 지원 위해 nullable 이라 제외.
         this.patientProfile =
                 Objects.requireNonNull(patientProfile, "patientProfile must not be null");
-        this.sketchCode = Objects.requireNonNull(sketchCode, "sketchCode must not be null");
         this.imageUrl = Objects.requireNonNull(imageUrl, "imageUrl must not be null");
         // 도메인 invariant: 누적 카운터라 음수는 논리 오류 (216 MR AI 리뷰 #2 후속).
         if (playDurationSeconds < 0) {
             throw new IllegalArgumentException("플레이 시간은 0 이상이어야 합니다.");
         }
-        this.title = title;
+        this.sketchCode = sketchCode;
         this.playDurationSeconds = playDurationSeconds;
         this.isPublic = isPublic;
     }
@@ -98,10 +95,7 @@ public class Artwork {
      * PATCH 시맨틱: {@code null} 인 인자는 "변경 없음" 으로 간주하고 기존 값을 유지한다. {@code sketchCode} / {@code
      * imageUrl} / {@code patientProfile} 은 본 메서드로 변경하지 않는다 (각각 고정 / 별도 메서드 / 도메인 정책).
      */
-    public void update(String title, Boolean isPublic) {
-        if (title != null) {
-            this.title = title;
-        }
+    public void update(Boolean isPublic) {
         if (isPublic != null) {
             this.isPublic = isPublic;
         }
