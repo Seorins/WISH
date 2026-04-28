@@ -1,15 +1,19 @@
 from dataclasses import dataclass
+from math import sqrt
 
 from app.services.gymnastics.constants import (
+    DEFAULT_MARCH_DEPTH_SHIFT_MAX,
     DEFAULT_MARCH_DOMINANCE_MARGIN,
-    DEFAULT_MARCH_KNEE_LIFT_BONUS_RANGE,
-    DEFAULT_MARCH_KNEE_LIFT_THRESHOLD,
+    DEFAULT_MARCH_PELVIS_SHIFT_MAX,
     DEFAULT_MARCH_RELEASE_THRESHOLD,
     DEFAULT_MARCH_TARGET_STEPS,
+    DEFAULT_MARCH_THIGH_ANGLE_THRESHOLD,
     DEFAULT_MARCH_TORSO_TILT_MAX,
-    DEFAULT_MARCH_WARMUP_FRAMES,
-    LEFT_KNEE,
-    RIGHT_KNEE,
+)
+from app.services.gymnastics.feedback import (
+    FeedbackStabilizerState,
+    select_march_feedback_candidate,
+    stabilize_feedback,
 )
 from app.services.gymnastics.evaluators.base import BaseEvaluator, EvaluatorResult
 from app.services.gymnastics.features.march_features import MarchFeatureSet, extract_march_features
@@ -19,12 +23,12 @@ from app.services.gymnastics.types import NormalizedPoseFrame
 @dataclass(slots=True)
 class MarchEvaluatorConfig:
     target_steps: int = DEFAULT_MARCH_TARGET_STEPS
-    knee_lift_threshold: float = DEFAULT_MARCH_KNEE_LIFT_THRESHOLD
-    knee_lift_bonus_range: float = DEFAULT_MARCH_KNEE_LIFT_BONUS_RANGE
-    torso_tilt_max: float = DEFAULT_MARCH_TORSO_TILT_MAX
+    thigh_angle_threshold: float = DEFAULT_MARCH_THIGH_ANGLE_THRESHOLD
     dominance_margin: float = DEFAULT_MARCH_DOMINANCE_MARGIN
     release_threshold: float = DEFAULT_MARCH_RELEASE_THRESHOLD
-    warmup_frames: int = DEFAULT_MARCH_WARMUP_FRAMES
+    torso_tilt_max: float = DEFAULT_MARCH_TORSO_TILT_MAX
+    pelvis_shift_max: float = DEFAULT_MARCH_PELVIS_SHIFT_MAX
+    depth_shift_max: float = DEFAULT_MARCH_DEPTH_SHIFT_MAX
 
 
 class MarchEvaluator(BaseEvaluator):
@@ -43,92 +47,110 @@ class MarchEvaluator(BaseEvaluator):
         last_seen_side: str | None = None,
         left_armed: bool = True,
         right_armed: bool = True,
-        warmup_frames_remaining: int = 0,
-        baseline_left_knee_y: float | None = None,
-        baseline_right_knee_y: float | None = None,
+        reference_hip_x: float | None = None,
+        reference_hip_y: float | None = None,
+        reference_scale: float | None = None,
+        displayed_feedback_code: str | None = None,
+        displayed_feedback_text: str | None = None,
+        displayed_feedback_frames: int = 0,
+        candidate_feedback_code: str | None = None,
+        candidate_feedback_text: str | None = None,
+        candidate_feedback_streak: int = 0,
     ) -> EvaluatorResult:
         effective_target = target_steps or self.config.target_steps
 
-        current_left_knee_y = self._get_current_knee_y(frame, LEFT_KNEE)
-        current_right_knee_y = self._get_current_knee_y(frame, RIGHT_KNEE)
+        # Capture reference position on the very first valid frame.
+        # Reference stays fixed for the entire session.
+        next_reference_hip_x = reference_hip_x
+        next_reference_hip_y = reference_hip_y
+        next_reference_scale = reference_scale
 
-        effective_warmup = (
-            max(warmup_frames_remaining, self.config.warmup_frames)
-            if baseline_left_knee_y is None or baseline_right_knee_y is None
-            else warmup_frames_remaining
-        )
-
-        # Warmup during startup collects the lowest ready-pose knee position.
-        # After warmup finishes, baseline stays fixed for the rest of the session.
-        if effective_warmup > 0:
-            next_baseline_left = self._update_baseline(
-                baseline_knee_y=baseline_left_knee_y,
-                current_knee_y=current_left_knee_y,
-            )
-            next_baseline_right = self._update_baseline(
-                baseline_knee_y=baseline_right_knee_y,
-                current_knee_y=current_right_knee_y,
-            )
-        else:
-            next_baseline_left = baseline_left_knee_y
-            next_baseline_right = baseline_right_knee_y
+        if frame.tracking == "tracking_ok" and reference_hip_x is None:
+            next_reference_hip_x = frame.hip_center.x
+            next_reference_hip_y = frame.hip_center.y
+            next_reference_scale = frame.scale_reference
 
         features = extract_march_features(
             frame,
-            baseline_left_knee_y=next_baseline_left,
-            baseline_right_knee_y=next_baseline_right,
+            reference_hip_x=next_reference_hip_x,
+            reference_hip_y=next_reference_hip_y,
+            reference_scale=next_reference_scale,
         )
 
-        baseline_ready = self._has_valid_baseline(next_baseline_left, next_baseline_right)
+        previous_feedback_state = FeedbackStabilizerState(
+            displayed_code=displayed_feedback_code,
+            displayed_text=displayed_feedback_text,
+            displayed_frames=displayed_feedback_frames,
+            candidate_code=candidate_feedback_code,
+            candidate_text=candidate_feedback_text,
+            candidate_streak=candidate_feedback_streak,
+        )
 
+        # ── Tracking failure ──────────────────────────────────────────────────
         if frame.tracking != "tracking_ok":
-            return EvaluatorResult(
-                motion_id=self.motion_id,
+            next_feedback_state = self._stabilize_feedback(
+                features=features,
+                state=previous_state,
+                tracking=frame.tracking,
+                previous_feedback_state=previous_feedback_state,
+            )
+            return self._make_result(
                 state=previous_state,
                 step_count=step_count,
                 accuracy=0.0,
-                feedback="Show your full body in the camera.",
                 tracking=frame.tracking,
                 last_counted_side=last_counted_side,
                 last_seen_side=last_seen_side,
                 left_armed=left_armed,
                 right_armed=right_armed,
-                warmup_frames_remaining=max(effective_warmup, 1) if not baseline_ready else effective_warmup,
-                baseline_left_knee_y=next_baseline_left,
-                baseline_right_knee_y=next_baseline_right,
+                reference_hip_x=next_reference_hip_x,
+                reference_hip_y=next_reference_hip_y,
+                reference_scale=next_reference_scale,
+                feedback_state=next_feedback_state,
             )
 
-        if effective_warmup > 0 or not baseline_ready:
-            next_warmup_remaining = max(effective_warmup - 1, 0) if baseline_ready else max(effective_warmup, 1)
-            return EvaluatorResult(
-                motion_id=self.motion_id,
+        # ── Reference not yet set (first frame just captured it — return idle) ─
+        if next_reference_hip_x is None:
+            next_feedback_state = self._stabilize_feedback(
+                features=features,
+                state="idle",
+                tracking=frame.tracking,
+                previous_feedback_state=previous_feedback_state,
+            )
+            return self._make_result(
                 state="idle",
                 step_count=step_count,
                 accuracy=0.0,
-                feedback="Hold the ready pose.",
                 tracking=frame.tracking,
                 last_counted_side=last_counted_side,
                 last_seen_side=last_seen_side,
                 left_armed=True,
                 right_armed=True,
-                warmup_frames_remaining=next_warmup_remaining,
-                baseline_left_knee_y=next_baseline_left,
-                baseline_right_knee_y=next_baseline_right,
+                reference_hip_x=next_reference_hip_x,
+                reference_hip_y=next_reference_hip_y,
+                reference_scale=next_reference_scale,
+                feedback_state=next_feedback_state,
             )
 
-        next_left_armed = left_armed or features.left_knee_lift <= self.config.release_threshold
-        next_right_armed = right_armed or features.right_knee_lift <= self.config.release_threshold
+        # ── Main evaluation ───────────────────────────────────────────────────
+
+        # Re-arm once the leg returns close to vertical
+        next_left_armed = left_armed or features.left_thigh_angle <= self.config.release_threshold
+        next_right_armed = right_armed or features.right_thigh_angle <= self.config.release_threshold
 
         next_state = self._resolve_next_state(features)
         next_step_count = step_count
         next_counted_side = last_counted_side
 
+        # Count only at a peak AND only when the pelvis hasn't drifted too far
+        is_in_place = self._is_in_place(features)
         peak_side = self._get_peak_side(next_state)
-        if peak_side == "left" and next_left_armed:
+
+        if peak_side == "left" and next_left_armed and is_in_place:
             next_step_count += 1
             next_counted_side = "left"
             next_left_armed = False
-        elif peak_side == "right" and next_right_armed:
+        elif peak_side == "right" and next_right_armed and is_in_place:
             next_step_count += 1
             next_counted_side = "right"
             next_right_armed = False
@@ -140,47 +162,29 @@ class MarchEvaluator(BaseEvaluator):
         next_seen_side = active_side or last_seen_side
 
         accuracy = self._compute_accuracy(features)
-        feedback = self._select_feedback(features, next_state)
+        next_feedback_state = self._stabilize_feedback(
+            features=features,
+            state=next_state,
+            tracking=frame.tracking,
+            previous_feedback_state=previous_feedback_state,
+        )
 
-        return EvaluatorResult(
-            motion_id=self.motion_id,
+        return self._make_result(
             state=next_state,
             step_count=min(next_step_count, effective_target),
             accuracy=accuracy,
-            feedback=feedback,
             tracking=frame.tracking,
             last_counted_side=next_counted_side,
             last_seen_side=next_seen_side,
             left_armed=next_left_armed,
             right_armed=next_right_armed,
-            warmup_frames_remaining=0,
-            baseline_left_knee_y=next_baseline_left,
-            baseline_right_knee_y=next_baseline_right,
+            reference_hip_x=next_reference_hip_x,
+            reference_hip_y=next_reference_hip_y,
+            reference_scale=next_reference_scale,
+            feedback_state=next_feedback_state,
         )
 
-    def _get_current_knee_y(self, frame: NormalizedPoseFrame, landmark_name: str) -> float | None:
-        landmark = frame.landmarks.get(landmark_name)
-        if landmark is None:
-            return None
-        return landmark.y
-
-    def _update_baseline(
-        self,
-        baseline_knee_y: float | None,
-        current_knee_y: float | None,
-    ) -> float | None:
-        if current_knee_y is None:
-            return baseline_knee_y
-        if baseline_knee_y is None:
-            return current_knee_y
-        return max(baseline_knee_y, current_knee_y)
-
-    def _has_valid_baseline(
-        self,
-        baseline_left_knee_y: float | None,
-        baseline_right_knee_y: float | None,
-    ) -> bool:
-        return baseline_left_knee_y is not None and baseline_right_knee_y is not None
+    # ── State helpers ─────────────────────────────────────────────────────────
 
     def _resolve_next_state(self, features: MarchFeatureSet) -> str:
         if self._is_left_peak(features):
@@ -195,21 +199,21 @@ class MarchEvaluator(BaseEvaluator):
 
     def _is_left_peak(self, features: MarchFeatureSet) -> bool:
         return (
-            features.left_knee_lift >= self.config.knee_lift_threshold
-            and features.left_knee_lift > features.right_knee_lift + self.config.dominance_margin
+            features.left_thigh_angle >= self.config.thigh_angle_threshold
+            and features.left_thigh_angle > features.right_thigh_angle + self.config.dominance_margin
         )
 
     def _is_right_peak(self, features: MarchFeatureSet) -> bool:
         return (
-            features.right_knee_lift >= self.config.knee_lift_threshold
-            and features.right_knee_lift > features.left_knee_lift + self.config.dominance_margin
+            features.right_thigh_angle >= self.config.thigh_angle_threshold
+            and features.right_thigh_angle > features.left_thigh_angle + self.config.dominance_margin
         )
 
     def _is_left_dominant(self, features: MarchFeatureSet) -> bool:
-        return features.left_knee_lift > features.right_knee_lift + self.config.dominance_margin
+        return features.left_thigh_angle > features.right_thigh_angle + self.config.dominance_margin
 
     def _is_right_dominant(self, features: MarchFeatureSet) -> bool:
-        return features.right_knee_lift > features.left_knee_lift + self.config.dominance_margin
+        return features.right_thigh_angle > features.left_thigh_angle + self.config.dominance_margin
 
     def _get_peak_side(self, state: str) -> str | None:
         if state == "left_peak":
@@ -225,25 +229,100 @@ class MarchEvaluator(BaseEvaluator):
             return "right"
         return None
 
-    def _compute_accuracy(self, features: MarchFeatureSet) -> float:
-        dominant_lift = max(features.left_knee_lift, features.right_knee_lift)
-        lift_score = min(
-            dominant_lift
-            / max(self.config.knee_lift_threshold + self.config.knee_lift_bonus_range, 1e-6),
-            1.0,
+    # ── In-place gate ─────────────────────────────────────────────────────────
+
+    def _is_in_place(self, features: MarchFeatureSet) -> bool:
+        return (
+            abs(features.pelvis_shift_x) <= self.config.pelvis_shift_max
+            and abs(features.pelvis_shift_y) <= self.config.pelvis_shift_max
+            and abs(features.pelvis_depth_shift) <= self.config.depth_shift_max
         )
-        torso_penalty = min(features.torso_tilt / max(self.config.torso_tilt_max, 1.0), 1.0)
-        accuracy = (lift_score * 0.7) + ((1.0 - torso_penalty) * 0.3)
+
+    # ── Accuracy ─────────────────────────────────────────────────────────────
+
+    def _compute_accuracy(self, features: MarchFeatureSet) -> float:
+        dominant_angle = max(features.left_thigh_angle, features.right_thigh_angle)
+
+        # Knee height (40%): how high toward horizontal (90°) the dominant thigh got
+        lift_score = min(dominant_angle / 90.0, 1.0)
+
+        # Thigh angle quality (30%): how close to meeting the threshold
+        thigh_score = min(dominant_angle / max(self.config.thigh_angle_threshold, 1.0), 1.0)
+
+        # Pelvis stability (20%): closeness to reference position
+        shift_magnitude = sqrt(
+            features.pelvis_shift_x ** 2
+            + features.pelvis_shift_y ** 2
+            + features.pelvis_depth_shift ** 2
+        )
+        stability_score = max(1.0 - shift_magnitude / max(self.config.pelvis_shift_max, 1e-6), 0.0)
+
+        # Torso stability (10%)
+        torso_score = max(1.0 - features.torso_tilt / max(self.config.torso_tilt_max, 1.0), 0.0)
+
+        accuracy = (
+            lift_score * 0.4
+            + thigh_score * 0.3
+            + stability_score * 0.2
+            + torso_score * 0.1
+        )
         return round(max(min(accuracy, 1.0), 0.0), 2)
 
-    def _select_feedback(self, features: MarchFeatureSet, state: str) -> str | None:
-        if state == "complete":
-            return None
-        if features.torso_tilt > self.config.torso_tilt_max:
-            return "Keep your torso upright."
-        dominant_lift = max(features.left_knee_lift, features.right_knee_lift)
-        if dominant_lift < self.config.knee_lift_threshold:
-            return "Lift your knee higher."
-        if state == "idle":
-            return "March left and right alternately."
-        return None
+    # ── Feedback ─────────────────────────────────────────────────────────────
+
+    def _stabilize_feedback(
+        self,
+        features: MarchFeatureSet,
+        state: str,
+        tracking: str,
+        previous_feedback_state: FeedbackStabilizerState,
+    ) -> FeedbackStabilizerState:
+        candidate = select_march_feedback_candidate(
+            features=features,
+            state=state,
+            tracking=tracking,
+            pelvis_shift_max=self.config.pelvis_shift_max,
+            depth_shift_max=self.config.depth_shift_max,
+            thigh_angle_threshold=self.config.thigh_angle_threshold,
+            torso_tilt_max=self.config.torso_tilt_max,
+        )
+        return stabilize_feedback(candidate=candidate, state=previous_feedback_state)
+
+    # ── Result builder ────────────────────────────────────────────────────────
+
+    def _make_result(
+        self,
+        state: str,
+        step_count: int,
+        accuracy: float,
+        tracking: str,
+        last_counted_side: str | None,
+        last_seen_side: str | None,
+        left_armed: bool,
+        right_armed: bool,
+        reference_hip_x: float | None,
+        reference_hip_y: float | None,
+        reference_scale: float | None,
+        feedback_state: FeedbackStabilizerState,
+    ) -> EvaluatorResult:
+        return EvaluatorResult(
+            motion_id=self.motion_id,
+            state=state,
+            step_count=step_count,
+            accuracy=accuracy,
+            feedback=feedback_state.displayed_text,
+            tracking=tracking,
+            last_counted_side=last_counted_side,
+            last_seen_side=last_seen_side,
+            left_armed=left_armed,
+            right_armed=right_armed,
+            reference_hip_x=reference_hip_x,
+            reference_hip_y=reference_hip_y,
+            reference_scale=reference_scale,
+            displayed_feedback_code=feedback_state.displayed_code,
+            displayed_feedback_text=feedback_state.displayed_text,
+            displayed_feedback_frames=feedback_state.displayed_frames,
+            candidate_feedback_code=feedback_state.candidate_code,
+            candidate_feedback_text=feedback_state.candidate_text,
+            candidate_feedback_streak=feedback_state.candidate_streak,
+        )

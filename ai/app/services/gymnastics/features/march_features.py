@@ -6,6 +6,7 @@ from app.services.gymnastics.constants import (
     LEFT_HIP,
     LEFT_KNEE,
     LEFT_SHOULDER,
+    MIN_SCALE_REFERENCE,
     RIGHT_ANKLE,
     RIGHT_HIP,
     RIGHT_KNEE,
@@ -18,65 +19,102 @@ NUMERIC_EPSILON = 1e-6
 
 @dataclass(slots=True)
 class MarchFeatureSet:
+    # hip → knee vector Y component negated: positive = knee above hip
+    # (hip is at normalized origin 0,0 so this equals -knee.y)
     left_knee_lift: float
     right_knee_lift: float
+
+    # Angle of hip→knee vector from vertical downward direction (degrees)
+    # 0° = straight down (standing), 90° = horizontal, >90° = above hip
+    left_thigh_angle: float
+    right_thigh_angle: float
+
+    # Knee joint flexion angle: hip–knee–ankle (degrees); None if landmarks missing
     left_knee_angle: float | None
     right_knee_angle: float | None
+
     torso_tilt: float
-    baseline_left_knee_y: float | None
-    baseline_right_knee_y: float | None
-    current_left_knee_y: float | None
-    current_right_knee_y: float | None
+
+    # Pelvis displacement from reference position, normalized by reference_scale
+    pelvis_shift_x: float   # lateral (left/right) drift
+    pelvis_shift_y: float   # vertical drift
+    pelvis_depth_shift: float   # scale change = forward/backward movement
 
 
 def extract_march_features(
     frame: NormalizedPoseFrame,
-    baseline_left_knee_y: float | None = None,
-    baseline_right_knee_y: float | None = None,
+    reference_hip_x: float | None = None,
+    reference_hip_y: float | None = None,
+    reference_scale: float | None = None,
 ) -> MarchFeatureSet:
-    current_left_knee_y = _get_landmark_y(frame, LEFT_KNEE)
-    current_right_knee_y = _get_landmark_y(frame, RIGHT_KNEE)
+    left_knee = frame.landmarks.get(LEFT_KNEE)
+    right_knee = frame.landmarks.get(RIGHT_KNEE)
 
-    left_knee_lift = _compute_knee_raise_from_baseline(
-        baseline_left_knee_y,
-        current_left_knee_y,
-    )
-    right_knee_lift = _compute_knee_raise_from_baseline(
-        baseline_right_knee_y,
-        current_right_knee_y,
-    )
+    left_knee_lift = (-left_knee.y) if left_knee is not None else 0.0
+    right_knee_lift = (-right_knee.y) if right_knee is not None else 0.0
+
+    left_thigh_angle = _compute_thigh_angle(left_knee)
+    right_thigh_angle = _compute_thigh_angle(right_knee)
+
     left_knee_angle = _compute_joint_angle(frame, LEFT_HIP, LEFT_KNEE, LEFT_ANKLE)
     right_knee_angle = _compute_joint_angle(frame, RIGHT_HIP, RIGHT_KNEE, RIGHT_ANKLE)
+
     torso_tilt = _compute_torso_tilt(frame)
+
+    pelvis_shift_x, pelvis_shift_y, pelvis_depth_shift = _compute_pelvis_shift(
+        frame=frame,
+        reference_hip_x=reference_hip_x,
+        reference_hip_y=reference_hip_y,
+        reference_scale=reference_scale,
+    )
 
     return MarchFeatureSet(
         left_knee_lift=left_knee_lift,
         right_knee_lift=right_knee_lift,
+        left_thigh_angle=left_thigh_angle,
+        right_thigh_angle=right_thigh_angle,
         left_knee_angle=left_knee_angle,
         right_knee_angle=right_knee_angle,
         torso_tilt=torso_tilt,
-        baseline_left_knee_y=baseline_left_knee_y,
-        baseline_right_knee_y=baseline_right_knee_y,
-        current_left_knee_y=current_left_knee_y,
-        current_right_knee_y=current_right_knee_y,
+        pelvis_shift_x=pelvis_shift_x,
+        pelvis_shift_y=pelvis_shift_y,
+        pelvis_depth_shift=pelvis_depth_shift,
     )
 
 
-def _compute_knee_raise_from_baseline(
-    baseline_knee_y: float | None,
-    current_knee_y: float | None,
-) -> float:
-    if baseline_knee_y is None or current_knee_y is None:
+def _compute_thigh_angle(knee: NormalizedLandmark | None) -> float:
+    """
+    Angle between the hip→knee vector and the vertical downward direction.
+    Hip is at the normalized origin (0, 0), so the vector is just (knee.x, knee.y).
+    Vertical down = (0, 1) in image coordinates (y increases downward).
+    Returns 0° when the knee hangs straight below the hip, 90° when horizontal.
+    """
+    if knee is None:
         return 0.0
+    dx = knee.x
+    dy = knee.y
+    magnitude = sqrt(dx * dx + dy * dy)
+    if magnitude < NUMERIC_EPSILON:
+        return 0.0
+    cosine = max(min(dy / magnitude, 1.0), -1.0)
+    return degrees(acos(cosine))
 
-    return max(baseline_knee_y - current_knee_y, 0.0)
 
+def _compute_pelvis_shift(
+    frame: NormalizedPoseFrame,
+    reference_hip_x: float | None,
+    reference_hip_y: float | None,
+    reference_scale: float | None,
+) -> tuple[float, float, float]:
+    if reference_hip_x is None or reference_hip_y is None or reference_scale is None:
+        return 0.0, 0.0, 0.0
 
-def _get_landmark_y(frame: NormalizedPoseFrame, landmark_name: str) -> float | None:
-    landmark = frame.landmarks.get(landmark_name)
-    if landmark is None:
-        return None
-    return landmark.y
+    scale_ref = max(reference_scale, MIN_SCALE_REFERENCE)
+    shift_x = (frame.hip_center.x - reference_hip_x) / scale_ref
+    shift_y = (frame.hip_center.y - reference_hip_y) / scale_ref
+    depth_shift = (frame.scale_reference - reference_scale) / scale_ref
+
+    return shift_x, shift_y, depth_shift
 
 
 def _compute_joint_angle(
@@ -117,7 +155,7 @@ def _compute_torso_tilt(frame: NormalizedPoseFrame) -> float:
 
     dx = shoulder_center[0] - hip_center[0]
     dy = shoulder_center[1] - hip_center[1]
-    magnitude = sqrt(dx**2 + dy**2)
+    magnitude = sqrt(dx * dx + dy * dy)
     if magnitude == 0.0:
         return 0.0
 
