@@ -1,5 +1,7 @@
 package com.comong.backend.domain.artwork.service;
 
+import java.util.Objects;
+
 import org.springframework.stereotype.Component;
 
 import com.comong.backend.domain.artwork.entity.Artwork;
@@ -30,11 +32,13 @@ public class ArtworkAccessChecker {
     /**
      * 작품 조회 권한 체크.
      *
-     * @param artwork 대상 작품
+     * @param artwork 대상 작품, null 이면 NullPointerException — 호출자가 사전에 NOT_FOUND 처리하고 와야 함
      * @param currentUserId 인증 사용자 id, 비로그인이면 {@code null}
+     * @throws NullPointerException artwork 가 null 일 때 — 권한 체크 단계에 도달하기 전 작품 존재 여부를 검증할 책임은 호출자에 있음
      * @throws BusinessException FORBIDDEN — 비공개 작품을 작성자가 아닌 사람이 조회하려 할 때
      */
     public void verifyReadable(Artwork artwork, Long currentUserId) {
+        Objects.requireNonNull(artwork, "artwork must not be null");
         if (artwork.isPublic()) {
             return;
         }
@@ -46,11 +50,13 @@ public class ArtworkAccessChecker {
     /**
      * 작품 수정/삭제 권한 체크. 공개 여부와 무관하게 작성자만 허용.
      *
-     * @param artwork 대상 작품
+     * @param artwork 대상 작품, null 이면 NullPointerException — 호출자가 사전에 NOT_FOUND 처리하고 와야 함
      * @param currentUserId 인증 사용자 id, 비로그인이면 {@code null}
+     * @throws NullPointerException artwork 가 null 일 때
      * @throws BusinessException FORBIDDEN — 작성자가 아니거나 비로그인 상태
      */
     public void verifyOwner(Artwork artwork, Long currentUserId) {
+        Objects.requireNonNull(artwork, "artwork must not be null");
         if (!artwork.isOwnedBy(currentUserId)) {
             throw new BusinessException(GlobalErrorCode.FORBIDDEN);
         }

@@ -42,6 +42,15 @@ class ArtworkAccessCheckerTest {
     }
 
     @Test
+    void rejectsNullArtwork() {
+        // 호출자가 NOT_FOUND 처리하지 않고 null 을 넘긴 경우 — 빠른 실패
+        assertThatThrownBy(() -> checker.verifyReadable(null, 1L))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> checker.verifyOwner(null, 1L))
+                .isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
     void onlyOwnerCanModifyOrDelete() {
         // 공개 작품이라도 수정/삭제는 작성자만
         Artwork artwork = publicArtworkOwnedBy(1L);
