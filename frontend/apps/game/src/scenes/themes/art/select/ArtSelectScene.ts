@@ -58,10 +58,7 @@ export class ArtSelectScene extends Phaser.Scene {
   private dialogFrameTop = 0
   private dialogTextWrapWidth = 0
   private dialogScale = 1
-  private albumOverlay: Phaser.GameObjects.Container | null = null
   private isAlbumVisible = false
-  private isAlbumPageTurning = false
-  private albumPageTurnTimers: Phaser.Time.TimerEvent[] = []
 
   private isDialogVisible = false
   private dialogDismissed = false
@@ -88,7 +85,6 @@ export class ArtSelectScene extends Phaser.Scene {
     }
 
     if (this.isAlbumVisible) {
-      this.closeAlbum()
       return
     }
 
@@ -136,10 +132,6 @@ export class ArtSelectScene extends Phaser.Scene {
     this.load.image('dialog-enter', '/assets/images/ui/dialog/enter.png')
     this.load.image('dialog-select', '/assets/images/ui/dialog/select.png')
     this.load.image('art-ui-album', '/assets/images/themes/art/ui/album.png')
-    this.load.image('art-ui-delete-btn', '/assets/images/themes/art/ui/delete_btn.png')
-    this.load.image('art-ui-album-page', '/assets/images/themes/art/ui/album_page.png')
-    this.load.image('art-ui-album-next1', '/assets/images/themes/art/ui/album_next1.png')
-    this.load.image('art-ui-album-next2', '/assets/images/themes/art/ui/album_next2.png')
     this.load.spritesheet('character', '/assets/images/common/player/character_sheet.png', {
       frameWidth: FRAME_SIZE,
       frameHeight: FRAME_SIZE,
@@ -606,238 +598,23 @@ export class ArtSelectScene extends Phaser.Scene {
       this.closeDialog(false)
     }
 
-    const { width: vw, height: vh } = this.scale
-    const dim = this.add
-      .rectangle(vw / 2, vh / 2, vw, vh, 0x000000, 1)
-      .setDepth(40)
-      .setScrollFactor(0)
-      .setAlpha(0)
-      .setInteractive()
-
-    const albumPageSource = this.textures
-      .get('art-ui-album-page')
-      .getSourceImage() as HTMLImageElement
-    const albumPageRatio = albumPageSource.width / albumPageSource.height
-    const albumPageHeight = Math.min(vh * 0.96, (vw * 0.94) / albumPageRatio)
-    const albumPageWidth = albumPageHeight * albumPageRatio
-    const albumPage = this.add
-      .image(vw / 2, vh / 2, 'art-ui-album-page')
-      .setDepth(41)
-      .setDisplaySize(albumPageWidth, albumPageHeight)
-      .setScrollFactor(0)
-      .setInteractive({ useHandCursor: true })
-      .setAlpha(0)
-    const albumPageScale = { x: albumPage.scaleX, y: albumPage.scaleY }
-    albumPage.setScale(albumPageScale.x * 0.98, albumPageScale.y * 0.98)
-
-    const pageTurnFrame = this.add
-      .image(vw / 2, vh / 2, 'art-ui-album-next1')
-      .setDepth(42)
-      .setDisplaySize(albumPageWidth, albumPageHeight)
-      .setScrollFactor(0)
-      .setAlpha(0)
-      .setVisible(false)
-    const pageTurnMaskShape = this.make.graphics({}, false)
-    const pageTurnMaskLeft = vw / 2 - albumPageWidth * 0.32
-    const pageTurnMaskTop = vh / 2 - albumPageHeight * 0.48
-    const pageTurnMaskWidth = albumPageWidth * 0.64
-    pageTurnMaskShape.fillStyle(0xffffff)
-    pageTurnMaskShape.fillRect(
-      pageTurnMaskLeft,
-      pageTurnMaskTop,
-      pageTurnMaskWidth,
-      albumPageHeight * 0.72,
-    )
-    pageTurnMaskShape.fillTriangle(
-      pageTurnMaskLeft,
-      vh / 2 + albumPageHeight * 0.24,
-      pageTurnMaskLeft + pageTurnMaskWidth,
-      vh / 2 + albumPageHeight * 0.24,
-      vw / 2,
-      vh / 2 + albumPageHeight * 0.33,
-    )
-    pageTurnFrame.setMask(pageTurnMaskShape.createGeometryMask())
-    pageTurnFrame.on('destroy', () => pageTurnMaskShape.destroy())
-
-    const pageTurnZoneWidth = albumPageWidth * 0.28
-    const pageTurnZoneHeight = albumPageHeight * 0.76
-    const previousPageZone = this.add
-      .zone(vw / 2 - albumPageWidth * 0.28, vh / 2, pageTurnZoneWidth, pageTurnZoneHeight)
-      .setDepth(42)
-      .setScrollFactor(0)
-      .setInteractive({ useHandCursor: true })
-    const nextPageZone = this.add
-      .zone(vw / 2 + albumPageWidth * 0.28, vh / 2, pageTurnZoneWidth, pageTurnZoneHeight)
-      .setDepth(42)
-      .setScrollFactor(0)
-      .setInteractive({ useHandCursor: true })
-    const turnAlbumPage = (direction: 'next' | 'previous') => {
-      if (this.isAlbumPageTurning) {
-        return
-      }
-
-      this.isAlbumPageTurning = true
-      this.clearAlbumPageTurnTimers()
-      this.isAlbumPageTurning = true
-
-      const frameKeys =
-        direction === 'next'
-          ? ['art-ui-album-next1', 'art-ui-album-next2']
-          : ['art-ui-album-next2', 'art-ui-album-next1']
-
-      frameKeys.forEach((frameKey, index) => {
-        const timer = this.time.delayedCall(115 * index, () => {
-          if (!this.albumOverlay || !this.isAlbumVisible || !pageTurnFrame.active) {
-            return
-          }
-
-          pageTurnFrame
-            .setTexture(frameKey)
-            .setDisplaySize(albumPageWidth, albumPageHeight)
-            .setAlpha(1)
-            .setVisible(true)
-
-          if (index === frameKeys.length - 1) {
-            const hideTimer = this.time.delayedCall(115, () => {
-              if (pageTurnFrame.active) {
-                pageTurnFrame.setAlpha(0).setVisible(false)
-              }
-              this.clearAlbumPageTurnTimers()
-            })
-            this.albumPageTurnTimers.push(hideTimer)
-          }
-        })
-        this.albumPageTurnTimers.push(timer)
-      })
-    }
-
-    previousPageZone.on(
-      'pointerdown',
-      (
-        _pointer: Phaser.Input.Pointer,
-        _x: number,
-        _y: number,
-        event: Phaser.Types.Input.EventData,
-      ) => {
-        event.stopPropagation()
-        turnAlbumPage('previous')
-      },
-    )
-    nextPageZone.on(
-      'pointerdown',
-      (
-        _pointer: Phaser.Input.Pointer,
-        _x: number,
-        _y: number,
-        event: Phaser.Types.Input.EventData,
-      ) => {
-        event.stopPropagation()
-        turnAlbumPage('next')
-      },
-    )
-    albumPage.on(
-      'pointerdown',
-      (
-        _pointer: Phaser.Input.Pointer,
-        _x: number,
-        _y: number,
-        event: Phaser.Types.Input.EventData,
-      ) => event.stopPropagation(),
-    )
-
-    const closeButtonSource = this.textures
-      .get('art-ui-delete-btn')
-      .getSourceImage() as HTMLImageElement
-    const closeButtonSize = Math.min(64, Math.max(46, vh * 0.07))
-    const closeButton = this.add
-      .image(vw - 32 - closeButtonSize / 2, 32 + closeButtonSize / 2, 'art-ui-delete-btn')
-      .setDepth(43)
-      .setDisplaySize(
-        closeButtonSize,
-        closeButtonSize * (closeButtonSource.height / closeButtonSource.width),
-      )
-      .setScrollFactor(0)
-      .setAlpha(0)
-      .setInteractive({ useHandCursor: true })
-    const closeButtonScale = { x: closeButton.scaleX, y: closeButton.scaleY }
-    closeButton.on('pointerover', () => {
-      closeButton.setTint(0xfff3c4)
-      closeButton.setScale(closeButtonScale.x * 1.06, closeButtonScale.y * 1.06)
-    })
-    closeButton.on('pointerout', () => {
-      closeButton.clearTint()
-      closeButton.setScale(closeButtonScale.x, closeButtonScale.y)
-    })
-    closeButton.on(
-      'pointerdown',
-      (
-        _pointer: Phaser.Input.Pointer,
-        _x: number,
-        _y: number,
-        event: Phaser.Types.Input.EventData,
-      ) => {
-        event.stopPropagation()
-        this.closeAlbum()
-      },
-    )
-
-    dim.on(
-      'pointerdown',
-      (
-        _pointer: Phaser.Input.Pointer,
-        _x: number,
-        _y: number,
-        event: Phaser.Types.Input.EventData,
-      ) => {
-        event.stopPropagation()
-        this.closeAlbum()
-      },
-    )
-
-    this.albumOverlay = this.add
-      .container(0, 0, [dim, albumPage, pageTurnFrame, previousPageZone, nextPageZone, closeButton])
-      .setDepth(40)
     this.isAlbumVisible = true
-
-    this.tweens.add({
-      targets: dim,
-      alpha: 0.56,
-      duration: 160,
-      ease: 'Sine.easeOut',
+    const albumScene = this.scene.get('ArtAlbumScene')
+    albumScene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.isAlbumVisible = false
     })
-    this.tweens.add({
-      targets: albumPage,
-      alpha: 1,
-      scaleX: albumPageScale.x,
-      scaleY: albumPageScale.y,
-      duration: 180,
-      ease: 'Sine.easeOut',
-    })
-    this.tweens.add({
-      targets: closeButton,
-      alpha: 1,
-      duration: 160,
-      ease: 'Sine.easeOut',
-    })
+    this.scene.launch('ArtAlbumScene')
+    this.scene.bringToTop('ArtAlbumScene')
   }
 
   private closeAlbum() {
-    if (!this.albumOverlay) {
+    if (!this.isAlbumVisible) {
       this.isAlbumVisible = false
       return
     }
 
-    this.tweens.killTweensOf(this.albumOverlay.list)
-    this.clearAlbumPageTurnTimers()
-    this.albumOverlay.destroy(true)
-    this.albumOverlay = null
+    this.scene.stop('ArtAlbumScene')
     this.isAlbumVisible = false
-  }
-
-  private clearAlbumPageTurnTimers() {
-    this.albumPageTurnTimers.forEach(timer => timer.remove(false))
-    this.albumPageTurnTimers = []
-    this.isAlbumPageTurning = false
   }
 
   private createDialogUi(vw: number, vh: number) {
