@@ -15,6 +15,8 @@ const CANVAS_DRAW_AREA = { x: 120, y: 150, width: 1288, height: 620 }
 const DELETE_BUTTON_SIZE = { width: 344, height: 336 }
 const FILLABLE_WHITE_THRESHOLD = 245
 const HAND_FILL_COOLDOWN_MS = 320
+type ColoringTool = 'brush' | 'eraser'
+const COLORING_TOOLS: ColoringTool[] = ['brush', 'eraser']
 const PALETTE_SWATCHES = [
   { color: 0xff2b2b, sourceX: 1470, sourceY: 262 },
   { color: 0xff4d9a, sourceX: 1902, sourceY: 262 },
@@ -51,14 +53,20 @@ export class ArtColoringScene extends Phaser.Scene {
   private suppressIntroDialog = false
   private drawBounds = new Phaser.Geom.Rectangle()
   private coloringBaseBounds = new Phaser.Geom.Rectangle()
+  private paletteBounds = new Phaser.Geom.Rectangle()
   private coloringTexture!: Phaser.GameObjects.RenderTexture
   private paletteSelection!: Phaser.GameObjects.Arc
   private rumiBubble!: Phaser.GameObjects.Graphics
   private rumiBubbleText!: Phaser.GameObjects.Text
   private brushCursor!: Phaser.GameObjects.Image
+  private toolButtons: Partial<Record<ColoringTool, Phaser.GameObjects.Image>> = {}
+  private toolButtonFrames: Partial<Record<ColoringTool, Phaser.GameObjects.Arc>> = {}
+  private toolButtonGlows: Partial<Record<ColoringTool, Phaser.GameObjects.Image>> = {}
+  private toolButtonBaseScales: Partial<Record<ColoringTool, { x: number; y: number }>> = {}
   private saveButton: Phaser.GameObjects.Image | null = null
   private resetButton: Phaser.GameObjects.Image | null = null
   private exitButton: Phaser.GameObjects.Image | null = null
+  private currentTool: ColoringTool = 'brush'
   private currentColor: number = PALETTE_SWATCHES[0].color
   private palettePoints: PalettePoint[] = []
   private suppressStartupDialogs = false
@@ -86,11 +94,15 @@ export class ArtColoringScene extends Phaser.Scene {
   private lastHandColorSelectedAt = 0
   private pendingHandColor: number | null = null
   private pendingHandColorStartedAt = 0
+  private pendingHandTool: ColoringTool | null = null
+  private pendingHandToolStartedAt = 0
+  private lastHandToolSelectedAt = 0
   private pendingHandAction: HandActionKind | null = null
   private pendingHandActionStartedAt = 0
   private activatedHandAction: HandActionKind | null = null
   private lastHandFillRegionId: number | null = null
   private lastHandFillAt = 0
+  private isSavingColoring = false
 
   private readonly handlePointerDown = (pointer: Phaser.Input.Pointer) => {
     if (!this.handTracker?.isStarted && !this.isStartingHandTracker) {
@@ -101,12 +113,33 @@ export class ArtColoringScene extends Phaser.Scene {
       return
     }
 
+    if (this.currentTool === 'eraser') {
+      this.isDrawing = true
+      if (this.fillRegionAt(pointer.x, pointer.y, 0xffffff)) {
+        this.handleSuccessfulFill()
+      }
+      return
+    }
+
     if (this.fillRegionAt(pointer.x, pointer.y)) {
       this.handleSuccessfulFill()
     }
   }
 
-  private readonly handlePointerMove = (_pointer: Phaser.Input.Pointer) => {}
+  private readonly handlePointerMove = (pointer: Phaser.Input.Pointer) => {
+    if (this.currentTool !== 'eraser' || !this.isDrawing || !pointer.isDown) {
+      return
+    }
+
+    if (!Phaser.Geom.Rectangle.Contains(this.drawBounds, pointer.x, pointer.y)) {
+      this.stopDrawing()
+      return
+    }
+
+    if (this.fillRegionAt(pointer.x, pointer.y, 0xffffff)) {
+      this.handleSuccessfulFill()
+    }
+  }
 
   private readonly handlePointerUp = () => {
     this.stopDrawing()
@@ -131,6 +164,7 @@ export class ArtColoringScene extends Phaser.Scene {
     this.load.image('art-ui-palette', '/assets/images/themes/art/ui/palette.png')
     this.load.image('art-ui-rumi', '/assets/images/themes/art/ui/rumi.png')
     this.load.image('art-ui-brush', '/assets/images/themes/art/ui/brush.png')
+    this.load.image('art-ui-eraser', '/assets/images/themes/art/ui/eraser.png')
     this.load.image('art-ui-delete-btn', '/assets/images/themes/art/ui/delete_btn.png')
     this.load.image('art-ui-reset-btn', '/assets/images/themes/art/ui/reset.png')
     this.load.image('art-ui-save-btn', '/assets/images/themes/art/ui/save_btn.png')
@@ -146,8 +180,17 @@ export class ArtColoringScene extends Phaser.Scene {
     this.strokeCount = 0
     this.handTrackingDisposed = false
     this.suppressStartupDialogs = this.suppressIntroDialog
+    this.currentTool = 'brush'
+    this.toolButtons = {}
+    this.toolButtonFrames = {}
+    this.toolButtonGlows = {}
+    this.toolButtonBaseScales = {}
     this.lastHandFillRegionId = null
     this.lastHandFillAt = 0
+    this.pendingHandTool = null
+    this.pendingHandToolStartedAt = 0
+    this.lastHandToolSelectedAt = 0
+    this.isSavingColoring = false
     this.sourceImageData = null
     this.sourceImageSize = { width: 0, height: 0 }
     this.sourceFillBounds = { minX: 0, minY: 0, maxX: 0, maxY: 0 }
@@ -169,6 +212,7 @@ export class ArtColoringScene extends Phaser.Scene {
     this.createColoringBase()
     this.createPalette(vw, vh)
     this.createActionButtons()
+    this.createToolSelector()
     this.createRumiArea(vw, vh)
     this.createBrushCursor()
     if (this.suppressIntroDialog) {
@@ -328,12 +372,25 @@ export class ArtColoringScene extends Phaser.Scene {
 
   private createPalette(vw: number, vh: number) {
     const paletteHeight = Math.min(this.drawBounds.height * 0.88, vh * 0.41)
-    const panelCenterX = vw * 0.878
+    const paletteWidth = paletteHeight * (3429 / 2286)
+    const toolIconSize = Math.max(68, Math.min(90, Math.round(vw * 0.044)))
+    const toolHitSize = toolIconSize + 18
+    const toolGap = Math.max(10, Math.round(toolHitSize * 0.14))
+    const minPanelCenterX = this.drawBounds.right + paletteWidth * 0.24
+    const maxPanelCenterX = Math.max(
+      minPanelCenterX,
+      vw - toolHitSize - toolGap - paletteWidth * 0.18 - 24,
+    )
+    const panelCenterX = Phaser.Math.Clamp(
+      this.drawBounds.right + paletteWidth * 0.35,
+      minPanelCenterX,
+      maxPanelCenterX,
+    )
     const paletteTargetTop = this.drawBounds.top + 2
     const palette = this.add
       .image(panelCenterX, paletteTargetTop + paletteHeight / 2, 'art-ui-palette')
       .setDepth(8)
-    palette.setDisplaySize(paletteHeight * (3429 / 2286), paletteHeight)
+    palette.setDisplaySize(paletteWidth, paletteHeight)
 
     const paletteLeft = palette.x - palette.displayWidth / 2
     const paletteBoundsTop = palette.y - palette.displayHeight / 2
@@ -342,6 +399,15 @@ export class ArtColoringScene extends Phaser.Scene {
     const selectionRadius = Math.max(11, palette.displayWidth * 0.034)
     const hitWidth = palette.displayWidth * 0.115
     const hitHeight = palette.displayHeight * 0.06
+    const minSwatchSourceX = Math.min(...PALETTE_SWATCHES.map(swatch => swatch.sourceX))
+    const maxSwatchSourceX = Math.max(...PALETTE_SWATCHES.map(swatch => swatch.sourceX))
+    const visualPaddingX = hitWidth * 0.9
+    this.paletteBounds.setTo(
+      paletteLeft + minSwatchSourceX * scaleX - visualPaddingX,
+      paletteBoundsTop,
+      (maxSwatchSourceX - minSwatchSourceX) * scaleX + visualPaddingX * 2,
+      palette.displayHeight,
+    )
 
     this.paletteSelection = this.add
       .circle(0, 0, selectionRadius, 0xffffff, 0)
@@ -448,6 +514,61 @@ export class ArtColoringScene extends Phaser.Scene {
     )
   }
 
+  private createToolSelector() {
+    const iconSize = Math.max(68, Math.min(90, Math.round(this.scale.width * 0.044)))
+    const hitSize = iconSize + 8
+    const hitRadius = hitSize / 2
+    const gap = Math.max(10, Math.round(hitSize * 0.14))
+    const totalHeight = COLORING_TOOLS.length * hitSize + (COLORING_TOOLS.length - 1) * gap
+    const x = Math.min(
+      this.scale.width - hitRadius - 18,
+      this.paletteBounds.right + gap + hitRadius,
+    )
+    const maxTop = Math.max(16, this.scale.height - totalHeight - 16)
+    const startY = Phaser.Math.Clamp(this.paletteBounds.centerY - totalHeight / 2, 16, maxTop)
+
+    COLORING_TOOLS.forEach((tool, index) => {
+      const y = startY + hitRadius + index * (hitSize + gap)
+      const frame = this.add
+        .circle(x, y, hitRadius, 0xfff6e8, 0.001)
+        .setStrokeStyle(0, 0xffffff, 0)
+        .setDepth(14)
+      const glow = this.add
+        .image(x, y, tool === 'brush' ? 'art-ui-brush' : 'art-ui-eraser')
+        .setDepth(14)
+        .setDisplaySize(iconSize, iconSize)
+        .setTint(0x7fa7ff)
+        .setAlpha(0)
+      const button = this.add
+        .image(x, y, tool === 'brush' ? 'art-ui-brush' : 'art-ui-eraser')
+        .setDepth(15)
+        .setDisplaySize(iconSize, iconSize)
+        .setInteractive({ useHandCursor: true })
+
+      this.toolButtonFrames[tool] = frame
+      this.toolButtonGlows[tool] = glow
+      this.toolButtons[tool] = button
+      this.toolButtonBaseScales[tool] = { x: button.scaleX, y: button.scaleY }
+
+      button.on('pointerover', () => this.refreshToolButtons(tool))
+      button.on('pointerout', () => this.refreshToolButtons())
+      button.on(
+        'pointerdown',
+        (
+          _pointer: Phaser.Input.Pointer,
+          _localX: number,
+          _localY: number,
+          event: Phaser.Types.Input.EventData,
+        ) => {
+          event.stopPropagation()
+          this.setColoringTool(tool)
+        },
+      )
+    })
+
+    this.refreshToolButtons()
+  }
+
   private createRumiArea(vw: number, vh: number) {
     const panelCenterX = vw * 0.878
     const paletteHeight = Math.min(this.drawBounds.height * 0.88, vh * 0.41)
@@ -491,9 +612,63 @@ export class ArtColoringScene extends Phaser.Scene {
   private createBrushCursor() {
     this.input.setDefaultCursor('none')
     this.brushCursor = this.add.image(0, 0, 'art-ui-brush').setDepth(20)
+    this.brushCursor.setScrollFactor(0)
+    this.updateBrushCursorTexture()
+  }
+
+  private setColoringTool(tool: ColoringTool) {
+    this.currentTool = tool
+    this.clearPendingHandTool()
+    this.refreshToolButtons()
+    this.updateBrushCursorTexture()
+    if (tool === 'brush') {
+      this.stopDrawing()
+    }
+  }
+
+  private refreshToolButtons(hoveredTool: ColoringTool | null = null) {
+    COLORING_TOOLS.forEach(tool => {
+      const button = this.toolButtons[tool]
+      const frame = this.toolButtonFrames[tool]
+      const glow = this.toolButtonGlows[tool]
+      const baseScale = this.toolButtonBaseScales[tool]
+      if (!button || !frame || !glow || !baseScale) {
+        return
+      }
+
+      const isSelected = tool === this.currentTool
+      const isHovered = tool === hoveredTool
+      frame.setFillStyle(0xfff6e8, 0.001)
+      frame.setStrokeStyle(0, 0xffffff, 0)
+      glow.setAlpha(isSelected ? 0.42 : isHovered ? 0.22 : 0)
+      glow.setScale(
+        baseScale.x * (isSelected ? 1.32 : 1.22),
+        baseScale.y * (isSelected ? 1.32 : 1.22),
+      )
+      button.clearTint()
+      button.setTint(isSelected ? 0xffffff : isHovered ? 0xfff0c7 : 0xffffff)
+      button.setScale(
+        baseScale.x * (isSelected ? 1.08 : isHovered ? 1.04 : 1),
+        baseScale.y * (isSelected ? 1.08 : isHovered ? 1.04 : 1),
+      )
+    })
+  }
+
+  private updateBrushCursorTexture() {
+    if (!this.brushCursor) {
+      return
+    }
+
+    if (this.currentTool === 'eraser') {
+      this.brushCursor.setTexture('art-ui-eraser')
+      this.brushCursor.setDisplaySize(54, 54)
+      this.brushCursor.setOrigin(0.5, 0.5)
+      return
+    }
+
+    this.brushCursor.setTexture('art-ui-brush')
     this.brushCursor.setDisplaySize(48, 48)
     this.brushCursor.setOrigin(0.18, 0.88)
-    this.brushCursor.setScrollFactor(0)
   }
 
   private startHandColoringMode(delegate: 'GPU' | 'CPU' = 'GPU') {
@@ -540,6 +715,7 @@ export class ArtColoringScene extends Phaser.Scene {
     this.isStartingHandTracker = false
     this.clearPendingHandAction()
     this.clearPendingHandColor()
+    this.clearPendingHandTool()
     this.handPointerSmoother.reset()
     this.handTrackingGuard.reset()
     this.handTracker?.stop()
@@ -564,6 +740,7 @@ export class ArtColoringScene extends Phaser.Scene {
 
     if (!tracking.point) {
       this.clearPendingHandAction()
+      this.clearPendingHandTool()
       this.lastHandFillRegionId = null
       return
     }
@@ -577,22 +754,35 @@ export class ArtColoringScene extends Phaser.Scene {
 
     if (!handState?.isColoringGesture) {
       this.clearPendingHandAction()
+      this.clearPendingHandTool()
       this.lastHandFillRegionId = null
       return
     }
 
     if (this.tryActivateActionButtonFromHand(smoothedPoint, result.timestampMs)) {
       this.lastHandFillRegionId = null
+      this.clearPendingHandTool()
+      return
+    }
+
+    if (this.trySelectToolFromHand(smoothedPoint, result.timestampMs)) {
+      this.lastHandFillRegionId = null
       return
     }
 
     if (this.trySelectColorFromHand(smoothedPoint, result.timestampMs)) {
       this.lastHandFillRegionId = null
+      this.clearPendingHandTool()
       return
     }
 
     if (!Phaser.Geom.Rectangle.Contains(this.drawBounds, smoothedPoint.x, smoothedPoint.y)) {
       this.lastHandFillRegionId = null
+      return
+    }
+
+    if (this.currentTool === 'eraser') {
+      this.tryFillFromHand(smoothedPoint, result.timestampMs, 0xffffff)
       return
     }
 
@@ -700,6 +890,50 @@ export class ArtColoringScene extends Phaser.Scene {
     this.setActionButtonHover(null)
   }
 
+  private trySelectToolFromHand(point: Phaser.Math.Vector2, timestampMs: number) {
+    const tool = this.getHandToolAt(point)
+    if (!tool) {
+      this.clearPendingHandTool()
+      return false
+    }
+
+    this.refreshToolButtons(tool)
+
+    if (this.pendingHandTool !== tool) {
+      this.pendingHandTool = tool
+      this.pendingHandToolStartedAt = timestampMs
+      return true
+    }
+
+    if (timestampMs - this.pendingHandToolStartedAt < 600) {
+      return true
+    }
+
+    if (tool === this.currentTool && timestampMs - this.lastHandToolSelectedAt < 220) {
+      return true
+    }
+
+    this.setColoringTool(tool)
+    this.lastHandToolSelectedAt = timestampMs
+    return true
+  }
+
+  private getHandToolAt(point: Phaser.Math.Vector2): ColoringTool | null {
+    for (const tool of COLORING_TOOLS) {
+      if (this.toolButtonFrames[tool]?.getBounds().contains(point.x, point.y)) {
+        return tool
+      }
+    }
+
+    return null
+  }
+
+  private clearPendingHandTool() {
+    this.pendingHandTool = null
+    this.pendingHandToolStartedAt = 0
+    this.refreshToolButtons()
+  }
+
   private trySelectColorFromHand(point: Phaser.Math.Vector2, timestampMs: number) {
     const nearest = this.getNearestPaletteColor(point.x, point.y)
     if (!nearest) {
@@ -738,7 +972,11 @@ export class ArtColoringScene extends Phaser.Scene {
     this.pendingHandColorStartedAt = 0
   }
 
-  private tryFillFromHand(point: Phaser.Math.Vector2, timestampMs: number) {
+  private tryFillFromHand(
+    point: Phaser.Math.Vector2,
+    timestampMs: number,
+    color = this.currentColor,
+  ) {
     const regionId = this.getRegionIdAt(point.x, point.y)
     if (regionId < 0) {
       this.lastHandFillRegionId = null
@@ -754,7 +992,7 @@ export class ArtColoringScene extends Phaser.Scene {
 
     this.lastHandFillRegionId = regionId
     this.lastHandFillAt = timestampMs
-    if (this.fillRegionById(regionId)) {
+    if (this.fillRegionById(regionId, color)) {
       this.handleSuccessfulFill()
     }
   }
@@ -780,6 +1018,7 @@ export class ArtColoringScene extends Phaser.Scene {
 
   private selectColor(color: number) {
     this.currentColor = color
+    this.setColoringTool('brush')
     this.paletteSelection.setVisible(false)
   }
 
@@ -1106,13 +1345,13 @@ export class ArtColoringScene extends Phaser.Scene {
     return true
   }
 
-  private fillRegionAt(sceneX: number, sceneY: number) {
+  private fillRegionAt(sceneX: number, sceneY: number, color = this.currentColor) {
     const regionId = this.getRegionIdAt(sceneX, sceneY)
     if (regionId < 0) {
       return false
     }
 
-    return this.fillRegionById(regionId)
+    return this.fillRegionById(regionId, color)
   }
 
   private getRegionIdAt(sceneX: number, sceneY: number) {
@@ -1139,13 +1378,13 @@ export class ArtColoringScene extends Phaser.Scene {
     return regionIdByPixel[sourceY * this.sourceImageSize.width + sourceX] ?? -1
   }
 
-  private fillRegionById(regionId: number) {
+  private fillRegionById(regionId: number, color = this.currentColor) {
     const fillRegion = this.cachedFillRegions[regionId]
     if (!fillRegion) {
       return false
     }
 
-    if (this.filledRegionColorById?.[regionId] === this.currentColor) {
+    if (this.filledRegionColorById?.[regionId] === color) {
       return false
     }
 
@@ -1163,9 +1402,9 @@ export class ArtColoringScene extends Phaser.Scene {
 
     const fillImageData = context.createImageData(textureWidth, textureHeight)
     const data = fillImageData.data
-    const red = (this.currentColor >> 16) & 0xff
-    const green = (this.currentColor >> 8) & 0xff
-    const blue = this.currentColor & 0xff
+    const red = (color >> 16) & 0xff
+    const green = (color >> 8) & 0xff
+    const blue = color & 0xff
 
     for (const pixelIndex of pixelIndices) {
       const pixelX = (pixelIndex % this.sourceImageSize.width) - bounds.minX
@@ -1195,7 +1434,7 @@ export class ArtColoringScene extends Phaser.Scene {
     fillImage.destroy()
     this.textures.remove(textureKey)
     if (this.filledRegionColorById) {
-      this.filledRegionColorById[regionId] = this.currentColor
+      this.filledRegionColorById[regionId] = color
     }
     return true
   }
@@ -1208,6 +1447,7 @@ export class ArtColoringScene extends Phaser.Scene {
     this.stopDrawing()
     this.clearPendingHandAction()
     this.clearPendingHandColor()
+    this.clearPendingHandTool()
     this.handPointerSmoother.reset()
     this.handTrackingGuard.reset()
     this.lastHandFillRegionId = null
@@ -1220,72 +1460,62 @@ export class ArtColoringScene extends Phaser.Scene {
   }
 
   private saveColoring() {
-    const outputCanvas = this.createSavedColoringCanvas()
-    if (!outputCanvas) {
+    if (this.isSavingColoring) {
       return
     }
 
-    const link = document.createElement('a')
-    link.href = outputCanvas.toDataURL('image/png')
-    link.download = `coloring-${this.selectedOption.id}-${Date.now()}.png`
-    document.body.appendChild(link)
-    link.click()
-    link.remove()
-    this.showRumiLine('complete')
+    this.isSavingColoring = true
+    void this.createSavedColoringCanvas()
+      .then(outputCanvas => {
+        if (!outputCanvas) {
+          return
+        }
+
+        const link = document.createElement('a')
+        link.href = outputCanvas.toDataURL('image/png')
+        link.download = `coloring-${this.selectedOption.id}-${Date.now()}.png`
+        document.body.appendChild(link)
+        link.click()
+        link.remove()
+        this.showRumiLine('complete')
+      })
+      .catch(error => {
+        console.error('Failed to export coloring PNG.', error)
+      })
+      .finally(() => {
+        this.isSavingColoring = false
+      })
   }
 
-  private createSavedColoringCanvas() {
+  private createSavedColoringCanvas(): Promise<HTMLCanvasElement | null> {
     if (!this.sourceImageData) {
-      return null
+      return Promise.resolve(null)
     }
 
-    const outputCanvas = document.createElement('canvas')
-    outputCanvas.width = this.sourceImageSize.width
-    outputCanvas.height = this.sourceImageSize.height
-    const context = outputCanvas.getContext('2d')
+    return new Promise(resolve => {
+      this.coloringTexture.snapshot(snapshot => {
+        const outputCanvas = document.createElement('canvas')
+        outputCanvas.width = this.sourceImageSize.width
+        outputCanvas.height = this.sourceImageSize.height
+        const context = outputCanvas.getContext('2d')
 
-    if (!context) {
-      return null
-    }
+        if (!context) {
+          resolve(null)
+          return
+        }
 
-    const outputImageData = context.createImageData(outputCanvas.width, outputCanvas.height)
-    const outputData = outputImageData.data
+        context.fillStyle = '#ffffff'
+        context.fillRect(0, 0, outputCanvas.width, outputCanvas.height)
 
-    for (let dataIndex = 0; dataIndex < outputData.length; dataIndex += 4) {
-      outputData[dataIndex] = 255
-      outputData[dataIndex + 1] = 255
-      outputData[dataIndex + 2] = 255
-      outputData[dataIndex + 3] = 255
-    }
+        if (snapshot instanceof HTMLImageElement || snapshot instanceof HTMLCanvasElement) {
+          context.drawImage(snapshot, 0, 0, outputCanvas.width, outputCanvas.height)
+        }
 
-    this.drawSavedFillRegions(outputData)
-    this.drawSavedLineArt(outputData)
-    context.putImageData(outputImageData, 0, 0)
-    return outputCanvas
-  }
-
-  private drawSavedFillRegions(outputData: Uint8ClampedArray) {
-    if (!this.filledRegionColorById) {
-      return
-    }
-
-    this.cachedFillRegions.forEach((fillRegion, regionId) => {
-      const color = this.filledRegionColorById?.[regionId] ?? -1
-      if (color < 0) {
-        return
-      }
-
-      const red = (color >> 16) & 0xff
-      const green = (color >> 8) & 0xff
-      const blue = color & 0xff
-
-      for (const pixelIndex of fillRegion.pixelIndices) {
-        const dataIndex = pixelIndex * 4
-        outputData[dataIndex] = red
-        outputData[dataIndex + 1] = green
-        outputData[dataIndex + 2] = blue
-        outputData[dataIndex + 3] = 255
-      }
+        const outputImageData = context.getImageData(0, 0, outputCanvas.width, outputCanvas.height)
+        this.drawSavedLineArt(outputImageData.data)
+        context.putImageData(outputImageData, 0, 0)
+        resolve(outputCanvas)
+      }, 'image/png')
     })
   }
 
