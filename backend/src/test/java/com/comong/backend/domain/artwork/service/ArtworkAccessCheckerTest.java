@@ -31,14 +31,15 @@ class ArtworkAccessCheckerTest {
 
         assertThatNoException().isThrownBy(() -> checker.verifyReadable(artwork, 1L));
 
+        // 권한 없을 때 ID 존재 노출 안 하려고 NOT_FOUND (404)
         assertThatThrownBy(() -> checker.verifyReadable(artwork, 2L))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
-                .isEqualTo(ArtworkErrorCode.ARTWORK_ACCESS_DENIED);
+                .isEqualTo(ArtworkErrorCode.ARTWORK_NOT_FOUND);
         assertThatThrownBy(() -> checker.verifyReadable(artwork, null))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
-                .isEqualTo(ArtworkErrorCode.ARTWORK_ACCESS_DENIED);
+                .isEqualTo(ArtworkErrorCode.ARTWORK_NOT_FOUND);
     }
 
     @Test

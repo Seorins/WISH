@@ -6,6 +6,7 @@ import java.util.stream.Stream;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -61,7 +62,7 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         String storagePattern = stripTrailingSlash(storageProperties.publicUrlPrefix()) + "/**";
-        String[] publicEndpoints =
+        String[] genericPublicEndpoints =
                 Stream.concat(Arrays.stream(STATIC_PUBLIC_ENDPOINTS), Stream.of(storagePattern))
                         .toArray(String[]::new);
 
@@ -73,8 +74,25 @@ public class SecurityConfig {
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(
                         auth ->
-                                auth.requestMatchers(publicEndpoints)
+                                auth
+                                        // 1. 인증/문서/헬스체크/스토리지 정적 서빙 — 모든 메서드 허용
+                                        .requestMatchers(genericPublicEndpoints)
                                         .permitAll()
+                                        // 2. 공개 갤러리 (목록/상세 분리 안 하고 GET 만 허용)
+                                        .requestMatchers(
+                                                HttpMethod.GET,
+                                                "/artworks/public",
+                                                "/artworks/public/**")
+                                        .permitAll()
+                                        // 3. /artworks/me 는 본인 작품만이라 인증 필수 (밑의 catch 보다 먼저 매칭)
+                                        .requestMatchers(HttpMethod.GET, "/artworks/me")
+                                        .authenticated()
+                                        // 4. GET /artworks/{id} — 비공개 작품 보호는 service 의
+                                        //    ArtworkAccessChecker.verifyReadable 가 담당.
+                                        //    비로그인 (anonymous) 접근 허용해서 공개 작품 상세를 외부 공유 가능.
+                                        .requestMatchers(HttpMethod.GET, "/artworks/*")
+                                        .permitAll()
+                                        // 5. 그 외 모든 요청 (POST/PATCH/DELETE on artworks 포함) — 인증 필수
                                         .anyRequest()
                                         .authenticated())
                 .exceptionHandling(

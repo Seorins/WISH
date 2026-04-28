@@ -30,12 +30,13 @@ import com.comong.backend.global.exception.BusinessException;
 public class ArtworkAccessChecker {
 
     /**
-     * 작품 조회 권한 체크.
+     * 작품 조회 권한 체크. 권한 없을 때 ID 존재 사실 자체를 노출하지 않으려고 NOT_FOUND (404) 로 응답 (PatientProfileService 와 같은
+     * 보안 패턴).
      *
      * @param artwork 대상 작품, null 이면 NullPointerException — 호출자가 사전에 NOT_FOUND 처리하고 와야 함
      * @param currentUserId 인증 사용자 id, 비로그인이면 {@code null}
      * @throws NullPointerException artwork 가 null 일 때 — 권한 체크 단계에 도달하기 전 작품 존재 여부를 검증할 책임은 호출자에 있음
-     * @throws BusinessException FORBIDDEN — 비공개 작품을 작성자가 아닌 사람이 조회하려 할 때
+     * @throws BusinessException ARTWORK_NOT_FOUND — 비공개 작품을 작성자가 아닌 사람이 조회하려 할 때
      */
     public void verifyReadable(Artwork artwork, Long currentUserId) {
         Objects.requireNonNull(artwork, "artwork must not be null");
@@ -43,7 +44,7 @@ public class ArtworkAccessChecker {
             return;
         }
         if (!artwork.isOwnedBy(currentUserId)) {
-            throw new BusinessException(ArtworkErrorCode.ARTWORK_ACCESS_DENIED);
+            throw new BusinessException(ArtworkErrorCode.ARTWORK_NOT_FOUND);
         }
     }
 
