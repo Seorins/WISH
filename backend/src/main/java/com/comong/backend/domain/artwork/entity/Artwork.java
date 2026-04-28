@@ -14,7 +14,7 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 
-import com.comong.backend.domain.user.entity.User;
+import com.comong.backend.domain.patient.entity.PatientProfile;
 
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -36,10 +36,13 @@ public class Artwork {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // 작품 작성자. User 도메인에 대한 외래키만 잡고, 권한 체크는 service 레이어에서 처리한다.
+    // 작품 소유자. 보호자 계정(User) 가 아니라 실제 플레이 주체인 PatientProfile 에 귀속한다.
+    // 현재 정책은 보호자 1명당 환자 1명(1:1) 이지만, 1:N 으로 열릴 때 기존 작품의 환자 귀속을
+    // 추론할 수 없는 마이그레이션 함정을 방지하기 위해 처음부터 patient_profile_id 로 잡는다.
+    // 권한 체크는 artwork.patientProfile.user.id 를 인증 사용자와 비교 (service 레이어).
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "user_id", nullable = false)
-    private User user;
+    @JoinColumn(name = "patient_profile_id", nullable = false)
+    private PatientProfile patientProfile;
 
     /** FE 정적 자산의 도안 식별자 (예: "cat-01"). 한 번 정해진 코드는 재사용/변경 금지. */
     @Column(name = "sketch_code", nullable = false, length = 50)
@@ -69,13 +72,13 @@ public class Artwork {
 
     @Builder
     private Artwork(
-            User user,
+            PatientProfile patientProfile,
             String sketchCode,
             String title,
             String imageUrl,
             int playDurationSeconds,
             boolean isPublic) {
-        this.user = user;
+        this.patientProfile = patientProfile;
         this.sketchCode = sketchCode;
         this.title = title;
         this.imageUrl = imageUrl;
