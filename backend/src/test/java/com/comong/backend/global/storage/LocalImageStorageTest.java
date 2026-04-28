@@ -61,6 +61,37 @@ class LocalImageStorageTest {
         assertThatThrownBy(() -> storage.upload(file)).isInstanceOf(BusinessException.class);
     }
 
+    @Test
+    void deleteRemovesUploadedFile() {
+        LocalImageStorage storage = storage();
+        MultipartFile file = new MockMultipartFile("file", "painting.png", "image/png", PNG_BYTES);
+        StoredImage stored = storage.upload(file);
+        String filename = stored.url().substring(stored.url().lastIndexOf('/') + 1);
+        assertThat(Files.exists(uploadDir.resolve(filename))).isTrue();
+
+        storage.delete(stored.url());
+
+        assertThat(Files.exists(uploadDir.resolve(filename))).isFalse();
+    }
+
+    @Test
+    void deleteRejectsFilenameWithTraversalCharacters() {
+        LocalImageStorage storage = storage();
+
+        // delete() 는 url 의 lastIndexOf('/') 뒤 부분을 filename 으로 취하므로,
+        // 방어가 의미 있는 케이스는 그 filename 자체에 dotdot/백슬래시가 포함되는 경우다.
+
+        // 슬래시 이후에 dotdot 가 붙은 케이스
+        assertThatThrownBy(() -> storage.delete("/uploads/..hidden"))
+                .isInstanceOf(BusinessException.class);
+
+        // 슬래시 자체가 없어 url 전체가 filename 이 되는 케이스
+        assertThatThrownBy(() -> storage.delete("..foo")).isInstanceOf(BusinessException.class);
+
+        // 백슬래시 (윈도우 경로 구분자) 포함
+        assertThatThrownBy(() -> storage.delete("foo\\bar")).isInstanceOf(BusinessException.class);
+    }
+
     private LocalImageStorage storage() {
         return new LocalImageStorage(
                 new StorageProperties(uploadDir.toString(), "/uploads"), "/api/v1");

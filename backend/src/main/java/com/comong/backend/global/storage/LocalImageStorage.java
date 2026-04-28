@@ -83,9 +83,22 @@ public class LocalImageStorage implements ImageStorage {
         if (filename.isBlank()) {
             return;
         }
+        // Path traversal 방어: DB 가 항상 신뢰 가능하다는 가정에 의존하지 않고, filename 자체에서
+        // 경로 구분자/dotdot/단일 dot 를 차단해 uploadDir 외부 파일을 건드리지 못하게 한다.
+        if (filename.contains("/")
+                || filename.contains("\\")
+                || filename.contains("..")
+                || filename.equals(".")) {
+            throw new BusinessException(GlobalErrorCode.INVALID_INPUT);
+        }
+        // 한 단계 더 — 정규화 후에도 uploadRoot 하위인지 확인 (defense in depth).
+        Path uploadRoot = Path.of(properties.uploadDir()).toAbsolutePath().normalize();
+        Path target = uploadRoot.resolve(filename).normalize();
+        if (!target.startsWith(uploadRoot)) {
+            throw new BusinessException(GlobalErrorCode.INVALID_INPUT);
+        }
         try {
-            Files.deleteIfExists(
-                    Path.of(properties.uploadDir()).toAbsolutePath().resolve(filename));
+            Files.deleteIfExists(target);
         } catch (IOException e) {
             throw new BusinessException(GlobalErrorCode.INTERNAL_SERVER_ERROR);
         }
