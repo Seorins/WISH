@@ -86,6 +86,34 @@ public class Artwork {
         this.isPublic = isPublic;
     }
 
+    /**
+     * 주어진 사용자가 본 작품의 소유자인지 판단. {@code patientProfile.user.id} 와 비교한다.
+     *
+     * <p>{@code userId} 가 null 이면 (비로그인 등) 항상 false. {@code patientProfile} 또는 그 user 가 null 인 비정상
+     * 상태도 안전하게 false (DB FK NOT NULL 이라 정상 흐름에선 발생 안 함 — 정합성 안전망).
+     *
+     * <p><b>LAZY fetch 주의 (N+1)</b>: {@code patientProfile} 과 그 안의 {@code user} 모두 LAZY 매핑이라, 영속성
+     * 컨텍스트에서 분리된 {@code Artwork} 또는 명시적 fetch 없이 가져온 {@code Artwork} 에 대해 호출하면 user/patient 로딩
+     * SELECT 가 추가 발생한다. 권한 체크를 다수 작품에 반복할 가능성이 있는 경로 (예: 비공개 갤러리 필터링) 에서는 호출 전에 {@code JOIN FETCH}
+     * artwork.patientProfile.user 또는 {@code @EntityGraph} 로 미리 로딩해야 N+1 을 막는다. 단건 조회/수정/삭제는 추가 1 쿼리
+     * 정도라 무시 가능.
+     *
+     * <p>권한 체크 컴포넌트 ({@link com.comong.backend.domain.artwork.service.ArtworkAccessChecker}) 가
+     * 사용한다.
+     */
+    public boolean isOwnedBy(Long userId) {
+        if (userId == null) {
+            return false;
+        }
+        if (patientProfile == null) {
+            return false;
+        }
+        if (patientProfile.getUser() == null) {
+            return false;
+        }
+        return userId.equals(patientProfile.getUser().getId());
+    }
+
     @PrePersist
     void prePersist() {
         LocalDateTime now = LocalDateTime.now();
