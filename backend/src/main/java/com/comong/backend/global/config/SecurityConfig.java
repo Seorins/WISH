@@ -32,9 +32,20 @@ public class SecurityConfig {
     private final RestAuthenticationEntryPoint authenticationEntryPoint;
     private final RestAccessDeniedHandler accessDeniedHandler;
 
-    /** 인증/문서/헬스체크 관련 공개 엔드포인트. */
+    /**
+     * 인증/문서/헬스체크 관련 공개 엔드포인트.
+     *
+     * <p>{@code /uploads/**} 는 로컬 스토리지에 저장된 업로드 이미지를 정적 리소스로 서빙하기 위한 경로 (S14P31E103-217). 현재 정책은
+     * "URL 만 알면 누구나 접근 가능" — UUID 기반 파일명으로 추측을 어렵게 했으나 비공개 작품 이미지에 대한 권한 체크는 없다. S14P31E103-218/219
+     * 작업 시 인증된 컨트롤러로 다운로드 경로를 분리하면 이 항목을 제거한다.
+     */
     private static final String[] PUBLIC_ENDPOINTS = {
-        "/auth/**", "/actuator/health", "/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**"
+        "/auth/**",
+        "/actuator/health",
+        "/v3/api-docs/**",
+        "/swagger-ui.html",
+        "/swagger-ui/**",
+        "/uploads/**"
     };
 
     @Bean

@@ -2,12 +2,24 @@ server:
   port: 8080
   servlet:
     context-path: /api/v1
+  tomcat:
+    # multipart 한 요청 전체의 본문 크기 한도. spring.servlet.multipart.max-request-size 와 같이 잡아야
+    # 톰캣 단계에서 미리 차단하지 않는다.
+    max-http-form-post-size: 10485760
+    max-swallow-size: 10485760
 
 spring:
   application:
     name: backend
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:local}
+
+  servlet:
+    multipart:
+      # 작품 이미지 업로드용. 손 제스처 색칠 PNG 가 보통 1~5MB 라 10MB 면 충분.
+      # 한도 초과 시 MaxUploadSizeExceededException → S14P31E103-220 에서 PAYLOAD_TOO_LARGE 매핑 예정.
+      max-file-size: 10MB
+      max-request-size: 10MB
 
   jpa:
     open-in-view: false
@@ -46,3 +58,11 @@ springdoc:
     display-request-duration: true
   default-consumes-media-type: application/json
   default-produces-media-type: application/json
+
+storage:
+  local:
+    # OS 파일시스템상 업로드 디렉토리. 상대경로면 JVM cwd 기준. 운영은 환경변수로 절대경로 주입.
+    upload-dir: ${STORAGE_UPLOAD_DIR:./uploads}
+    # 외부 노출 servlet 상대 prefix. SecurityConfig.PUBLIC_ENDPOINTS 와 StorageConfig 의 핸들러 매핑이
+    # 같은 prefix 를 공유하므로 변경 시 두 곳 모두 동기화 필요.
+    public-url-prefix: ${STORAGE_PUBLIC_URL_PREFIX:/uploads}
