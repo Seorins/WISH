@@ -78,12 +78,45 @@ public class Artwork {
             String imageUrl,
             int playDurationSeconds,
             boolean isPublic) {
+        // 도메인 invariant: 누적 카운터라 음수는 논리 오류 (216 MR AI 리뷰 #2 후속).
+        if (playDurationSeconds < 0) {
+            throw new IllegalArgumentException("플레이 시간은 0 이상이어야 합니다.");
+        }
         this.patientProfile = patientProfile;
         this.sketchCode = sketchCode;
         this.title = title;
         this.imageUrl = imageUrl;
         this.playDurationSeconds = playDurationSeconds;
         this.isPublic = isPublic;
+    }
+
+    /**
+     * PATCH 시맨틱: {@code null} 인 인자는 "변경 없음" 으로 간주하고 기존 값을 유지한다. {@code sketchCode} / {@code
+     * imageUrl} / {@code patientProfile} 은 본 메서드로 변경하지 않는다 (각각 고정 / 별도 메서드 / 도메인 정책).
+     */
+    public void update(String title, Boolean isPublic) {
+        if (title != null) {
+            this.title = title;
+        }
+        if (isPublic != null) {
+            this.isPublic = isPublic;
+        }
+    }
+
+    /** 이미지 교체 — PATCH 시 새 이미지가 업로드된 경우 호출. 기존 URL 의 스토리지 파일 삭제는 호출자(service) 책임. */
+    public void replaceImage(String newImageUrl) {
+        this.imageUrl = newImageUrl;
+    }
+
+    /**
+     * 누적 플레이 시간 더하기. 호출자 (수정 API) 가 받는 {@code additionalPlayDurationSeconds} 가 음수면 logic error 라
+     * IllegalArgumentException.
+     */
+    public void addPlayDuration(int additionalSeconds) {
+        if (additionalSeconds < 0) {
+            throw new IllegalArgumentException("추가 플레이 시간은 0 이상이어야 합니다.");
+        }
+        this.playDurationSeconds += additionalSeconds;
     }
 
     /**
