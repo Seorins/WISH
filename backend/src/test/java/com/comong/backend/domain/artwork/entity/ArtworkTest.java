@@ -1,6 +1,7 @@
 package com.comong.backend.domain.artwork.entity;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -32,11 +33,66 @@ class ArtworkTest {
     }
 
     @Test
-    void isOwnedBy_returnsFalseWhenPatientProfileMissing() {
-        // 비정상 상태 (DB FK NOT NULL 이라 정상 흐름엔 없음) 를 안전망이 잡는지 확인
-        Artwork artwork = artworkWithNullPatientProfile();
+    void builder_rejectsNullPatientProfile() {
+        // 225 후속: 빌더에서 fail-fast — JPA save 까지 가기 전에 NPE.
+        assertThatThrownBy(
+                        () ->
+                                Artwork.builder()
+                                        .patientProfile(null)
+                                        .sketchCode("cat-01")
+                                        .imageUrl("/api/v1/uploads/x.png")
+                                        .playDurationSeconds(0)
+                                        .isPublic(false)
+                                        .build())
+                .isInstanceOf(NullPointerException.class)
+                .hasMessageContaining("patientProfile");
+    }
 
-        assertThat(artwork.isOwnedBy(1L)).isFalse();
+    @Test
+    void builder_rejectsNullSketchCode() {
+        PatientProfile profile = mock(PatientProfile.class);
+        assertThatThrownBy(
+                        () ->
+                                Artwork.builder()
+                                        .patientProfile(profile)
+                                        .sketchCode(null)
+                                        .imageUrl("/api/v1/uploads/x.png")
+                                        .playDurationSeconds(0)
+                                        .isPublic(false)
+                                        .build())
+                .isInstanceOf(NullPointerException.class)
+                .hasMessageContaining("sketchCode");
+    }
+
+    @Test
+    void builder_rejectsNullImageUrl() {
+        PatientProfile profile = mock(PatientProfile.class);
+        assertThatThrownBy(
+                        () ->
+                                Artwork.builder()
+                                        .patientProfile(profile)
+                                        .sketchCode("cat-01")
+                                        .imageUrl(null)
+                                        .playDurationSeconds(0)
+                                        .isPublic(false)
+                                        .build())
+                .isInstanceOf(NullPointerException.class)
+                .hasMessageContaining("imageUrl");
+    }
+
+    @Test
+    void builder_rejectsNegativePlayDuration() {
+        PatientProfile profile = mock(PatientProfile.class);
+        assertThatThrownBy(
+                        () ->
+                                Artwork.builder()
+                                        .patientProfile(profile)
+                                        .sketchCode("cat-01")
+                                        .imageUrl("/api/v1/uploads/x.png")
+                                        .playDurationSeconds(-1)
+                                        .isPublic(false)
+                                        .build())
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
@@ -64,16 +120,6 @@ class ArtworkTest {
 
         return Artwork.builder()
                 .patientProfile(profile)
-                .sketchCode("cat-01")
-                .imageUrl("/api/v1/uploads/x.png")
-                .playDurationSeconds(0)
-                .isPublic(false)
-                .build();
-    }
-
-    private Artwork artworkWithNullPatientProfile() {
-        return Artwork.builder()
-                .patientProfile(null)
                 .sketchCode("cat-01")
                 .imageUrl("/api/v1/uploads/x.png")
                 .playDurationSeconds(0)
