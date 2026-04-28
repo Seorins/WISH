@@ -1,11 +1,38 @@
-from app.services.gymnastics.features.march_features import MarchFeatureSet
-from app.services.gymnastics.feedback.stabilizer import FeedbackCandidate
+from dataclasses import dataclass
 
-# (code, text) pairs — code is used for deduplication, text is shown to the user
-_STAY_IN_PLACE = ("STAY_IN_PLACE", "제자리에서 걸어요")
-_LIFT_LEG_BIGGER = ("LIFT_LEG_BIGGER", "다리를 더 크게 들어요")
-_LIFT_KNEE_HIGHER = ("LIFT_KNEE_HIGHER", "무릎을 더 높이 들어요")
-_STRAIGHTEN_BACK = ("STRAIGHTEN_BACK", "허리를 곧게 세워요")
+from app.services.gymnastics.features.march_features import MarchFeatureSet
+
+
+@dataclass(slots=True)
+class FeedbackCandidate:
+    code: str
+    text: str
+
+
+TRACKING_LOW = FeedbackCandidate(
+    code="TRACKING_LOW",
+    text="\uc804\uc2e0\uc774 \ud654\uba74\uc5d0 \ubcf4\uc774\uac8c \uc11c\uc694",
+)
+STAY_IN_PLACE = FeedbackCandidate(
+    code="STAY_IN_PLACE",
+    text="\uc81c\uc790\ub9ac\uc5d0\uc11c \uac78\uc5b4\uc694",
+)
+LIFT_LEG_BIGGER = FeedbackCandidate(
+    code="LIFT_LEG_BIGGER",
+    text="\ub2e4\ub9ac\ub97c \ub354 \ub192\uac8c \ub4e4\uc5b4\uc694",
+)
+LIFT_KNEE_HIGHER = FeedbackCandidate(
+    code="LIFT_KNEE_HIGHER",
+    text="\ubb34\ub98e\uc744 \uc870\uae08 \ub354 \ub192\uc774 \ub4e4\uc5b4\uc694",
+)
+STRAIGHTEN_BACK = FeedbackCandidate(
+    code="STRAIGHTEN_BACK",
+    text="\ud5c8\ub9ac\ub97c \uacf3\uac8c \uc138\uc6cc\uc694",
+)
+ALTERNATE_STEPS = FeedbackCandidate(
+    code="ALTERNATE_STEPS",
+    text="\uc67c\ubc1c \uc624\ub978\ubc1c \ubc88\uac08\uc544 \ud574\uc694",
+)
 
 
 def select_march_feedback_candidate(
@@ -18,28 +45,22 @@ def select_march_feedback_candidate(
     torso_tilt_max: float,
 ) -> FeedbackCandidate | None:
     if tracking != "tracking_ok":
-        return None
-    if state in ("idle", "complete"):
-        return None
+        return TRACKING_LOW
 
-    # Priority 1: person has moved out of place (앞뒤/좌우 이동)
     lateral_drift = max(abs(features.pelvis_shift_x), abs(features.pelvis_shift_y))
     if lateral_drift > pelvis_shift_max or abs(features.pelvis_depth_shift) > depth_shift_max:
-        code, text = _STAY_IN_PLACE
-        return FeedbackCandidate(code=code, text=text)
+        return STAY_IN_PLACE
 
-    # Priority 2: thigh barely moving (너무 작은 리프트)
+    if features.torso_tilt > torso_tilt_max:
+        return STRAIGHTEN_BACK
+
     dominant_angle = max(features.left_thigh_angle, features.right_thigh_angle)
     if dominant_angle < thigh_angle_threshold * 0.5:
-        code, text = _LIFT_LEG_BIGGER
-        return FeedbackCandidate(code=code, text=text)
+        return LIFT_LEG_BIGGER
     if dominant_angle < thigh_angle_threshold:
-        code, text = _LIFT_KNEE_HIGHER
-        return FeedbackCandidate(code=code, text=text)
+        return LIFT_KNEE_HIGHER
 
-    # Priority 3: torso leaning
-    if features.torso_tilt > torso_tilt_max:
-        code, text = _STRAIGHTEN_BACK
-        return FeedbackCandidate(code=code, text=text)
+    if state == "idle":
+        return ALTERNATE_STEPS
 
     return None
