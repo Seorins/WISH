@@ -43,6 +43,7 @@ type ExportedDrawingPng = {
   blob: Blob
   dataUrl: string
   filename: string
+  playDurationSeconds: number
   width: number
   height: number
 }
@@ -94,6 +95,7 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
   private activatedHandAction: HandActionKind | null = null
   private isSavingDrawing = false
   private suppressStartupDialogs = false
+  private contentStartedAt = 0
   private saveButtonBaseScale = { x: 1, y: 1 }
   private resetButtonBaseScale = { x: 1, y: 1 }
   private exitButtonBaseScale = { x: 1, y: 1 }
@@ -168,6 +170,7 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
   create(data: ArtFreeDrawingSceneData = {}) {
     const { width: vw, height: vh } = this.scale
     this.suppressStartupDialogs = Boolean(data.suppressIntroDialog)
+    this.contentStartedAt = this.time.now
     this.lastInteractionAt = this.time.now
     this.lastIdlePromptAt = this.time.now
     this.handTrackingDisposed = false
@@ -1113,7 +1116,8 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
     }
 
     this.isSavingDrawing = true
-    void this.exportDrawingPng()
+    const playDurationSeconds = this.getPlayDurationSeconds()
+    void this.exportDrawingPng(playDurationSeconds)
       .then(exportedDrawing => {
         this.downloadBlob(exportedDrawing.blob, exportedDrawing.filename)
         this.showRumiLine('complete')
@@ -1126,7 +1130,7 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
       })
   }
 
-  private exportDrawingPng(): Promise<ExportedDrawingPng> {
+  private exportDrawingPng(playDurationSeconds: number): Promise<ExportedDrawingPng> {
     return new Promise((resolve, reject) => {
       this.drawingTexture.snapshot(snapshot => {
         if (!(snapshot instanceof HTMLImageElement) && !(snapshot instanceof HTMLCanvasElement)) {
@@ -1155,11 +1159,16 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
           blob: this.dataUrlToBlob(dataUrl),
           dataUrl,
           filename: `free-drawing-${Date.now()}.png`,
+          playDurationSeconds,
           width,
           height,
         })
       }, 'image/png')
     })
+  }
+
+  private getPlayDurationSeconds() {
+    return Math.max(0, Math.floor((this.time.now - this.contentStartedAt) / 1000))
   }
 
   private dataUrlToBlob(dataUrl: string) {

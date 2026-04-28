@@ -47,6 +47,11 @@ type CachedFillRegion = {
   pixelIndices: Uint32Array
   bounds: { minX: number; minY: number; maxX: number; maxY: number }
 }
+type ExportedColoringPng = {
+  canvas: HTMLCanvasElement
+  filename: string
+  playDurationSeconds: number
+}
 
 export class ArtColoringScene extends Phaser.Scene {
   private selectedOption: ColoringOption = coloringOptions[0]
@@ -103,6 +108,7 @@ export class ArtColoringScene extends Phaser.Scene {
   private lastHandFillRegionId: number | null = null
   private lastHandFillAt = 0
   private isSavingColoring = false
+  private contentStartedAt = 0
 
   private readonly handlePointerDown = (pointer: Phaser.Input.Pointer) => {
     if (!this.handTracker?.isStarted && !this.isStartingHandTracker) {
@@ -174,6 +180,7 @@ export class ArtColoringScene extends Phaser.Scene {
   }
 
   create() {
+    this.contentStartedAt = this.time.now
     this.isTransitioning = false
     this.isDrawing = false
     this.hasStartedColoring = false
@@ -1465,15 +1472,16 @@ export class ArtColoringScene extends Phaser.Scene {
     }
 
     this.isSavingColoring = true
-    void this.createSavedColoringCanvas()
-      .then(outputCanvas => {
-        if (!outputCanvas) {
+    const playDurationSeconds = this.getPlayDurationSeconds()
+    void this.exportColoringPng(playDurationSeconds)
+      .then(exportedColoring => {
+        if (!exportedColoring) {
           return
         }
 
         const link = document.createElement('a')
-        link.href = outputCanvas.toDataURL('image/png')
-        link.download = `coloring-${this.selectedOption.id}-${Date.now()}.png`
+        link.href = exportedColoring.canvas.toDataURL('image/png')
+        link.download = exportedColoring.filename
         document.body.appendChild(link)
         link.click()
         link.remove()
@@ -1487,7 +1495,7 @@ export class ArtColoringScene extends Phaser.Scene {
       })
   }
 
-  private createSavedColoringCanvas(): Promise<HTMLCanvasElement | null> {
+  private exportColoringPng(playDurationSeconds: number): Promise<ExportedColoringPng | null> {
     if (!this.sourceImageData) {
       return Promise.resolve(null)
     }
@@ -1514,9 +1522,17 @@ export class ArtColoringScene extends Phaser.Scene {
         const outputImageData = context.getImageData(0, 0, outputCanvas.width, outputCanvas.height)
         this.drawSavedLineArt(outputImageData.data)
         context.putImageData(outputImageData, 0, 0)
-        resolve(outputCanvas)
+        resolve({
+          canvas: outputCanvas,
+          filename: `coloring-${this.selectedOption.id}-${Date.now()}.png`,
+          playDurationSeconds,
+        })
       }, 'image/png')
     })
+  }
+
+  private getPlayDurationSeconds() {
+    return Math.max(0, Math.floor((this.time.now - this.contentStartedAt) / 1000))
   }
 
   private drawSavedLineArt(outputData: Uint8ClampedArray) {
