@@ -49,19 +49,20 @@ class ArtworkTest {
     }
 
     @Test
-    void builder_rejectsNullSketchCode() {
+    void builder_acceptsNullSketchCode() {
+        // V5 (231) 후속: 자유 그리기 (밑그림 없는 작품) 케이스 지원 위해 sketchCode 는 nullable.
+        // 225 의 fail-fast 대상에서 제외되었으므로 null 빌드가 정상 통과해야 함.
         PatientProfile profile = mock(PatientProfile.class);
-        assertThatThrownBy(
-                        () ->
-                                Artwork.builder()
-                                        .patientProfile(profile)
-                                        .sketchCode(null)
-                                        .imageUrl("/api/v1/uploads/x.png")
-                                        .playDurationSeconds(0)
-                                        .isPublic(false)
-                                        .build())
-                .isInstanceOf(NullPointerException.class)
-                .hasMessageContaining("sketchCode");
+        Artwork artwork =
+                Artwork.builder()
+                        .patientProfile(profile)
+                        .sketchCode(null)
+                        .imageUrl("/api/v1/uploads/x.png")
+                        .playDurationSeconds(0)
+                        .isPublic(false)
+                        .build();
+
+        assertThat(artwork.getSketchCode()).isNull();
     }
 
     @Test

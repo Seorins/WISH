@@ -86,8 +86,7 @@ public class ArtworkController {
     @Operation(
             summary = "작품 부분 수정",
             description =
-                    "title / isPublic / additionalPlayDurationSeconds 부분 수정. image 파트 생략 가능. 작성자만"
-                            + " 가능, 그 외 403.")
+                    "isPublic / additionalPlayDurationSeconds 부분 수정. image 파트 생략 가능. 작성자만 가능, 그 외 403.")
     @PatchMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ApiResponse<ArtworkResponse>> update(
             @AuthenticationPrincipal AuthenticatedUser currentUser,

@@ -17,8 +17,6 @@ import io.swagger.v3.oas.annotations.media.Schema;
 public record ArtworkCreateRequest(
         @Schema(description = "FE 정적 자산의 도안 식별자 (자유 그리기는 생략)", example = "cat-01") @Size(max = 50)
                 String sketchCode,
-        @Schema(description = "사용자 지정 작품 제목 (선택)", example = "내 첫 고양이") @Size(max = 50)
-                String title,
         @Schema(description = "플레이 시간(초)", example = "87") @NotNull @PositiveOrZero
                 Integer playDurationSeconds,
         @Schema(description = "공개 갤러리 노출 여부", example = "false") @NotNull Boolean isPublic) {}

@@ -14,7 +14,6 @@ import com.comong.backend.domain.artwork.entity.Artwork;
 public record PublicArtworkResponse(
         Long id,
         String sketchCode,
-        String title,
         String imageUrl,
         int playDurationSeconds,
         LocalDateTime createdAt,
@@ -26,7 +25,6 @@ public record PublicArtworkResponse(
         return new PublicArtworkResponse(
                 artwork.getId(),
                 artwork.getSketchCode(),
-                artwork.getTitle(),
                 artwork.getImageUrl(),
                 artwork.getPlayDurationSeconds(),
                 artwork.getCreatedAt(),
