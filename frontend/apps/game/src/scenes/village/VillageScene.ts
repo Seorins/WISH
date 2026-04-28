@@ -29,6 +29,8 @@ const DEFAULT_PLAYER_SPAWN = { xRatio: 0.5, yRatio: 0.47 }
 const ART_PORTAL = { xRatio: 0.545, yRatio: 0.655, widthRatio: 0.08, heightRatio: 0.125 }
 const TAEKWONDO_PORTAL = { xRatio: 0.49, yRatio: 0.06, widthRatio: 0.09, heightRatio: 0.11 }
 const GYMNASTICS_PORTAL = { xRatio: 0.72, yRatio: 0.53, widthRatio: 0.04, heightRatio: 0.05 }
+const MUSIC_PORTAL = { xRatio: 0.205, yRatio: 0.315, widthRatio: 0.035, heightRatio: 0.07 }
+const SHOW_MUSIC_PORTAL_MARKER = false
 
 type ObstacleRect = { x: number; y: number; w: number; h: number }
 type VillageSceneData = {
@@ -48,8 +50,10 @@ export class VillageScene extends Phaser.Scene {
   private taekwondoPortal!: Phaser.Geom.Rectangle
   private portalCooldownUntil = 0
   private gymnasticsPortal!: Phaser.Geom.Rectangle
+  private musicPortal!: Phaser.Geom.Rectangle
   private playerWasInArtPortal = true
   private playerWasInGymnasticsPortal = true
+  private playerWasInMusicPortal = true
   private isTransitioning = false
   private target: Phaser.Math.Vector2 | null = null
   private lastDirection: PlayerDirection = 'down'
@@ -97,9 +101,25 @@ export class VillageScene extends Phaser.Scene {
     this.cameras.main.setBounds(0, 0, W, H)
     this.playerWasInArtPortal = true
     this.playerWasInGymnasticsPortal = true
+    this.playerWasInMusicPortal = true
     this.artPortal = createRatioRectangle(W, H, ART_PORTAL)
     this.taekwondoPortal = createRatioRectangle(W, H, TAEKWONDO_PORTAL)
     this.gymnasticsPortal = createRatioRectangle(W, H, GYMNASTICS_PORTAL)
+    this.musicPortal = createRatioRectangle(W, H, MUSIC_PORTAL)
+    if (SHOW_MUSIC_PORTAL_MARKER) {
+      this.add
+        .rectangle(
+          this.musicPortal.x,
+          this.musicPortal.y,
+          this.musicPortal.width,
+          this.musicPortal.height,
+          0x22d3ee,
+          0.28,
+        )
+        .setOrigin(0, 0)
+        .setStrokeStyle(5, 0xffffff, 0.95)
+        .setDepth(9)
+    }
 
     this.obstacles = this.physics.add.staticGroup()
     OBSTACLES.forEach(({ x, y, w, h }) => {
@@ -230,6 +250,17 @@ export class VillageScene extends Phaser.Scene {
       this.enterGymnasticsScene()
     }
     this.playerWasInGymnasticsPortal = gymState.isInside
+
+    const musicState = getRectangleEntryState(
+      this.musicPortal,
+      this.player.x,
+      this.player.y,
+      this.playerWasInMusicPortal,
+    )
+    if (!this.isTransitioning && musicState.didEnter) {
+      this.enterMusicScene()
+    }
+    this.playerWasInMusicPortal = musicState.isInside
   }
 
   private showSehyunDialog() {
@@ -269,6 +300,18 @@ export class VillageScene extends Phaser.Scene {
     }
 
     fadeToScene(this, 'ArtSelectScene', { duration: 250 })
+  }
+
+  private enterMusicScene() {
+    this.isTransitioning = true
+    this.target = null
+    this.player.setVelocity(0, 0)
+
+    if (this.isDialogVisible) {
+      this.hideDialog(false)
+    }
+
+    fadeToScene(this, 'MusicSelectScene', { duration: 250 })
   }
 
   private tryEnterTaekwondoScene() {
