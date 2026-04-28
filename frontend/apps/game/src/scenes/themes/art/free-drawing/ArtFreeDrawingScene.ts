@@ -1113,7 +1113,7 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
     }
 
     this.isSavingDrawing = true
-    void this.exportDrawingLinesPng()
+    void this.exportDrawingPng()
       .then(exportedDrawing => {
         this.downloadBlob(exportedDrawing.blob, exportedDrawing.filename)
         this.showRumiLine('complete')
@@ -1126,21 +1126,37 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
       })
   }
 
-  private exportDrawingLinesPng(): Promise<ExportedDrawingPng> {
+  private exportDrawingPng(): Promise<ExportedDrawingPng> {
     return new Promise((resolve, reject) => {
       this.drawingTexture.snapshot(snapshot => {
-        if (!(snapshot instanceof HTMLImageElement)) {
+        if (!(snapshot instanceof HTMLImageElement) && !(snapshot instanceof HTMLCanvasElement)) {
           reject(new Error('Drawing snapshot did not return an image.'))
           return
         }
 
-        const dataUrl = snapshot.src
+        const width = Math.round(this.drawBounds.width)
+        const height = Math.round(this.drawBounds.height)
+        const outputCanvas = document.createElement('canvas')
+        outputCanvas.width = width
+        outputCanvas.height = height
+        const context = outputCanvas.getContext('2d')
+
+        if (!context) {
+          reject(new Error('Failed to create drawing export canvas.'))
+          return
+        }
+
+        context.fillStyle = '#ffffff'
+        context.fillRect(0, 0, width, height)
+        context.drawImage(snapshot, 0, 0, width, height)
+
+        const dataUrl = outputCanvas.toDataURL('image/png')
         resolve({
           blob: this.dataUrlToBlob(dataUrl),
           dataUrl,
-          filename: `free-drawing-lines-${Date.now()}.png`,
-          width: Math.round(this.drawBounds.width),
-          height: Math.round(this.drawBounds.height),
+          filename: `free-drawing-${Date.now()}.png`,
+          width,
+          height,
         })
       }, 'image/png')
     })
