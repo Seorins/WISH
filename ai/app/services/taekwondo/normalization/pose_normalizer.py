@@ -6,6 +6,7 @@ from app.services.taekwondo.constants import (
     LEFT_HIP,
     LEFT_SHOULDER,
     MIN_SCALE_REFERENCE,
+    MIN_SAFE_SCALE_REFERENCE,
     REQUIRED_CENTER_POINTS,
     REQUIRED_SCALE_POINTS,
     REQUIRED_TAEKWONDO_TRACKING_POINTS,
@@ -23,10 +24,9 @@ class PoseNormalizer:
         raw_landmarks = self._to_raw_landmarks(frame.landmarks)
         filtered_landmarks = self._filter_low_confidence(raw_landmarks)
         mirrored_landmarks = self._apply_mirror(filtered_landmarks, frame.mirrored)
-        tracking = self._resolve_tracking_status(mirrored_landmarks)
-
         hip_center = self._compute_hip_center(mirrored_landmarks)
         scale_reference = self._compute_scale_reference(mirrored_landmarks)
+        tracking = self._resolve_tracking_status(mirrored_landmarks, scale_reference)
         normalized_landmarks = self._normalize_coordinates(
             landmarks=mirrored_landmarks,
             hip_center=hip_center,
@@ -148,19 +148,24 @@ class PoseNormalizer:
         scale_reference: float,
     ) -> dict[str, NormalizedLandmark]:
         normalized: dict[str, NormalizedLandmark] = {}
+        effective_scale = max(scale_reference, MIN_SAFE_SCALE_REFERENCE)
 
         for name, landmark in landmarks.items():
             normalized[name] = NormalizedLandmark(
                 name=name,
-                x=(landmark.x - hip_center.x) / scale_reference,
-                y=(landmark.y - hip_center.y) / scale_reference,
-                z=(landmark.z / scale_reference) if landmark.z is not None else None,
+                x=(landmark.x - hip_center.x) / effective_scale,
+                y=(landmark.y - hip_center.y) / effective_scale,
+                z=(landmark.z / effective_scale) if landmark.z is not None else None,
                 confidence=landmark.confidence,
             )
 
         return normalized
 
-    def _resolve_tracking_status(self, landmarks: dict[str, RawLandmark]) -> str:
+    def _resolve_tracking_status(
+        self,
+        landmarks: dict[str, RawLandmark],
+        scale_reference: float,
+    ) -> str:
         if not landmarks:
             return "tracking_low"
 
@@ -168,6 +173,9 @@ class PoseNormalizer:
             return "tracking_low"
 
         if not all(point in landmarks for point in REQUIRED_CENTER_POINTS + REQUIRED_SCALE_POINTS):
+            return "tracking_low"
+
+        if scale_reference < MIN_SAFE_SCALE_REFERENCE:
             return "tracking_low"
 
         return "tracking_ok"
