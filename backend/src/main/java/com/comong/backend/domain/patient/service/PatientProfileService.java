@@ -1,6 +1,7 @@
 package com.comong.backend.domain.patient.service;
 
 import java.util.List;
+import java.util.Optional;
 
 import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -94,6 +95,16 @@ public class PatientProfileService {
         return patientProfileRepository.findAllByUserId(userId).stream()
                 .map(PatientProfileResponse::from)
                 .toList();
+    }
+
+    /**
+     * 보호자 user 의 환자 프로필 entity 직접 반환 — artwork 등 다른 도메인 service 가 PatientProfile 을 외래키 대상으로 필요할 때
+     * 사용.
+     *
+     * <p>현재 1:1 정책이므로 첫 번째 결과를 반환. 1:N 으로 정책 변경 시 호출 측이 patientProfileId 를 직접 받도록 흐름이 바뀌어야 한다.
+     */
+    public Optional<PatientProfile> findEntityByUserId(Long userId) {
+        return patientProfileRepository.findAllByUserId(userId).stream().findFirst();
     }
 
     public PatientProfileResponse findOne(Long userId, Long profileId) {

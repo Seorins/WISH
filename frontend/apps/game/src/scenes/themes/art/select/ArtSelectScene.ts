@@ -422,7 +422,6 @@ export class ArtSelectScene extends Phaser.Scene {
     this.closeDialog(false)
     fadeToScene(this, mode === 'free-drawing' ? 'ArtFreeDrawingScene' : 'ArtColoringSelectScene', {
       duration: 220,
-      data: { suppressIntroDialog: true },
     })
   }
 

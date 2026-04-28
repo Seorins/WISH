@@ -1,6 +1,7 @@
 package com.comong.backend.domain.user.entity;
 
 import java.time.LocalDateTime;
+import java.util.Objects;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -53,9 +54,12 @@ public class User {
 
     @Builder
     private User(String email, String nickname, String password) {
-        this.email = email;
-        this.nickname = nickname;
-        this.password = password;
+        // 빌더 단계 invariant: @Column(nullable = false) 만으로는 build() 시점에 null 이 차단되지 않고
+        // JPA save 단계의 PropertyValueException 으로 늦게 발견된다. 도메인 객체는 항상 유효한 상태로 만들어지도록
+        // fail-fast.
+        this.email = Objects.requireNonNull(email, "email must not be null");
+        this.nickname = Objects.requireNonNull(nickname, "nickname must not be null");
+        this.password = Objects.requireNonNull(password, "password must not be null");
     }
 
     @PrePersist

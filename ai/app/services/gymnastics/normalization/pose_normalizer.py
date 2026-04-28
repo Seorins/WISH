@@ -7,6 +7,7 @@ from app.services.gymnastics.constants import (
     LEFT_SHOULDER,
     MIN_SCALE_REFERENCE,
     REQUIRED_CENTER_POINTS,
+    REQUIRED_MARCH_TRACKING_POINTS,
     REQUIRED_SCALE_POINTS,
     RIGHT_HIP,
     RIGHT_SHOULDER,
@@ -32,11 +33,13 @@ class PoseNormalizer:
             scale_reference=scale_reference,
         )
 
+        # hip_center retains raw image-space coordinates (0–1) so the evaluator
+        # can track pelvis position across frames for the in-place movement check.
         return NormalizedPoseFrame(
             tracking=tracking,
             timestamp_ms=frame.timestamp_ms,
             scale_reference=scale_reference,
-            hip_center=HipCenter(x=0.0, y=0.0),
+            hip_center=hip_center,
             landmarks=normalized_landmarks,
         )
 
@@ -164,6 +167,9 @@ class PoseNormalizer:
 
     def _resolve_tracking_status(self, landmarks: dict[str, RawLandmark]) -> str:
         if not landmarks:
+            return "tracking_low"
+
+        if not all(point in landmarks for point in REQUIRED_MARCH_TRACKING_POINTS):
             return "tracking_low"
 
         if not all(point in landmarks for point in REQUIRED_CENTER_POINTS + REQUIRED_SCALE_POINTS):

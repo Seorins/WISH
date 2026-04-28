@@ -13,6 +13,8 @@ const ART_ROOM_RETURN_SPAWN = { xRatio: 0.5, yRatio: 0.76 }
 const CANVAS_SOURCE_SIZE = { width: 1535, height: 1024 }
 const CANVAS_DRAW_AREA = { x: 120, y: 150, width: 1288, height: 620 }
 const DELETE_BUTTON_SIZE = { width: 344, height: 336 }
+type DrawingTool = 'brush' | 'eraser'
+const DRAWING_TOOLS: DrawingTool[] = ['brush', 'eraser']
 const PALETTE_SWATCHES = [
   { color: 0xff2b2b, sourceX: 1470, sourceY: 262 },
   { color: 0xff4d9a, sourceX: 1902, sourceY: 262 },
@@ -48,12 +50,17 @@ type ExportedDrawingPng = {
 export class ArtFreeDrawingScene extends Phaser.Scene {
   private drawBounds = new Phaser.Geom.Rectangle()
   private canvasFrameBounds = new Phaser.Geom.Rectangle()
+  private paletteBounds = new Phaser.Geom.Rectangle()
   private drawingTexture!: Phaser.GameObjects.RenderTexture
   private brushStroke!: Phaser.GameObjects.Graphics
   private paletteSelection!: Phaser.GameObjects.Arc
   private rumiBubble!: Phaser.GameObjects.Graphics
   private rumiBubbleText!: Phaser.GameObjects.Text
   private brushCursor!: Phaser.GameObjects.Image
+  private toolButtons: Partial<Record<DrawingTool, Phaser.GameObjects.Image>> = {}
+  private toolButtonFrames: Partial<Record<DrawingTool, Phaser.GameObjects.Arc>> = {}
+  private toolButtonGlows: Partial<Record<DrawingTool, Phaser.GameObjects.Image>> = {}
+  private toolButtonBaseScales: Partial<Record<DrawingTool, { x: number; y: number }>> = {}
   private saveButton: Phaser.GameObjects.Image | null = null
   private resetButton: Phaser.GameObjects.Image | null = null
   private exitButton: Phaser.GameObjects.Image | null = null
@@ -72,12 +79,16 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
   private strokeCount = 0
   private lastDrawPoint: Phaser.Math.Vector2 | null = null
   private lastHandDrawPoint: Phaser.Math.Vector2 | null = null
+  private currentTool: DrawingTool = 'brush'
   private currentColor: number = PALETTE_SWATCHES[0].color
   private lastInteractionAt = 0
   private lastIdlePromptAt = 0
   private lastHandColorSelectedAt = 0
   private pendingHandColor: number | null = null
   private pendingHandColorStartedAt = 0
+  private pendingHandTool: DrawingTool | null = null
+  private pendingHandToolStartedAt = 0
+  private lastHandToolSelectedAt = 0
   private pendingHandAction: HandActionKind | null = null
   private pendingHandActionStartedAt = 0
   private activatedHandAction: HandActionKind | null = null
@@ -148,6 +159,7 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
     this.load.image('art-ui-palette', '/assets/images/themes/art/ui/palette.png')
     this.load.image('art-ui-rumi', '/assets/images/themes/art/ui/rumi.png')
     this.load.image('art-ui-brush', '/assets/images/themes/art/ui/brush.png')
+    this.load.image('art-ui-eraser', '/assets/images/themes/art/ui/eraser.png')
     this.load.image('art-ui-delete-btn', '/assets/images/themes/art/ui/delete_btn.png')
     this.load.image('art-ui-reset-btn', '/assets/images/themes/art/ui/reset.png')
     this.load.image('art-ui-save-btn', '/assets/images/themes/art/ui/save_btn.png')
@@ -159,6 +171,14 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
     this.lastInteractionAt = this.time.now
     this.lastIdlePromptAt = this.time.now
     this.handTrackingDisposed = false
+    this.currentTool = 'brush'
+    this.toolButtons = {}
+    this.toolButtonFrames = {}
+    this.toolButtonGlows = {}
+    this.toolButtonBaseScales = {}
+    this.pendingHandTool = null
+    this.pendingHandToolStartedAt = 0
+    this.lastHandToolSelectedAt = 0
 
     const background = this.add.image(vw / 2, vh / 2, 'art-room-background')
     const backgroundSource = background.texture.getSourceImage() as HTMLImageElement
@@ -172,6 +192,7 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
     this.createExitButton(vw, vh)
     this.createPalette(vw, vh)
     this.createActionButtons()
+    this.createToolSelector()
     this.createRumiArea(vw, vh)
     this.createBrushCursor()
 
@@ -303,12 +324,25 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
 
   private createPalette(vw: number, vh: number) {
     const paletteHeight = Math.min(this.drawBounds.height * 0.88, vh * 0.41)
-    const panelCenterX = vw * 0.878
+    const paletteWidth = paletteHeight * (3429 / 2286)
+    const toolIconSize = Math.max(68, Math.min(90, Math.round(vw * 0.044)))
+    const toolHitSize = toolIconSize + 18
+    const toolGap = Math.max(10, Math.round(toolHitSize * 0.14))
+    const minPanelCenterX = this.drawBounds.right + paletteWidth * 0.24
+    const maxPanelCenterX = Math.max(
+      minPanelCenterX,
+      vw - toolHitSize - toolGap - paletteWidth * 0.18 - 24,
+    )
+    const panelCenterX = Phaser.Math.Clamp(
+      this.drawBounds.right + paletteWidth * 0.35,
+      minPanelCenterX,
+      maxPanelCenterX,
+    )
     const paletteTargetTop = this.drawBounds.top + 2
     const palette = this.add
       .image(panelCenterX, paletteTargetTop + paletteHeight / 2, 'art-ui-palette')
       .setDepth(8)
-    palette.setDisplaySize(paletteHeight * (3429 / 2286), paletteHeight)
+    palette.setDisplaySize(paletteWidth, paletteHeight)
 
     const paletteLeft = palette.x - palette.displayWidth / 2
     const paletteBoundsTop = palette.y - palette.displayHeight / 2
@@ -317,6 +351,15 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
     const selectionRadius = Math.max(11, palette.displayWidth * 0.034)
     const hitWidth = palette.displayWidth * 0.115
     const hitHeight = palette.displayHeight * 0.06
+    const minSwatchSourceX = Math.min(...PALETTE_SWATCHES.map(swatch => swatch.sourceX))
+    const maxSwatchSourceX = Math.max(...PALETTE_SWATCHES.map(swatch => swatch.sourceX))
+    const visualPaddingX = hitWidth * 0.9
+    this.paletteBounds.setTo(
+      paletteLeft + minSwatchSourceX * scaleX - visualPaddingX,
+      paletteBoundsTop,
+      (maxSwatchSourceX - minSwatchSourceX) * scaleX + visualPaddingX * 2,
+      palette.displayHeight,
+    )
 
     this.paletteSelection = this.add
       .circle(0, 0, selectionRadius, 0xffffff, 0)
@@ -439,6 +482,61 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
     )
   }
 
+  private createToolSelector() {
+    const iconSize = Math.max(68, Math.min(90, Math.round(this.scale.width * 0.044)))
+    const hitSize = iconSize + 8
+    const hitRadius = hitSize / 2
+    const gap = Math.max(10, Math.round(hitSize * 0.14))
+    const totalHeight = DRAWING_TOOLS.length * hitSize + (DRAWING_TOOLS.length - 1) * gap
+    const x = Math.min(
+      this.scale.width - hitRadius - 18,
+      this.paletteBounds.right + gap + hitRadius,
+    )
+    const maxTop = Math.max(16, this.scale.height - totalHeight - 16)
+    const startY = Phaser.Math.Clamp(this.paletteBounds.centerY - totalHeight / 2, 16, maxTop)
+
+    DRAWING_TOOLS.forEach((tool, index) => {
+      const y = startY + hitRadius + index * (hitSize + gap)
+      const frame = this.add
+        .circle(x, y, hitRadius, 0xfff6e8, 0.001)
+        .setStrokeStyle(0, 0xffffff, 0)
+        .setDepth(14)
+      const glow = this.add
+        .image(x, y, tool === 'brush' ? 'art-ui-brush' : 'art-ui-eraser')
+        .setDepth(14)
+        .setDisplaySize(iconSize, iconSize)
+        .setTint(0x7fa7ff)
+        .setAlpha(0)
+      const button = this.add
+        .image(x, y, tool === 'brush' ? 'art-ui-brush' : 'art-ui-eraser')
+        .setDepth(15)
+        .setDisplaySize(iconSize, iconSize)
+        .setInteractive({ useHandCursor: true })
+
+      this.toolButtonFrames[tool] = frame
+      this.toolButtonGlows[tool] = glow
+      this.toolButtons[tool] = button
+      this.toolButtonBaseScales[tool] = { x: button.scaleX, y: button.scaleY }
+
+      button.on('pointerover', () => this.refreshToolButtons(tool))
+      button.on('pointerout', () => this.refreshToolButtons())
+      button.on(
+        'pointerdown',
+        (
+          _pointer: Phaser.Input.Pointer,
+          _localX: number,
+          _localY: number,
+          event: Phaser.Types.Input.EventData,
+        ) => {
+          event.stopPropagation()
+          this.setDrawingTool(tool)
+        },
+      )
+    })
+
+    this.refreshToolButtons()
+  }
+
   private createRumiArea(vw: number, vh: number) {
     const panelCenterX = vw * 0.878
     const paletteHeight = Math.min(this.drawBounds.height * 0.88, vh * 0.41)
@@ -513,9 +611,60 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
   private createBrushCursor() {
     this.input.setDefaultCursor('none')
     this.brushCursor = this.add.image(0, 0, 'art-ui-brush').setDepth(20)
+    this.brushCursor.setScrollFactor(0)
+    this.updateBrushCursorTexture()
+  }
+
+  private setDrawingTool(tool: DrawingTool) {
+    this.currentTool = tool
+    this.clearPendingHandTool()
+    this.refreshToolButtons()
+    this.updateBrushCursorTexture()
+  }
+
+  private refreshToolButtons(hoveredTool: DrawingTool | null = null) {
+    DRAWING_TOOLS.forEach(tool => {
+      const button = this.toolButtons[tool]
+      const frame = this.toolButtonFrames[tool]
+      const glow = this.toolButtonGlows[tool]
+      const baseScale = this.toolButtonBaseScales[tool]
+      if (!button || !frame || !glow || !baseScale) {
+        return
+      }
+
+      const isSelected = tool === this.currentTool
+      const isHovered = tool === hoveredTool
+      frame.setFillStyle(0xfff6e8, 0.001)
+      frame.setStrokeStyle(0, 0xffffff, 0)
+      glow.setAlpha(isSelected ? 0.42 : isHovered ? 0.22 : 0)
+      glow.setScale(
+        baseScale.x * (isSelected ? 1.32 : 1.22),
+        baseScale.y * (isSelected ? 1.32 : 1.22),
+      )
+      button.clearTint()
+      button.setTint(isSelected ? 0xffffff : isHovered ? 0xfff0c7 : 0xffffff)
+      button.setScale(
+        baseScale.x * (isSelected ? 1.08 : isHovered ? 1.04 : 1),
+        baseScale.y * (isSelected ? 1.08 : isHovered ? 1.04 : 1),
+      )
+    })
+  }
+
+  private updateBrushCursorTexture() {
+    if (!this.brushCursor) {
+      return
+    }
+
+    if (this.currentTool === 'eraser') {
+      this.brushCursor.setTexture('art-ui-eraser')
+      this.brushCursor.setDisplaySize(54, 54)
+      this.brushCursor.setOrigin(0.5, 0.5)
+      return
+    }
+
+    this.brushCursor.setTexture('art-ui-brush')
     this.brushCursor.setDisplaySize(48, 48)
     this.brushCursor.setOrigin(0.18, 0.88)
-    this.brushCursor.setScrollFactor(0)
   }
 
   private startHandDrawingMode() {
@@ -554,6 +703,7 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
     this.isStartingHandTracker = false
     this.stopHandDrawing()
     this.clearPendingHandAction()
+    this.clearPendingHandTool()
     this.handPointerSmoother.reset()
     this.handTrackingGuard.reset()
     this.handTracker?.stop()
@@ -578,6 +728,7 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
     if (!tracking.point) {
       this.stopHandDrawing()
       this.clearPendingHandAction()
+      this.clearPendingHandTool()
       return
     }
 
@@ -591,16 +742,24 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
     if (!handState?.isDrawingGesture) {
       this.stopHandDrawing()
       this.clearPendingHandAction()
+      this.clearPendingHandTool()
       return
     }
 
     if (this.tryActivateActionButtonFromHand(smoothedPoint, result.timestampMs)) {
+      this.stopHandDrawing()
+      this.clearPendingHandTool()
+      return
+    }
+
+    if (this.trySelectToolFromHand(smoothedPoint, result.timestampMs)) {
       this.stopHandDrawing()
       return
     }
 
     if (this.trySelectColorFromHand(smoothedPoint, result.timestampMs)) {
       this.stopHandDrawing()
+      this.clearPendingHandTool()
       return
     }
 
@@ -770,6 +929,50 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
     this.setActionButtonHover(null)
   }
 
+  private trySelectToolFromHand(point: Phaser.Math.Vector2, timestampMs: number) {
+    const tool = this.getHandToolAt(point)
+    if (!tool) {
+      this.clearPendingHandTool()
+      return false
+    }
+
+    this.refreshToolButtons(tool)
+
+    if (this.pendingHandTool !== tool) {
+      this.pendingHandTool = tool
+      this.pendingHandToolStartedAt = timestampMs
+      return true
+    }
+
+    if (timestampMs - this.pendingHandToolStartedAt < 600) {
+      return true
+    }
+
+    if (tool === this.currentTool && timestampMs - this.lastHandToolSelectedAt < 220) {
+      return true
+    }
+
+    this.setDrawingTool(tool)
+    this.lastHandToolSelectedAt = timestampMs
+    return true
+  }
+
+  private getHandToolAt(point: Phaser.Math.Vector2): DrawingTool | null {
+    for (const tool of DRAWING_TOOLS) {
+      if (this.toolButtonFrames[tool]?.getBounds().contains(point.x, point.y)) {
+        return tool
+      }
+    }
+
+    return null
+  }
+
+  private clearPendingHandTool() {
+    this.pendingHandTool = null
+    this.pendingHandToolStartedAt = 0
+    this.refreshToolButtons()
+  }
+
   private trySelectColorFromHand(point: Phaser.Math.Vector2, timestampMs: number) {
     const nearest = this.getNearestPaletteColor(point.x, point.y)
     if (!nearest) {
@@ -823,6 +1026,7 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
 
   private selectColor(color: number, _x: number, _y: number) {
     this.currentColor = color
+    this.setDrawingTool('brush')
     this.paletteSelection.setVisible(false)
   }
 
@@ -842,30 +1046,34 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
   }
 
   private drawDot(x: number, y: number) {
+    const strokeSize = this.getActiveStrokeSize()
     this.brushStroke.clear()
-    this.brushStroke.fillStyle(this.currentColor, 1)
-    this.brushStroke.fillCircle(
-      x - this.drawBounds.x,
-      y - this.drawBounds.y,
-      this.getBrushSize() / 2,
-    )
+    this.brushStroke.fillStyle(this.getActiveStrokeColor(), 1)
+    this.brushStroke.fillCircle(x - this.drawBounds.x, y - this.drawBounds.y, strokeSize / 2)
     this.drawingTexture.draw(this.brushStroke)
   }
 
   private drawStroke(from: Phaser.Math.Vector2, to: Phaser.Math.Vector2) {
+    const strokeSize = this.getActiveStrokeSize()
+    const strokeColor = this.getActiveStrokeColor()
     this.brushStroke.clear()
-    this.brushStroke.lineStyle(this.getBrushSize(), this.currentColor, 1)
+    this.brushStroke.lineStyle(strokeSize, strokeColor, 1)
     this.brushStroke.beginPath()
     this.brushStroke.moveTo(from.x - this.drawBounds.x, from.y - this.drawBounds.y)
     this.brushStroke.lineTo(to.x - this.drawBounds.x, to.y - this.drawBounds.y)
     this.brushStroke.strokePath()
-    this.brushStroke.fillStyle(this.currentColor, 1)
-    this.brushStroke.fillCircle(
-      to.x - this.drawBounds.x,
-      to.y - this.drawBounds.y,
-      this.getBrushSize() / 2,
-    )
+    this.brushStroke.fillStyle(strokeColor, 1)
+    this.brushStroke.fillCircle(to.x - this.drawBounds.x, to.y - this.drawBounds.y, strokeSize / 2)
     this.drawingTexture.draw(this.brushStroke)
+  }
+
+  private getActiveStrokeColor() {
+    return this.currentTool === 'eraser' ? 0xffffff : this.currentColor
+  }
+
+  private getActiveStrokeSize() {
+    const brushSize = this.getBrushSize()
+    return this.currentTool === 'eraser' ? Math.round(brushSize * 2.1) : brushSize
   }
 
   private getBrushSize() {
@@ -905,7 +1113,7 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
     }
 
     this.isSavingDrawing = true
-    void this.exportDrawingLinesPng()
+    void this.exportDrawingPng()
       .then(exportedDrawing => {
         this.downloadBlob(exportedDrawing.blob, exportedDrawing.filename)
         this.showRumiLine('complete')
@@ -918,21 +1126,37 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
       })
   }
 
-  private exportDrawingLinesPng(): Promise<ExportedDrawingPng> {
+  private exportDrawingPng(): Promise<ExportedDrawingPng> {
     return new Promise((resolve, reject) => {
       this.drawingTexture.snapshot(snapshot => {
-        if (!(snapshot instanceof HTMLImageElement)) {
+        if (!(snapshot instanceof HTMLImageElement) && !(snapshot instanceof HTMLCanvasElement)) {
           reject(new Error('Drawing snapshot did not return an image.'))
           return
         }
 
-        const dataUrl = snapshot.src
+        const width = Math.round(this.drawBounds.width)
+        const height = Math.round(this.drawBounds.height)
+        const outputCanvas = document.createElement('canvas')
+        outputCanvas.width = width
+        outputCanvas.height = height
+        const context = outputCanvas.getContext('2d')
+
+        if (!context) {
+          reject(new Error('Failed to create drawing export canvas.'))
+          return
+        }
+
+        context.fillStyle = '#ffffff'
+        context.fillRect(0, 0, width, height)
+        context.drawImage(snapshot, 0, 0, width, height)
+
+        const dataUrl = outputCanvas.toDataURL('image/png')
         resolve({
           blob: this.dataUrlToBlob(dataUrl),
           dataUrl,
-          filename: `free-drawing-lines-${Date.now()}.png`,
-          width: Math.round(this.drawBounds.width),
-          height: Math.round(this.drawBounds.height),
+          filename: `free-drawing-${Date.now()}.png`,
+          width,
+          height,
         })
       }, 'image/png')
     })
