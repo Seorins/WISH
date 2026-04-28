@@ -19,7 +19,7 @@ function App() {
       gameRef.current?.destroy(true)
       gameRef.current = null
     }
-  }, [])
+  }, [debugMode])
 
   if (debugMode === DEBUG_MARCH_MODE) {
     return <MarchDebugPage />
