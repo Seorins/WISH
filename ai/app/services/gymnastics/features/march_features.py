@@ -7,14 +7,13 @@ from app.services.gymnastics.constants import (
     LEFT_KNEE,
     LEFT_SHOULDER,
     MIN_SCALE_REFERENCE,
+    NUMERIC_EPSILON,
     RIGHT_ANKLE,
     RIGHT_HIP,
     RIGHT_KNEE,
     RIGHT_SHOULDER,
 )
 from app.services.gymnastics.types import NormalizedLandmark, NormalizedPoseFrame
-
-NUMERIC_EPSILON = 1e-6
 
 
 @dataclass(slots=True)

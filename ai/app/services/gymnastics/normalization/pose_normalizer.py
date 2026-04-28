@@ -169,10 +169,10 @@ class PoseNormalizer:
         if not landmarks:
             return "tracking_low"
 
-        if not all(point in landmarks for point in REQUIRED_CENTER_POINTS + REQUIRED_SCALE_POINTS):
+        if not all(point in landmarks for point in REQUIRED_MARCH_TRACKING_POINTS):
             return "tracking_low"
 
-        if not all(point in landmarks for point in REQUIRED_MARCH_TRACKING_POINTS):
+        if not all(point in landmarks for point in REQUIRED_CENTER_POINTS + REQUIRED_SCALE_POINTS):
             return "tracking_low"
 
         return "tracking_ok"

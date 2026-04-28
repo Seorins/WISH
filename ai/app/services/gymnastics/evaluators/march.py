@@ -2,6 +2,8 @@ from dataclasses import dataclass
 from math import sqrt
 
 from app.services.gymnastics.constants import (
+    DEFAULT_FEEDBACK_DISPLAY_FRAMES,
+    DEFAULT_FEEDBACK_STREAK_THRESHOLD,
     DEFAULT_MARCH_DEPTH_SHIFT_MAX,
     DEFAULT_MARCH_DOMINANCE_MARGIN,
     DEFAULT_MARCH_PELVIS_SHIFT_MAX,
@@ -10,13 +12,13 @@ from app.services.gymnastics.constants import (
     DEFAULT_MARCH_THIGH_ANGLE_THRESHOLD,
     DEFAULT_MARCH_TORSO_TILT_MAX,
 )
+from app.services.gymnastics.evaluators.base import BaseEvaluator, EvaluatorResult
+from app.services.gymnastics.features.march_features import MarchFeatureSet, extract_march_features
 from app.services.gymnastics.feedback import (
     FeedbackStabilizerState,
     select_march_feedback_candidate,
     stabilize_feedback,
 )
-from app.services.gymnastics.evaluators.base import BaseEvaluator, EvaluatorResult
-from app.services.gymnastics.features.march_features import MarchFeatureSet, extract_march_features
 from app.services.gymnastics.types import NormalizedPoseFrame
 
 
@@ -29,6 +31,8 @@ class MarchEvaluatorConfig:
     torso_tilt_max: float = DEFAULT_MARCH_TORSO_TILT_MAX
     pelvis_shift_max: float = DEFAULT_MARCH_PELVIS_SHIFT_MAX
     depth_shift_max: float = DEFAULT_MARCH_DEPTH_SHIFT_MAX
+    feedback_streak_threshold: int = DEFAULT_FEEDBACK_STREAK_THRESHOLD
+    feedback_display_frames: int = DEFAULT_FEEDBACK_DISPLAY_FRAMES
 
 
 class MarchEvaluator(BaseEvaluator):
@@ -59,8 +63,6 @@ class MarchEvaluator(BaseEvaluator):
     ) -> EvaluatorResult:
         effective_target = target_steps or self.config.target_steps
 
-        # Capture reference position on the very first valid frame.
-        # Reference stays fixed for the entire session.
         next_reference_hip_x = reference_hip_x
         next_reference_hip_y = reference_hip_y
         next_reference_scale = reference_scale
@@ -86,7 +88,6 @@ class MarchEvaluator(BaseEvaluator):
             candidate_streak=candidate_feedback_streak,
         )
 
-        # ── Tracking failure ──────────────────────────────────────────────────
         if frame.tracking != "tracking_ok":
             next_feedback_state = self._stabilize_feedback(
                 features=features,
@@ -109,8 +110,7 @@ class MarchEvaluator(BaseEvaluator):
                 feedback_state=next_feedback_state,
             )
 
-        # ── Reference not yet set (first frame just captured it — return idle) ─
-        if next_reference_hip_x is None:
+        if next_reference_hip_x is None or next_reference_hip_y is None or next_reference_scale is None:
             next_feedback_state = self._stabilize_feedback(
                 features=features,
                 state="idle",
@@ -132,9 +132,6 @@ class MarchEvaluator(BaseEvaluator):
                 feedback_state=next_feedback_state,
             )
 
-        # ── Main evaluation ───────────────────────────────────────────────────
-
-        # Re-arm once the leg returns close to vertical
         next_left_armed = left_armed or features.left_thigh_angle <= self.config.release_threshold
         next_right_armed = right_armed or features.right_thigh_angle <= self.config.release_threshold
 
@@ -142,18 +139,18 @@ class MarchEvaluator(BaseEvaluator):
         next_step_count = step_count
         next_counted_side = last_counted_side
 
-        # Count only at a peak AND only when the pelvis hasn't drifted too far
         is_in_place = self._is_in_place(features)
         peak_side = self._get_peak_side(next_state)
 
-        if peak_side == "left" and next_left_armed and is_in_place:
-            next_step_count += 1
-            next_counted_side = "left"
-            next_left_armed = False
-        elif peak_side == "right" and next_right_armed and is_in_place:
-            next_step_count += 1
-            next_counted_side = "right"
-            next_right_armed = False
+        if next_step_count < effective_target:
+            if peak_side == "left" and next_left_armed and is_in_place:
+                next_step_count += 1
+                next_counted_side = "left"
+                next_left_armed = False
+            elif peak_side == "right" and next_right_armed and is_in_place:
+                next_step_count += 1
+                next_counted_side = "right"
+                next_right_armed = False
 
         if next_step_count >= effective_target:
             next_state = "complete"
@@ -183,8 +180,6 @@ class MarchEvaluator(BaseEvaluator):
             reference_scale=next_reference_scale,
             feedback_state=next_feedback_state,
         )
-
-    # ── State helpers ─────────────────────────────────────────────────────────
 
     def _resolve_next_state(self, features: MarchFeatureSet) -> str:
         if self._is_left_peak(features):
@@ -229,8 +224,6 @@ class MarchEvaluator(BaseEvaluator):
             return "right"
         return None
 
-    # ── In-place gate ─────────────────────────────────────────────────────────
-
     def _is_in_place(self, features: MarchFeatureSet) -> bool:
         return (
             abs(features.pelvis_shift_x) <= self.config.pelvis_shift_max
@@ -238,26 +231,18 @@ class MarchEvaluator(BaseEvaluator):
             and abs(features.pelvis_depth_shift) <= self.config.depth_shift_max
         )
 
-    # ── Accuracy ─────────────────────────────────────────────────────────────
-
     def _compute_accuracy(self, features: MarchFeatureSet) -> float:
         dominant_angle = max(features.left_thigh_angle, features.right_thigh_angle)
 
-        # Knee height (40%): how high toward horizontal (90°) the dominant thigh got
         lift_score = min(dominant_angle / 90.0, 1.0)
-
-        # Thigh angle quality (30%): how close to meeting the threshold
         thigh_score = min(dominant_angle / max(self.config.thigh_angle_threshold, 1.0), 1.0)
 
-        # Pelvis stability (20%): closeness to reference position
         shift_magnitude = sqrt(
-            features.pelvis_shift_x ** 2
-            + features.pelvis_shift_y ** 2
-            + features.pelvis_depth_shift ** 2
+            features.pelvis_shift_x**2
+            + features.pelvis_shift_y**2
+            + features.pelvis_depth_shift**2,
         )
         stability_score = max(1.0 - shift_magnitude / max(self.config.pelvis_shift_max, 1e-6), 0.0)
-
-        # Torso stability (10%)
         torso_score = max(1.0 - features.torso_tilt / max(self.config.torso_tilt_max, 1.0), 0.0)
 
         accuracy = (
@@ -267,8 +252,6 @@ class MarchEvaluator(BaseEvaluator):
             + torso_score * 0.1
         )
         return round(max(min(accuracy, 1.0), 0.0), 2)
-
-    # ── Feedback ─────────────────────────────────────────────────────────────
 
     def _stabilize_feedback(
         self,
@@ -286,9 +269,12 @@ class MarchEvaluator(BaseEvaluator):
             thigh_angle_threshold=self.config.thigh_angle_threshold,
             torso_tilt_max=self.config.torso_tilt_max,
         )
-        return stabilize_feedback(candidate=candidate, state=previous_feedback_state)
-
-    # ── Result builder ────────────────────────────────────────────────────────
+        return stabilize_feedback(
+            candidate=candidate,
+            state=previous_feedback_state,
+            streak_threshold=self.config.feedback_streak_threshold,
+            display_frames=self.config.feedback_display_frames,
+        )
 
     def _make_result(
         self,
