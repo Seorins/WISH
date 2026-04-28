@@ -16,6 +16,13 @@ type PoomsaeCard = {
   background: Phaser.GameObjects.Rectangle
 }
 
+const FADE_DURATION = 220
+const OVERLAY_ALPHA = 0.68
+const HEADER_TITLE_Y = 54
+const HEADER_SUBTITLE_Y = 98
+const ACTION_STATUS_OFFSET_Y = 104
+const ACTION_BUTTON_OFFSET_Y = 54
+
 const TEST_POOMSAE_OPTIONS: PoomsaeOption[] = [
   {
     id: 'taegeuk-1',
@@ -109,19 +116,25 @@ export class TaekwondoPoomsaeSelectScene extends Phaser.Scene {
   create() {
     const { width: vw, height: vh } = this.scale
     addCoverBackground(this, 'taekwondo-room-background')
-    this.add.rectangle(vw / 2, vh / 2, vw, vh, 0x1c1712, 0.68).setDepth(1)
+    this.add.rectangle(vw / 2, vh / 2, vw, vh, 0x1c1712, OVERLAY_ALPHA).setDepth(1)
 
     this.createHeader(vw)
     this.createHorizontalOptionList(vw, vh)
     this.createActionBar(vw, vh)
-    this.updateSelection(this.selectedOptionId)
 
-    this.input.keyboard!.on('keydown-ESC', this.handleEscDown)
+    if (TEST_POOMSAE_OPTIONS.length === 0) {
+      this.showEmptyState(vw, vh)
+    } else {
+      this.updateSelection(this.selectedOptionId)
+    }
+
+    this.input.keyboard?.on('keydown-ESC', this.handleEscDown)
     this.input.on('wheel', this.handleWheel)
     this.input.on('pointermove', this.handlePointerMove)
     this.input.on('pointerup', this.handlePointerUp)
     this.input.on('pointerupoutside', this.handlePointerUp)
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.isDragging = false
       this.input.keyboard?.off('keydown-ESC', this.handleEscDown)
       this.input.off('wheel', this.handleWheel)
       this.input.off('pointermove', this.handlePointerMove)
@@ -129,12 +142,12 @@ export class TaekwondoPoomsaeSelectScene extends Phaser.Scene {
       this.input.off('pointerupoutside', this.handlePointerUp)
     })
 
-    this.cameras.main.fadeIn(220, 0, 0, 0)
+    this.cameras.main.fadeIn(FADE_DURATION, 0, 0, 0)
   }
 
   private createHeader(vw: number) {
     this.add
-      .text(vw / 2, 54, '품새 선택', {
+      .text(vw / 2, HEADER_TITLE_Y, '품새 선택', {
         fontFamily: 'sans-serif',
         fontSize: '38px',
         color: '#fff6df',
@@ -144,7 +157,7 @@ export class TaekwondoPoomsaeSelectScene extends Phaser.Scene {
       .setDepth(3)
 
     this.add
-      .text(vw / 2, 98, '연습할 품새를 고르고 시작해보자', {
+      .text(vw / 2, HEADER_SUBTITLE_Y, '연습할 품새를 고르고 시작해보자', {
         fontFamily: 'sans-serif',
         fontSize: '20px',
         color: '#e6d3af',
@@ -162,7 +175,7 @@ export class TaekwondoPoomsaeSelectScene extends Phaser.Scene {
     const cardHeight = viewportHeight - 20
     const gap = 18
     const contentWidth =
-      TEST_POOMSAE_OPTIONS.length * cardWidth + (TEST_POOMSAE_OPTIONS.length - 1) * gap
+      TEST_POOMSAE_OPTIONS.length * cardWidth + Math.max(0, TEST_POOMSAE_OPTIONS.length - 1) * gap
 
     const maskShape = this.add
       .rectangle(this.viewportX, viewportY, this.viewportWidth, viewportHeight, 0xffffff, 0)
@@ -283,7 +296,7 @@ export class TaekwondoPoomsaeSelectScene extends Phaser.Scene {
 
   private createActionBar(vw: number, vh: number) {
     this.statusText = this.add
-      .text(vw / 2, vh - 104, '', {
+      .text(vw / 2, vh - ACTION_STATUS_OFFSET_Y, '', {
         fontFamily: 'sans-serif',
         fontSize: '18px',
         color: '#f6ddac',
@@ -291,7 +304,7 @@ export class TaekwondoPoomsaeSelectScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(3)
 
-    const buttonY = vh - 54
+    const buttonY = vh - ACTION_BUTTON_OFFSET_Y
     this.createTextButton(vw / 2 - 120, buttonY, 170, '돌아가기', () => this.returnToDojang())
     this.createTextButton(vw / 2 + 120, buttonY, 170, '시작하기', () => this.showReadyMessage())
   }
@@ -337,13 +350,27 @@ export class TaekwondoPoomsaeSelectScene extends Phaser.Scene {
   }
 
   private showReadyMessage() {
+    this.isDragging = false
     const selectedOption = TEST_POOMSAE_OPTIONS.find(option => option.id === this.selectedOptionId)
     this.statusText.setText(
       selectedOption ? `${selectedOption.name} 연습 화면은 아직 준비 중이야.` : '품새를 선택해줘.',
     )
   }
 
+  private showEmptyState(vw: number, vh: number) {
+    this.statusText.setText('표시할 품새가 아직 없어.')
+    this.add
+      .text(vw / 2, vh * 0.45, '품새 테스트 데이터가 비어 있어.', {
+        fontFamily: 'sans-serif',
+        fontSize: '22px',
+        color: '#fff6df',
+      })
+      .setOrigin(0.5)
+      .setDepth(3)
+  }
+
   private returnToDojang() {
-    fadeToScene(this, 'TaekwondoSelectScene', { duration: 220 })
+    this.isDragging = false
+    fadeToScene(this, 'TaekwondoSelectScene', { duration: FADE_DURATION })
   }
 }
