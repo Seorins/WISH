@@ -55,9 +55,13 @@ public class LocalImageStorage implements ImageStorage {
 
     @Override
     public StoredImage upload(MultipartFile file) {
-        validateImage(file);
+        ImageFormat detectedFormat = validateImage(file);
+        String originalExtension = extractExtension(file.getOriginalFilename());
+        if (!detectedFormat.matchesExtension(originalExtension)) {
+            throw new BusinessException(GlobalErrorCode.INVALID_INPUT);
+        }
 
-        String filename = UUID.randomUUID() + extractExtension(file.getOriginalFilename());
+        String filename = UUID.randomUUID() + detectedFormat.canonicalExtension();
         Path target = Path.of(properties.uploadDir()).toAbsolutePath().resolve(filename);
 
         try {
@@ -87,7 +91,7 @@ public class LocalImageStorage implements ImageStorage {
         }
     }
 
-    private void validateImage(MultipartFile file) {
+    private ImageFormat validateImage(MultipartFile file) {
         if (file == null || file.isEmpty()) {
             throw new BusinessException(GlobalErrorCode.INVALID_INPUT);
         }
@@ -95,7 +99,7 @@ public class LocalImageStorage implements ImageStorage {
         if (contentType == null || !contentType.toLowerCase(Locale.ROOT).startsWith("image/")) {
             throw new BusinessException(GlobalErrorCode.INVALID_INPUT);
         }
-        verifyMagicBytes(file);
+        return detectMagicBytes(file);
     }
 
     /**
@@ -103,15 +107,24 @@ public class LocalImageStorage implements ImageStorage {
      * WEBP(RIFF) 만 통과시킨다. {@link MultipartFile#getInputStream()} 은 새 스트림을 반환하므로, 검증 후 {@link
      * MultipartFile#transferTo} 가 별도로 동작한다.
      */
-    private void verifyMagicBytes(MultipartFile file) {
+    private ImageFormat detectMagicBytes(MultipartFile file) {
         byte[] head;
         try (InputStream in = file.getInputStream()) {
             head = in.readNBytes(MAGIC_HEAD_SIZE);
         } catch (IOException e) {
             throw new BusinessException(GlobalErrorCode.INTERNAL_SERVER_ERROR);
         }
-        if (isPng(head) || isJpeg(head) || isGif(head) || isWebp(head)) {
-            return;
+        if (isPng(head)) {
+            return ImageFormat.PNG;
+        }
+        if (isJpeg(head)) {
+            return ImageFormat.JPEG;
+        }
+        if (isGif(head)) {
+            return ImageFormat.GIF;
+        }
+        if (isWebp(head)) {
+            return ImageFormat.WEBP;
         }
         throw new BusinessException(GlobalErrorCode.INVALID_INPUT);
     }
@@ -180,5 +193,28 @@ public class LocalImageStorage implements ImageStorage {
             throw new BusinessException(GlobalErrorCode.INVALID_INPUT);
         }
         return ext;
+    }
+
+    private enum ImageFormat {
+        PNG(".png", Set.of(".png")),
+        JPEG(".jpg", Set.of(".jpg", ".jpeg")),
+        GIF(".gif", Set.of(".gif")),
+        WEBP(".webp", Set.of(".webp"));
+
+        private final String canonicalExtension;
+        private final Set<String> acceptedExtensions;
+
+        ImageFormat(String canonicalExtension, Set<String> acceptedExtensions) {
+            this.canonicalExtension = canonicalExtension;
+            this.acceptedExtensions = acceptedExtensions;
+        }
+
+        boolean matchesExtension(String extension) {
+            return acceptedExtensions.contains(extension);
+        }
+
+        String canonicalExtension() {
+            return canonicalExtension;
+        }
     }
 }
