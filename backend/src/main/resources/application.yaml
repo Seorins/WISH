@@ -63,6 +63,6 @@ storage:
   local:
     # OS 파일시스템상 업로드 디렉토리. 상대경로면 JVM cwd 기준. 운영은 환경변수로 절대경로 주입.
     upload-dir: ${STORAGE_UPLOAD_DIR:./uploads}
-    # 외부 노출 servlet 상대 prefix. SecurityConfig.PUBLIC_ENDPOINTS 와 StorageConfig 의 핸들러 매핑이
-    # 같은 prefix 를 공유하므로 변경 시 두 곳 모두 동기화 필요.
+    # 외부 노출 servlet 상대 prefix. StorageConfig 정적 핸들러와 SecurityConfig permit 이 모두 이 값을
+    # 공유하므로 환경변수로 변경해도 한 곳에서 자동 동기화된다.
     public-url-prefix: ${STORAGE_PUBLIC_URL_PREFIX:/uploads}
