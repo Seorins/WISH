@@ -41,3 +41,68 @@ class NormalizedPoseResponse(BaseModel):
     scale_reference: float = Field(..., description="Reference body scale used for normalization")
     hip_center: HipCenterResponse
     landmarks: list[NormalizedLandmarkResponse]
+
+
+class MarchEvaluationRequest(BaseModel):
+    frame: PoseFrameRequest
+    previous_state: str = Field(default="idle", description="Previous evaluator state")
+    step_count: int = Field(default=0, ge=0, description="Current accumulated march step count")
+    target_steps: int = Field(default=8, ge=1, description="Target march step count")
+    last_counted_side: str | None = Field(
+        default=None,
+        description="Last counted side to prevent duplicate counting",
+    )
+    last_seen_side: str | None = Field(
+        default=None,
+        description="Last side that was detected as dominant",
+    )
+    baseline_left_knee_y: float | None = Field(
+        default=None,
+        description="Baseline left knee y position captured from the lowest ready posture",
+    )
+    baseline_right_knee_y: float | None = Field(
+        default=None,
+        description="Baseline right knee y position captured from the lowest ready posture",
+    )
+    left_armed: bool = Field(
+        default=True,
+        description="Whether the left side can count a new peak",
+    )
+    right_armed: bool = Field(
+        default=True,
+        description="Whether the right side can count a new peak",
+    )
+    warmup_frames_remaining: int = Field(
+        default=15,
+        ge=0,
+        description="Remaining warmup frames used to collect baseline before counting",
+    )
+
+
+class MarchFeaturesResponse(BaseModel):
+    left_knee_lift: float
+    right_knee_lift: float
+    left_knee_angle: float | None = None
+    right_knee_angle: float | None = None
+    torso_tilt: float
+    baseline_left_knee_y: float | None = None
+    baseline_right_knee_y: float | None = None
+    current_left_knee_y: float | None = None
+    current_right_knee_y: float | None = None
+
+
+class MarchEvaluationResponse(BaseModel):
+    motion_id: str
+    state: str
+    step_count: int
+    accuracy: float
+    feedback: str | None = None
+    tracking: str
+    last_counted_side: str | None = None
+    last_seen_side: str | None = None
+    baseline_left_knee_y: float | None = None
+    baseline_right_knee_y: float | None = None
+    left_armed: bool = True
+    right_armed: bool = True
+    warmup_frames_remaining: int = 0
+    features: MarchFeaturesResponse
