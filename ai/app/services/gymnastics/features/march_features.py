@@ -13,6 +13,8 @@ from app.services.gymnastics.constants import (
 )
 from app.services.gymnastics.types import NormalizedLandmark, NormalizedPoseFrame
 
+NUMERIC_EPSILON = 1e-6
+
 
 @dataclass(slots=True)
 class MarchFeatureSet:
@@ -94,7 +96,7 @@ def _compute_joint_angle(
 
     magnitude_a = _vector_magnitude(vector_a)
     magnitude_b = _vector_magnitude(vector_b)
-    if magnitude_a == 0.0 or magnitude_b == 0.0:
+    if magnitude_a < NUMERIC_EPSILON or magnitude_b < NUMERIC_EPSILON:
         return None
 
     dot_product = vector_a[0] * vector_b[0] + vector_a[1] * vector_b[1]

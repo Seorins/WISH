@@ -70,16 +70,16 @@ class MarchEvaluator(BaseEvaluator):
                 current_knee_y=current_right_knee_y,
             )
         else:
-            next_baseline_left = baseline_left_knee_y if baseline_left_knee_y is not None else current_left_knee_y
-            next_baseline_right = (
-                baseline_right_knee_y if baseline_right_knee_y is not None else current_right_knee_y
-            )
+            next_baseline_left = baseline_left_knee_y
+            next_baseline_right = baseline_right_knee_y
 
         features = extract_march_features(
             frame,
             baseline_left_knee_y=next_baseline_left,
             baseline_right_knee_y=next_baseline_right,
         )
+
+        baseline_ready = self._has_valid_baseline(next_baseline_left, next_baseline_right)
 
         if frame.tracking != "tracking_ok":
             return EvaluatorResult(
@@ -93,12 +93,13 @@ class MarchEvaluator(BaseEvaluator):
                 last_seen_side=last_seen_side,
                 left_armed=left_armed,
                 right_armed=right_armed,
-                warmup_frames_remaining=effective_warmup,
+                warmup_frames_remaining=max(effective_warmup, 1) if not baseline_ready else effective_warmup,
                 baseline_left_knee_y=next_baseline_left,
                 baseline_right_knee_y=next_baseline_right,
             )
 
-        if effective_warmup > 0:
+        if effective_warmup > 0 or not baseline_ready:
+            next_warmup_remaining = max(effective_warmup - 1, 0) if baseline_ready else max(effective_warmup, 1)
             return EvaluatorResult(
                 motion_id=self.motion_id,
                 state="idle",
@@ -110,7 +111,7 @@ class MarchEvaluator(BaseEvaluator):
                 last_seen_side=last_seen_side,
                 left_armed=True,
                 right_armed=True,
-                warmup_frames_remaining=effective_warmup - 1,
+                warmup_frames_remaining=next_warmup_remaining,
                 baseline_left_knee_y=next_baseline_left,
                 baseline_right_knee_y=next_baseline_right,
             )
@@ -173,6 +174,13 @@ class MarchEvaluator(BaseEvaluator):
         if baseline_knee_y is None:
             return current_knee_y
         return max(baseline_knee_y, current_knee_y)
+
+    def _has_valid_baseline(
+        self,
+        baseline_left_knee_y: float | None,
+        baseline_right_knee_y: float | None,
+    ) -> bool:
+        return baseline_left_knee_y is not None and baseline_right_knee_y is not None
 
     def _resolve_next_state(self, features: MarchFeatureSet) -> str:
         if self._is_left_peak(features):
