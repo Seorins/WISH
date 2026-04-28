@@ -44,6 +44,9 @@ def select_march_feedback_candidate(
     thigh_angle_threshold: float,
     torso_tilt_max: float,
 ) -> FeedbackCandidate | None:
+    if state == "complete":
+        return None
+
     if tracking != "tracking_ok":
         return TRACKING_LOW
 
