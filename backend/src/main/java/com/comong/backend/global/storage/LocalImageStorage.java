@@ -149,6 +149,11 @@ public class LocalImageStorage implements ImageStorage {
             log.warn("magic-bytes 읽기 IO 실패: {}", e.getMessage(), e);
             throw new BusinessException(StorageErrorCode.STORAGE_FAILURE);
         }
+        // truncated 파일 차단 — 시그니처만 들어있고 실제 이미지 데이터는 없는 케이스 (8 byte PNG 헤더만 있는 파일 등)
+        // 보안 위협은 아니지만 입력 검증 정확성 위해 거부.
+        if (head.length < MAGIC_HEAD_SIZE) {
+            throw new BusinessException(StorageErrorCode.INVALID_IMAGE);
+        }
         if (isPng(head)) {
             return ImageFormat.PNG;
         }

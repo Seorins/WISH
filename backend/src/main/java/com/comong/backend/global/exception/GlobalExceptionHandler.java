@@ -45,7 +45,9 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     public ResponseEntity<ApiResponse<Void>> handleMaxUploadSizeExceeded(
             MaxUploadSizeExceededException e) {
-        log.warn("multipart 한도 초과: {}", e.getMessage());
+        // cause (SizeLimitExceededException 등) 추적용으로 스택 트레이스 함께 출력.
+        // 운영 트래픽이 늘어 로그 노이즈가 되면 sampling 또는 message-only 로 다운그레이드 검토.
+        log.warn("multipart 한도 초과: {}", e.getMessage(), e);
         return ResponseEntity.status(StorageErrorCode.PAYLOAD_TOO_LARGE.getStatus())
                 .body(ApiResponse.error(StorageErrorCode.PAYLOAD_TOO_LARGE));
     }
