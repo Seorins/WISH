@@ -23,7 +23,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 /**
- * 사용자가 색칠한 작품. 도안(sketchCode 로 FE 정적 자산과 매칭)과 합성된 결과 이미지(imageUrl), 누적 플레이 시간, 공개 여부를 보관한다.
+ * 사용자가 색칠한 작품. 도안(sketchCode 정수 코드로 FE 정적 자산과 매칭)과 합성된 결과 이미지(imageUrl), 누적 플레이 시간, 공개 여부를 보관한다.
  *
  * <p>영역별 색상 데이터는 저장하지 않는다. FE 가 imageUrl PNG 를 캔버스에 깔고 덧칠/빈 칸 형태로 수정 UX 를 처리한다.
  */
@@ -46,11 +46,11 @@ public class Artwork {
     private PatientProfile patientProfile;
 
     /**
-     * FE 정적 자산의 도안 식별자 (예: "cat-01"). 자유 그리기 (밑그림 없는 작품) 케이스에서는 {@code null}. 도안 기반 작품의 경우 한 번 정해진
-     * 코드는 재사용/변경 금지.
+     * FE 정적 자산의 도안 식별자 (정수 코드). 자유 그리기 (밑그림 없는 작품) 케이스에서는 {@code null}. 도안 기반 작품의 경우 한 번 정해진 코드는
+     * 재사용/변경 금지.
      */
-    @Column(name = "sketch_code", length = 50)
-    private String sketchCode;
+    @Column(name = "sketch_code")
+    private Integer sketchCode;
 
     /** 합성된 결과 이미지의 URL. 실제 파일은 별도 스토리지에 저장된다. */
     @Column(name = "image_url", nullable = false, length = 500)
@@ -73,7 +73,7 @@ public class Artwork {
     @Builder
     private Artwork(
             PatientProfile patientProfile,
-            String sketchCode,
+            Integer sketchCode,
             String imageUrl,
             int playDurationSeconds,
             boolean isPublic) {

@@ -71,12 +71,12 @@ class ArtworkControllerIntegrationTest extends IntegrationTestSupport {
                                 .file(imagePart())
                                 .file(
                                         requestPart(
-                                                "{\"sketchCode\":\"cat-01\",\"playDurationSeconds\":60,\"isPublic\":false}"))
+                                                "{\"sketchCode\":1,\"playDurationSeconds\":60,\"isPublic\":false}"))
                                 .header("Authorization", "Bearer " + token))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.code").value("SUCCESS"))
                 .andExpect(jsonPath("$.data.id").isNumber())
-                .andExpect(jsonPath("$.data.sketchCode").value("cat-01"))
+                .andExpect(jsonPath("$.data.sketchCode").value(1))
                 .andExpect(jsonPath("$.data.playDurationSeconds").value(60))
                 .andExpect(jsonPath("$.data.isPublic").value(false))
                 .andExpect(
@@ -114,7 +114,7 @@ class ArtworkControllerIntegrationTest extends IntegrationTestSupport {
                                 .file(imagePart())
                                 .file(
                                         requestPart(
-                                                "{\"sketchCode\":\"cat-01\",\"playDurationSeconds\":-5,\"isPublic\":false}"))
+                                                "{\"sketchCode\":1,\"playDurationSeconds\":-5,\"isPublic\":false}"))
                                 .header("Authorization", "Bearer " + token))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("G-001"));
@@ -124,25 +124,25 @@ class ArtworkControllerIntegrationTest extends IntegrationTestSupport {
     void getMyList_returnsOnlyOwnArtworks() throws Exception {
         String aliceToken = setupUserWithProfile("alice2@example.com", "alice2", "A", "ak");
         String bobToken = setupUserWithProfile("bob2@example.com", "bob2", "B", "bk");
-        createArtwork(aliceToken, "cat-01", false);
-        createArtwork(bobToken, "cat-02", false);
+        createArtwork(aliceToken, 1, false);
+        createArtwork(bobToken, 2, false);
 
         mockMvc.perform(get("/artworks/me").header("Authorization", "Bearer " + aliceToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.content.length()").value(1))
-                .andExpect(jsonPath("$.data.content[0].sketchCode").value("cat-01"));
+                .andExpect(jsonPath("$.data.content[0].sketchCode").value(1));
     }
 
     @Test
     void getPublicList_anonymousAllowed() throws Exception {
         String token = setupUserWithProfile("public@example.com", "public", "P", "pk");
-        createArtwork(token, "cat-pub", true);
-        createArtwork(token, "cat-priv", false);
+        createArtwork(token, 10, true);
+        createArtwork(token, 11, false);
 
         mockMvc.perform(get("/artworks/public"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.content.length()").value(1))
-                .andExpect(jsonPath("$.data.content[0].sketchCode").value("cat-pub"))
+                .andExpect(jsonPath("$.data.content[0].sketchCode").value(10))
                 // 공개 응답 author 는 nickname 만 노출, 내부 PK (patientProfileId) 는 응답에서 제외
                 .andExpect(jsonPath("$.data.content[0].author.nickname").value("pk"))
                 .andExpect(jsonPath("$.data.content[0].author.patientProfileId").doesNotExist());
@@ -157,7 +157,7 @@ class ArtworkControllerIntegrationTest extends IntegrationTestSupport {
                                 // image 파트 누락
                                 .file(
                                         requestPart(
-                                                "{\"sketchCode\":\"cat-01\",\"playDurationSeconds\":0,\"isPublic\":false}"))
+                                                "{\"sketchCode\":1,\"playDurationSeconds\":0,\"isPublic\":false}"))
                                 .header("Authorization", "Bearer " + token))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("G-001"));
@@ -179,18 +179,18 @@ class ArtworkControllerIntegrationTest extends IntegrationTestSupport {
     @Test
     void getDetail_publicAccessibleByAnonymous() throws Exception {
         String token = setupUserWithProfile("carol@example.com", "carol", "Carol", "carol-kid");
-        Long id = createArtwork(token, "cat-01", true);
+        Long id = createArtwork(token, 1, true);
 
         mockMvc.perform(get("/artworks/" + id))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.sketchCode").value("cat-01"));
+                .andExpect(jsonPath("$.data.sketchCode").value(1));
     }
 
     @Test
     void getDetail_privateReturnsNotFoundToOthers() throws Exception {
         String aliceToken = setupUserWithProfile("alice3@example.com", "alice3", "A", "ak");
         String bobToken = setupUserWithProfile("bob3@example.com", "bob3", "B", "bk");
-        Long id = createArtwork(aliceToken, "cat-01", false);
+        Long id = createArtwork(aliceToken, 1, false);
 
         // anon
         mockMvc.perform(get("/artworks/" + id))
@@ -207,7 +207,7 @@ class ArtworkControllerIntegrationTest extends IntegrationTestSupport {
     void deleteArtwork_byOwnerSucceeds_byOtherForbidden() throws Exception {
         String aliceToken = setupUserWithProfile("alice4@example.com", "alice4", "A", "ak");
         String bobToken = setupUserWithProfile("bob4@example.com", "bob4", "B", "bk");
-        Long id = createArtwork(aliceToken, "cat-01", true);
+        Long id = createArtwork(aliceToken, 1, true);
 
         // 다른 사용자 삭제 시도 → 403 (소유권 없음)
         mockMvc.perform(delete("/artworks/" + id).header("Authorization", "Bearer " + bobToken))
@@ -279,16 +279,16 @@ class ArtworkControllerIntegrationTest extends IntegrationTestSupport {
                 .andExpect(status().isCreated());
     }
 
-    private Long createArtwork(String token, String sketchCode, boolean isPublic) throws Exception {
+    private Long createArtwork(String token, int sketchCode, boolean isPublic) throws Exception {
         String body =
                 mockMvc.perform(
                                 artworkMultipart(HttpMethod.POST, "/artworks")
                                         .file(imagePart())
                                         .file(
                                                 requestPart(
-                                                        "{\"sketchCode\":\""
+                                                        "{\"sketchCode\":"
                                                                 + sketchCode
-                                                                + "\",\"playDurationSeconds\":10,\"isPublic\":"
+                                                                + ",\"playDurationSeconds\":10,\"isPublic\":"
                                                                 + isPublic
                                                                 + "}"))
                                         .header("Authorization", "Bearer " + token))

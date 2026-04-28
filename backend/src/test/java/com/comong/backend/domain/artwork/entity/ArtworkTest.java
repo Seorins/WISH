@@ -39,7 +39,7 @@ class ArtworkTest {
                         () ->
                                 Artwork.builder()
                                         .patientProfile(null)
-                                        .sketchCode("cat-01")
+                                        .sketchCode(1)
                                         .imageUrl("/api/v1/uploads/x.png")
                                         .playDurationSeconds(0)
                                         .isPublic(false)
@@ -72,7 +72,7 @@ class ArtworkTest {
                         () ->
                                 Artwork.builder()
                                         .patientProfile(profile)
-                                        .sketchCode("cat-01")
+                                        .sketchCode(1)
                                         .imageUrl(null)
                                         .playDurationSeconds(0)
                                         .isPublic(false)
@@ -88,7 +88,7 @@ class ArtworkTest {
                         () ->
                                 Artwork.builder()
                                         .patientProfile(profile)
-                                        .sketchCode("cat-01")
+                                        .sketchCode(1)
                                         .imageUrl("/api/v1/uploads/x.png")
                                         .playDurationSeconds(-1)
                                         .isPublic(false)
@@ -104,7 +104,7 @@ class ArtworkTest {
         Artwork artwork =
                 Artwork.builder()
                         .patientProfile(profileWithoutUser)
-                        .sketchCode("cat-01")
+                        .sketchCode(1)
                         .imageUrl("/api/v1/uploads/x.png")
                         .playDurationSeconds(0)
                         .isPublic(false)
@@ -121,7 +121,7 @@ class ArtworkTest {
 
         return Artwork.builder()
                 .patientProfile(profile)
-                .sketchCode("cat-01")
+                .sketchCode(1)
                 .imageUrl("/api/v1/uploads/x.png")
                 .playDurationSeconds(0)
                 .isPublic(false)

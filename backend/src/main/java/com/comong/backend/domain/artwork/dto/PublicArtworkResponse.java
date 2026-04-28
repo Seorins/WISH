@@ -13,7 +13,7 @@ import com.comong.backend.domain.artwork.entity.Artwork;
  */
 public record PublicArtworkResponse(
         Long id,
-        String sketchCode,
+        Integer sketchCode,
         String imageUrl,
         int playDurationSeconds,
         LocalDateTime createdAt,
