@@ -31,7 +31,7 @@ const ART_EXIT_PORTAL = { xRatio: 0.44, yRatio: 0.86, widthRatio: 0.12, heightRa
 const ART_RETURN_SPAWN = { xRatio: 0.585, yRatio: 0.855 }
 const RUMI_TALK_ICON = { xRatio: 0.335, yRatio: 0.33 }
 const RUMI_INTERACTION = { xRatio: 0.335, yRatio: 0.55, radiusRatio: 0.06 }
-const ALBUM_OBJECT = { xRatio: 0.757, yRatio: 0.603, sizeRatio: 0.105 }
+const ALBUM_OBJECT = { xRatio: 0.768, yRatio: 0.638, sizeRatio: 0.086 }
 const DIALOG_TEXT_BOX = {
   withChoicesX: 790,
   withChoicesWidth: 1260,
@@ -74,7 +74,6 @@ export class ArtSelectScene extends Phaser.Scene {
   private dialogFrameTop = 0
   private dialogTextWrapWidth = 0
   private dialogScale = 1
-  private albumOverlay: Phaser.GameObjects.Container | null = null
   private isAlbumVisible = false
 
   private isDialogVisible = false
@@ -102,7 +101,6 @@ export class ArtSelectScene extends Phaser.Scene {
     }
 
     if (this.isAlbumVisible) {
-      this.closeAlbum()
       return
     }
 
@@ -452,12 +450,30 @@ export class ArtSelectScene extends Phaser.Scene {
     backgroundHeight: number,
   ) {
     const albumSize = backgroundWidth * ALBUM_OBJECT.sizeRatio
+    const albumX = backgroundLeft + backgroundWidth * ALBUM_OBJECT.xRatio
+    const albumY = backgroundTop + backgroundHeight * ALBUM_OBJECT.yRatio
+    const albumGlow = this.add
+      .image(albumX, albumY, 'art-ui-album')
+      .setDepth(7)
+      .setDisplaySize(albumSize * 1.08, albumSize * 1.08)
+      .setTint(0xffed9b)
+      .setAlpha(0.25)
+      .setBlendMode(Phaser.BlendModes.ADD)
+    const glowScale = { x: albumGlow.scaleX, y: albumGlow.scaleY }
+
+    this.tweens.add({
+      targets: albumGlow,
+      alpha: 0.42,
+      scaleX: glowScale.x * 1.05,
+      scaleY: glowScale.y * 1.05,
+      duration: 900,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    })
+
     const album = this.add
-      .image(
-        backgroundLeft + backgroundWidth * ALBUM_OBJECT.xRatio,
-        backgroundTop + backgroundHeight * ALBUM_OBJECT.yRatio,
-        'art-ui-album',
-      )
+      .image(albumX, albumY, 'art-ui-album')
       .setDepth(8)
       .setDisplaySize(albumSize, albumSize)
       .setInteractive({ useHandCursor: true })
@@ -481,6 +497,8 @@ export class ArtSelectScene extends Phaser.Scene {
         event: Phaser.Types.Input.EventData,
       ) => {
         event.stopPropagation()
+        album.clearTint()
+        album.setScale(baseScale.x, baseScale.y)
         this.openAlbum()
       },
     )
@@ -498,63 +516,22 @@ export class ArtSelectScene extends Phaser.Scene {
       this.closeDialog(false)
     }
 
-    const { width: vw, height: vh } = this.scale
-    const dim = this.add
-      .rectangle(vw / 2, vh / 2, vw, vh, 0x000000, 0.52)
-      .setDepth(40)
-      .setScrollFactor(0)
-      .setInteractive()
-
-    const albumSize = Math.min(vw * 0.58, vh * 0.78)
-    const album = this.add
-      .image(vw / 2, vh / 2, 'art-ui-album')
-      .setDepth(41)
-      .setDisplaySize(albumSize, albumSize)
-      .setScrollFactor(0)
-      .setInteractive({ useHandCursor: true })
-
-    album.on(
-      'pointerdown',
-      (
-        _pointer: Phaser.Input.Pointer,
-        _x: number,
-        _y: number,
-        event: Phaser.Types.Input.EventData,
-      ) => event.stopPropagation(),
-    )
-
-    dim.on(
-      'pointerdown',
-      (
-        _pointer: Phaser.Input.Pointer,
-        _x: number,
-        _y: number,
-        event: Phaser.Types.Input.EventData,
-      ) => {
-        event.stopPropagation()
-        this.closeAlbum()
-      },
-    )
-
-    this.albumOverlay = this.add.container(0, 0, [dim, album]).setDepth(40).setAlpha(0)
     this.isAlbumVisible = true
-
-    this.tweens.add({
-      targets: this.albumOverlay,
-      alpha: 1,
-      duration: 160,
-      ease: 'Sine.easeOut',
+    const albumScene = this.scene.get('ArtAlbumScene')
+    albumScene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.isAlbumVisible = false
     })
+    this.scene.launch('ArtAlbumScene')
+    this.scene.bringToTop('ArtAlbumScene')
   }
 
   private closeAlbum() {
-    if (!this.albumOverlay) {
+    if (!this.isAlbumVisible) {
       this.isAlbumVisible = false
       return
     }
 
-    this.albumOverlay.destroy(true)
-    this.albumOverlay = null
+    this.scene.stop('ArtAlbumScene')
     this.isAlbumVisible = false
   }
 

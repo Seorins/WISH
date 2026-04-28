@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
 import { StartScene } from './scenes/start/StartScene'
+import { ArtAlbumScene } from './scenes/themes/art/album/ArtAlbumScene'
 import { ArtColoringScene } from './scenes/themes/art/coloring/ArtColoringScene'
 import { ArtColoringSelectScene } from './scenes/themes/art/coloring/ArtColoringSelectScene'
 import { ArtFreeDrawingScene } from './scenes/themes/art/free-drawing/ArtFreeDrawingScene'
@@ -24,6 +25,7 @@ export function createGame(parent: HTMLElement): Phaser.Game {
       StartScene,
       VillageScene,
       ArtSelectScene,
+      ArtAlbumScene,
       ArtFreeDrawingScene,
       ArtColoringSelectScene,
       ArtColoringScene,
