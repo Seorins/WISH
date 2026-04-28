@@ -21,26 +21,43 @@ def stabilize_feedback(
     state: FeedbackStabilizerState,
     streak_threshold: int,
     display_frames: int,
+    clear_frames: int,
 ) -> FeedbackStabilizerState:
-    same_candidate = candidate is not None and candidate.code == state.candidate_code
-    new_streak = (state.candidate_streak + 1) if same_candidate else (1 if candidate else 0)
+    next_candidate_code = candidate.code if candidate is not None else None
+    next_candidate_text = candidate.text if candidate is not None else None
 
-    if candidate is not None and new_streak >= streak_threshold:
-        return FeedbackStabilizerState(
-            displayed_code=candidate.code,
-            displayed_text=candidate.text,
-            displayed_frames=display_frames,
-            candidate_code=candidate.code,
-            candidate_text=candidate.text,
-            candidate_streak=new_streak,
-        )
+    same_candidate = (
+        next_candidate_code == state.candidate_code
+        and next_candidate_text == state.candidate_text
+    )
+    next_candidate_streak = state.candidate_streak + 1 if same_candidate else 1
 
-    remaining = max(state.displayed_frames - 1, 0)
+    displayed_code = state.displayed_code
+    displayed_text = state.displayed_text
+    remaining_frames = max(state.displayed_frames - 1, 0)
+
+    if candidate is not None:
+        if displayed_code == candidate.code and displayed_text == candidate.text:
+            remaining_frames = display_frames
+        elif next_candidate_streak >= streak_threshold and state.displayed_frames <= 0:
+            displayed_code = candidate.code
+            displayed_text = candidate.text
+            remaining_frames = display_frames
+    else:
+        if displayed_text is not None and next_candidate_streak >= clear_frames:
+            displayed_code = None
+            displayed_text = None
+            remaining_frames = 0
+
+    if remaining_frames <= 0 and candidate is None:
+        displayed_code = None
+        displayed_text = None
+
     return FeedbackStabilizerState(
-        displayed_code=state.displayed_code if remaining > 0 else None,
-        displayed_text=state.displayed_text if remaining > 0 else None,
-        displayed_frames=remaining,
-        candidate_code=candidate.code if candidate is not None else None,
-        candidate_text=candidate.text if candidate is not None else None,
-        candidate_streak=new_streak,
+        displayed_code=displayed_code,
+        displayed_text=displayed_text,
+        displayed_frames=remaining_frames,
+        candidate_code=next_candidate_code,
+        candidate_text=next_candidate_text,
+        candidate_streak=next_candidate_streak,
     )

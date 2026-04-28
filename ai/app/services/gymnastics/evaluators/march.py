@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from math import sqrt
 
 from app.services.gymnastics.constants import (
+    DEFAULT_FEEDBACK_CLEAR_FRAMES,
     DEFAULT_FEEDBACK_DISPLAY_FRAMES,
     DEFAULT_FEEDBACK_STREAK_THRESHOLD,
     DEFAULT_MARCH_DEPTH_SHIFT_MAX,
@@ -33,6 +34,7 @@ class MarchEvaluatorConfig:
     depth_shift_max: float = DEFAULT_MARCH_DEPTH_SHIFT_MAX
     feedback_streak_threshold: int = DEFAULT_FEEDBACK_STREAK_THRESHOLD
     feedback_display_frames: int = DEFAULT_FEEDBACK_DISPLAY_FRAMES
+    feedback_clear_frames: int = DEFAULT_FEEDBACK_CLEAR_FRAMES
 
 
 class MarchEvaluator(BaseEvaluator):
@@ -274,6 +276,7 @@ class MarchEvaluator(BaseEvaluator):
             state=previous_feedback_state,
             streak_threshold=self.config.feedback_streak_threshold,
             display_frames=self.config.feedback_display_frames,
+            clear_frames=self.config.feedback_clear_frames,
         )
 
     def _make_result(

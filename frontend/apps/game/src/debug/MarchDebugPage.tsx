@@ -19,21 +19,28 @@ type MarchApiResponse = {
   tracking: string
   last_counted_side: string | null
   last_seen_side: string | null
-  baseline_left_knee_y: number | null
-  baseline_right_knee_y: number | null
   left_armed: boolean
   right_armed: boolean
-  warmup_frames_remaining: number
+  reference_hip_x: number | null
+  reference_hip_y: number | null
+  reference_scale: number | null
+  displayed_feedback_code: string | null
+  displayed_feedback_text: string | null
+  displayed_feedback_frames: number
+  candidate_feedback_code: string | null
+  candidate_feedback_text: string | null
+  candidate_feedback_streak: number
   features: {
     left_knee_lift: number
     right_knee_lift: number
+    left_thigh_angle: number
+    right_thigh_angle: number
     left_knee_angle: number | null
     right_knee_angle: number | null
     torso_tilt: number
-    baseline_left_knee_y: number | null
-    baseline_right_knee_y: number | null
-    current_left_knee_y: number | null
-    current_right_knee_y: number | null
+    pelvis_shift_x: number
+    pelvis_shift_y: number
+    pelvis_depth_shift: number
   }
 }
 
@@ -46,7 +53,6 @@ type StateLogEntry = {
 
 const DEFAULT_AI_BASE_URL = 'http://localhost:8001/api/v1'
 const DEFAULT_TARGET_STEPS = 30
-const DEFAULT_WARMUP_FRAMES = 15
 const MAX_STATE_LOGS = 12
 
 function MarchDebugPage() {
@@ -59,11 +65,17 @@ function MarchDebugPage() {
   const stepCountRef = useRef(0)
   const lastCountedSideRef = useRef<string | null>(null)
   const lastSeenSideRef = useRef<string | null>(null)
-  const baselineLeftKneeYRef = useRef<number | null>(null)
-  const baselineRightKneeYRef = useRef<number | null>(null)
   const leftArmedRef = useRef(true)
   const rightArmedRef = useRef(true)
-  const warmupFramesRemainingRef = useRef(DEFAULT_WARMUP_FRAMES)
+  const referenceHipXRef = useRef<number | null>(null)
+  const referenceHipYRef = useRef<number | null>(null)
+  const referenceScaleRef = useRef<number | null>(null)
+  const displayedFeedbackCodeRef = useRef<string | null>(null)
+  const displayedFeedbackTextRef = useRef<string | null>(null)
+  const displayedFeedbackFramesRef = useRef(0)
+  const candidateFeedbackCodeRef = useRef<string | null>(null)
+  const candidateFeedbackTextRef = useRef<string | null>(null)
+  const candidateFeedbackStreakRef = useRef(0)
 
   const [aiBaseUrl, setAiBaseUrl] = useState(DEFAULT_AI_BASE_URL)
   const [running, setRunning] = useState(false)
@@ -83,11 +95,17 @@ function MarchDebugPage() {
     stepCountRef.current = 0
     lastCountedSideRef.current = null
     lastSeenSideRef.current = null
-    baselineLeftKneeYRef.current = null
-    baselineRightKneeYRef.current = null
     leftArmedRef.current = true
     rightArmedRef.current = true
-    warmupFramesRemainingRef.current = DEFAULT_WARMUP_FRAMES
+    referenceHipXRef.current = null
+    referenceHipYRef.current = null
+    referenceScaleRef.current = null
+    displayedFeedbackCodeRef.current = null
+    displayedFeedbackTextRef.current = null
+    displayedFeedbackFramesRef.current = 0
+    candidateFeedbackCodeRef.current = null
+    candidateFeedbackTextRef.current = null
+    candidateFeedbackStreakRef.current = 0
     setResult(null)
     setStateLogs([])
   }
@@ -142,11 +160,17 @@ function MarchDebugPage() {
                 target_steps: DEFAULT_TARGET_STEPS,
                 last_counted_side: lastCountedSideRef.current,
                 last_seen_side: lastSeenSideRef.current,
-                baseline_left_knee_y: baselineLeftKneeYRef.current,
-                baseline_right_knee_y: baselineRightKneeYRef.current,
                 left_armed: leftArmedRef.current,
                 right_armed: rightArmedRef.current,
-                warmup_frames_remaining: warmupFramesRemainingRef.current,
+                reference_hip_x: referenceHipXRef.current,
+                reference_hip_y: referenceHipYRef.current,
+                reference_scale: referenceScaleRef.current,
+                displayed_feedback_code: displayedFeedbackCodeRef.current,
+                displayed_feedback_text: displayedFeedbackTextRef.current,
+                displayed_feedback_frames: displayedFeedbackFramesRef.current,
+                candidate_feedback_code: candidateFeedbackCodeRef.current,
+                candidate_feedback_text: candidateFeedbackTextRef.current,
+                candidate_feedback_streak: candidateFeedbackStreakRef.current,
               }),
             })
 
@@ -177,11 +201,17 @@ function MarchDebugPage() {
             stepCountRef.current = payload.step_count
             lastCountedSideRef.current = payload.last_counted_side
             lastSeenSideRef.current = payload.last_seen_side
-            baselineLeftKneeYRef.current = payload.baseline_left_knee_y
-            baselineRightKneeYRef.current = payload.baseline_right_knee_y
             leftArmedRef.current = payload.left_armed
             rightArmedRef.current = payload.right_armed
-            warmupFramesRemainingRef.current = payload.warmup_frames_remaining
+            referenceHipXRef.current = payload.reference_hip_x
+            referenceHipYRef.current = payload.reference_hip_y
+            referenceScaleRef.current = payload.reference_scale
+            displayedFeedbackCodeRef.current = payload.displayed_feedback_code
+            displayedFeedbackTextRef.current = payload.displayed_feedback_text
+            displayedFeedbackFramesRef.current = payload.displayed_feedback_frames
+            candidateFeedbackCodeRef.current = payload.candidate_feedback_code
+            candidateFeedbackTextRef.current = payload.candidate_feedback_text
+            candidateFeedbackStreakRef.current = payload.candidate_feedback_streak
             setResult(payload)
             setStatus(payload.feedback ?? 'Running normally')
           } catch (fetchError) {
@@ -253,12 +283,7 @@ function MarchDebugPage() {
           <h1 style={{ margin: 0, fontSize: '32px' }}>March AI Debug</h1>
           <p style={{ marginTop: '8px', color: '#4d5b71' }}>
             Capture pose landmarks from the webcam, send them to the `march/evaluate` API, and
-            inspect baseline-based knee raises, left/right alternation, and peak detection in real
-            time.
-          </p>
-          <p style={{ marginTop: '4px', color: '#6b7280', fontSize: '14px' }}>
-            Hold the ready pose for about 0.5 seconds after pressing Start so the warmup baseline
-            can settle.
+            inspect in-place gait counting and feedback stabilization in real time.
           </p>
 
           <label style={{ display: 'block', marginTop: '16px', fontWeight: 600 }}>
@@ -327,25 +352,37 @@ function MarchDebugPage() {
           <InfoRow label="stepCount" value={String(result?.step_count ?? 0)} />
           <InfoRow label="accuracy" value={String(result?.accuracy ?? '-')} />
           <InfoRow label="feedback" value={result?.feedback ?? '-'} />
-          <InfoRow label="warmupFrames" value={String(result?.warmup_frames_remaining ?? 0)} />
+          <InfoRow
+            label="displayedFeedbackFrames"
+            value={String(result?.displayed_feedback_frames ?? 0)}
+          />
+          <InfoRow label="candidateFeedback" value={result?.candidate_feedback_text ?? '-'} />
+          <InfoRow
+            label="candidateFeedbackStreak"
+            value={String(result?.candidate_feedback_streak ?? 0)}
+          />
           <InfoRow label="leftArmed" value={String(result?.left_armed ?? true)} />
           <InfoRow label="rightArmed" value={String(result?.right_armed ?? true)} />
-          <InfoRow label="baselineLeftKneeY" value={formatNumber(result?.baseline_left_knee_y)} />
-          <InfoRow label="baselineRightKneeY" value={formatNumber(result?.baseline_right_knee_y)} />
+          <InfoRow label="referenceHipX" value={formatNumber(result?.reference_hip_x)} />
+          <InfoRow label="referenceHipY" value={formatNumber(result?.reference_hip_y)} />
+          <InfoRow label="referenceScale" value={formatNumber(result?.reference_scale)} />
 
           <h3 style={{ marginTop: '24px', marginBottom: '12px' }}>Features</h3>
           <InfoRow label="leftKneeLift" value={formatNumber(result?.features.left_knee_lift)} />
           <InfoRow label="rightKneeLift" value={formatNumber(result?.features.right_knee_lift)} />
+          <InfoRow label="leftThighAngle" value={formatNumber(result?.features.left_thigh_angle)} />
+          <InfoRow
+            label="rightThighAngle"
+            value={formatNumber(result?.features.right_thigh_angle)}
+          />
           <InfoRow label="leftKneeAngle" value={formatNumber(result?.features.left_knee_angle)} />
           <InfoRow label="rightKneeAngle" value={formatNumber(result?.features.right_knee_angle)} />
           <InfoRow label="torsoTilt" value={formatNumber(result?.features.torso_tilt)} />
+          <InfoRow label="pelvisShiftX" value={formatNumber(result?.features.pelvis_shift_x)} />
+          <InfoRow label="pelvisShiftY" value={formatNumber(result?.features.pelvis_shift_y)} />
           <InfoRow
-            label="currentLeftKneeY"
-            value={formatNumber(result?.features.current_left_knee_y)}
-          />
-          <InfoRow
-            label="currentRightKneeY"
-            value={formatNumber(result?.features.current_right_knee_y)}
+            label="pelvisDepthShift"
+            value={formatNumber(result?.features.pelvis_depth_shift)}
           />
 
           <h3 style={{ marginTop: '24px', marginBottom: '12px' }}>State Log</h3>
