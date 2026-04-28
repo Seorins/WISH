@@ -57,16 +57,33 @@ export class HandTracker {
   async start(): Promise<void> {
     if (this.isStarted) return
 
-    const vision = await FilesetResolver.forVisionTasks(this.options.wasmBaseUrl)
-    this.landmarker = await HandLandmarker.createFromOptions(vision, {
-      baseOptions: {
-        modelAssetPath: this.options.modelAssetPath,
-        delegate: this.options.delegate,
-      },
-      runningMode: 'VIDEO',
-      numHands: this.options.numHands,
-    })
+    let didStartVideo = false
 
+    try {
+      if (!this.videoElement) {
+        await this.startVideo()
+        didStartVideo = true
+      }
+
+      const vision = await FilesetResolver.forVisionTasks(this.options.wasmBaseUrl)
+      this.landmarker = await HandLandmarker.createFromOptions(vision, {
+        baseOptions: {
+          modelAssetPath: this.options.modelAssetPath,
+          delegate: this.options.delegate,
+        },
+        runningMode: 'VIDEO',
+        numHands: this.options.numHands,
+      })
+    } catch (error) {
+      if (didStartVideo) {
+        this.stop()
+      }
+
+      throw error
+    }
+  }
+
+  private async startVideo(): Promise<void> {
     this.mediaStream = await navigator.mediaDevices.getUserMedia({
       video: this.options.video,
       audio: false,
@@ -76,7 +93,6 @@ export class HandTracker {
     this.videoElement.srcObject = this.mediaStream
     this.videoElement.muted = true
     this.videoElement.playsInline = true
-
     await this.videoElement.play()
   }
 
