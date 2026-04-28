@@ -52,6 +52,10 @@ public abstract class IntegrationTestSupport {
         registry.add("storage.local.upload-dir", TEST_UPLOAD_DIR::toString);
     }
 
+    /**
+     * shutdown hook 은 best-effort 이지만, 정리 실패 원인을 추적할 수 있도록 {@code System.err} 로 출력. SLF4J 로거는 종료 후
+     * 시점일 수 있어 표준 에러 스트림이 더 안정적. CI 환경에서 임시 디스크 누수 발견에 도움.
+     */
     private static void deleteUploadDirRecursive() {
         try (Stream<Path> walk = Files.walk(TEST_UPLOAD_DIR)) {
             walk.sorted(Comparator.reverseOrder())
@@ -59,12 +63,17 @@ public abstract class IntegrationTestSupport {
                             p -> {
                                 try {
                                     Files.deleteIfExists(p);
-                                } catch (IOException ignored) {
-                                    // shutdown hook 안에선 best-effort
+                                } catch (IOException e) {
+                                    System.err.println(
+                                            "test upload cleanup failed for "
+                                                    + p
+                                                    + ": "
+                                                    + e.getMessage());
                                 }
                             });
-        } catch (IOException ignored) {
-            // best-effort
+        } catch (IOException e) {
+            System.err.println(
+                    "test upload dir walk failed for " + TEST_UPLOAD_DIR + ": " + e.getMessage());
         }
     }
 }

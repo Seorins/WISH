@@ -14,6 +14,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.util.matcher.RegexRequestMatcher;
 
 import com.comong.backend.global.security.JwtAuthenticationFilter;
 import com.comong.backend.global.security.JwtProperties;
@@ -90,7 +91,11 @@ public class SecurityConfig {
                                         // 4. GET /artworks/{id} — 비공개 작품 보호는 service 의
                                         //    ArtworkAccessChecker.verifyReadable 가 담당.
                                         //    비로그인 (anonymous) 접근 허용해서 공개 작품 상세를 외부 공유 가능.
-                                        .requestMatchers(HttpMethod.GET, "/artworks/*")
+                                        //    숫자 ID 만 매칭하도록 정규식으로 제한 — 미래에 /artworks/something
+                                        //    같은 임의 segment 가 추가돼도 의도치 않게 permitAll 에 포함되지 않음.
+                                        .requestMatchers(
+                                                RegexRequestMatcher.regexMatcher(
+                                                        HttpMethod.GET, "/artworks/\\d+"))
                                         .permitAll()
                                         // 5. 그 외 모든 요청 (POST/PATCH/DELETE on artworks 포함) — 인증 필수
                                         .anyRequest()
