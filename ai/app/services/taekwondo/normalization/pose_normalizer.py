@@ -9,16 +9,17 @@ from app.services.taekwondo.constants import (
     MIN_SAFE_SCALE_REFERENCE,
     REQUIRED_CENTER_POINTS,
     REQUIRED_SCALE_POINTS,
-    REQUIRED_TAEKWONDO_TRACKING_POINTS,
     RIGHT_HIP,
     RIGHT_SHOULDER,
 )
+from app.services.taekwondo.tracking.quality_checker import TrackingQualityChecker
 from app.services.taekwondo.types import HipCenter, NormalizedLandmark, NormalizedPoseFrame, RawLandmark
 
 
 class PoseNormalizer:
     def __init__(self, min_confidence: float = DEFAULT_MIN_CONFIDENCE):
         self.min_confidence = min_confidence
+        self._quality_checker = TrackingQualityChecker()
 
     def normalize(self, frame: PoseFrameRequest) -> NormalizedPoseFrame:
         raw_landmarks = self._to_raw_landmarks(frame.landmarks)
@@ -26,7 +27,7 @@ class PoseNormalizer:
         mirrored_landmarks = self._apply_mirror(filtered_landmarks, frame.mirrored)
         hip_center = self._compute_hip_center(mirrored_landmarks)
         scale_reference = self._compute_scale_reference(mirrored_landmarks)
-        tracking = self._resolve_tracking_status(mirrored_landmarks, scale_reference)
+        quality = self._quality_checker.check(mirrored_landmarks, scale_reference)
         normalized_landmarks = self._normalize_coordinates(
             landmarks=mirrored_landmarks,
             hip_center=hip_center,
@@ -34,7 +35,8 @@ class PoseNormalizer:
         )
 
         return NormalizedPoseFrame(
-            tracking=tracking,
+            tracking=quality.status,
+            quality=quality,
             timestamp_ms=frame.timestamp_ms,
             scale_reference=scale_reference,
             hip_center=hip_center,
@@ -160,22 +162,3 @@ class PoseNormalizer:
             )
 
         return normalized
-
-    def _resolve_tracking_status(
-        self,
-        landmarks: dict[str, RawLandmark],
-        scale_reference: float,
-    ) -> str:
-        if not landmarks:
-            return "tracking_low"
-
-        if not all(point in landmarks for point in REQUIRED_TAEKWONDO_TRACKING_POINTS):
-            return "tracking_low"
-
-        if not all(point in landmarks for point in REQUIRED_CENTER_POINTS + REQUIRED_SCALE_POINTS):
-            return "tracking_low"
-
-        if scale_reference < MIN_SAFE_SCALE_REFERENCE:
-            return "tracking_low"
-
-        return "tracking_ok"

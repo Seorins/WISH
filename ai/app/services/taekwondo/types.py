@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass(slots=True)
@@ -26,8 +26,18 @@ class HipCenter:
 
 
 @dataclass(slots=True)
+class TrackingQuality:
+    status: str
+    quality_score: float
+    missing_landmarks: list[str]
+    landmark_completeness: float
+    mean_confidence: float
+
+
+@dataclass(slots=True)
 class NormalizedPoseFrame:
     tracking: str
+    quality: TrackingQuality
     timestamp_ms: int
     scale_reference: float
     hip_center: HipCenter
