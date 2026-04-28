@@ -7,8 +7,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 import com.comong.backend.global.common.response.ApiResponse;
+import com.comong.backend.global.storage.StorageErrorCode;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -38,6 +40,16 @@ public class GlobalExceptionHandler {
         log.warn("ValidationException: {}", fieldErrors);
         return ResponseEntity.status(GlobalErrorCode.INVALID_INPUT.getStatus())
                 .body(ApiResponse.error(GlobalErrorCode.INVALID_INPUT, fieldErrors));
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMaxUploadSizeExceeded(
+            MaxUploadSizeExceededException e) {
+        // cause (SizeLimitExceededException 등) 추적용으로 스택 트레이스 함께 출력.
+        // 운영 트래픽이 늘어 로그 노이즈가 되면 sampling 또는 message-only 로 다운그레이드 검토.
+        log.warn("multipart 한도 초과: {}", e.getMessage(), e);
+        return ResponseEntity.status(StorageErrorCode.PAYLOAD_TOO_LARGE.getStatus())
+                .body(ApiResponse.error(StorageErrorCode.PAYLOAD_TOO_LARGE));
     }
 
     @ExceptionHandler(Exception.class)

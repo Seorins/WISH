@@ -13,24 +13,30 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.comong.backend.global.exception.BusinessException;
-import com.comong.backend.global.exception.GlobalErrorCode;
+
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * 로컬 디스크에 이미지를 저장하는 {@link ImageStorage} 구현체.
  *
  * <p>파일명 충돌 방지를 위해 UUID 기반 이름을 생성한다.
  *
- * <p><b>업로드 검증 — 3중 방어</b>:
+ * <p><b>업로드 검증 — 4중 방어</b>:
  *
  * <ol>
  *   <li>{@code Content-Type} 이 {@code image/*} 인지 (1차, 클라이언트 헤더라 신뢰도 낮음)
- *   <li>원본 파일명 확장자가 {@link #ALLOWED_EXTENSIONS} 에 포함되는지 (2차, 정적 서빙 시 실행 가능 콘텐츠 차단)
- *   <li>실제 binary 의 magic bytes 가 허용 포맷의 시그니처와 일치하는지 (3차, 헤더+확장자 거짓말을 모두 우회)
+ *   <li>실제 binary 의 magic bytes 가 PNG/JPEG/GIF/WEBP 시그니처와 일치하는지 (2차)
+ *   <li>매직바이트로 검출한 포맷과 파일명 확장자가 일치하는지 (3차, mislabeled 차단)
+ *   <li>확장자가 {@link #ALLOWED_EXTENSIONS} 에 포함되는지 (4차, 정적 서빙 시 실행 가능 콘텐츠 차단)
  * </ol>
  *
+ * <p>모든 검증 실패는 {@link StorageErrorCode#INVALID_IMAGE} 로, IO 실패는 {@link
+ * StorageErrorCode#STORAGE_FAILURE} 로 매핑된다.
+ *
  * <p><b>접근 통제</b>: 현재는 모든 업로드 파일이 정적 리소스 핸들러를 통해 누구나 URL 만 알면 접근 가능하다. UUID 기반 파일명이 추측을 어렵게는 하지만,
- * 비공개 작품 이미지에 대한 권한 체크는 제공하지 않는다. 이 정책은 S14P31E103-218/219 작업 시 재검토한다.
+ * 비공개 작품 이미지에 대한 권한 체크는 제공하지 않는다. 인증된 다운로드 컨트롤러로의 전환은 추후 별도 이슈에서 결정.
  */
+@Slf4j
 @Component
 public class LocalImageStorage implements ImageStorage {
 
@@ -58,7 +64,7 @@ public class LocalImageStorage implements ImageStorage {
         ImageFormat detectedFormat = validateImage(file);
         String originalExtension = extractExtension(file.getOriginalFilename());
         if (!detectedFormat.matchesExtension(originalExtension)) {
-            throw new BusinessException(GlobalErrorCode.INVALID_INPUT);
+            throw new BusinessException(StorageErrorCode.INVALID_IMAGE);
         }
 
         String filename = UUID.randomUUID() + detectedFormat.canonicalExtension();
@@ -68,12 +74,25 @@ public class LocalImageStorage implements ImageStorage {
             Files.createDirectories(target.getParent());
             file.transferTo(target);
         } catch (IOException e) {
-            throw new BusinessException(GlobalErrorCode.INTERNAL_SERVER_ERROR);
+            log.warn("이미지 업로드 IO 실패 (target={}): {}", target, e.getMessage(), e);
+            throw new BusinessException(StorageErrorCode.STORAGE_FAILURE);
         }
 
         return new StoredImage(contextPath + properties.publicUrlPrefix() + "/" + filename);
     }
 
+    /**
+     * 저장된 이미지를 제거한다. {@code idempotent} 시맨틱 — 파일이 존재하지 않으면 조용히 무시한다.
+     *
+     * <p>다만 {@code url} 자체가 정상 흐름에서 발생할 수 없는 형태일 때 (filename 부분에 경로 구분자/dotdot/단일 dot 포함) 는 {@link
+     * StorageErrorCode#STORAGE_FAILURE} 로 거부한다. {@code upload} 가 반환한 URL 만 들어오는 정상 흐름에선 발생 안 함 — DB
+     * 변조 등 데이터 무결성 위반의 가드. IO 실패도 같은 코드로 매핑.
+     *
+     * <p>{@code url} 이 null 이거나 빈 문자열일 때는 NOT_FOUND 와 동등하게 무시한다 (호출자가 미리 검증할 책임은 없음).
+     *
+     * @param url upload 가 반환했던 URL
+     * @throws BusinessException STORAGE_FAILURE — filename 무결성 위반 / IO 실패 시
+     */
     @Override
     public void delete(String url) {
         if (url == null || url.isBlank()) {
@@ -83,34 +102,36 @@ public class LocalImageStorage implements ImageStorage {
         if (filename.isBlank()) {
             return;
         }
-        // Path traversal 방어: DB 가 항상 신뢰 가능하다는 가정에 의존하지 않고, filename 자체에서
-        // 경로 구분자/dotdot/단일 dot 를 차단해 uploadDir 외부 파일을 건드리지 못하게 한다.
+        // Path traversal 방어: filename 자체에서 경로 구분자/dotdot/단일 dot 차단.
         if (filename.contains("/")
                 || filename.contains("\\")
                 || filename.contains("..")
                 || filename.equals(".")) {
-            throw new BusinessException(GlobalErrorCode.INVALID_INPUT);
+            log.warn("저장소 URL 무결성 위반 — 의심 파일명: {}", filename);
+            throw new BusinessException(StorageErrorCode.STORAGE_FAILURE);
         }
         // 한 단계 더 — 정규화 후에도 uploadRoot 하위인지 확인 (defense in depth).
         Path uploadRoot = Path.of(properties.uploadDir()).toAbsolutePath().normalize();
         Path target = uploadRoot.resolve(filename).normalize();
         if (!target.startsWith(uploadRoot)) {
-            throw new BusinessException(GlobalErrorCode.INVALID_INPUT);
+            log.warn("저장소 URL 무결성 위반 — 정규화 후 uploadRoot 외부: {}", target);
+            throw new BusinessException(StorageErrorCode.STORAGE_FAILURE);
         }
         try {
             Files.deleteIfExists(target);
         } catch (IOException e) {
-            throw new BusinessException(GlobalErrorCode.INTERNAL_SERVER_ERROR);
+            log.warn("이미지 삭제 IO 실패 (target={}): {}", target, e.getMessage(), e);
+            throw new BusinessException(StorageErrorCode.STORAGE_FAILURE);
         }
     }
 
     private ImageFormat validateImage(MultipartFile file) {
         if (file == null || file.isEmpty()) {
-            throw new BusinessException(GlobalErrorCode.INVALID_INPUT);
+            throw new BusinessException(StorageErrorCode.INVALID_IMAGE);
         }
         String contentType = file.getContentType();
         if (contentType == null || !contentType.toLowerCase(Locale.ROOT).startsWith("image/")) {
-            throw new BusinessException(GlobalErrorCode.INVALID_INPUT);
+            throw new BusinessException(StorageErrorCode.INVALID_IMAGE);
         }
         return detectMagicBytes(file);
     }
@@ -125,7 +146,13 @@ public class LocalImageStorage implements ImageStorage {
         try (InputStream in = file.getInputStream()) {
             head = in.readNBytes(MAGIC_HEAD_SIZE);
         } catch (IOException e) {
-            throw new BusinessException(GlobalErrorCode.INTERNAL_SERVER_ERROR);
+            log.warn("magic-bytes 읽기 IO 실패: {}", e.getMessage(), e);
+            throw new BusinessException(StorageErrorCode.STORAGE_FAILURE);
+        }
+        // truncated 파일 차단 — 시그니처만 들어있고 실제 이미지 데이터는 없는 케이스 (8 byte PNG 헤더만 있는 파일 등)
+        // 보안 위협은 아니지만 입력 검증 정확성 위해 거부.
+        if (head.length < MAGIC_HEAD_SIZE) {
+            throw new BusinessException(StorageErrorCode.INVALID_IMAGE);
         }
         if (isPng(head)) {
             return ImageFormat.PNG;
@@ -139,7 +166,7 @@ public class LocalImageStorage implements ImageStorage {
         if (isWebp(head)) {
             return ImageFormat.WEBP;
         }
-        throw new BusinessException(GlobalErrorCode.INVALID_INPUT);
+        throw new BusinessException(StorageErrorCode.INVALID_IMAGE);
     }
 
     /** PNG: 89 50 4E 47 0D 0A 1A 0A */
@@ -195,15 +222,15 @@ public class LocalImageStorage implements ImageStorage {
      */
     private String extractExtension(String originalFilename) {
         if (originalFilename == null) {
-            throw new BusinessException(GlobalErrorCode.INVALID_INPUT);
+            throw new BusinessException(StorageErrorCode.INVALID_IMAGE);
         }
         int dot = originalFilename.lastIndexOf('.');
         if (dot < 0 || dot == originalFilename.length() - 1) {
-            throw new BusinessException(GlobalErrorCode.INVALID_INPUT);
+            throw new BusinessException(StorageErrorCode.INVALID_IMAGE);
         }
         String ext = originalFilename.substring(dot).toLowerCase(Locale.ROOT);
         if (!ALLOWED_EXTENSIONS.contains(ext)) {
-            throw new BusinessException(GlobalErrorCode.INVALID_INPUT);
+            throw new BusinessException(StorageErrorCode.INVALID_IMAGE);
         }
         return ext;
     }
