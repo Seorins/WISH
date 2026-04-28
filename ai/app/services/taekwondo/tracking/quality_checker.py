@@ -1,12 +1,12 @@
 from app.services.taekwondo.constants import (
     MIN_SAFE_SCALE_REFERENCE,
     REQUIRED_TAEKWONDO_TRACKING_POINTS,
+    TRACKING_CONFIDENCE_GOOD,
+    TRACKING_LOST_THRESHOLD,
 )
 from app.services.taekwondo.types import RawLandmark, TrackingQuality
 
 _TOTAL_REQUIRED = len(REQUIRED_TAEKWONDO_TRACKING_POINTS)
-_TRACKING_LOST_THRESHOLD = 0.5
-_CONFIDENCE_GOOD = 0.9
 
 
 class TrackingQualityChecker:
@@ -33,18 +33,21 @@ class TrackingQualityChecker:
 
         if not missing and scale_ok:
             status = "tracking_ok"
-        elif completeness >= _TRACKING_LOST_THRESHOLD:
+        elif completeness >= TRACKING_LOST_THRESHOLD:
             status = "tracking_low"
         else:
             status = "tracking_lost"
 
-        confidence_factor = min(mean_confidence / _CONFIDENCE_GOOD, 1.0)
+        confidence_factor = min(mean_confidence / TRACKING_CONFIDENCE_GOOD, 1.0)
         scale_factor = (
             1.0
             if scale_ok
             else min(scale_reference / MIN_SAFE_SCALE_REFERENCE, 1.0)
         )
-        quality_score = completeness * confidence_factor * scale_factor
+        quality_score = max(
+            0.0,
+            min(completeness * confidence_factor * scale_factor, 1.0),
+        )
 
         return TrackingQuality(
             status=status,

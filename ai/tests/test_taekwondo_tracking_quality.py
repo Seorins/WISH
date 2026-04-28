@@ -5,6 +5,7 @@ from app.main import create_app
 from app.services.taekwondo.constants import (
     MIN_SAFE_SCALE_REFERENCE,
     REQUIRED_TAEKWONDO_TRACKING_POINTS,
+    TRACKING_LOST_THRESHOLD,
 )
 from app.services.taekwondo.tracking.quality_checker import TrackingQualityChecker
 from app.services.taekwondo.types import RawLandmark
@@ -93,6 +94,15 @@ class TestTrackingQualityChecker:
         assert result.status == "tracking_lost"
         assert len(result.missing_landmarks) == 8
         assert result.landmark_completeness == pytest.approx(4 / 12, rel=1e-3)
+
+    def test_boundary_completeness_equal_to_threshold_returns_tracking_low(self):
+        required_count = int(len(REQUIRED_TAEKWONDO_TRACKING_POINTS) * TRACKING_LOST_THRESHOLD)
+        names = REQUIRED_TAEKWONDO_TRACKING_POINTS[:required_count]
+        lms = _make_landmarks(names)
+        result = self.checker.check(lms, scale_reference=0.2)
+
+        assert result.landmark_completeness == pytest.approx(TRACKING_LOST_THRESHOLD, rel=1e-3)
+        assert result.status == "tracking_low"
 
     def test_scale_too_small_returns_tracking_low(self):
         lms = _make_landmarks()
