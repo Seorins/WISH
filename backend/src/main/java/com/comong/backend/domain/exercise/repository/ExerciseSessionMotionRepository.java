@@ -10,6 +10,4 @@ public interface ExerciseSessionMotionRepository
         extends JpaRepository<ExerciseSessionMotion, Long> {
 
     List<ExerciseSessionMotion> findAllBySessionId(Long sessionId);
-
-    boolean existsByMotionId(Long motionId);
 }
