@@ -66,3 +66,13 @@ storage:
     # 외부 노출 servlet 상대 prefix. StorageConfig 정적 핸들러와 SecurityConfig permit 이 모두 이 값을
     # 공유하므로 환경변수로 변경해도 한 곳에서 자동 동기화된다.
     public-url-prefix: ${STORAGE_PUBLIC_URL_PREFIX:/uploads}
+
+# 운영/개발 공통 CORS 허용 origin. CORS 는 브라우저 측 정책이고 서버 보안 경계가 아니므로
+# 환경별로 분리하지 않고 한 곳에서 관리한다 (인증/인가가 실질 보안을 담당).
+cors:
+  allowed-origins:
+    - https://k14e103.p.ssafy.io
+    - http://localhost:3001       # game
+    - http://localhost:3002       # admin
+    - http://127.0.0.1:3001
+    - http://127.0.0.1:3002
