@@ -7,6 +7,7 @@ import { ArtFreeDrawingScene } from './scenes/themes/art/free-drawing/ArtFreeDra
 import { ArtSelectScene } from './scenes/themes/art/select/ArtSelectScene'
 import { TaekwondoPoomsaeSelectScene } from './scenes/themes/taekwondo/select/TaekwondoPoomsaeSelectScene'
 import { TaekwondoSelectScene } from './scenes/themes/taekwondo/select/TaekwondoSelectScene'
+import { GymnasticsTopScene } from './scenes/themes/gymnastics/play/GymnasticsPlayScene'
 import { GymnasticsSelectScene } from './scenes/themes/gymnastics/select/GymnasticsSelectScene'
 import { MusicSelectScene } from './scenes/themes/music/select/MusicSelectScene'
 import { VillageScene } from './scenes/village/VillageScene'
@@ -34,6 +35,7 @@ export function createGame(parent: HTMLElement): Phaser.Game {
       TaekwondoSelectScene,
       TaekwondoPoomsaeSelectScene,
       GymnasticsSelectScene,
+      GymnasticsTopScene,
       MusicSelectScene,
     ],
     scale: {

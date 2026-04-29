@@ -36,6 +36,15 @@ const GYMNASTICS_RETURN_SPAWN = { xRatio: 0.72, yRatio: 0.58 }
 const DIALOG_TEXT_BOX = { x: 900, y: 445, width: 1040, height: 190 }
 const GYM_SELECT_CARD_SIZE = { width: 538, height: 785 }
 const GYM_SELECT_TITLE_SIZE = { width: 893, height: 207 }
+const RACCOON_IDLE_ANIM_KEY = 'raccoon-gymnastics-idle'
+const RACCOON_TEXTURE_KEY = 'raccoon-clean'
+const RACCOON_FRAME_SIZE = 360
+const RACCOON_CROP_RECTS = [
+  { x: 120, y: 640, width: 360, height: 340 },
+  { x: 580, y: 640, width: 360, height: 340 },
+  { x: 1040, y: 640, width: 360, height: 340 },
+  { x: 1460, y: 640, width: 360, height: 340 },
+]
 
 type GymnasticsSelectSceneData = {
   spawn?: RatioPoint
@@ -50,7 +59,7 @@ export class GymnasticsSelectScene extends Phaser.Scene {
   private isTransitioning = false
   private playerWasInExitPortal = true
 
-  private raccoon!: Phaser.GameObjects.Image
+  private raccoon!: Phaser.GameObjects.Sprite
   private raccoonAnchor = new Phaser.Math.Vector2()
   private talkIcon!: Phaser.GameObjects.Image
   private dialog!: SimpleDialogUi
@@ -71,7 +80,10 @@ export class GymnasticsSelectScene extends Phaser.Scene {
       'gymnastics-background',
       '/assets/images/themes/gymnastics/background/background.png',
     )
-    this.load.image('raccoon', '/assets/images/themes/gymnastics/characters/Raccoon.png')
+    this.load.image(
+      'raccoon-source',
+      '/assets/images/themes/gymnastics/characters/raccoon_exercise_spritesheet.png',
+    )
     this.load.image(
       'gym-select-title',
       '/assets/images/themes/gymnastics/ui/gym_select_title_component.png',
@@ -103,8 +115,11 @@ export class GymnasticsSelectScene extends Phaser.Scene {
     const raccoonX = vw * 0.58
     const raccoonY = vh * 0.6
     const raccoonH = vh * 0.18
-    this.raccoon = this.add.image(raccoonX, raccoonY, 'raccoon')
-    this.raccoon.setDisplaySize(raccoonH, raccoonH).setDepth(5)
+    this.createCleanRaccoonTexture()
+    this.ensureRaccoonAnimations()
+    this.raccoon = this.add.sprite(raccoonX, raccoonY, RACCOON_TEXTURE_KEY, 0)
+    this.raccoon.setOrigin(0.5, 0.58).setDisplaySize(raccoonH, raccoonH).setDepth(5)
+    this.raccoon.play(RACCOON_IDLE_ANIM_KEY)
     this.raccoonAnchor.set(raccoonX, raccoonY)
 
     this.talkIcon = createFloatingInteractionIcon(this, {
@@ -112,7 +127,7 @@ export class GymnasticsSelectScene extends Phaser.Scene {
       y: raccoonY - raccoonH * 0.55,
       displaySize: 44,
       depth: 6,
-      bobOffset: 8,
+      bobOffset: 10,
     })
 
     this.createDialogUi()
@@ -212,6 +227,53 @@ export class GymnasticsSelectScene extends Phaser.Scene {
     })
   }
 
+  private createCleanRaccoonTexture() {
+    if (this.textures.exists(RACCOON_TEXTURE_KEY)) return
+
+    const source = this.textures.get('raccoon-source').getSourceImage() as HTMLImageElement
+    const canvas = document.createElement('canvas')
+    canvas.width = RACCOON_FRAME_SIZE * RACCOON_CROP_RECTS.length
+    canvas.height = RACCOON_FRAME_SIZE
+    const context = canvas.getContext('2d')
+    if (!context) {
+      throw new Error('Raccoon canvas context is not available.')
+    }
+
+    RACCOON_CROP_RECTS.forEach((rect, index) => {
+      context.drawImage(
+        source,
+        rect.x,
+        rect.y,
+        rect.width,
+        rect.height,
+        index * RACCOON_FRAME_SIZE,
+        RACCOON_FRAME_SIZE - rect.height,
+        rect.width,
+        rect.height,
+      )
+    })
+
+    const texture = this.textures.addCanvas(RACCOON_TEXTURE_KEY, canvas)
+    if (!texture) {
+      throw new Error('Clean raccoon texture is not available.')
+    }
+
+    RACCOON_CROP_RECTS.forEach((_, index) => {
+      texture.add(index, 0, index * RACCOON_FRAME_SIZE, 0, RACCOON_FRAME_SIZE, RACCOON_FRAME_SIZE)
+    })
+  }
+
+  private ensureRaccoonAnimations() {
+    if (this.anims.exists(RACCOON_IDLE_ANIM_KEY)) return
+
+    this.anims.create({
+      key: RACCOON_IDLE_ANIM_KEY,
+      frames: this.anims.generateFrameNumbers(RACCOON_TEXTURE_KEY, { start: 0, end: 3 }),
+      frameRate: 1.2,
+      repeat: -1,
+    })
+  }
+
   private startConversation() {
     this.dialogSteps = [
       Phaser.Utils.Array.GetRandom(seongsuDialogs.guide),
@@ -277,9 +339,9 @@ export class GymnasticsSelectScene extends Phaser.Scene {
 
     const danielCard = this.add.image(0, cardY, 'gym-card-daniel').setDepth(20).setAlpha(0)
     danielCard.setScrollFactor(0).setDisplaySize(cardW, cardH).setX(secondCardX)
+    danielCard.setTint(0x9c9c9c)
 
     this.makeCardClickable(topCard, () => this.selectContent('top'))
-    this.makeCardClickable(danielCard, () => this.selectContent('daniel'))
 
     const backBtn = this.createBackButton(104, Math.max(44, vh * 0.07))
 
@@ -350,10 +412,10 @@ export class GymnasticsSelectScene extends Phaser.Scene {
 
   private selectContent(mode: 'top' | 'daniel') {
     if (this.isTransitioning) return
+    if (mode !== 'top') return
     this.isTransitioning = true
 
-    const sceneKey = mode === 'top' ? 'GymnasticsTopScene' : 'GymnasticsDanielScene'
-    fadeToScene(this, sceneKey, { duration: 250 })
+    fadeToScene(this, 'GymnasticsTopScene', { duration: 250 })
   }
 
   private returnToVillage() {
