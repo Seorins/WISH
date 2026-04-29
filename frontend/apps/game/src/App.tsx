@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { createGame } from './phaser'
 import type Phaser from 'phaser'
 import MarchDebugPage from './debug/MarchDebugPage'
+import { ensureDemoAuthToken } from './auth/demoAuth'
 
 const DEBUG_MARCH_MODE = 'march'
 
@@ -14,8 +15,16 @@ function App() {
   useEffect(() => {
     if (debugMode === DEBUG_MARCH_MODE) return
     if (!containerRef.current || gameRef.current) return
-    gameRef.current = createGame(containerRef.current)
+
+    let isCancelled = false
+
+    void ensureDemoAuthToken().then(() => {
+      if (isCancelled || !containerRef.current || gameRef.current) return
+      gameRef.current = createGame(containerRef.current)
+    })
+
     return () => {
+      isCancelled = true
       gameRef.current?.destroy(true)
       gameRef.current = null
     }

@@ -16,6 +16,7 @@ import { getColoringOption, coloringOptions, type ColoringOption } from './color
 const CANVAS_SOURCE_SIZE = { width: 1535, height: 1024 }
 const CANVAS_DRAW_AREA = { x: 120, y: 150, width: 1288, height: 620 }
 const DELETE_BUTTON_SIZE = { width: 344, height: 336 }
+const ART_ROOM_RETURN_SPAWN = { xRatio: 0.5, yRatio: 0.76 }
 const FILLABLE_WHITE_THRESHOLD = 245
 const HAND_FILL_COOLDOWN_MS = 320
 const EXIT_CONFIRM_DEPTH = 60
@@ -197,7 +198,7 @@ export class ArtColoringScene extends Phaser.Scene {
       return
     }
 
-    this.requestReturnToColoringSelect()
+    this.requestReturnToArtRoom()
   }
 
   constructor() {
@@ -397,7 +398,7 @@ export class ArtColoringScene extends Phaser.Scene {
         event: Phaser.Types.Input.EventData,
       ) => {
         event.stopPropagation()
-        this.requestReturnToColoringSelect()
+        this.requestReturnToArtRoom()
       },
     )
   }
@@ -939,7 +940,7 @@ export class ArtColoringScene extends Phaser.Scene {
     } else if (action === 'reset') {
       this.resetColoring()
     } else {
-      this.requestReturnToColoringSelect()
+      this.requestReturnToArtRoom()
     }
 
     return true
@@ -1591,7 +1592,7 @@ export class ArtColoringScene extends Phaser.Scene {
       .then(() => {
         this.showRumiLine('complete')
         this.hasStartedColoring = false
-        this.returnToColoringSelect()
+        this.returnToArtRoom()
       })
       .catch(error => {
         console.error('Failed to save coloring artwork.', error)
@@ -1685,7 +1686,7 @@ export class ArtColoringScene extends Phaser.Scene {
     }
   }
 
-  private requestReturnToColoringSelect() {
+  private requestReturnToArtRoom() {
     if (this.isTransitioning || this.isSavingColoring || this.isSaveVisibilityConfirmOpen) {
       return
     }
@@ -1697,7 +1698,7 @@ export class ArtColoringScene extends Phaser.Scene {
       return
     }
 
-    this.returnToColoringSelect()
+    this.returnToArtRoom()
   }
 
   private showExitConfirm() {
@@ -1724,7 +1725,7 @@ export class ArtColoringScene extends Phaser.Scene {
         textColor: '#ffffff',
         onSelect: () => {
           this.hideExitConfirm()
-          this.returnToColoringSelect()
+          this.returnToArtRoom()
         },
       },
     })
@@ -1780,18 +1781,22 @@ export class ArtColoringScene extends Phaser.Scene {
     this.setRumiBubbleVisible(true)
   }
 
-  private returnToColoringSelect() {
+  private returnToArtRoom() {
     if (this.isTransitioning) {
       return
     }
 
     this.hideExitConfirm()
     this.hideSaveVisibilityConfirm()
+    this.stopDrawing()
     this.stopHandTracking()
     this.isTransitioning = true
     this.cameras.main.fadeOut(180, 0, 0, 0)
     this.time.delayedCall(180, () => {
-      this.scene.start('ArtColoringSelectScene')
+      this.scene.start('ArtSelectScene', {
+        spawn: ART_ROOM_RETURN_SPAWN,
+        suppressRumiDialog: true,
+      })
     })
   }
 }
