@@ -38,6 +38,15 @@ def ready_stance_landmarks() -> list[dict]:
     ]
 
 
+def ready_stance_boundary_landmarks() -> list[dict]:
+    return base_upper_body_landmarks() + [
+        {"name": "LEFT_KNEE", "x": 0.45, "y": 0.70, "z": 0.0, "visibility": 0.99},
+        {"name": "RIGHT_KNEE", "x": 0.55, "y": 0.70, "z": 0.0, "visibility": 0.99},
+        {"name": "LEFT_ANKLE", "x": 0.42, "y": 0.90, "z": 0.0, "visibility": 0.99},
+        {"name": "RIGHT_ANKLE", "x": 0.58, "y": 0.90, "z": 0.0, "visibility": 0.99},
+    ]
+
+
 def walking_stance_landmarks() -> list[dict]:
     return base_upper_body_landmarks() + [
         {"name": "LEFT_KNEE", "x": 0.37, "y": 0.70, "z": 0.0, "visibility": 0.99},
@@ -61,6 +70,13 @@ def tracking_low_landmarks() -> list[dict]:
     return [item for item in landmarks if item["name"] != "RIGHT_ANKLE"]
 
 
+def tracking_lost_landmarks() -> list[dict]:
+    return [
+        {**landmark, "visibility": 0.0}
+        for landmark in ready_stance_landmarks()
+    ]
+
+
 def test_classify_ready_stance() -> None:
     response = client.post("/api/v1/taekwondo/classify-stance", json=build_payload(ready_stance_landmarks()))
 
@@ -69,6 +85,15 @@ def test_classify_ready_stance() -> None:
     assert body["tracking"] == "tracking_ok"
     assert body["stance_label"] == "ready_stance"
     assert body["confidence"] > 0.45
+
+
+def test_classify_ready_stance_at_width_boundary() -> None:
+    response = client.post("/api/v1/taekwondo/classify-stance", json=build_payload(ready_stance_boundary_landmarks()))
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["tracking"] == "tracking_ok"
+    assert body["stance_label"] == "ready_stance"
 
 
 def test_classify_walking_stance() -> None:
@@ -96,5 +121,15 @@ def test_classify_stance_returns_unclassified_when_tracking_is_not_ok() -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["tracking"] == "tracking_low"
+    assert body["stance_label"] == "unclassified"
+    assert body["confidence"] == 0.0
+
+
+def test_classify_stance_returns_unclassified_when_tracking_is_lost() -> None:
+    response = client.post("/api/v1/taekwondo/classify-stance", json=build_payload(tracking_lost_landmarks()))
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["tracking"] == "tracking_lost"
     assert body["stance_label"] == "unclassified"
     assert body["confidence"] == 0.0

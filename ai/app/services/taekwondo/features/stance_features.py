@@ -34,7 +34,8 @@ def extract_stance_features(frame: NormalizedPoseFrame) -> StanceFeatureSet:
 
     hip_width = _distance_2d(left_hip, right_hip)
     foot_distance = _distance_2d(left_ankle, right_ankle)
-    stance_width_ratio = foot_distance / hip_width if hip_width >= STANCE_HIP_WIDTH_MIN else 0.0
+    safe_hip_width_threshold = STANCE_HIP_WIDTH_MIN + MIN_SCALE_REFERENCE
+    stance_width_ratio = foot_distance / hip_width if hip_width > safe_hip_width_threshold else 0.0
 
     left_knee_angle = _joint_angle(frame, LEFT_HIP, LEFT_KNEE, LEFT_ANKLE)
     right_knee_angle = _joint_angle(frame, RIGHT_HIP, RIGHT_KNEE, RIGHT_ANKLE)

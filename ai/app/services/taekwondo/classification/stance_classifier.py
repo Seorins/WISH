@@ -56,6 +56,14 @@ class StanceClassifier:
             STANCE_WALKING: self._score_walking_stance(features),
             STANCE_FRONT: self._score_front_stance(features),
         }
+        if not scores:
+            return StanceClassificationResult(
+                stance_label="unclassified",
+                confidence=0.0,
+                bend_side=features.bend_side,
+                scores={},
+                features=features,
+            )
 
         best_label = max(scores, key=scores.get)
         best_score = scores[best_label]
