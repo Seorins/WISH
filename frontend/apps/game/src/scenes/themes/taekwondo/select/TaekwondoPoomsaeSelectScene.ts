@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { assetPath } from '@/game/assets/assetPath'
 import { fadeToScene } from '@/game/systems/sceneTransition'
 import { addCoverBackground } from '@/game/world/background'
 
@@ -157,25 +158,34 @@ export class TaekwondoPoomsaeSelectScene extends Phaser.Scene {
   preload() {
     this.load.image(
       ASSET_KEYS.background,
-      '/assets/images/themes/taekwondo/background/taekwondo_inside.png',
+      assetPath('images/themes/taekwondo/background/taekwondo_inside.png'),
     )
-    this.load.image(ASSET_KEYS.sign, '/assets/images/themes/taekwondo/ui/poomsae_select.png')
-    this.load.image(ASSET_KEYS.card, '/assets/images/themes/taekwondo/ui/tkd_list.png')
+    this.load.image(ASSET_KEYS.sign, assetPath('images/themes/taekwondo/ui/poomsae_select.png'))
+    this.load.image(ASSET_KEYS.card, assetPath('images/themes/taekwondo/ui/tkd_list.png'))
     this.load.image(
       ASSET_KEYS.arrowLeft,
-      '/assets/images/themes/taekwondo/ui/poomsae_arrow_left.png',
+      assetPath('images/themes/taekwondo/ui/poomsae_arrow_left.png'),
     )
     this.load.image(
       ASSET_KEYS.arrowRight,
-      '/assets/images/themes/taekwondo/ui/poomsae_arrow_right.png',
+      assetPath('images/themes/taekwondo/ui/poomsae_arrow_right.png'),
     )
-    this.load.image(ASSET_KEYS.backButton, '/assets/images/themes/taekwondo/ui/back_button.png')
-    this.load.image(ASSET_KEYS.backPressed, '/assets/images/themes/taekwondo/ui/back_pressed.png')
-    this.load.image(ASSET_KEYS.startButton, '/assets/images/themes/taekwondo/ui/start_button.png')
-    this.load.image(ASSET_KEYS.startPressed, '/assets/images/themes/taekwondo/ui/start_pressed.png')
+    this.load.image(ASSET_KEYS.backButton, assetPath('images/themes/taekwondo/ui/back_button.png'))
+    this.load.image(
+      ASSET_KEYS.backPressed,
+      assetPath('images/themes/taekwondo/ui/back_pressed.png'),
+    )
+    this.load.image(
+      ASSET_KEYS.startButton,
+      assetPath('images/themes/taekwondo/ui/start_button.png'),
+    )
+    this.load.image(
+      ASSET_KEYS.startPressed,
+      assetPath('images/themes/taekwondo/ui/start_pressed.png'),
+    )
     this.load.spritesheet(
       ASSET_KEYS.seokjae,
-      '/assets/images/themes/taekwondo/characters/seokjae_sprite.png',
+      assetPath('images/themes/taekwondo/characters/seokjae_sprite.png'),
       {
         frameWidth: SEOKJAE_FRAME_SIZE.width,
         frameHeight: SEOKJAE_FRAME_SIZE.height,

@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { assetPath } from '@/game/assets/assetPath'
 import {
   createClickTargetMarker,
   createPlayer,
@@ -69,20 +70,23 @@ export class GymnasticsSelectScene extends Phaser.Scene {
   preload() {
     this.load.image(
       'gymnastics-background',
-      '/assets/images/themes/gymnastics/background/background.png',
+      assetPath('images/themes/gymnastics/background/background.png'),
     )
-    this.load.image('raccoon', '/assets/images/themes/gymnastics/characters/Raccoon.png')
+    this.load.image('raccoon', assetPath('images/themes/gymnastics/characters/Raccoon.png'))
     this.load.image(
       'gym-select-title',
-      '/assets/images/themes/gymnastics/ui/gym_select_title_component.png',
+      assetPath('images/themes/gymnastics/ui/gym_select_title_component.png'),
     )
-    this.load.image('gym-card-top', '/assets/images/themes/gymnastics/ui/topgymnastics_select.png')
+    this.load.image(
+      'gym-card-top',
+      assetPath('images/themes/gymnastics/ui/topgymnastics_select.png'),
+    )
     this.load.image(
       'gym-card-daniel',
-      '/assets/images/themes/gymnastics/ui/daniel_gymnastics_select.png',
+      assetPath('images/themes/gymnastics/ui/daniel_gymnastics_select.png'),
     )
     loadInteractionIcons(this)
-    this.load.image('seongsu-dialog', '/assets/images/npcs/seongsu/dialog-frame.png')
+    this.load.image('seongsu-dialog', assetPath('images/npcs/seongsu/dialog-frame.png'))
     loadPlayerSpritesheet(this)
   }
 

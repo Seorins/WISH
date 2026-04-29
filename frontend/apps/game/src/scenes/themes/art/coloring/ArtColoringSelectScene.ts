@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { assetPath } from '@/game/assets/assetPath'
 import { coloringOptions, type ColoringOption } from './coloringOptions'
 
 const ART_ROOM_RETURN_SPAWN = { xRatio: 0.5, yRatio: 0.76 }
@@ -33,8 +34,8 @@ export class ArtColoringSelectScene extends Phaser.Scene {
   }
 
   preload() {
-    this.load.image('art-room-background', '/assets/images/themes/art/background/background.png')
-    this.load.image('art-ui-delete-btn', '/assets/images/themes/art/ui/delete_btn.png')
+    this.load.image('art-room-background', assetPath('images/themes/art/background/background.png'))
+    this.load.image('art-ui-delete-btn', assetPath('images/themes/art/ui/delete_btn.png'))
     coloringOptions.forEach(option => {
       this.load.image(option.assetKey, option.imagePath)
     })

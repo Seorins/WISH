@@ -6,6 +6,7 @@ import {
   type Artwork,
   type ArtworkPage,
 } from '@wish/api-client'
+import { assetPath } from '@/game/assets/assetPath'
 import { createArtConfirmDialog, type ArtConfirmDialog } from '../ui/artConfirmDialog'
 import { coloringOptions } from '../coloring/coloringOptions'
 
@@ -54,12 +55,12 @@ export class ArtAlbumScene extends Phaser.Scene {
   }
 
   preload() {
-    this.loadImageIfMissing('art-ui-delete-btn', '/assets/images/themes/art/ui/delete_btn.png')
-    this.loadImageIfMissing('art-ui-album-page', '/assets/images/themes/art/ui/album_page.png')
-    this.loadImageIfMissing('art-ui-album-next1', '/assets/images/themes/art/ui/album_next1.png')
-    this.loadImageIfMissing('art-ui-album-next2', '/assets/images/themes/art/ui/album_next2.png')
-    this.loadImageIfMissing('art-ui-edit-action', '/assets/images/themes/art/ui/edit.png')
-    this.loadImageIfMissing('art-ui-delete-action', '/assets/images/themes/art/ui/delete.png')
+    this.loadImageIfMissing('art-ui-delete-btn', assetPath('images/themes/art/ui/delete_btn.png'))
+    this.loadImageIfMissing('art-ui-album-page', assetPath('images/themes/art/ui/album_page.png'))
+    this.loadImageIfMissing('art-ui-album-next1', assetPath('images/themes/art/ui/album_next1.png'))
+    this.loadImageIfMissing('art-ui-album-next2', assetPath('images/themes/art/ui/album_next2.png'))
+    this.loadImageIfMissing('art-ui-edit-action', assetPath('images/themes/art/ui/edit.png'))
+    this.loadImageIfMissing('art-ui-delete-action', assetPath('images/themes/art/ui/delete.png'))
   }
 
   create() {

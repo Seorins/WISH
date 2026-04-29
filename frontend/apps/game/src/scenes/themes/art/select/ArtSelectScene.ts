@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { assetPath } from '@/game/assets/assetPath'
 import {
   createClickTargetMarker,
   createPlayer,
@@ -134,12 +135,12 @@ export class ArtSelectScene extends Phaser.Scene {
   }
 
   preload() {
-    this.load.image('art-room-background', '/assets/images/themes/art/background/background.png')
+    this.load.image('art-room-background', assetPath('images/themes/art/background/background.png'))
     loadInteractionIcons(this)
-    this.load.image('rumi-dialog-frame', '/assets/images/npcs/rumi/dialog-frame.png')
-    this.load.image('dialog-enter', '/assets/images/ui/dialog/enter.png')
-    this.load.image('dialog-select', '/assets/images/ui/dialog/select.png')
-    this.load.image('art-ui-album', '/assets/images/themes/art/ui/album.png')
+    this.load.image('rumi-dialog-frame', assetPath('images/npcs/rumi/dialog-frame.png'))
+    this.load.image('dialog-enter', assetPath('images/ui/dialog/enter.png'))
+    this.load.image('dialog-select', assetPath('images/ui/dialog/select.png'))
+    this.load.image('art-ui-album', assetPath('images/themes/art/ui/album.png'))
     loadPlayerSpritesheet(this)
   }
 

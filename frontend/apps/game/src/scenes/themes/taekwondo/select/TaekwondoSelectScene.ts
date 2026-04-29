@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { assetPath } from '@/game/assets/assetPath'
 import {
   createClickTargetMarker,
   createPlayer,
@@ -124,15 +125,15 @@ export class TaekwondoSelectScene extends Phaser.Scene {
   preload() {
     this.load.image(
       'taekwondo-room-background',
-      '/assets/images/themes/taekwondo/background/taekwondo_inside.png',
+      assetPath('images/themes/taekwondo/background/taekwondo_inside.png'),
     )
     loadInteractionIcons(this)
-    this.load.image('seokjae-dialog-frame', '/assets/images/npcs/seokjae/dialog-frame.png')
-    this.load.image('dialog-enter', '/assets/images/ui/dialog/enter.png')
-    this.load.image('dialog-select', '/assets/images/ui/dialog/select.png')
+    this.load.image('seokjae-dialog-frame', assetPath('images/npcs/seokjae/dialog-frame.png'))
+    this.load.image('dialog-enter', assetPath('images/ui/dialog/enter.png'))
+    this.load.image('dialog-select', assetPath('images/ui/dialog/select.png'))
     this.load.spritesheet(
       'seokjae',
-      '/assets/images/themes/taekwondo/characters/seokjae_sprite.png',
+      assetPath('images/themes/taekwondo/characters/seokjae_sprite.png'),
       {
         frameWidth: TAEKWONDO_SPRITE_FRAME.width,
         frameHeight: TAEKWONDO_SPRITE_FRAME.height,
