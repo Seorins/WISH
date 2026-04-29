@@ -42,3 +42,17 @@ class NormalizedPoseFrame:
     scale_reference: float
     hip_center: HipCenter
     landmarks: dict[str, NormalizedLandmark]
+
+
+@dataclass(slots=True)
+class CalibrationResult:
+    tracking: str
+    quality: TrackingQuality
+    stable_frame_count: int
+    target_stable_frames: int
+    frames_remaining: int
+    calibration_status: str
+    is_calibrated: bool
+    failure_reason: str | None
+    reference_hip_center: HipCenter | None
+    reference_scale: float | None
