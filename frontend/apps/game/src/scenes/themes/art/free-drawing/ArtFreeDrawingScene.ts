@@ -68,7 +68,7 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
   private paletteSelection!: Phaser.GameObjects.Arc
   private rumiBubble!: Phaser.GameObjects.Graphics
   private rumiBubbleText!: Phaser.GameObjects.Text
-  private brushCursor!: Phaser.GameObjects.Image
+  private brushCursor: Phaser.GameObjects.Image | null = null
   private toolButtons: Partial<Record<DrawingTool, Phaser.GameObjects.Image>> = {}
   private toolButtonFrames: Partial<Record<DrawingTool, Phaser.GameObjects.Arc>> = {}
   private toolButtonGlows: Partial<Record<DrawingTool, Phaser.GameObjects.Image>> = {}
@@ -224,6 +224,7 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
     this.exitConfirmDialog = null
     this.isSaveVisibilityConfirmOpen = false
     this.saveVisibilityConfirmDialog = null
+    this.brushCursor = null
     this.hasStartedDrawing = false
     this.strokeCount = 0
     this.lastInteractionAt = this.time.now
@@ -251,11 +252,11 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
     }
     this.createHeader(vw, vh)
     this.createExitButton(vw, vh)
+    this.createBrushCursor()
     this.createPalette(vw, vh)
     this.createActionButtons()
     this.createToolSelector()
     this.createRumiArea(vw, vh)
-    this.createBrushCursor()
 
     if (this.suppressStartupDialogs) {
       this.setRumiBubbleVisible(false)
@@ -298,6 +299,7 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
       this.hideExitConfirm()
       this.hideSaveVisibilityConfirm()
       this.stopHandTracking()
+      this.brushCursor = null
     })
 
     this.cameras.main.fadeIn(220, 0, 0, 0)
