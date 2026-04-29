@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 from app.schemas.gymnastics import HipCenterResponse, NormalizedPoseResponse, PoseFrameRequest
@@ -123,7 +125,7 @@ class TaekwondoDirectionFeaturesResponse(BaseModel):
 
 class TaekwondoDirectionClassificationRequest(BaseModel):
     frame: TaekwondoPoseFrameRequest
-    previous_direction: str | None = Field(
+    previous_direction: Literal["front", "left", "right"] | None = Field(
         default=None,
         description="Previous direction label to infer turn_left / turn_right",
     )

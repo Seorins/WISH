@@ -73,6 +73,9 @@ def test_classify_front_direction() -> None:
     assert body["tracking"] == "tracking_ok"
     assert body["direction_label"] == "front"
     assert body["turn_label"] == "no_turn"
+    assert body["confidence"] >= 0.45
+    assert body["features"]["shoulder_balance"] <= 0.2
+    assert abs(body["features"]["side_extent_difference"]) <= 0.5
 
 
 def test_classify_left_direction_and_turn() -> None:
@@ -85,6 +88,9 @@ def test_classify_left_direction_and_turn() -> None:
     body = response.json()
     assert body["direction_label"] == "left"
     assert body["turn_label"] == "turn_left"
+    assert body["confidence"] >= 0.45
+    assert body["features"]["side_extent_difference"] > 0
+    assert body["scores"]["left"] > body["scores"]["front"]
 
 
 def test_classify_right_direction_and_turn() -> None:
@@ -97,6 +103,9 @@ def test_classify_right_direction_and_turn() -> None:
     body = response.json()
     assert body["direction_label"] == "right"
     assert body["turn_label"] == "turn_right"
+    assert body["confidence"] >= 0.45
+    assert body["features"]["side_extent_difference"] < 0
+    assert body["scores"]["right"] > body["scores"]["front"]
 
 
 def test_classify_direction_returns_unclassified_when_tracking_is_not_ok() -> None:
@@ -110,3 +119,13 @@ def test_classify_direction_returns_unclassified_when_tracking_is_not_ok() -> No
     assert body["tracking"] == "tracking_low"
     assert body["direction_label"] == "unclassified"
     assert body["turn_label"] == "no_turn"
+    assert body["confidence"] == 0.0
+
+
+def test_classify_direction_rejects_invalid_previous_direction() -> None:
+    response = client.post(
+        "/api/v1/taekwondo/classify-direction",
+        json=build_payload(front_direction_landmarks(), previous_direction="back"),
+    )
+
+    assert response.status_code == 422

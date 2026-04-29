@@ -59,6 +59,7 @@ class DirectionClassifier:
             DIRECTION_LEFT: self._score_left(features),
             DIRECTION_RIGHT: self._score_right(features),
         }
+        # This map is built from fixed direction labels, so it should never be empty.
         if not scores:
             return DirectionClassificationResult(
                 direction_label=DIRECTION_UNCLASSIFIED,
