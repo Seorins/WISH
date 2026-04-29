@@ -11,3 +11,11 @@ spring:
     hibernate:
       ddl-auto: ${JPA_DDL_AUTO:validate}
     show-sql: false
+
+cors:
+  allowed-origins:
+    - https://k14e103.p.ssafy.io
+    - http://localhost:3001
+    - http://localhost:3002
+    - http://127.0.0.1:3001
+    - http://127.0.0.1:3002
