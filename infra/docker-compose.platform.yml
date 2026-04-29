@@ -34,6 +34,9 @@ services:
     image: grafana/grafana:12.1.1
     container_name: e103-grafana
     restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
     ports:
       - 127.0.0.1:3000:3000
     volumes:
