@@ -13,7 +13,6 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
 
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -22,13 +21,7 @@ import lombok.NoArgsConstructor;
 
 @Entity
 @Getter
-@Table(
-        name = "exercise_session_motion",
-        uniqueConstraints = {
-            @UniqueConstraint(
-                    name = "uk_exercise_session_motion_session_motion",
-                    columnNames = {"session_id", "motion_id"})
-        })
+@Table(name = "exercise_session_motion")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ExerciseSessionMotion {
 
@@ -69,6 +62,7 @@ public class ExerciseSessionMotion {
             String feedback) {
         this.session = Objects.requireNonNull(session, "session must not be null");
         this.motion = Objects.requireNonNull(motion, "motion must not be null");
+        validateExerciseType(session, motion);
         validateNonNegative(durationSec, "durationSec");
         validateAccuracy(accuracy);
         validateNonNegative(completedReps, "completedReps");
@@ -81,6 +75,15 @@ public class ExerciseSessionMotion {
     @PrePersist
     void prePersist() {
         this.createdAt = LocalDateTime.now();
+    }
+
+    private void validateExerciseType(ExerciseSession session, Motion motion) {
+        if (session.getExerciseType() == null || motion.getExerciseType() == null) {
+            return;
+        }
+        if (session.getExerciseType() != motion.getExerciseType()) {
+            throw new IllegalArgumentException("session and motion exerciseType must match");
+        }
     }
 
     private void validateNonNegative(int value, String fieldName) {

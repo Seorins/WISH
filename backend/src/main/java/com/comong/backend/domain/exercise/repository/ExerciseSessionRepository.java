@@ -8,5 +8,5 @@ import com.comong.backend.domain.exercise.entity.ExerciseSession;
 
 public interface ExerciseSessionRepository extends JpaRepository<ExerciseSession, Long> {
 
-    List<ExerciseSession> findAllByPatientProfileId(Long patientId);
+    List<ExerciseSession> findAllByPatientProfileIdOrderByCreatedAtDesc(Long patientId);
 }

@@ -41,7 +41,6 @@ CREATE TABLE exercise_session_motion (
     created_at       TIMESTAMP(6)        NOT NULL,
     CONSTRAINT fk_exercise_session_motion_session FOREIGN KEY (session_id) REFERENCES exercise_session(id),
     CONSTRAINT fk_exercise_session_motion_motion FOREIGN KEY (motion_id) REFERENCES motion(id),
-    CONSTRAINT uk_exercise_session_motion_session_motion UNIQUE (session_id, motion_id),
     CONSTRAINT ck_exercise_session_motion_duration_non_negative CHECK (duration_sec >= 0),
     CONSTRAINT ck_exercise_session_motion_accuracy_range CHECK (accuracy >= 0.0 AND accuracy <= 1.0),
     CONSTRAINT ck_exercise_session_motion_completed_reps_non_negative CHECK (completed_reps >= 0)

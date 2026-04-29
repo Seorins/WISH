@@ -1,11 +1,37 @@
 package com.comong.backend.domain.exercise.entity;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 
 import org.junit.jupiter.api.Test;
 
 class ExerciseSessionMotionTest {
+
+    @Test
+    void builder_setsFieldsAndTimestamp() {
+        ExerciseSession session = session(ExerciseType.TOP);
+        Motion motion = motion(ExerciseType.TOP);
+        ExerciseSessionMotion sessionMotion =
+                ExerciseSessionMotion.builder()
+                        .session(session)
+                        .motion(motion)
+                        .durationSec(12)
+                        .accuracy(0.91)
+                        .completedReps(8)
+                        .feedback("Raise your knee higher.")
+                        .build();
+
+        sessionMotion.prePersist();
+
+        assertThat(sessionMotion.getSession()).isSameAs(session);
+        assertThat(sessionMotion.getMotion()).isSameAs(motion);
+        assertThat(sessionMotion.getDurationSec()).isEqualTo(12);
+        assertThat(sessionMotion.getAccuracy()).isEqualTo(0.91);
+        assertThat(sessionMotion.getCompletedReps()).isEqualTo(8);
+        assertThat(sessionMotion.getFeedback()).isEqualTo("Raise your knee higher.");
+        assertThat(sessionMotion.getCreatedAt()).isNotNull();
+    }
 
     @Test
     void builder_rejectsNullSession() {
@@ -37,6 +63,22 @@ class ExerciseSessionMotionTest {
                                         .build())
                 .isInstanceOf(NullPointerException.class)
                 .hasMessageContaining("motion");
+    }
+
+    @Test
+    void builder_rejectsDifferentExerciseType() {
+        assertThatThrownBy(
+                        () ->
+                                ExerciseSessionMotion.builder()
+                                        .session(session(ExerciseType.TOP))
+                                        .motion(motion(ExerciseType.DANIEL))
+                                        .durationSec(12)
+                                        .accuracy(0.91)
+                                        .completedReps(8)
+                                        .feedback("Raise your knee higher.")
+                                        .build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("exerciseType");
     }
 
     @Test
@@ -101,5 +143,25 @@ class ExerciseSessionMotionTest {
                                         .build())
                 .isInstanceOf(NullPointerException.class)
                 .hasMessageContaining("feedback");
+    }
+
+    private ExerciseSession session(ExerciseType exerciseType) {
+        return ExerciseSession.builder()
+                .patientProfile(mock(com.comong.backend.domain.patient.entity.PatientProfile.class))
+                .exerciseType(exerciseType)
+                .durationSec(78)
+                .averageAccuracy(0.87)
+                .completedMotionCount(4)
+                .build();
+    }
+
+    private Motion motion(ExerciseType exerciseType) {
+        return Motion.builder()
+                .exerciseType(exerciseType)
+                .name("March")
+                .routineOrder(1)
+                .targetReps(8)
+                .description("Walk in place.")
+                .build();
     }
 }
