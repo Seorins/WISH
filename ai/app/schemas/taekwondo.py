@@ -81,3 +81,27 @@ class TaekwondoBasicMotionClassificationResponse(BaseModel):
     dominant_side: str | None = None
     scores: dict[str, float]
     features: TaekwondoBasicMotionFeaturesResponse
+
+
+class TaekwondoStanceFeaturesResponse(BaseModel):
+    hip_width: float
+    foot_distance: float
+    stance_width_ratio: float
+    left_knee_angle: float | None = None
+    right_knee_angle: float | None = None
+    knee_angle_difference: float
+    bend_side: str | None = None
+
+
+class TaekwondoStanceClassificationRequest(BaseModel):
+    frame: TaekwondoPoseFrameRequest
+
+
+class TaekwondoStanceClassificationResponse(BaseModel):
+    tracking: str = Field(..., description="Tracking quality status for the current frame")
+    tracking_quality: TrackingQualityResponse
+    stance_label: str = Field(..., description="Current taekwondo stance label")
+    confidence: float = Field(..., ge=0.0, le=1.0)
+    bend_side: str | None = None
+    scores: dict[str, float]
+    features: TaekwondoStanceFeaturesResponse

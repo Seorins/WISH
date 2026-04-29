@@ -9,11 +9,18 @@ from app.schemas.taekwondo import (
     TaekwondoCalibrationResponse,
     TaekwondoNormalizedPoseResponse,
     TaekwondoPoseFrameRequest,
+    TaekwondoStanceClassificationRequest,
+    TaekwondoStanceClassificationResponse,
+    TaekwondoStanceFeaturesResponse,
     TrackingQualityResponse,
 )
 from app.services.taekwondo.classification.basic_motion_classifier import (
     BasicMotionClassificationResult,
     BasicMotionClassifier,
+)
+from app.services.taekwondo.classification.stance_classifier import (
+    StanceClassificationResult,
+    StanceClassifier,
 )
 from app.services.taekwondo.calibration.calibration_service import CalibrationService
 from app.services.taekwondo.normalization.pose_normalizer import PoseNormalizer
@@ -24,6 +31,7 @@ router = APIRouter(prefix="/taekwondo", tags=["taekwondo"])
 normalizer = PoseNormalizer()
 calibration_service = CalibrationService(normalizer=normalizer)
 basic_motion_classifier = BasicMotionClassifier()
+stance_classifier = StanceClassifier()
 
 
 def to_tracking_quality_response(frame: NormalizedPoseFrame | CalibrationResult) -> TrackingQualityResponse:
@@ -106,6 +114,29 @@ def to_taekwondo_basic_motion_response(
     )
 
 
+def to_taekwondo_stance_response(
+    frame: NormalizedPoseFrame,
+    result: StanceClassificationResult,
+) -> TaekwondoStanceClassificationResponse:
+    return TaekwondoStanceClassificationResponse(
+        tracking=frame.tracking,
+        tracking_quality=to_tracking_quality_response(frame),
+        stance_label=result.stance_label,
+        confidence=result.confidence,
+        bend_side=result.bend_side,
+        scores=result.scores,
+        features=TaekwondoStanceFeaturesResponse(
+            hip_width=result.features.hip_width,
+            foot_distance=result.features.foot_distance,
+            stance_width_ratio=result.features.stance_width_ratio,
+            left_knee_angle=result.features.left_knee_angle,
+            right_knee_angle=result.features.right_knee_angle,
+            knee_angle_difference=result.features.knee_angle_difference,
+            bend_side=result.features.bend_side,
+        ),
+    )
+
+
 @router.post("/normalize", response_model=TaekwondoNormalizedPoseResponse)
 def normalize_pose(frame: TaekwondoPoseFrameRequest) -> TaekwondoNormalizedPoseResponse:
     normalized = normalizer.normalize(frame)
@@ -129,3 +160,12 @@ def classify_basic_motion(
     normalized = normalizer.normalize(request.frame)
     result = basic_motion_classifier.classify(normalized)
     return to_taekwondo_basic_motion_response(normalized, result)
+
+
+@router.post("/classify-stance", response_model=TaekwondoStanceClassificationResponse)
+def classify_stance(
+    request: TaekwondoStanceClassificationRequest,
+) -> TaekwondoStanceClassificationResponse:
+    normalized = normalizer.normalize(request.frame)
+    result = stance_classifier.classify(normalized)
+    return to_taekwondo_stance_response(normalized, result)
