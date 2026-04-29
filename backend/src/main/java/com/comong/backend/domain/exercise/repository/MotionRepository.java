@@ -10,4 +10,6 @@ import com.comong.backend.domain.exercise.entity.Motion;
 public interface MotionRepository extends JpaRepository<Motion, Long> {
 
     List<Motion> findAllByExerciseTypeOrderByRoutineOrderAsc(ExerciseType exerciseType);
+
+    boolean existsByExerciseTypeAndRoutineOrder(ExerciseType exerciseType, int routineOrder);
 }
