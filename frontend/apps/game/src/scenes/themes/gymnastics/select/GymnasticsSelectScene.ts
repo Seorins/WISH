@@ -339,9 +339,9 @@ export class GymnasticsSelectScene extends Phaser.Scene {
 
     const danielCard = this.add.image(0, cardY, 'gym-card-daniel').setDepth(20).setAlpha(0)
     danielCard.setScrollFactor(0).setDisplaySize(cardW, cardH).setX(secondCardX)
-    danielCard.setTint(0x9c9c9c)
 
     this.makeCardClickable(topCard, () => this.selectContent('top'))
+    this.makeCardClickable(danielCard, () => this.selectContent('daniel'))
 
     const backBtn = this.createBackButton(104, Math.max(44, vh * 0.07))
 
@@ -412,10 +412,10 @@ export class GymnasticsSelectScene extends Phaser.Scene {
 
   private selectContent(mode: 'top' | 'daniel') {
     if (this.isTransitioning) return
-    if (mode !== 'top') return
     this.isTransitioning = true
 
-    fadeToScene(this, 'GymnasticsTopScene', { duration: 250 })
+    const sceneKey = mode === 'top' ? 'GymnasticsTopScene' : 'GymnasticsDanielScene'
+    fadeToScene(this, sceneKey, { duration: 250 })
   }
 
   private returnToVillage() {
