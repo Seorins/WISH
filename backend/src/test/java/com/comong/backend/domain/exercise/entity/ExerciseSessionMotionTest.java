@@ -11,11 +11,11 @@ class ExerciseSessionMotionTest {
     @Test
     void builder_setsFieldsAndTimestamp() {
         ExerciseSession session = session(ExerciseType.TOP);
-        Motion motion = motion(ExerciseType.TOP);
+        ExerciseMotion exerciseMotion = exerciseMotion(ExerciseType.TOP);
         ExerciseSessionMotion sessionMotion =
                 ExerciseSessionMotion.builder()
                         .session(session)
-                        .motion(motion)
+                        .exerciseMotion(exerciseMotion)
                         .durationSec(12)
                         .accuracy(0.91)
                         .completedReps(8)
@@ -25,7 +25,7 @@ class ExerciseSessionMotionTest {
         sessionMotion.prePersist();
 
         assertThat(sessionMotion.getSession()).isSameAs(session);
-        assertThat(sessionMotion.getMotion()).isSameAs(motion);
+        assertThat(sessionMotion.getExerciseMotion()).isSameAs(exerciseMotion);
         assertThat(sessionMotion.getDurationSec()).isEqualTo(12);
         assertThat(sessionMotion.getAccuracy()).isEqualTo(0.91);
         assertThat(sessionMotion.getCompletedReps()).isEqualTo(8);
@@ -39,7 +39,7 @@ class ExerciseSessionMotionTest {
                         () ->
                                 ExerciseSessionMotion.builder()
                                         .session(null)
-                                        .motion(mock(Motion.class))
+                                        .exerciseMotion(mock(ExerciseMotion.class))
                                         .durationSec(12)
                                         .accuracy(0.91)
                                         .completedReps(8)
@@ -50,19 +50,19 @@ class ExerciseSessionMotionTest {
     }
 
     @Test
-    void builder_rejectsNullMotion() {
+    void builder_rejectsNullExerciseMotion() {
         assertThatThrownBy(
                         () ->
                                 ExerciseSessionMotion.builder()
                                         .session(mock(ExerciseSession.class))
-                                        .motion(null)
+                                        .exerciseMotion(null)
                                         .durationSec(12)
                                         .accuracy(0.91)
                                         .completedReps(8)
                                         .feedback("Raise your knee higher.")
                                         .build())
                 .isInstanceOf(NullPointerException.class)
-                .hasMessageContaining("motion");
+                .hasMessageContaining("exerciseMotion");
     }
 
     @Test
@@ -71,7 +71,7 @@ class ExerciseSessionMotionTest {
                         () ->
                                 ExerciseSessionMotion.builder()
                                         .session(session(ExerciseType.TOP))
-                                        .motion(motion(ExerciseType.DANIEL))
+                                        .exerciseMotion(exerciseMotion(ExerciseType.DANIEL))
                                         .durationSec(12)
                                         .accuracy(0.91)
                                         .completedReps(8)
@@ -87,7 +87,7 @@ class ExerciseSessionMotionTest {
                         () ->
                                 ExerciseSessionMotion.builder()
                                         .session(mock(ExerciseSession.class))
-                                        .motion(mock(Motion.class))
+                                        .exerciseMotion(mock(ExerciseMotion.class))
                                         .durationSec(-1)
                                         .accuracy(0.91)
                                         .completedReps(8)
@@ -103,7 +103,7 @@ class ExerciseSessionMotionTest {
                         () ->
                                 ExerciseSessionMotion.builder()
                                         .session(mock(ExerciseSession.class))
-                                        .motion(mock(Motion.class))
+                                        .exerciseMotion(mock(ExerciseMotion.class))
                                         .durationSec(12)
                                         .accuracy(1.1)
                                         .completedReps(8)
@@ -119,7 +119,7 @@ class ExerciseSessionMotionTest {
                         () ->
                                 ExerciseSessionMotion.builder()
                                         .session(mock(ExerciseSession.class))
-                                        .motion(mock(Motion.class))
+                                        .exerciseMotion(mock(ExerciseMotion.class))
                                         .durationSec(12)
                                         .accuracy(0.91)
                                         .completedReps(-1)
@@ -135,7 +135,7 @@ class ExerciseSessionMotionTest {
                         () ->
                                 ExerciseSessionMotion.builder()
                                         .session(mock(ExerciseSession.class))
-                                        .motion(mock(Motion.class))
+                                        .exerciseMotion(mock(ExerciseMotion.class))
                                         .durationSec(12)
                                         .accuracy(0.91)
                                         .completedReps(8)
@@ -155,8 +155,8 @@ class ExerciseSessionMotionTest {
                 .build();
     }
 
-    private Motion motion(ExerciseType exerciseType) {
-        return Motion.builder()
+    private ExerciseMotion exerciseMotion(ExerciseType exerciseType) {
+        return ExerciseMotion.builder()
                 .exerciseType(exerciseType)
                 .name("March")
                 .routineOrder(1)

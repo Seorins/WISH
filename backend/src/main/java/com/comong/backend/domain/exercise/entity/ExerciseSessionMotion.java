@@ -34,8 +34,8 @@ public class ExerciseSessionMotion {
     private ExerciseSession session;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "motion_id", nullable = false)
-    private Motion motion;
+    @JoinColumn(name = "exercise_motion_id", nullable = false)
+    private ExerciseMotion exerciseMotion;
 
     @Column(name = "duration_sec", nullable = false)
     private int durationSec;
@@ -55,14 +55,15 @@ public class ExerciseSessionMotion {
     @Builder
     private ExerciseSessionMotion(
             ExerciseSession session,
-            Motion motion,
+            ExerciseMotion exerciseMotion,
             int durationSec,
             double accuracy,
             int completedReps,
             String feedback) {
         this.session = Objects.requireNonNull(session, "session must not be null");
-        this.motion = Objects.requireNonNull(motion, "motion must not be null");
-        validateExerciseType(session, motion);
+        this.exerciseMotion =
+                Objects.requireNonNull(exerciseMotion, "exerciseMotion must not be null");
+        validateExerciseType(session, exerciseMotion);
         validateNonNegative(durationSec, "durationSec");
         validateAccuracy(accuracy);
         validateNonNegative(completedReps, "completedReps");
@@ -77,9 +78,10 @@ public class ExerciseSessionMotion {
         this.createdAt = LocalDateTime.now();
     }
 
-    private void validateExerciseType(ExerciseSession session, Motion motion) {
-        if (session.getExerciseType() != motion.getExerciseType()) {
-            throw new IllegalArgumentException("session and motion exerciseType must match");
+    private void validateExerciseType(ExerciseSession session, ExerciseMotion exerciseMotion) {
+        if (session.getExerciseType() != exerciseMotion.getExerciseType()) {
+            throw new IllegalArgumentException(
+                    "session and exerciseMotion exerciseType must match");
         }
     }
 
