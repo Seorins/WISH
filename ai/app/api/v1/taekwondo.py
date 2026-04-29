@@ -7,6 +7,9 @@ from app.schemas.taekwondo import (
     TaekwondoBasicMotionFeaturesResponse,
     TaekwondoCalibrationRequest,
     TaekwondoCalibrationResponse,
+    TaekwondoDirectionClassificationRequest,
+    TaekwondoDirectionClassificationResponse,
+    TaekwondoDirectionFeaturesResponse,
     TaekwondoNormalizedPoseResponse,
     TaekwondoPoseFrameRequest,
     TaekwondoStanceClassificationRequest,
@@ -17,6 +20,10 @@ from app.schemas.taekwondo import (
 from app.services.taekwondo.classification.basic_motion_classifier import (
     BasicMotionClassificationResult,
     BasicMotionClassifier,
+)
+from app.services.taekwondo.classification.direction_classifier import (
+    DirectionClassificationResult,
+    DirectionClassifier,
 )
 from app.services.taekwondo.classification.stance_classifier import (
     StanceClassificationResult,
@@ -31,6 +38,7 @@ router = APIRouter(prefix="/taekwondo", tags=["taekwondo"])
 normalizer = PoseNormalizer()
 calibration_service = CalibrationService(normalizer=normalizer)
 basic_motion_classifier = BasicMotionClassifier()
+direction_classifier = DirectionClassifier()
 stance_classifier = StanceClassifier()
 
 
@@ -137,6 +145,33 @@ def to_taekwondo_stance_response(
     )
 
 
+def to_taekwondo_direction_response(
+    frame: NormalizedPoseFrame,
+    result: DirectionClassificationResult,
+) -> TaekwondoDirectionClassificationResponse:
+    return TaekwondoDirectionClassificationResponse(
+        tracking=frame.tracking,
+        tracking_quality=to_tracking_quality_response(frame),
+        direction_label=result.direction_label,
+        turn_label=result.turn_label,
+        confidence=result.confidence,
+        scores=result.scores,
+        features=TaekwondoDirectionFeaturesResponse(
+            left_shoulder_x=result.features.left_shoulder_x,
+            right_shoulder_x=result.features.right_shoulder_x,
+            left_hip_x=result.features.left_hip_x,
+            right_hip_x=result.features.right_hip_x,
+            left_ankle_x=result.features.left_ankle_x,
+            right_ankle_x=result.features.right_ankle_x,
+            left_side_extent=result.features.left_side_extent,
+            right_side_extent=result.features.right_side_extent,
+            side_extent_difference=result.features.side_extent_difference,
+            shoulder_balance=result.features.shoulder_balance,
+            ankle_balance=result.features.ankle_balance,
+        ),
+    )
+
+
 @router.post("/normalize", response_model=TaekwondoNormalizedPoseResponse)
 def normalize_pose(frame: TaekwondoPoseFrameRequest) -> TaekwondoNormalizedPoseResponse:
     normalized = normalizer.normalize(frame)
@@ -169,3 +204,12 @@ def classify_stance(
     normalized = normalizer.normalize(request.frame)
     result = stance_classifier.classify(normalized)
     return to_taekwondo_stance_response(normalized, result)
+
+
+@router.post("/classify-direction", response_model=TaekwondoDirectionClassificationResponse)
+def classify_direction(
+    request: TaekwondoDirectionClassificationRequest,
+) -> TaekwondoDirectionClassificationResponse:
+    normalized = normalizer.normalize(request.frame)
+    result = direction_classifier.classify(normalized, request.previous_direction)
+    return to_taekwondo_direction_response(normalized, result)
