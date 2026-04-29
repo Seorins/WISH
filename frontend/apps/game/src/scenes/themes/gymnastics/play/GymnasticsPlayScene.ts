@@ -60,6 +60,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
   private cameraContext!: CanvasRenderingContext2D
   private cameraTexture!: Phaser.Textures.CanvasTexture
   private cameraBounds!: PanelBounds
+  private statusBadgeBounds!: PanelBounds
   private statusDot!: Phaser.GameObjects.Arc
   private statusText!: Phaser.GameObjects.Text
   private motionCounterText!: Phaser.GameObjects.Text
@@ -79,6 +80,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
   constructor(
     sceneKey: string,
     private readonly motions: GymnasticsMotion[],
+    private readonly modeLabel: string,
   ) {
     super({ key: sceneKey })
   }
@@ -250,13 +252,15 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     this.createHeaderFrame(headerX, headerTop, modePanelW, headerH)
     this.createHeaderFrame(motionPanelX, headerTop, motionPanelW, headerH)
 
-    this.motionCounterMaxWidth = modePanelW - 24
+    const headerTextInset = Math.max(18, headerH * 0.9)
+    const modeTextCenterX = headerX + headerTextInset + (modePanelW - headerTextInset * 2) / 2
+    this.motionCounterMaxWidth = modePanelW - headerTextInset * 2
     this.motionTitleMaxWidth = motionPanelW - 32
     this.timerMaxWidth = Math.max(64, rightHeaderW - headerH - headerGap - 28)
     this.headerFontSize = headerFontSize
 
     this.motionCounterText = this.add
-      .text(headerX + modePanelW / 2, y, 'top \uCCB4\uC870', headerTextStyle)
+      .text(modeTextCenterX, y, this.modeLabel, headerTextStyle)
       .setOrigin(0.5)
       .setDepth(12)
 
@@ -309,6 +313,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     const badgeH = 28
     const badgeX = bounds.x + 18
     const badgeY = bounds.y + 18
+    this.statusBadgeBounds = { x: badgeX, y: badgeY, width: badgeW, height: badgeH }
     const badge = this.add.graphics().setDepth(9)
     badge.fillStyle(0x3f220c, 0.14)
     badge.fillRoundedRect(badgeX, badgeY + 2, badgeW, badgeH, 12)
@@ -316,7 +321,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     badge.fillRoundedRect(badgeX, badgeY, badgeW, badgeH, 12)
     badge.lineStyle(1, FLAT_COLORS.border, 1)
     badge.strokeRoundedRect(badgeX, badgeY, badgeW, badgeH, 12)
-    this.statusDot = this.add.circle(badgeX + 15, badgeY + badgeH / 2, 5.5, 0xd13b2f).setDepth(10)
+    this.statusDot = this.add.circle(0, badgeY + badgeH / 2, 5.5, 0xd13b2f).setDepth(10)
     this.statusText = this.add
       .text(badgeX + 28, badgeY + badgeH / 2, '인식 불가', {
         fontFamily: 'sans-serif',
@@ -326,6 +331,18 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
       })
       .setOrigin(0, 0.5)
       .setDepth(10)
+    this.layoutStatusBadge()
+  }
+
+  private layoutStatusBadge() {
+    const dotRadius = this.statusDot.radius
+    const gap = 8
+    const groupW = dotRadius * 2 + gap + this.statusText.width
+    const startX = this.statusBadgeBounds.x + (this.statusBadgeBounds.width - groupW) / 2
+    const centerY = this.statusBadgeBounds.y + this.statusBadgeBounds.height / 2
+
+    this.statusDot.setPosition(startX + dotRadius, centerY)
+    this.statusText.setPosition(startX + dotRadius * 2 + gap, centerY)
   }
 
   private createSidePanels(x: number, y: number, width: number, height: number) {
@@ -334,19 +351,22 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     const targetH = panelH
     const feedbackY = y + panelH + panelGap
     const feedbackH = panelH
+    const sectionTitleX = x + width / 2
+    const targetTitleY = y + targetH * 0.088
+    const feedbackTitleY = feedbackY + feedbackH * 0.094
 
     this.add
       .image(x + width / 2, y + targetH / 2, 'gymnastics-pose-frame')
       .setDisplaySize(width * TARGET_POSE_FRAME_SCALE, targetH * TARGET_POSE_FRAME_SCALE)
       .setDepth(11)
     this.add
-      .text(x + width / 2, y + targetH * 0.105, '목표 자세', {
+      .text(sectionTitleX, targetTitleY, '목표 자세', {
         fontFamily: 'sans-serif',
-        fontSize: `${Math.round(Phaser.Math.Clamp(targetH * 0.09, 16, 22))}px`,
+        fontSize: `${Math.round(Phaser.Math.Clamp(targetH * 0.078, 16, 20))}px`,
         color: '#fff4d4',
         fontStyle: 'bold',
         stroke: '#4b250c',
-        strokeThickness: 3,
+        strokeThickness: 2,
       })
       .setOrigin(0.5)
       .setDepth(13)
@@ -361,13 +381,13 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
       .setDisplaySize(width, feedbackH)
       .setDepth(11)
     this.add
-      .text(x + width / 2, feedbackY + feedbackH * 0.095, '실시간 피드백', {
+      .text(sectionTitleX, feedbackTitleY, '실시간 피드백', {
         fontFamily: 'sans-serif',
-        fontSize: `${Math.round(Phaser.Math.Clamp(feedbackH * 0.105, 15, 20))}px`,
+        fontSize: `${Math.round(Phaser.Math.Clamp(feedbackH * 0.082, 15, 20))}px`,
         color: '#fff4d4',
         fontStyle: 'bold',
         stroke: '#4b250c',
-        strokeThickness: 3,
+        strokeThickness: 2,
       })
       .setOrigin(0.5)
       .setDepth(13)
@@ -554,6 +574,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     this.statusText.setText(isRecognized ? '인식 중' : '인식 불가')
     this.feedbackTitleText?.setText(isRecognized ? '좋아요!' : '기다릴게요')
     if (this.feedbackTitleText) {
+      this.layoutStatusBadge()
       this.fitTextToWidth(this.feedbackTitleText, this.feedbackTitleMaxWidth, 38, 22)
       this.positionFeedbackStar()
     }
@@ -561,7 +582,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
 
   private renderMotion() {
     const motion = this.motions[this.motionIndex]
-    this.motionCounterText?.setText('top \uCCB4\uC870')
+    this.motionCounterText?.setText(this.modeLabel)
     this.motionTitleText?.setText(motion.title)
     this.timerText?.setText(this.formatTime(this.remainingSeconds))
     this.feedbackTitleText?.setText(this.isCameraRecognized ? '좋아요!' : '기다릴게요')
@@ -621,12 +642,12 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
 
 export class GymnasticsTopScene extends GymnasticsPlaySceneBase {
   constructor() {
-    super('GymnasticsTopScene', TOP_MOTIONS)
+    super('GymnasticsTopScene', TOP_MOTIONS, 'top \uCCB4\uC870')
   }
 }
 
 export class GymnasticsDanielScene extends GymnasticsPlaySceneBase {
   constructor() {
-    super('GymnasticsDanielScene', DANIEL_MOTIONS)
+    super('GymnasticsDanielScene', DANIEL_MOTIONS, '\uB2E4\uB2C8\uC5D8 \uCCB4\uC870')
   }
 }
