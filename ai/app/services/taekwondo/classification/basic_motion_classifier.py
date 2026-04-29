@@ -6,6 +6,31 @@ from app.services.taekwondo.constants import (
     ACTION_MIDDLE_PUNCH,
     ACTION_READY,
     ACTION_UNCLASSIFIED,
+    ELBOW_BENT_MAX,
+    ELBOW_BENT_MIN,
+    ELBOW_EXTENDED_THRESHOLD,
+    ELBOW_SEMI_EXTENDED_THRESHOLD,
+    ELBOW_SLIGHTLY_BENT_MAX,
+    LOW_BLOCK_EXTENDED_ARM_WEIGHT,
+    LOW_BLOCK_FAR_FROM_CENTER_REFERENCE,
+    LOW_BLOCK_FAR_FROM_CENTER_WEIGHT,
+    LOW_BLOCK_OPPOSITE_NEAR_HIP_WEIGHT,
+    LOW_BLOCK_WRIST_LOW_WEIGHT,
+    LOW_BLOCK_WRIST_Y_MIN,
+    MIDDLE_PUNCH_EXTENDED_ARM_WEIGHT,
+    MIDDLE_PUNCH_FAR_FROM_CENTER_REFERENCE,
+    MIDDLE_PUNCH_FAR_FROM_CENTER_WEIGHT,
+    MIDDLE_PUNCH_OPPOSITE_NEAR_HIP_WEIGHT,
+    MIDDLE_PUNCH_TORSO_HEIGHT_WEIGHT,
+    MIDDLE_PUNCH_WRIST_Y_MAX,
+    MIDDLE_PUNCH_WRIST_Y_MIN,
+    MIN_CLASSIFICATION_CONFIDENCE,
+    READY_BOTH_NEAR_HIPS_WEIGHT,
+    READY_ELBOWS_NOT_LOCKED_WEIGHT,
+    READY_HANDS_BALANCED_WEIGHT,
+    READY_HANDS_BALANCED_Y_DIFF_MAX,
+    READY_HANDS_NOT_EXTENDED_WEIGHT,
+    READY_HANDS_NOT_EXTENDED_X_MAX,
 )
 from app.services.taekwondo.features.basic_motion_features import (
     BasicMotionFeatureSet,
@@ -45,7 +70,7 @@ class BasicMotionClassifier:
         best_label = max(scores, key=scores.get)
         best_score = scores[best_label]
 
-        if best_score < 0.45:
+        if best_score < MIN_CLASSIFICATION_CONFIDENCE:
             return BasicMotionClassificationResult(
                 action_label=ACTION_UNCLASSIFIED,
                 confidence=round(best_score, 4),
@@ -64,10 +89,10 @@ class BasicMotionClassifier:
 
     def _score_ready(self, features: BasicMotionFeatureSet) -> float:
         both_near_hips = features.left_wrist_near_hip and features.right_wrist_near_hip
-        hands_balanced = abs(features.left_wrist_y - features.right_wrist_y) <= 0.25
+        hands_balanced = abs(features.left_wrist_y - features.right_wrist_y) <= READY_HANDS_BALANCED_Y_DIFF_MAX
         hands_not_extended = (
-            features.left_wrist_far_from_center <= 0.45
-            and features.right_wrist_far_from_center <= 0.45
+            features.left_wrist_far_from_center <= READY_HANDS_NOT_EXTENDED_X_MAX
+            and features.right_wrist_far_from_center <= READY_HANDS_NOT_EXTENDED_X_MAX
         )
         elbows_not_locked = self._max_score(
             self._bent_elbow_score(features.left_elbow_angle),
@@ -75,10 +100,10 @@ class BasicMotionClassifier:
         )
 
         score = 0.0
-        score += 0.4 if both_near_hips else 0.0
-        score += 0.25 if hands_balanced else 0.0
-        score += 0.2 if hands_not_extended else 0.0
-        score += elbows_not_locked * 0.15
+        score += READY_BOTH_NEAR_HIPS_WEIGHT if both_near_hips else 0.0
+        score += READY_HANDS_BALANCED_WEIGHT if hands_balanced else 0.0
+        score += READY_HANDS_NOT_EXTENDED_WEIGHT if hands_not_extended else 0.0
+        score += elbows_not_locked * READY_ELBOWS_NOT_LOCKED_WEIGHT
         return min(score, 1.0)
 
     def _score_low_block(self, features: BasicMotionFeatureSet) -> float:
@@ -96,10 +121,10 @@ class BasicMotionClassifier:
         opposite_near_hip = features.right_wrist_near_hip if side == "left" else features.left_wrist_near_hip
 
         score = 0.0
-        score += 0.35 if wrist_y >= 0.25 else 0.0
-        score += min(far_from_center / 1.2, 1.0) * 0.25
-        score += self._extended_arm_score(elbow_angle) * 0.25
-        score += 0.15 if opposite_near_hip else 0.0
+        score += LOW_BLOCK_WRIST_LOW_WEIGHT if wrist_y >= LOW_BLOCK_WRIST_Y_MIN else 0.0
+        score += min(far_from_center / LOW_BLOCK_FAR_FROM_CENTER_REFERENCE, 1.0) * LOW_BLOCK_FAR_FROM_CENTER_WEIGHT
+        score += self._extended_arm_score(elbow_angle) * LOW_BLOCK_EXTENDED_ARM_WEIGHT
+        score += LOW_BLOCK_OPPOSITE_NEAR_HIP_WEIGHT if opposite_near_hip else 0.0
         return min(score, 1.0)
 
     def _score_middle_punch(self, features: BasicMotionFeatureSet) -> float:
@@ -116,30 +141,30 @@ class BasicMotionClassifier:
         elbow_angle = features.left_elbow_angle if side == "left" else features.right_elbow_angle
         opposite_near_hip = features.right_wrist_near_hip if side == "left" else features.left_wrist_near_hip
 
-        torso_height_score = 1.0 if -0.9 <= wrist_y <= -0.1 else 0.0
+        torso_height_score = 1.0 if MIDDLE_PUNCH_WRIST_Y_MIN <= wrist_y <= MIDDLE_PUNCH_WRIST_Y_MAX else 0.0
 
         score = 0.0
-        score += torso_height_score * 0.35
-        score += min(far_from_center / 1.2, 1.0) * 0.25
-        score += self._extended_arm_score(elbow_angle) * 0.25
-        score += 0.15 if opposite_near_hip else 0.0
+        score += torso_height_score * MIDDLE_PUNCH_TORSO_HEIGHT_WEIGHT
+        score += min(far_from_center / MIDDLE_PUNCH_FAR_FROM_CENTER_REFERENCE, 1.0) * MIDDLE_PUNCH_FAR_FROM_CENTER_WEIGHT
+        score += self._extended_arm_score(elbow_angle) * MIDDLE_PUNCH_EXTENDED_ARM_WEIGHT
+        score += MIDDLE_PUNCH_OPPOSITE_NEAR_HIP_WEIGHT if opposite_near_hip else 0.0
         return min(score, 1.0)
 
     def _extended_arm_score(self, elbow_angle: float | None) -> float:
         if elbow_angle is None:
             return 0.0
-        if elbow_angle >= 150.0:
+        if elbow_angle >= ELBOW_EXTENDED_THRESHOLD:
             return 1.0
-        if elbow_angle >= 120.0:
+        if elbow_angle >= ELBOW_SEMI_EXTENDED_THRESHOLD:
             return 0.7
         return 0.0
 
     def _bent_elbow_score(self, elbow_angle: float | None) -> float:
         if elbow_angle is None:
             return 0.0
-        if 60.0 <= elbow_angle <= 150.0:
+        if ELBOW_BENT_MIN <= elbow_angle <= ELBOW_BENT_MAX:
             return 1.0
-        if 150.0 < elbow_angle <= 165.0:
+        if ELBOW_BENT_MAX < elbow_angle <= ELBOW_SLIGHTLY_BENT_MAX:
             return 0.5
         return 0.0
 

@@ -2,6 +2,9 @@ from dataclasses import dataclass
 from math import acos, degrees, sqrt
 
 from app.services.taekwondo.constants import (
+    FEATURE_DOMINANT_ACTION_MARGIN,
+    FEATURE_DOMINANT_ACTION_MIN_SCORE,
+    FEATURE_WRIST_NEAR_HIP_DISTANCE_MAX,
     LEFT_ELBOW,
     LEFT_HIP,
     LEFT_SHOULDER,
@@ -41,14 +44,14 @@ def extract_basic_motion_features(frame: NormalizedPoseFrame) -> BasicMotionFeat
     left_wrist_far_from_center = abs(left_wrist.x) if left_wrist is not None else 0.0
     right_wrist_far_from_center = abs(right_wrist.x) if right_wrist is not None else 0.0
 
-    left_wrist_to_hip_distance = _distance(left_wrist, left_hip)
-    right_wrist_to_hip_distance = _distance(right_wrist, right_hip)
+    left_wrist_to_hip_distance = _distance_2d(left_wrist, left_hip)
+    right_wrist_to_hip_distance = _distance_2d(right_wrist, right_hip)
 
     left_elbow_angle = _joint_angle(frame, LEFT_SHOULDER, LEFT_ELBOW, LEFT_WRIST)
     right_elbow_angle = _joint_angle(frame, RIGHT_SHOULDER, RIGHT_ELBOW, RIGHT_WRIST)
 
-    left_wrist_near_hip = left_wrist_to_hip_distance <= 0.45
-    right_wrist_near_hip = right_wrist_to_hip_distance <= 0.45
+    left_wrist_near_hip = left_wrist_to_hip_distance <= FEATURE_WRIST_NEAR_HIP_DISTANCE_MAX
+    right_wrist_near_hip = right_wrist_to_hip_distance <= FEATURE_WRIST_NEAR_HIP_DISTANCE_MAX
 
     dominant_action_side = _resolve_dominant_action_side(
         left_far_from_center=left_wrist_far_from_center,
@@ -82,14 +85,14 @@ def _resolve_dominant_action_side(
     left_score = left_far_from_center + left_wrist_to_hip_distance
     right_score = right_far_from_center + right_wrist_to_hip_distance
 
-    if max(left_score, right_score) < 0.8:
+    if max(left_score, right_score) < FEATURE_DOMINANT_ACTION_MIN_SCORE:
         return None
-    if abs(left_score - right_score) < 0.15:
+    if abs(left_score - right_score) < FEATURE_DOMINANT_ACTION_MARGIN:
         return None
     return "left" if left_score > right_score else "right"
 
 
-def _distance(first: NormalizedLandmark | None, second: NormalizedLandmark | None) -> float:
+def _distance_2d(first: NormalizedLandmark | None, second: NormalizedLandmark | None) -> float:
     if first is None or second is None:
         return 0.0
     return sqrt((first.x - second.x) ** 2 + (first.y - second.y) ** 2)
@@ -114,7 +117,10 @@ def _joint_angle(
     magnitude_b = sqrt(vector_b[0] ** 2 + vector_b[1] ** 2)
     if magnitude_a < MIN_SCALE_REFERENCE or magnitude_b < MIN_SCALE_REFERENCE:
         return None
+    denominator = magnitude_a * magnitude_b
+    if denominator <= MIN_SCALE_REFERENCE:
+        return None
 
-    cosine = (vector_a[0] * vector_b[0] + vector_a[1] * vector_b[1]) / (magnitude_a * magnitude_b)
+    cosine = (vector_a[0] * vector_b[0] + vector_a[1] * vector_b[1]) / denominator
     cosine = max(min(cosine, 1.0), -1.0)
     return degrees(acos(cosine))
