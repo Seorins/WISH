@@ -115,3 +115,25 @@ def test_calibration_returns_tracking_lost_reason_when_visibility_is_too_low() -
     assert body["tracking"] == "tracking_lost"
     assert body["failure_reason"] == "tracking_lost"
     assert body["calibration_status"] == "reposition_required"
+
+
+def test_calibration_keeps_frames_remaining_at_zero_when_count_already_exceeds_target() -> None:
+    response = client.post(
+        "/api/v1/taekwondo/calibrate",
+        json=build_calibration_payload(stable_frame_count=6, target_stable_frames=5),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["calibration_status"] == "calibrated"
+    assert body["stable_frame_count"] == 7
+    assert body["frames_remaining"] == 0
+
+
+def test_calibration_rejects_unrealistically_large_target_frame_count() -> None:
+    response = client.post(
+        "/api/v1/taekwondo/calibrate",
+        json=build_calibration_payload(target_stable_frames=1000),
+    )
+
+    assert response.status_code == 422

@@ -1,7 +1,10 @@
 from pydantic import BaseModel, Field
 
 from app.schemas.gymnastics import HipCenterResponse, NormalizedPoseResponse, PoseFrameRequest
-from app.services.taekwondo.constants import DEFAULT_CALIBRATION_TARGET_FRAMES
+from app.services.taekwondo.constants import (
+    DEFAULT_CALIBRATION_TARGET_FRAMES,
+    MAX_CALIBRATION_TARGET_FRAMES,
+)
 
 
 class TaekwondoPoseFrameRequest(PoseFrameRequest):
@@ -31,6 +34,7 @@ class TaekwondoCalibrationRequest(BaseModel):
     target_stable_frames: int = Field(
         default=DEFAULT_CALIBRATION_TARGET_FRAMES,
         ge=1,
+        le=MAX_CALIBRATION_TARGET_FRAMES,
         description="How many stable frames are required before calibration succeeds",
     )
 
