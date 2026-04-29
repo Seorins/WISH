@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { assetPath } from '@/game/assets/assetPath'
 import {
   createClickTargetMarker,
   createPlayer,
@@ -65,11 +66,11 @@ export class VillageScene extends Phaser.Scene {
   }
 
   preload() {
-    this.load.image('map', '/assets/images/village/background/map.png')
-    this.load.image('sehyun_talk', '/assets/images/npcs/sehyun/dialog-frame.png')
-    this.load.image('profile', '/assets/images/common/profile.png')
-    this.load.image('menu', '/assets/images/ui/buttons/menu.png')
-    this.load.spritesheet('sehyun', '/assets/images/npcs/sehyun/sprite.png', {
+    this.load.image('map', assetPath('images/village/background/map.png'))
+    this.load.image('sehyun_talk', assetPath('images/npcs/sehyun/dialog-frame.png'))
+    this.load.image('profile', assetPath('images/common/profile.png'))
+    this.load.image('menu', assetPath('images/ui/buttons/menu.png'))
+    this.load.spritesheet('sehyun', assetPath('images/npcs/sehyun/sprite.png'), {
       frameWidth: 313,
       frameHeight: 313,
       margin: 1,

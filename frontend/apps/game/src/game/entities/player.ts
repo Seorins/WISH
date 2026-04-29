@@ -1,5 +1,7 @@
 import Phaser from 'phaser'
 
+import { assetPath } from '@/game/assets/assetPath'
+
 export const PLAYER_FRAME_SIZE = 313
 export const PLAYER_WALK_SPEED = 180
 export const PLAYER_TEXTURE_KEY = 'character'
@@ -30,7 +32,7 @@ type PlayerMovementResult = {
   moving: boolean
 }
 
-const CHARACTER_SHEET_PATH = '/assets/images/common/player/character_sheet.png'
+const CHARACTER_SHEET_PATH = assetPath('images/common/player/character_sheet.png')
 
 const PLAYER_WALK_ANIMATIONS: Array<{
   key: `walk-${PlayerDirection}`

@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { assetPath } from '@/game/assets/assetPath'
 
 type FloatingInteractionIconOptions = {
   x: number
@@ -11,8 +12,8 @@ type FloatingInteractionIconOptions = {
 }
 
 export function loadInteractionIcons(scene: Phaser.Scene) {
-  scene.load.image('talk-icon', '/assets/images/ui/icons/talk.png')
-  scene.load.image('talking-icon', '/assets/images/ui/icons/talking.png')
+  scene.load.image('talk-icon', assetPath('images/ui/icons/talk.png'))
+  scene.load.image('talking-icon', assetPath('images/ui/icons/talking.png'))
 }
 
 export function createFloatingInteractionIcon(

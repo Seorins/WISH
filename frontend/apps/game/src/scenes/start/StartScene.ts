@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { assetPath } from '@/game/assets/assetPath'
 
 export class StartScene extends Phaser.Scene {
   constructor() {
@@ -6,9 +7,9 @@ export class StartScene extends Phaser.Scene {
   }
 
   preload() {
-    this.load.image('home', '/assets/images/common/background/home.png')
-    this.load.image('logo', '/assets/images/common/logo.png')
-    this.load.image('startbtn', '/assets/images/ui/buttons/startbtn.png')
+    this.load.image('home', assetPath('images/common/background/home.png'))
+    this.load.image('logo', assetPath('images/common/logo.png'))
+    this.load.image('startbtn', assetPath('images/ui/buttons/startbtn.png'))
   }
 
   create() {

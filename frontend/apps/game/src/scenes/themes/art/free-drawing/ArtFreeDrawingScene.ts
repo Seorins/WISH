@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
 import { createArtwork, updateArtwork } from '@wish/api-client'
+import { assetPath } from '@/game/assets/assetPath'
 import { HandTracker, type TrackedHand } from '@/game/motion/handTracker'
 import { detectIndexFingerGesture } from '@/game/motion/indexFingerGesture'
 import { toPointerCanvasCoordinates } from '@/game/motion/pointerCanvasCoordinates'
@@ -201,15 +202,15 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
   }
 
   preload() {
-    this.load.image('art-room-background', '/assets/images/themes/art/background/background.png')
-    this.load.image('art-ui-canvas', '/assets/images/themes/art/ui/canvas.png')
-    this.load.image('art-ui-palette', '/assets/images/themes/art/ui/palette.png')
-    this.load.image('art-ui-rumi', '/assets/images/themes/art/ui/rumi.png')
-    this.load.image('art-ui-brush', '/assets/images/themes/art/ui/brush.png')
-    this.load.image('art-ui-eraser', '/assets/images/themes/art/ui/eraser.png')
-    this.load.image('art-ui-delete-btn', '/assets/images/themes/art/ui/delete_btn.png')
-    this.load.image('art-ui-reset-btn', '/assets/images/themes/art/ui/reset.png')
-    this.load.image('art-ui-save-btn', '/assets/images/themes/art/ui/save_btn.png')
+    this.load.image('art-room-background', assetPath('images/themes/art/background/background.png'))
+    this.load.image('art-ui-canvas', assetPath('images/themes/art/ui/canvas.png'))
+    this.load.image('art-ui-palette', assetPath('images/themes/art/ui/palette.png'))
+    this.load.image('art-ui-rumi', assetPath('images/themes/art/ui/rumi.png'))
+    this.load.image('art-ui-brush', assetPath('images/themes/art/ui/brush.png'))
+    this.load.image('art-ui-eraser', assetPath('images/themes/art/ui/eraser.png'))
+    this.load.image('art-ui-delete-btn', assetPath('images/themes/art/ui/delete_btn.png'))
+    this.load.image('art-ui-reset-btn', assetPath('images/themes/art/ui/reset.png'))
+    this.load.image('art-ui-save-btn', assetPath('images/themes/art/ui/save_btn.png'))
   }
 
   create(data: ArtFreeDrawingSceneData = {}) {
