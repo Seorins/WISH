@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { assetPath } from '@/game/assets/assetPath'
 import {
   createClickTargetMarker,
   createPlayer,
@@ -85,10 +86,10 @@ export class MusicSelectScene extends Phaser.Scene {
   }
 
   preload() {
-    this.load.image('music-background', '/assets/images/themes/music/background/background.png')
+    this.load.image('music-background', assetPath('images/themes/music/background/background.png'))
     this.load.spritesheet(
       'music-gisung-sprite',
-      '/assets/images/themes/music/characters/gisung_sprite.png',
+      assetPath('images/themes/music/characters/gisung_sprite.png'),
       {
         frameWidth: MUSIC_SPRITE_FRAME.width,
         frameHeight: MUSIC_SPRITE_FRAME.height,
@@ -97,7 +98,7 @@ export class MusicSelectScene extends Phaser.Scene {
       },
     )
     loadInteractionIcons(this)
-    this.load.image('gisung-dialog-frame', '/assets/images/npcs/gisung/dialog-frame.png')
+    this.load.image('gisung-dialog-frame', assetPath('images/npcs/gisung/dialog-frame.png'))
     loadPlayerSpritesheet(this)
   }
 

@@ -17,6 +17,7 @@ type CreateSimpleDialogOptions = {
   fontColor?: string
   fontSize?: number
   lineSpacing?: number
+  frameBottomMargin?: number
 }
 
 export type SimpleDialogUi = {
@@ -40,6 +41,7 @@ export function createSimpleDialogUi(
     fontColor = '#3b2a1f',
     fontSize = 44,
     lineSpacing = 6,
+    frameBottomMargin = -30,
   }: CreateSimpleDialogOptions,
 ) {
   const { width: vw, height: vh } = scene.scale
@@ -48,7 +50,7 @@ export function createSimpleDialogUi(
   const source = frame.texture.getSourceImage() as HTMLImageElement
   frame.setDisplaySize(dialogWidth, dialogWidth * (source.height / source.width))
   frame.setDepth(frameDepth).setAlpha(0).setScrollFactor(0)
-  frame.y = vh - frame.displayHeight / 2 + 30
+  frame.y = vh - frameBottomMargin - frame.displayHeight / 2
 
   const scale = frame.displayWidth / source.width
   const dialogLeft = frame.x - frame.displayWidth / 2
@@ -77,6 +79,11 @@ export function setCenteredDialogText(dialog: SimpleDialogUi, line: string) {
     dialog.textBaseY + Math.max(0, (dialog.textBoxHeight - dialog.text.height) / 2) - opticalOffset
 
   dialog.text.setPosition(dialog.textBaseX, centeredY)
+}
+
+export function setDialogTextAtBase(dialog: SimpleDialogUi, line: string) {
+  dialog.text.setText(line)
+  dialog.text.setPosition(dialog.textBaseX, dialog.textBaseY)
 }
 
 export function fadeSimpleDialog(
