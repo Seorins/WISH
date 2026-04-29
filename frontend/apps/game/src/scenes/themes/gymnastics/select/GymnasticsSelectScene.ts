@@ -19,7 +19,7 @@ import {
 import {
   createSimpleDialogUi,
   fadeSimpleDialog,
-  setCenteredDialogText,
+  setDialogTextAtBase,
   type SimpleDialogUi,
 } from '@/game/ui/simpleDialog'
 import { addCoverBackground } from '@/game/world/background'
@@ -232,6 +232,7 @@ export class GymnasticsSelectScene extends Phaser.Scene {
       maxDialogWidth: 1080,
       fontSize: 40,
       lineSpacing: 4,
+      frameBottomMargin: 18,
     })
   }
 
@@ -288,7 +289,7 @@ export class GymnasticsSelectScene extends Phaser.Scene {
       Phaser.Utils.Array.GetRandom(seongsuDialogs.choicePrompt),
     ]
     this.dialogStepIndex = 0
-    setCenteredDialogText(this.dialog, this.dialogSteps[0].text)
+    setDialogTextAtBase(this.dialog, this.dialogSteps[0].text)
     this.isDialogVisible = true
     setInteractionIconActive(this.talkIcon, true)
     fadeSimpleDialog(this, this.dialog, 1, 220)
@@ -297,7 +298,7 @@ export class GymnasticsSelectScene extends Phaser.Scene {
   private advanceDialog() {
     if (this.dialogStepIndex < this.dialogSteps.length - 1) {
       this.dialogStepIndex += 1
-      setCenteredDialogText(this.dialog, this.dialogSteps[this.dialogStepIndex].text)
+      setDialogTextAtBase(this.dialog, this.dialogSteps[this.dialogStepIndex].text)
       return
     }
     // 마지막 단계 → 대화 닫고 선택 화면 표시
