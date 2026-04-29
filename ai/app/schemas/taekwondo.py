@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 from app.schemas.gymnastics import HipCenterResponse, NormalizedPoseResponse, PoseFrameRequest
@@ -105,3 +107,35 @@ class TaekwondoStanceClassificationResponse(BaseModel):
     bend_side: str | None = None
     scores: dict[str, float]
     features: TaekwondoStanceFeaturesResponse
+
+
+class TaekwondoDirectionFeaturesResponse(BaseModel):
+    left_shoulder_x: float
+    right_shoulder_x: float
+    left_hip_x: float
+    right_hip_x: float
+    left_ankle_x: float
+    right_ankle_x: float
+    left_side_extent: float
+    right_side_extent: float
+    side_extent_difference: float
+    shoulder_balance: float
+    ankle_balance: float
+
+
+class TaekwondoDirectionClassificationRequest(BaseModel):
+    frame: TaekwondoPoseFrameRequest
+    previous_direction: Literal["front", "left", "right"] | None = Field(
+        default=None,
+        description="Previous direction label to infer turn_left / turn_right",
+    )
+
+
+class TaekwondoDirectionClassificationResponse(BaseModel):
+    tracking: str = Field(..., description="Tracking quality status for the current frame")
+    tracking_quality: TrackingQualityResponse
+    direction_label: str = Field(..., description="Current body direction label")
+    turn_label: str = Field(..., description="Direction change label")
+    confidence: float = Field(..., ge=0.0, le=1.0)
+    scores: dict[str, float]
+    features: TaekwondoDirectionFeaturesResponse
