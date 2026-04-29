@@ -53,3 +53,31 @@ class TaekwondoCalibrationResponse(BaseModel):
     )
     reference_hip_center: HipCenterResponse | None = None
     reference_scale: float | None = None
+
+
+class TaekwondoBasicMotionFeaturesResponse(BaseModel):
+    left_wrist_y: float
+    right_wrist_y: float
+    left_wrist_far_from_center: float
+    right_wrist_far_from_center: float
+    left_wrist_to_hip_distance: float
+    right_wrist_to_hip_distance: float
+    left_elbow_angle: float | None = None
+    right_elbow_angle: float | None = None
+    left_wrist_near_hip: bool
+    right_wrist_near_hip: bool
+    dominant_action_side: str | None = None
+
+
+class TaekwondoBasicMotionClassificationRequest(BaseModel):
+    frame: TaekwondoPoseFrameRequest
+
+
+class TaekwondoBasicMotionClassificationResponse(BaseModel):
+    tracking: str = Field(..., description="Tracking quality status for the current frame")
+    tracking_quality: TrackingQualityResponse
+    action_label: str = Field(..., description="Current basic taekwondo action label")
+    confidence: float = Field(..., ge=0.0, le=1.0)
+    dominant_side: str | None = None
+    scores: dict[str, float]
+    features: TaekwondoBasicMotionFeaturesResponse
