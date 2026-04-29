@@ -78,9 +78,6 @@ public class ExerciseSessionMotion {
     }
 
     private void validateExerciseType(ExerciseSession session, Motion motion) {
-        if (session.getExerciseType() == null || motion.getExerciseType() == null) {
-            return;
-        }
         if (session.getExerciseType() != motion.getExerciseType()) {
             throw new IllegalArgumentException("session and motion exerciseType must match");
         }
