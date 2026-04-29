@@ -33,6 +33,8 @@ const TOP_MOTIONS: GymnasticsMotion[] = [
   },
 ]
 
+const DANIEL_MOTIONS: GymnasticsMotion[] = TOP_MOTIONS
+
 const FLAT_COLORS = {
   surface: 0xfffbf2,
   surfaceAlt: 0xfff6e7,
@@ -44,7 +46,7 @@ const FLAT_COLORS = {
   primaryDark: 0x237a42,
   secondary: 0xfff6e7,
 }
-export class GymnasticsTopScene extends Phaser.Scene {
+class GymnasticsPlaySceneBase extends Phaser.Scene {
   private motionIndex = 0
   private score = 120
   private remainingSeconds = 72
@@ -70,8 +72,11 @@ export class GymnasticsTopScene extends Phaser.Scene {
   private timerMaxWidth = 0
   private feedbackTitleMaxWidth = 0
 
-  constructor() {
-    super({ key: 'GymnasticsTopScene' })
+  constructor(
+    sceneKey: string,
+    private readonly motions: GymnasticsMotion[],
+  ) {
+    super({ key: sceneKey })
   }
 
   preload() {
@@ -577,13 +582,13 @@ export class GymnasticsTopScene extends Phaser.Scene {
   }
 
   private moveMotion(direction: number) {
-    this.motionIndex = Phaser.Math.Wrap(this.motionIndex + direction, 0, TOP_MOTIONS.length)
+    this.motionIndex = Phaser.Math.Wrap(this.motionIndex + direction, 0, this.motions.length)
     this.renderMotion()
   }
 
   private renderMotion() {
-    const motion = TOP_MOTIONS[this.motionIndex]
-    this.motionCounterText?.setText(`${this.motionIndex + 1} / ${TOP_MOTIONS.length}`)
+    const motion = this.motions[this.motionIndex]
+    this.motionCounterText?.setText(`${this.motionIndex + 1} / ${this.motions.length}`)
     this.motionTitleText?.setText(motion.title)
     this.scoreText?.setText(`별 ${this.score}`)
     this.feedbackTitleText?.setText(this.isCameraRecognized ? '좋아요!' : '기다릴게요')
@@ -632,5 +637,17 @@ export class GymnasticsTopScene extends Phaser.Scene {
     this.mediaStream = null
     this.videoElement?.remove()
     this.videoElement = null
+  }
+}
+
+export class GymnasticsTopScene extends GymnasticsPlaySceneBase {
+  constructor() {
+    super('GymnasticsTopScene', TOP_MOTIONS)
+  }
+}
+
+export class GymnasticsDanielScene extends GymnasticsPlaySceneBase {
+  constructor() {
+    super('GymnasticsDanielScene', DANIEL_MOTIONS)
   }
 }
