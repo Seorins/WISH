@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 from app.services.gymnastics.features.march_features import MarchFeatureSet
+from app.services.gymnastics.features.side_step_features import SideStepFeatureSet
 
 
 @dataclass(slots=True)
@@ -33,6 +34,14 @@ ALTERNATE_STEPS = FeedbackCandidate(
     code="ALTERNATE_STEPS",
     text="\uc67c\ubc1c \uc624\ub978\ubc1c \ubc88\uac08\uc544 \ud574\uc694",
 )
+WIDEN_SIDE_STEP = FeedbackCandidate(
+    code="WIDEN_SIDE_STEP",
+    text="\uc606\uc73c\ub85c \ub354 \ud06c\uac8c \ubc8c\ub824\uc694",
+)
+MOVE_SIDE_ONLY = FeedbackCandidate(
+    code="MOVE_SIDE_ONLY",
+    text="\uc606\uc73c\ub85c\ub9cc \uc6c0\uc9c1\uc5ec\uc694",
+)
 
 
 def select_march_feedback_candidate(
@@ -62,6 +71,37 @@ def select_march_feedback_candidate(
         return LIFT_LEG_BIGGER
     if dominant_angle < thigh_angle_threshold:
         return LIFT_KNEE_HIGHER
+
+    if state == "idle":
+        return ALTERNATE_STEPS
+
+    return None
+
+
+def select_side_step_feedback_candidate(
+    features: SideStepFeatureSet,
+    state: str,
+    tracking: str,
+    ankle_span_threshold: float,
+    extent_threshold: float,
+    depth_shift_max: float,
+    torso_tilt_max: float,
+) -> FeedbackCandidate | None:
+    if state == "complete":
+        return None
+
+    if tracking != "tracking_ok":
+        return TRACKING_LOW
+
+    if abs(features.pelvis_depth_shift) > depth_shift_max:
+        return MOVE_SIDE_ONLY
+
+    if features.torso_tilt > torso_tilt_max:
+        return STRAIGHTEN_BACK
+
+    dominant_extent = max(features.left_step_extent, features.right_step_extent)
+    if features.ankle_span < ankle_span_threshold or dominant_extent < extent_threshold:
+        return WIDEN_SIDE_STEP
 
     if state == "idle":
         return ALTERNATE_STEPS
