@@ -1,6 +1,7 @@
 package com.comong.backend.domain.exercise.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -14,10 +15,13 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.comong.backend.domain.exercise.entity.ExerciseMotion;
+import com.comong.backend.domain.exercise.entity.ExerciseSession;
+import com.comong.backend.domain.exercise.entity.ExerciseSessionMotion;
 import com.comong.backend.domain.exercise.entity.ExerciseType;
 import com.comong.backend.domain.exercise.repository.ExerciseMotionRepository;
 import com.comong.backend.domain.exercise.repository.ExerciseSessionMotionRepository;
 import com.comong.backend.domain.exercise.repository.ExerciseSessionRepository;
+import com.comong.backend.domain.patient.entity.PatientProfile;
 import com.comong.backend.domain.patient.repository.PatientProfileRepository;
 import com.comong.backend.domain.user.repository.UserRepository;
 import com.comong.backend.support.IntegrationTestSupport;
@@ -109,6 +113,82 @@ class ExerciseSessionControllerIntegrationTest extends IntegrationTestSupport {
 
         assertThat(exerciseSessionRepository.count()).isEqualTo(1);
         assertThat(exerciseSessionMotionRepository.count()).isEqualTo(2);
+    }
+
+    @Test
+    void listExerciseSessions_returnsOwnedPatientSessionsOrderedByCreatedAtDesc() throws Exception {
+        TestUser user = setupUserWithProfile("list-session@example.com", "list-session-user");
+        PatientProfile profile = findProfile(user);
+        ExerciseSession older =
+                exerciseSessionRepository.save(exerciseSession(profile, 60, 0.8, 1));
+        Thread.sleep(5);
+        ExerciseSession newer =
+                exerciseSessionRepository.save(exerciseSession(profile, 78, 0.87, 2));
+
+        mockMvc.perform(
+                        get("/exercise-sessions")
+                                .header("Authorization", "Bearer " + user.token())
+                                .param("patientProfileId", user.patientProfileId().toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.length()").value(2))
+                .andExpect(jsonPath("$.data[0].id").value(newer.getId()))
+                .andExpect(jsonPath("$.data[0].durationSec").value(78))
+                .andExpect(jsonPath("$.data[1].id").value(older.getId()))
+                .andExpect(jsonPath("$.data[1].durationSec").value(60));
+    }
+
+    @Test
+    void listExerciseSessions_rejectsOtherUsersPatientProfile() throws Exception {
+        TestUser owner = setupUserWithProfile("list-owner@example.com", "list-owner-user");
+        TestUser other = setupUserWithProfile("list-other@example.com", "list-other-user");
+
+        mockMvc.perform(
+                        get("/exercise-sessions")
+                                .header("Authorization", "Bearer " + other.token())
+                                .param("patientProfileId", owner.patientProfileId().toString()))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("P-001"));
+    }
+
+    @Test
+    void getExerciseSessionDetail_returnsOwnedSessionWithMotionsOrderedByRoutineOrder()
+            throws Exception {
+        TestUser user = setupUserWithProfile("detail-session@example.com", "detail-session-user");
+        PatientProfile profile = findProfile(user);
+        ExerciseMotion march = exerciseMotionRepository.save(exerciseMotion("March", 1));
+        ExerciseMotion sideStep = exerciseMotionRepository.save(exerciseMotion("Side step", 2));
+        ExerciseSession session =
+                exerciseSessionRepository.save(exerciseSession(profile, 78, 0.87, 2));
+        exerciseSessionMotionRepository.save(sessionMotion(session, sideStep, 14, 0.88));
+        exerciseSessionMotionRepository.save(sessionMotion(session, march, 12, 0.91));
+
+        mockMvc.perform(
+                        get("/exercise-sessions/{id}", session.getId())
+                                .header("Authorization", "Bearer " + user.token()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.id").value(session.getId()))
+                .andExpect(jsonPath("$.data.patientProfileId").value(user.patientProfileId()))
+                .andExpect(jsonPath("$.data.motions.length()").value(2))
+                .andExpect(jsonPath("$.data.motions[0].exerciseMotionId").value(march.getId()))
+                .andExpect(jsonPath("$.data.motions[0].routineOrder").value(1))
+                .andExpect(jsonPath("$.data.motions[1].exerciseMotionId").value(sideStep.getId()))
+                .andExpect(jsonPath("$.data.motions[1].routineOrder").value(2));
+    }
+
+    @Test
+    void getExerciseSessionDetail_rejectsOtherUsersSession() throws Exception {
+        TestUser owner = setupUserWithProfile("detail-owner@example.com", "detail-owner-user");
+        TestUser other = setupUserWithProfile("detail-other@example.com", "detail-other-user");
+        ExerciseSession session =
+                exerciseSessionRepository.save(exerciseSession(findProfile(owner), 78, 0.87, 1));
+
+        mockMvc.perform(
+                        get("/exercise-sessions/{id}", session.getId())
+                                .header("Authorization", "Bearer " + other.token()))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("EX-005"));
     }
 
     @Test
@@ -230,6 +310,20 @@ class ExerciseSessionControllerIntegrationTest extends IntegrationTestSupport {
                 .andExpect(jsonPath("$.code").value("G-003"));
     }
 
+    @Test
+    void listExerciseSessions_requiresAuthentication() throws Exception {
+        mockMvc.perform(get("/exercise-sessions").param("patientProfileId", "1"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("G-003"));
+    }
+
+    @Test
+    void getExerciseSessionDetail_requiresAuthentication() throws Exception {
+        mockMvc.perform(get("/exercise-sessions/{id}", 1L))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("G-003"));
+    }
+
     private ExerciseMotion exerciseMotion(String name, int routineOrder) {
         return exerciseMotion(ExerciseType.TOP, name, routineOrder);
     }
@@ -243,6 +337,36 @@ class ExerciseSessionControllerIntegrationTest extends IntegrationTestSupport {
                 .targetReps(8)
                 .description(name + " description.")
                 .build();
+    }
+
+    private ExerciseSession exerciseSession(
+            PatientProfile patientProfile,
+            int durationSec,
+            double averageAccuracy,
+            int completedMotionCount) {
+        return ExerciseSession.builder()
+                .patientProfile(patientProfile)
+                .exerciseType(ExerciseType.TOP)
+                .durationSec(durationSec)
+                .averageAccuracy(averageAccuracy)
+                .completedMotionCount(completedMotionCount)
+                .build();
+    }
+
+    private ExerciseSessionMotion sessionMotion(
+            ExerciseSession session, ExerciseMotion motion, int durationSec, double accuracy) {
+        return ExerciseSessionMotion.builder()
+                .session(session)
+                .exerciseMotion(motion)
+                .durationSec(durationSec)
+                .accuracy(accuracy)
+                .completedReps(8)
+                .feedback("Good")
+                .build();
+    }
+
+    private PatientProfile findProfile(TestUser user) {
+        return patientProfileRepository.findById(user.patientProfileId()).orElseThrow();
     }
 
     private String saveRequest(Long patientProfileId, Long exerciseMotionId, String exerciseType) {

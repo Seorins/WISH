@@ -12,6 +12,7 @@ import com.comong.backend.domain.exercise.dto.ExerciseSessionMotionResponse;
 import com.comong.backend.domain.exercise.dto.ExerciseSessionMotionSaveRequest;
 import com.comong.backend.domain.exercise.dto.ExerciseSessionResponse;
 import com.comong.backend.domain.exercise.dto.ExerciseSessionSaveRequest;
+import com.comong.backend.domain.exercise.dto.ExerciseSessionSummaryResponse;
 import com.comong.backend.domain.exercise.entity.ExerciseMotion;
 import com.comong.backend.domain.exercise.entity.ExerciseSession;
 import com.comong.backend.domain.exercise.entity.ExerciseSessionMotion;
@@ -61,6 +62,36 @@ public class ExerciseSessionService {
         return ExerciseSessionResponse.of(
                 session,
                 savedSessionMotions.stream().map(ExerciseSessionMotionResponse::from).toList());
+    }
+
+    public List<ExerciseSessionSummaryResponse> findAll(Long userId, Long patientProfileId) {
+        PatientProfile patientProfile =
+                patientProfileService.findOwnedOrThrow(userId, patientProfileId);
+        return exerciseSessionRepository
+                .findAllByPatientProfileIdOrderByCreatedAtDesc(patientProfile.getId())
+                .stream()
+                .map(ExerciseSessionSummaryResponse::from)
+                .toList();
+    }
+
+    public ExerciseSessionResponse findOne(Long userId, Long sessionId) {
+        ExerciseSession session = findOwnedSessionOrThrow(userId, sessionId);
+        List<ExerciseSessionMotionResponse> motions =
+                exerciseSessionMotionRepository
+                        .findAllBySessionIdWithExerciseMotionOrderByRoutineOrderAsc(sessionId)
+                        .stream()
+                        .map(ExerciseSessionMotionResponse::from)
+                        .toList();
+
+        return ExerciseSessionResponse.of(session, motions);
+    }
+
+    private ExerciseSession findOwnedSessionOrThrow(Long userId, Long sessionId) {
+        return exerciseSessionRepository
+                .findByIdWithPatientProfileAndUser(sessionId)
+                .filter(session -> session.getPatientProfile().getUser().getId().equals(userId))
+                .orElseThrow(
+                        () -> new BusinessException(ExerciseErrorCode.EXERCISE_SESSION_NOT_FOUND));
     }
 
     private Map<Long, ExerciseMotion> loadExerciseMotionMap(
