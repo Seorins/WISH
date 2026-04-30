@@ -5,6 +5,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -12,6 +13,10 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
+import com.comong.backend.domain.exercise.repository.ExerciseMotionRepository;
+import com.comong.backend.domain.exercise.repository.ExerciseSessionMotionRepository;
+import com.comong.backend.domain.exercise.repository.ExerciseSessionRepository;
+import com.comong.backend.domain.patient.repository.PatientProfileRepository;
 import com.comong.backend.domain.user.entity.User;
 import com.comong.backend.domain.user.entity.UserRole;
 import com.comong.backend.domain.user.repository.UserRepository;
@@ -39,13 +44,33 @@ import tools.jackson.databind.ObjectMapper;
 class AdminAuthorizationIntegrationTest extends IntegrationTestSupport {
 
     @Autowired private MockMvc mockMvc;
-
     @Autowired private ObjectMapper objectMapper;
-
     @Autowired private UserRepository userRepository;
+    @Autowired private PatientProfileRepository patientProfileRepository;
+    @Autowired private ExerciseMotionRepository exerciseMotionRepository;
+    @Autowired private ExerciseSessionRepository exerciseSessionRepository;
+    @Autowired private ExerciseSessionMotionRepository exerciseSessionMotionRepository;
 
     @BeforeEach
     void cleanDb() {
+        cleanAll();
+    }
+
+    @AfterEach
+    void cleanDbAfter() {
+        cleanAll();
+    }
+
+    /**
+     * V10 seed 가 TOP routine_order 1~5 를 채워두기 때문에 motion 저장소도 함께 비워야 admin endpoint 호출 시 unique 제약
+     * 충돌(EX-002)을 피할 수 있다. FK 정책상 master(exercise_motion) 는 RESTRICT 라 자식(session_motion)을 먼저 비운 뒤
+     * master 를 지운다.
+     */
+    private void cleanAll() {
+        exerciseSessionMotionRepository.deleteAll();
+        exerciseSessionRepository.deleteAll();
+        exerciseMotionRepository.deleteAll();
+        patientProfileRepository.deleteAll();
         userRepository.deleteAll();
     }
 

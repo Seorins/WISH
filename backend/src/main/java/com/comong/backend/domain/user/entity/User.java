@@ -52,8 +52,9 @@ public class User {
     private String password;
 
     /**
-     * 사용자 역할. 회원가입은 항상 {@link UserRole#USER}, ADMIN 은 부팅 시 {@code SECURITY_ADMIN_EMAILS} 기반 promote
-     * 로만 부여된다.
+     * 사용자 역할. 회원가입은 항상 {@link UserRole#USER} 로 생성되고, ADMIN 부여는 운영자가 환경별 DB 에 직접 SQL 을 실행하는 방식만 인정한다
+     * ({@code backend/docs/admin-bootstrap.md} 참고). 도메인 메서드 {@link #promoteToAdmin()} 은 향후 admin UI
+     * 또는 테스트 fixture 에서만 사용된다.
      */
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
@@ -80,8 +81,9 @@ public class User {
     }
 
     /**
-     * 사용자를 ADMIN 으로 승격한다. 회원가입 흐름이 아닌 부팅 시 환경변수 기반 promote 에서만 호출된다 ({@code AdminBootstrapper}). 이미
-     * ADMIN 이면 호출자가 미리 걸러내는 것이 일반적.
+     * 사용자를 ADMIN 으로 승격한다. 운영 흐름은 DB 직접 수정이며 본 메서드는 호출하지 않는다 ({@code
+     * backend/docs/admin-bootstrap.md} 참고). 향후 admin UI 또는 테스트 fixture 에서 사용한다. 이미 ADMIN 이면 호출자가 미리
+     * 걸러내는 것이 일반적.
      */
     public void promoteToAdmin() {
         this.role = UserRole.ADMIN;
