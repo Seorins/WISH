@@ -286,6 +286,23 @@ public record UserSignupRequest(
 | `security.jwt.access-token-ttl-seconds` | Access 토큰 유효시간 | 3600 (1시간) |
 | `security.jwt.issuer` | 발급자 (iss) | `comong` |
 
+### 사용자 역할 (USER / ADMIN)
+
+`UserRole { USER, ADMIN }` 만 존재. 회원가입은 항상 `USER` 로 생성된다.
+
+`ADMIN` 부여는 **부팅 시 환경변수 기반 promote** 한 가지 경로만 인정:
+
+- `application.yaml` → `security.admin.emails` (env: `SECURITY_ADMIN_EMAILS`, 콤마 구분)
+- `AdminBootstrapper` 가 부팅 시 해당 이메일 사용자를 USER → ADMIN 으로 갱신
+- 미가입 이메일은 경고 로그 후 skip (자동 생성하지 않는다 — 비밀번호 처리 부재)
+- 이미 ADMIN 이면 skip (idempotent)
+
+운영에서 ADMIN 추가/제거: 사전 회원가입 후 환경변수에 이메일 추가 → 재배포. 회원가입 API 자체에는 role 입력 필드를 노출하지 않는다.
+
+권한 보호는 `@PreAuthorize("hasRole('ADMIN')")` 사용 — `JwtAuthenticationFilter` 가 토큰의 role claim 을 `ROLE_<enum>` 으로 부여하므로 enum 이름과 자동 매칭.
+
+> **테스트 주의**: 통합 테스트의 `with(user().roles("ADMIN"))` 은 Spring Security Test 가 `SecurityContext` 를 직접 주입해 `JwtAuthenticationFilter` 를 우회한다. 실제 ADMIN 권한 발급 경로 검증은 `AdminAuthorizationIntegrationTest` 가 담당.
+
 ### Swagger 연동
 
 - `OpenApiConfig` 에 Bearer 스키마 등록 완료.

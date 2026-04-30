@@ -47,7 +47,8 @@ public class AuthService {
         if (!passwordEncoder.matches(request.password(), user.getPassword())) {
             throw new BusinessException(AuthErrorCode.INVALID_CREDENTIALS);
         }
-        String token = jwtTokenProvider.createAccessToken(user.getId(), user.getEmail());
+        String token =
+                jwtTokenProvider.createAccessToken(user.getId(), user.getEmail(), user.getRole());
         return TokenResponse.of(token, jwtTokenProvider.getAccessTokenTtlSeconds());
     }
 }

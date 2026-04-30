@@ -5,6 +5,8 @@ import java.util.Objects;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -49,21 +51,39 @@ public class User {
     @Column(nullable = false, length = 100)
     private String password;
 
+    /**
+     * 사용자 역할. 회원가입은 항상 {@link UserRole#USER}, ADMIN 은 부팅 시 {@code SECURITY_ADMIN_EMAILS} 기반 promote
+     * 로만 부여된다.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private UserRole role;
+
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
     @Builder
-    private User(String email, String nickname, String password) {
+    private User(String email, String nickname, String password, UserRole role) {
         // 빌더 단계 invariant: @Column(nullable = false) 만으로는 build() 시점에 null 이 차단되지 않고
         // JPA save 단계의 PropertyValueException 으로 늦게 발견된다. 도메인 객체는 항상 유효한 상태로 만들어지도록
         // fail-fast.
         this.email = Objects.requireNonNull(email, "email must not be null");
         this.nickname = Objects.requireNonNull(nickname, "nickname must not be null");
         this.password = Objects.requireNonNull(password, "password must not be null");
+        // role 은 빌더에서 생략 가능 — 기본 USER. 호출자가 명시하면 그 값을 따른다.
+        this.role = role != null ? role : UserRole.USER;
     }
 
     @PrePersist
     void prePersist() {
         this.createdAt = LocalDateTime.now();
+    }
+
+    /**
+     * 사용자를 ADMIN 으로 승격한다. 회원가입 흐름이 아닌 부팅 시 환경변수 기반 promote 에서만 호출된다 ({@code AdminBootstrapper}). 이미
+     * ADMIN 이면 호출자가 미리 걸러내는 것이 일반적.
+     */
+    public void promoteToAdmin() {
+        this.role = UserRole.ADMIN;
     }
 }

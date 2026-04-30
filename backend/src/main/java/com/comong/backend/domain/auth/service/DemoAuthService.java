@@ -44,7 +44,8 @@ public class DemoAuthService {
         User user = findOrCreateDemoUser();
         ensureDemoPatientProfile(user);
 
-        String token = jwtTokenProvider.createAccessToken(user.getId(), user.getEmail());
+        String token =
+                jwtTokenProvider.createAccessToken(user.getId(), user.getEmail(), user.getRole());
         return TokenResponse.of(token, jwtTokenProvider.getAccessTokenTtlSeconds());
     }
 

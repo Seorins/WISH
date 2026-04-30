@@ -43,9 +43,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         if (token != null) {
             try {
                 JwtTokenProvider.AuthenticatedUser user = jwtTokenProvider.parse(token);
+                // Spring Security 의 hasRole('ADMIN') 매칭을 위해 ROLE_ 접두사를 붙여 enum 이름과 결합한다.
+                String authority = "ROLE_" + user.role().name();
                 Authentication authentication =
                         new UsernamePasswordAuthenticationToken(
-                                user, null, List.of(new SimpleGrantedAuthority("ROLE_USER")));
+                                user, null, List.of(new SimpleGrantedAuthority(authority)));
                 ((UsernamePasswordAuthenticationToken) authentication)
                         .setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                 SecurityContextHolder.getContext().setAuthentication(authentication);
