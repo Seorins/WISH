@@ -43,3 +43,11 @@ scrape_configs:
         labels:
           service: postgres
           env: dev
+
+  - job_name: redis-dev
+    static_configs:
+      - targets:
+          - redis-exporter:9121
+        labels:
+          service: redis
+          env: dev
