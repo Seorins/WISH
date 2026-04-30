@@ -84,6 +84,30 @@ public class ExerciseMotion {
         this.thumbnailUrl = thumbnailUrl;
     }
 
+    public void update(
+            String name,
+            Integer targetReps,
+            String description,
+            String demoVideoUrl,
+            String thumbnailUrl) {
+        if (name != null) {
+            this.name = name;
+        }
+        if (targetReps != null) {
+            validatePositive(targetReps, "targetReps");
+            this.targetReps = targetReps;
+        }
+        if (description != null) {
+            this.description = description;
+        }
+        if (demoVideoUrl != null) {
+            this.demoVideoUrl = demoVideoUrl;
+        }
+        if (thumbnailUrl != null) {
+            this.thumbnailUrl = thumbnailUrl;
+        }
+    }
+
     @PrePersist
     void prePersist() {
         LocalDateTime now = LocalDateTime.now();
