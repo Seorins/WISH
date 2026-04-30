@@ -120,6 +120,20 @@ User user = userRepository.findById(id)
 - `createdAt` / `updatedAt` 은 `@PrePersist` / `@PreUpdate` 또는 JPA Auditing 사용
 - **빌더 필수 필드 검증**: `@ManyToOne(optional = false)` / `@Column(nullable = false)` 만으로는 `build()` 시점에 null 차단이 안 되고 JPA save 단계의 `PropertyValueException` 으로 늦게 발견된다. 빌더 생성자에서 `Objects.requireNonNull(field, "field must not be null")` 로 즉시 fail-fast. 도메인 invariant (`playDurationSeconds >= 0` 등) 도 같은 위치에서 검사 (예: `User`, `PatientProfile`, `Artwork` 참고)
 
+### FK / ON DELETE 정책
+
+신규 도메인이 외래키를 추가할 때 Flyway 마이그레이션의 `FOREIGN KEY (...) REFERENCES ...` 절에 **반드시 `ON DELETE` 를 명시**한다. 누락 시 PostgreSQL 기본 `NO ACTION` 으로 동작하지만, 정책이 코드/리뷰에 드러나지 않으면 운영 단계에서 부모 행 삭제가 어떻게 전파되는지 추측해야 한다.
+
+선택 가이드:
+
+| 관계 유형 | 권장 | 이유 |
+| --- | --- | --- |
+| 부모-자식이 **소유 관계** (보호자 → 환자 → 작품/세션 등) | `ON DELETE CASCADE` | 부모 삭제 시 자식 데이터도 함께 정리하는 것이 자연스러움. 사용자/환자 탈퇴 흐름이 단순해진다. |
+| **마스터 데이터** 참조 (exercise_motion 등 시스템 공유 데이터) | `ON DELETE RESTRICT` | 사용 중인 마스터 행 삭제를 DB 레벨에서 차단. 비즈니스 단의 `IN_USE` 예외와 같은 불변식을 DB 가 다시 잠그는 defense in depth. |
+| 자식이 부모 없이도 **독립 의미** | `ON DELETE SET NULL` | (현재 사용처 없음) FK 컬럼이 nullable 일 때만 사용 가능. 작품을 환자 삭제 후에도 보존하는 등 특수한 경우. |
+
+현재 적용된 정책은 [`V11__apply_on_delete_policy.sql`](../src/main/resources/db/migration/V11__apply_on_delete_policy.sql) 참고. 새 FK 추가 시 이 표 기준으로 결정하고, 결정 근거가 표에 없으면 팀과 논의 후 표를 갱신한다.
+
 ## 6. DTO 규칙
 
 - 요청/응답 모두 `record` 사용 (불변 + 간결)
