@@ -1,10 +1,14 @@
-from fastapi import APIRouter
+import logging
+
+from fastapi import APIRouter, HTTPException
 
 from app.schemas.gymnastics import (
     HipCenterResponse,
     MarchEvaluationRequest,
     MarchEvaluationResponse,
     MarchFeaturesResponse,
+    MarchSummaryRequest,
+    MarchSummaryResponse,
     NormalizedLandmarkResponse,
     NormalizedPoseResponse,
     PoseFrameRequest,
@@ -12,9 +16,11 @@ from app.schemas.gymnastics import (
 from app.services.gymnastics.evaluators.march import MarchEvaluator
 from app.services.gymnastics.features.march_features import extract_march_features
 from app.services.gymnastics.normalization.pose_normalizer import PoseNormalizer
+from app.services.gymnastics.summary import build_march_motion_summary
 from app.services.gymnastics.types import NormalizedPoseFrame
 
 router = APIRouter(prefix="/gymnastics", tags=["gymnastics"])
+logger = logging.getLogger(__name__)
 
 normalizer = PoseNormalizer()
 march_evaluator = MarchEvaluator()
@@ -87,6 +93,42 @@ def evaluate_march(payload: MarchEvaluationRequest) -> MarchEvaluationResponse:
             pelvis_shift_y=features.pelvis_shift_y,
             pelvis_depth_shift=features.pelvis_depth_shift,
         ),
+    )
+
+
+@router.post("/march/summary", response_model=MarchSummaryResponse)
+def summarize_march(payload: MarchSummaryRequest) -> MarchSummaryResponse:
+    try:
+        summary = build_march_motion_summary(
+            started_at=payload.started_at,
+            ended_at=payload.ended_at,
+            step_count=payload.step_count,
+            accuracy=payload.accuracy,
+            representative_feedback=payload.representative_feedback,
+            tracking=payload.tracking,
+            state=payload.state,
+        )
+    except ValueError as exc:
+        logger.warning(
+            "Invalid march summary request: started_at=%s ended_at=%s detail=%s",
+            payload.started_at,
+            payload.ended_at,
+            exc,
+        )
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception:
+        logger.exception("Unexpected error while building march summary")
+        raise
+
+    return MarchSummaryResponse(
+        motionId=summary.motion_id,
+        motionName=summary.motion_name,
+        durationSec=summary.duration_sec,
+        stepCount=summary.step_count,
+        accuracy=summary.accuracy,
+        representativeFeedback=summary.representative_feedback,
+        tracking=summary.tracking,
+        state=summary.state,
     )
 
 
