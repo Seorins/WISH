@@ -24,8 +24,10 @@ export type {
   UpdateArtworkRequest,
 } from './artworks'
 export type {
+  CreateExerciseMotionParams,
   CreateExerciseMotionRequest,
   ExerciseMotion,
   ExerciseType,
+  UpdateExerciseMotionParams,
   UpdateExerciseMotionRequest,
 } from './exercise-motions'
