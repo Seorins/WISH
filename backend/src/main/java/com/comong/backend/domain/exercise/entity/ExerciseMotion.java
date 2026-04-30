@@ -84,12 +84,8 @@ public class ExerciseMotion {
         this.thumbnailUrl = thumbnailUrl;
     }
 
-    public void update(
-            String name,
-            Integer targetReps,
-            String description,
-            String demoVideoUrl,
-            String thumbnailUrl) {
+    /** 메타데이터(텍스트) 만 부분 갱신. 미디어 URL 은 {@link #replaceThumbnail}/{@link #clearThumbnail} 등 별도 메서드. */
+    public void updateMetadata(String name, Integer targetReps, String description) {
         if (name != null) {
             this.name = name;
         }
@@ -100,12 +96,22 @@ public class ExerciseMotion {
         if (description != null) {
             this.description = description;
         }
-        if (demoVideoUrl != null) {
-            this.demoVideoUrl = demoVideoUrl;
-        }
-        if (thumbnailUrl != null) {
-            this.thumbnailUrl = thumbnailUrl;
-        }
+    }
+
+    public void replaceThumbnail(String url) {
+        this.thumbnailUrl = Objects.requireNonNull(url, "url must not be null");
+    }
+
+    public void clearThumbnail() {
+        this.thumbnailUrl = null;
+    }
+
+    public void replaceDemoVideo(String url) {
+        this.demoVideoUrl = Objects.requireNonNull(url, "url must not be null");
+    }
+
+    public void clearDemoVideo() {
+        this.demoVideoUrl = null;
     }
 
     @PrePersist
