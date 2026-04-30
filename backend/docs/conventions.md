@@ -330,53 +330,79 @@ Long userId = user.userId();
 
 (추후 `@AuthenticationPrincipal` 용 커스텀 어노테이션 검토 — 새 이슈)
 
-## 13. 이미지 업로드 / 저장소
+## 13. 미디어 업로드 / 저장소
 
-이미지 파일을 다루는 모든 도메인은 `ImageStorage` 추상화를 통해 저장한다. 도메인별로 직접 디스크/외부 SDK 를 만지지 말 것 — 보안 룰을 한 곳에 모아두기 위함.
+이미지·영상 파일을 다루는 모든 도메인은 `ImageStorage` / `VideoStorage` 추상화를 통해 저장한다. 도메인별로 직접 디스크/외부 SDK 를 만지지 말 것 — 보안 룰을 한 곳에 모아두기 위함.
 
 ### 추상화
 
-- `global/storage/ImageStorage` — 인터페이스 (`upload`, `delete`)
-- `global/storage/LocalImageStorage` — 로컬 디스크 구현체 (현재 유일 구현. S3 구현체는 S14P31E103-240 에서 추가 예정)
-- `global/storage/StoredImage` — 반환 URL 래퍼 (DB `image_url` 컬럼에 저장)
-- `global/storage/StorageProperties` — `storage.local.{upload-dir, public-url-prefix}` 바인딩
+- `global/storage/ImageStorage` — 이미지 인터페이스 (`upload`, `delete`)
+- `global/storage/LocalImageStorage` — 로컬 디스크 이미지 구현체
+- `global/storage/StoredImage` — 이미지 URL 래퍼 (DB `image_url`/`thumbnail_url` 컬럼에 저장)
+- `global/storage/VideoStorage` — 영상 인터페이스 (S14P31E103-308)
+- `global/storage/LocalVideoStorage` — 로컬 디스크 영상 구현체
+- `global/storage/StoredVideo` — 영상 URL 래퍼 (DB `demo_video_url` 컬럼에 저장)
+- `global/storage/StorageProperties` — `storage.local.{upload-dir, public-url-prefix}` 바인딩 (이미지·영상 공유)
 
-### 업로드 검증 — 4중 방어
+S3 구현체는 S14P31E103-240 (이미지) 및 후속 영상용 이슈에서 추가. 인터페이스 분리되어 있어 프로파일별 빈 교체로 갈아끼운다.
 
-`LocalImageStorage` 가 다음 순서로 검사한다. 어느 한 층만으로는 우회 가능하므로 모두 거친다.
+### 업로드 검증 — 4중 방어 (이미지·영상 동일 패턴)
 
-1. **Content-Type** 이 `image/*` 인지 (1차, 클라이언트 헤더라 신뢰도 낮음)
-2. 실제 binary 의 **magic bytes** 가 PNG / JPEG / GIF / WEBP 시그니처와 일치하는지 (2차)
+각 구현체가 다음 순서로 검사한다. 어느 한 층만으로는 우회 가능하므로 모두 거친다.
+
+1. **Content-Type** 이 `image/*` 또는 `video/*` 인지 (1차, 클라이언트 헤더라 신뢰도 낮음)
+2. 실제 binary 의 **magic bytes** 가 알려진 시그니처와 일치하는지 (2차)
 3. 매직바이트로 검출한 포맷과 **파일명 확장자가 일치**하는지 (3차, mislabeled 차단)
-4. 확장자가 **whitelist** (`.png/.jpg/.jpeg/.webp/.gif`) 에 포함되는지 (4차, 정적 서빙 시 실행 가능 콘텐츠 차단)
+4. 확장자가 **whitelist** 에 포함되는지 (4차, 정적 서빙 시 실행 가능 콘텐츠 차단)
 
-검증 실패는 `S-001 INVALID_IMAGE`, IO 실패는 `S-002 STORAGE_FAILURE`. 초과 크기는 `S-003 PAYLOAD_TOO_LARGE`.
+| 구분 | 허용 포맷 | 자체 한도 | 에러코드 |
+| --- | --- | --- | --- |
+| 이미지 | PNG / JPEG / GIF / WEBP (`.png/.jpg/.jpeg/.webp/.gif`) | 10MB | `S-001 INVALID_IMAGE` |
+| 영상 | MP4 / WebM (`.mp4/.webm`) | 100MB | `S-004 INVALID_VIDEO` |
+
+IO 실패는 `S-002 STORAGE_FAILURE`. 한도 초과는 `S-003 PAYLOAD_TOO_LARGE` (multipart 글로벌 한도 초과 또는 각 구현체의 자체 한도 초과 모두).
 
 ### 파일명 / Path Traversal 방어
 
 - 저장 파일명은 **UUID + canonical 확장자**. 원본 파일명 기반 추측 공격을 막는다.
 - `delete(url)` 는 idempotent — 파일이 없으면 조용히 무시한다.
 - 다만 URL 의 filename 부분에 경로 구분자(`/` `\`), `..`, 단일 `.` 가 포함되면 `S-002` 로 거부한다 (DB 변조 등 데이터 무결성 위반 가드).
-- 한 단계 더: 정규화 후에도 `uploadRoot` 하위인지 검사 (defense in depth).
+- 한 단계 더: 정규화 후에도 정해진 root (이미지는 `uploadRoot`, 영상은 `uploadRoot/videos`) 하위인지 검사 (defense in depth).
+
+### 디렉토리 레이아웃
+
+- 이미지: `<upload-dir>/UUID.<ext>` (flat)
+- 영상: `<upload-dir>/videos/UUID.<ext>` (subpath 분리 — ops/감사 가독성)
 
 ### prefix / public URL 동기화
 
-`storage.local.public-url-prefix` (yaml) → `LocalImageStorage` 가 반환 URL 을 생성, `StorageConfig` 가 정적 리소스 핸들러에 매핑, `SecurityConfig.PUBLIC_ENDPOINTS` 가 같은 prefix 를 permit. **세 군데가 동일한 값을 공유**하므로 yaml 한 곳만 바꾸면 모두 따라간다. 새 prefix 를 도입할 때 한 군데라도 빠뜨리지 말 것.
+`storage.local.public-url-prefix` (yaml) → 각 storage 구현체가 반환 URL 을 생성, `StorageConfig` 가 정적 리소스 핸들러에 매핑, `SecurityConfig.PUBLIC_ENDPOINTS` 가 같은 prefix 를 permit. **세 군데가 동일한 값을 공유**하므로 yaml 한 곳만 바꾸면 모두 따라간다. 새 prefix 를 도입할 때 한 군데라도 빠뜨리지 말 것.
 
 ### 멀티파트 한도
 
 | 키 | 값 | 의미 |
 | --- | --- | --- |
-| `spring.servlet.multipart.max-file-size` | 10MB | 파일 단건 한도 |
-| `spring.servlet.multipart.max-request-size` | 10MB | 요청 본문 전체 한도 |
-| `server.tomcat.max-http-form-post-size` | 10MB | 톰캣 단계 차단 한도 |
-| `server.tomcat.max-swallow-size` | 10MB | 한도 초과 시에도 톰캣이 본문을 읽어들이는 한계 |
+| `spring.servlet.multipart.max-file-size` | 100MB | 파일 단건 한도 (영상 수용) |
+| `spring.servlet.multipart.max-request-size` | 110MB | 요청 본문 전체 한도 |
+| `server.tomcat.max-http-form-post-size` | 110MB | 톰캣 단계 차단 한도 |
+| `server.tomcat.max-swallow-size` | 110MB | 한도 초과 시에도 톰캣이 본문을 읽어들이는 한계 |
 
-위 4개를 **같이** 잡아야 톰캣 단계에서 미리 차단되지 않는다. 한도 초과는 `MaxUploadSizeExceededException` → `S-003` 로 매핑.
+위 4개를 **같이** 잡아야 톰캣 단계에서 미리 차단되지 않는다. 글로벌 한도가 영상에 맞춰져 크게 잡혀 있어도 이미지는 자체적으로 10MB 를 다시 강제한다 (`LocalImageStorage` 코드). 한도 초과는 `MaxUploadSizeExceededException` → `S-003` 로 매핑.
+
+### 트랜잭션 정합성 (orphan cleanup)
+
+파일 IO 는 트랜잭션 외 자원이라 DB 커밋과 묶이지 못한다. `ArtworkService` / `ExerciseMotionService` 는 `TransactionSynchronization` 으로 다음 패턴을 적용한다.
+
+- **create**: 새로 업로드된 파일은 롤백 시 삭제, 커밋 시 보존
+- **update (교체)**: 새 파일은 롤백 시 삭제, 커밋 시 옛 파일 삭제
+- **update (clear)**: `clear*` 플래그가 true 면 커밋 시 옛 파일 삭제
+- **delete**: 커밋 후 모든 연관 파일 삭제
+
+완벽한 2PC 가 아니라 최악의 경우(커밋 직전 JVM 크래시 등) 일부 orphan 이 남을 수 있음 — 별도 cleanup 배치는 후속 이슈.
 
 ### 접근 통제 — 현재 정책
 
-현재 모든 업로드 파일은 정적 리소스 핸들러를 통해 **누구나 URL 만 알면 접근 가능**하다. UUID 가 추측을 어렵게 하지만, 비공개 작품 이미지에 대한 권한 체크는 제공하지 않는다. 인증된 다운로드 컨트롤러로의 전환은 별도 이슈에서 결정.
+현재 모든 업로드 파일(이미지·영상)은 정적 리소스 핸들러를 통해 **누구나 URL 만 알면 접근 가능**하다. UUID 가 추측을 어렵게 하지만, 비공개 컨텐츠에 대한 권한 체크는 제공하지 않는다. 인증된 다운로드 컨트롤러로의 전환은 별도 이슈에서 결정.
 
 ## 14. 커밋 메시지
 
