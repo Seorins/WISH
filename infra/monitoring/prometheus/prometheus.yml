@@ -35,3 +35,11 @@ scrape_configs:
         labels:
           service: backend
           env: dev
+
+  - job_name: postgres-dev
+    static_configs:
+      - targets:
+          - postgres-exporter:9187
+        labels:
+          service: postgres
+          env: dev

@@ -54,6 +54,21 @@ services:
     networks:
       - e103-dev-network
 
+  postgres-exporter:
+    image: quay.io/prometheuscommunity/postgres-exporter:v0.17.1
+    container_name: e103-postgres-exporter
+    restart: unless-stopped
+    environment:
+      DATA_SOURCE_URI: postgres-dev:5432/${POSTGRES_DEV_DB:-e103_dev_db}?sslmode=disable
+      DATA_SOURCE_USER: ${POSTGRES_DEV_USER:-postgres}
+      DATA_SOURCE_PASS: ${POSTGRES_DEV_PASSWORD}
+    depends_on:
+      postgres-dev:
+        condition: service_healthy
+    networks:
+      - e103-platform-network
+      - e103-dev-network
+
   redis-dev:
     image: redis:7-alpine
     container_name: e103-redis-dev
