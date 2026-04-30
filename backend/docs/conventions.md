@@ -60,9 +60,13 @@ Jackson `@JsonInclude(NON_NULL)` 로 `null` 필드는 응답에서 제외된다.
 | 접두사 | 영역 | 예시 |
 | --- | --- | --- |
 | `G-` | 전역/공통 | `G-001` 입력값 오류, `G-003` 인증 필요, `G-004` 접근 권한 없음 |
-| `U-` | User 도메인 | `U-001` 사용자 없음 |
+| `U-` | User 도메인 | `U-001` 사용자 없음, `U-002` 이메일 중복 |
 | `A-` | Auth 도메인 | `A-001` 자격증명 불일치, `A-002` 토큰 만료 |
-| `(새 접두사)` | 새 도메인 | 신규 도메인 추가 시 팀 논의로 결정 |
+| `P-` | Patient 도메인 (환자 프로필) | `P-001` 프로필 없음, `P-002` 프로필 중복 |
+| `S-` | Storage (이미지 업로드/저장소) | `S-001` 유효 이미지 아님, `S-002` 처리 실패, `S-003` 파일 크기 초과 |
+| `AR-` | Artwork 도메인 | `AR-001` 작품 없음, `AR-002` 접근 권한 없음 |
+| `EX-` | Exercise 도메인 (체조) | `EX-001` 동작 없음, `EX-003` 사용 중 동작, `EX-005` 세션 없음 |
+| `(새 접두사)` | 새 도메인 | 신규 도메인 추가 시 팀 논의로 결정 (충돌 회피 — 위 표에서 사용 중인 prefix 와 겹치지 않게) |
 
 ### enum 정의
 
@@ -115,6 +119,20 @@ User user = userRepository.findById(id)
 - 테이블명은 **복수형** (`users`, `games`) 으로 통일
 - `createdAt` / `updatedAt` 은 `@PrePersist` / `@PreUpdate` 또는 JPA Auditing 사용
 - **빌더 필수 필드 검증**: `@ManyToOne(optional = false)` / `@Column(nullable = false)` 만으로는 `build()` 시점에 null 차단이 안 되고 JPA save 단계의 `PropertyValueException` 으로 늦게 발견된다. 빌더 생성자에서 `Objects.requireNonNull(field, "field must not be null")` 로 즉시 fail-fast. 도메인 invariant (`playDurationSeconds >= 0` 등) 도 같은 위치에서 검사 (예: `User`, `PatientProfile`, `Artwork` 참고)
+
+### FK / ON DELETE 정책
+
+신규 도메인이 외래키를 추가할 때 Flyway 마이그레이션의 `FOREIGN KEY (...) REFERENCES ...` 절에 **반드시 `ON DELETE` 를 명시**한다. 누락 시 PostgreSQL 기본 `NO ACTION` 으로 동작하지만, 정책이 코드/리뷰에 드러나지 않으면 운영 단계에서 부모 행 삭제가 어떻게 전파되는지 추측해야 한다.
+
+선택 가이드:
+
+| 관계 유형 | 권장 | 이유 |
+| --- | --- | --- |
+| 부모-자식이 **소유 관계** (보호자 → 환자 → 작품/세션 등) | `ON DELETE CASCADE` | 부모 삭제 시 자식 데이터도 함께 정리하는 것이 자연스러움. 사용자/환자 탈퇴 흐름이 단순해진다. |
+| **마스터 데이터** 참조 (exercise_motion 등 시스템 공유 데이터) | `ON DELETE RESTRICT` | 사용 중인 마스터 행 삭제를 DB 레벨에서 차단. 비즈니스 단의 `IN_USE` 예외와 같은 불변식을 DB 가 다시 잠그는 defense in depth. |
+| 자식이 부모 없이도 **독립 의미** | `ON DELETE SET NULL` | (현재 사용처 없음) FK 컬럼이 nullable 일 때만 사용 가능. 작품을 환자 삭제 후에도 보존하는 등 특수한 경우. |
+
+현재 적용된 정책은 [`V11__apply_on_delete_policy.sql`](../src/main/resources/db/migration/V11__apply_on_delete_policy.sql) 참고. 새 FK 추가 시 이 표 기준으로 결정하고, 결정 근거가 표에 없으면 팀과 논의 후 표를 갱신한다.
 
 ## 6. DTO 규칙
 
@@ -220,6 +238,10 @@ public record UserSignupRequest(
 `application-prod.yaml` 에서 `springdoc.*.enabled: false` 로 강제.
 운영 환경에 API 스펙을 외부 노출하지 않기 위함. 필요시 (파트너 공개 등) 팀 논의 후 해제.
 
+### Server URL — 자동 추론에 맡길 것
+
+`OpenApiConfig` 의 `OpenAPI` 빈에 `addServersItem(...)` 을 박지 않는다. 명시하는 순간 springdoc 가 요청 URL 기반 자동 추론을 끈다. dev 의 nginx 가 `X-Forwarded-Prefix=/dev/api/v1` 을 보내고 백엔드는 `server.forward-headers-strategy: framework` 로 받기 때문에, 자동 추론이 동작해야 환경별 base URL 이 알아서 박힌다 (S14P31E103-291 회귀).
+
 ## 12. 인증 / 인가
 
 ### 방식
@@ -282,7 +304,55 @@ Long userId = user.userId();
 
 (추후 `@AuthenticationPrincipal` 용 커스텀 어노테이션 검토 — 새 이슈)
 
-## 13. 커밋 메시지
+## 13. 이미지 업로드 / 저장소
+
+이미지 파일을 다루는 모든 도메인은 `ImageStorage` 추상화를 통해 저장한다. 도메인별로 직접 디스크/외부 SDK 를 만지지 말 것 — 보안 룰을 한 곳에 모아두기 위함.
+
+### 추상화
+
+- `global/storage/ImageStorage` — 인터페이스 (`upload`, `delete`)
+- `global/storage/LocalImageStorage` — 로컬 디스크 구현체 (현재 유일 구현. S3 구현체는 S14P31E103-240 에서 추가 예정)
+- `global/storage/StoredImage` — 반환 URL 래퍼 (DB `image_url` 컬럼에 저장)
+- `global/storage/StorageProperties` — `storage.local.{upload-dir, public-url-prefix}` 바인딩
+
+### 업로드 검증 — 4중 방어
+
+`LocalImageStorage` 가 다음 순서로 검사한다. 어느 한 층만으로는 우회 가능하므로 모두 거친다.
+
+1. **Content-Type** 이 `image/*` 인지 (1차, 클라이언트 헤더라 신뢰도 낮음)
+2. 실제 binary 의 **magic bytes** 가 PNG / JPEG / GIF / WEBP 시그니처와 일치하는지 (2차)
+3. 매직바이트로 검출한 포맷과 **파일명 확장자가 일치**하는지 (3차, mislabeled 차단)
+4. 확장자가 **whitelist** (`.png/.jpg/.jpeg/.webp/.gif`) 에 포함되는지 (4차, 정적 서빙 시 실행 가능 콘텐츠 차단)
+
+검증 실패는 `S-001 INVALID_IMAGE`, IO 실패는 `S-002 STORAGE_FAILURE`. 초과 크기는 `S-003 PAYLOAD_TOO_LARGE`.
+
+### 파일명 / Path Traversal 방어
+
+- 저장 파일명은 **UUID + canonical 확장자**. 원본 파일명 기반 추측 공격을 막는다.
+- `delete(url)` 는 idempotent — 파일이 없으면 조용히 무시한다.
+- 다만 URL 의 filename 부분에 경로 구분자(`/` `\`), `..`, 단일 `.` 가 포함되면 `S-002` 로 거부한다 (DB 변조 등 데이터 무결성 위반 가드).
+- 한 단계 더: 정규화 후에도 `uploadRoot` 하위인지 검사 (defense in depth).
+
+### prefix / public URL 동기화
+
+`storage.local.public-url-prefix` (yaml) → `LocalImageStorage` 가 반환 URL 을 생성, `StorageConfig` 가 정적 리소스 핸들러에 매핑, `SecurityConfig.PUBLIC_ENDPOINTS` 가 같은 prefix 를 permit. **세 군데가 동일한 값을 공유**하므로 yaml 한 곳만 바꾸면 모두 따라간다. 새 prefix 를 도입할 때 한 군데라도 빠뜨리지 말 것.
+
+### 멀티파트 한도
+
+| 키 | 값 | 의미 |
+| --- | --- | --- |
+| `spring.servlet.multipart.max-file-size` | 10MB | 파일 단건 한도 |
+| `spring.servlet.multipart.max-request-size` | 10MB | 요청 본문 전체 한도 |
+| `server.tomcat.max-http-form-post-size` | 10MB | 톰캣 단계 차단 한도 |
+| `server.tomcat.max-swallow-size` | 10MB | 한도 초과 시에도 톰캣이 본문을 읽어들이는 한계 |
+
+위 4개를 **같이** 잡아야 톰캣 단계에서 미리 차단되지 않는다. 한도 초과는 `MaxUploadSizeExceededException` → `S-003` 로 매핑.
+
+### 접근 통제 — 현재 정책
+
+현재 모든 업로드 파일은 정적 리소스 핸들러를 통해 **누구나 URL 만 알면 접근 가능**하다. UUID 가 추측을 어렵게 하지만, 비공개 작품 이미지에 대한 권한 체크는 제공하지 않는다. 인증된 다운로드 컨트롤러로의 전환은 별도 이슈에서 결정.
+
+## 14. 커밋 메시지
 
 ```
 [S14P31E103-<이슈번호>] BE/<타입>: <내용>
