@@ -11,6 +11,7 @@ import {
   updatePlayerMovement,
 } from '@/game/entities/player'
 import { fadeToScene } from '@/game/systems/sceneTransition'
+import { getPlayerMoveSpeed } from '@/game/settings/gameSettings'
 import {
   createFloatingInteractionIcon,
   loadInteractionIcons,
@@ -212,6 +213,7 @@ export class ArtSelectScene extends Phaser.Scene {
       cursors: this.cursors,
       target: this.target,
       lastDirection: this.lastDirection,
+      speed: getPlayerMoveSpeed(),
       blocked: this.isDialogVisible || this.isAlbumVisible,
     })
     this.target = movement.target
