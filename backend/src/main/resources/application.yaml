@@ -45,12 +45,6 @@ security:
     secret: ${JWT_SECRET:local-dev-only-change-me-please-use-at-least-32-chars}
     access-token-ttl-seconds: ${JWT_ACCESS_TTL_SECONDS:3600}
     issuer: ${JWT_ISSUER:comong}
-  admin:
-    # 부팅 시 USER → ADMIN 으로 promote 할 이메일 목록 (S14P31E103-300).
-    # 회원가입 흐름은 항상 USER 이므로 ADMIN 부여는 이 목록에만 의존한다.
-    # 환경변수 SECURITY_ADMIN_EMAILS 에 콤마 구분 문자열로 주입 (예: "alice@x.com,bob@y.com").
-    # 미가입 이메일은 부팅 시 경고 로그 후 skip — 사전 회원가입 후 등록 + 재배포가 절차.
-    emails: ${SECURITY_ADMIN_EMAILS:}
 
 springdoc:
   api-docs:

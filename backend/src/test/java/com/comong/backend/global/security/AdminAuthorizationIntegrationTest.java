@@ -10,10 +10,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
+import com.comong.backend.domain.user.entity.User;
 import com.comong.backend.domain.user.entity.UserRole;
 import com.comong.backend.domain.user.repository.UserRepository;
 import com.comong.backend.support.IntegrationTestSupport;
@@ -24,32 +23,26 @@ import tools.jackson.databind.ObjectMapper;
  * 실제 인증 흐름 (회원가입 → 로그인 → JWT) 으로 ADMIN 권한이 보호되는지 검증한다.
  *
  * <p>기존 {@code with(user().roles("ADMIN"))} 테스트는 Spring Security Test 가 SecurityContext 를 직접 주입해
- * {@code JwtAuthenticationFilter} 를 우회하기 때문에 "실제 ADMIN 권한 발급 경로"는 검증되지 않았다 (S14P31E103-300).
+ * {@code JwtAuthenticationFilter} 를 우회하기 때문에 "실제 ADMIN 권한 발급 경로" 는 검증되지 않았다 (S14P31E103-300).
  *
  * <p>본 테스트는 다음 두 사각지대를 메운다.
  *
  * <ul>
  *   <li>USER 로 가입한 사용자의 토큰으로는 admin endpoint 가 거부됨
- *   <li>{@code AdminBootstrapper} 로 promote 후 재로그인하면 같은 사용자가 admin endpoint 를 통과함
+ *   <li>운영 절차로 직접 role 을 ADMIN 으로 갱신한 사용자가 재로그인 후 admin endpoint 를 통과함
  * </ul>
+ *
+ * <p>운영에서 ADMIN 부여는 DB 직접 수정으로만 한다 (자세한 절차는 {@code backend/docs/admin-bootstrap.md}). 본 테스트는 그 운영
+ * 절차를 {@link User#promoteToAdmin()} 호출로 시뮬레이션한다.
  */
 @AutoConfigureMockMvc
 class AdminAuthorizationIntegrationTest extends IntegrationTestSupport {
-
-    private static final String ADMIN_EMAIL = "admin-bootstrap@example.com";
-
-    @DynamicPropertySource
-    static void adminEmails(DynamicPropertyRegistry registry) {
-        registry.add("security.admin.emails", () -> ADMIN_EMAIL);
-    }
 
     @Autowired private MockMvc mockMvc;
 
     @Autowired private ObjectMapper objectMapper;
 
     @Autowired private UserRepository userRepository;
-
-    @Autowired private AdminBootstrapper adminBootstrapper;
 
     @BeforeEach
     void cleanDb() {
@@ -72,11 +65,11 @@ class AdminAuthorizationIntegrationTest extends IntegrationTestSupport {
 
     @Test
     void promotedUserPassesAdminEndpointAfterReLogin() throws Exception {
-        // 1. ADMIN 부트스트랩 대상 이메일로 가입 — 이 시점엔 USER.
-        signup(ADMIN_EMAIL, "admin1", "P@ssw0rd!");
-        String beforeToken = login(ADMIN_EMAIL, "P@ssw0rd!");
+        // 1. 일반 회원가입 — USER 로 시작.
+        signup("admin1@example.com", "admin1", "P@ssw0rd!");
+        String beforeToken = login("admin1@example.com", "P@ssw0rd!");
 
-        // 가입 직후 토큰은 USER 라 admin endpoint 거부.
+        // 가입 직후 토큰은 USER 이므로 admin endpoint 거부.
         mockMvc.perform(
                         post("/exercise-motions")
                                 .header("Authorization", "Bearer " + beforeToken)
@@ -84,16 +77,18 @@ class AdminAuthorizationIntegrationTest extends IntegrationTestSupport {
                                 .content(motionCreateBody("TOP", 2, "사이드 스텝")))
                 .andExpect(status().isForbidden());
 
-        // 2. 부트스트랩 실행 → DB role ADMIN 으로 갱신.
-        adminBootstrapper.run(null);
+        // 2. 운영 절차 시뮬레이션 — DB 직접 갱신으로 USER → ADMIN 승격.
+        User user = userRepository.findByEmail("admin1@example.com").orElseThrow();
+        user.promoteToAdmin();
+        userRepository.save(user);
 
-        assertThat(userRepository.findByEmail(ADMIN_EMAIL).orElseThrow().getRole())
+        assertThat(userRepository.findByEmail("admin1@example.com").orElseThrow().getRole())
                 .isEqualTo(UserRole.ADMIN);
 
         // 3. 재로그인 — 새 토큰엔 role=ADMIN claim.
-        String afterToken = login(ADMIN_EMAIL, "P@ssw0rd!");
+        String afterToken = login("admin1@example.com", "P@ssw0rd!");
 
-        // 4. 같은 사용자, 새 토큰으로 admin endpoint 통과 (201).
+        // 4. 같은 사용자, 새 토큰으로 admin endpoint 통과.
         mockMvc.perform(
                         post("/exercise-motions")
                                 .header("Authorization", "Bearer " + afterToken)
