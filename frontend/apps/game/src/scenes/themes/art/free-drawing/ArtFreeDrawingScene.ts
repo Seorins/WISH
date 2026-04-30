@@ -10,6 +10,7 @@ import { getPointerReference } from '@/game/motion/pointerReference'
 import { PointerSmoother } from '@/game/motion/pointerSmoother'
 import { PointerTrackingGuard } from '@/game/motion/pointerTrackingGuard'
 import { createArtCameraPreview, type ArtCameraPreview } from '../ui/artCameraPreview'
+import { getArtBrushColorOverlayTextureKey } from '../ui/artBrushColorOverlayTexture'
 import { createArtConfirmDialog, type ArtConfirmDialog } from '../ui/artConfirmDialog'
 
 const ART_ROOM_RETURN_SPAWN = { xRatio: 0.5, yRatio: 0.76 }
@@ -68,6 +69,7 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
   private paletteSelection!: Phaser.GameObjects.Arc
   private cameraPreview: ArtCameraPreview | null = null
   private brushCursor: Phaser.GameObjects.Image | null = null
+  private brushColorOverlay: Phaser.GameObjects.Image | null = null
   private toolButtons: Partial<Record<DrawingTool, Phaser.GameObjects.Image>> = {}
   private toolButtonFrames: Partial<Record<DrawingTool, Phaser.GameObjects.Arc>> = {}
   private toolButtonGlows: Partial<Record<DrawingTool, Phaser.GameObjects.Image>> = {}
@@ -212,6 +214,7 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
     this.isSaveVisibilityConfirmOpen = false
     this.saveVisibilityConfirmDialog = null
     this.brushCursor = null
+    this.brushColorOverlay = null
     this.cameraPreview = null
     this.hasStartedDrawing = false
     this.strokeCount = 0
@@ -264,6 +267,7 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
       this.cameraPreview = null
       this.stopHandTracking()
       this.brushCursor = null
+      this.brushColorOverlay = null
     })
 
     this.cameras.main.fadeIn(220, 0, 0, 0)
@@ -271,9 +275,7 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
 
   update(time: number) {
     const pointer = this.input.activePointer
-    if (this.brushCursor) {
-      this.brushCursor.setPosition(pointer.x, pointer.y)
-    }
+    this.updateBrushCursorPosition(pointer.x, pointer.y)
 
     this.cameraPreview?.update()
     this.updateHandDrawing(time)
@@ -465,7 +467,7 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
         event: Phaser.Types.Input.EventData,
       ) => {
         event.stopPropagation()
-        const nearest = this.getNearestPaletteColor(pointer.x, pointer.y)
+        const nearest = this.getPaletteColorAt(pointer.x, pointer.y)
         if (nearest !== null) {
           this.selectColor(nearest.color, nearest.x, nearest.y)
         }
@@ -648,6 +650,11 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
     this.input.setDefaultCursor('none')
     this.brushCursor = this.add.image(0, 0, 'art-ui-brush').setDepth(20)
     this.brushCursor.setScrollFactor(0)
+    this.brushColorOverlay = this.add
+      .image(0, 0, getArtBrushColorOverlayTextureKey(this, this.currentColor))
+      .setDepth(21)
+    this.brushColorOverlay.setScrollFactor(0)
+    this.updateBrushCursorPosition(this.input.activePointer.x, this.input.activePointer.y)
     this.updateBrushCursorTexture()
   }
 
@@ -687,20 +694,44 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
   }
 
   private updateBrushCursorTexture() {
-    if (!this.brushCursor) {
+    const brushCursor = this.brushCursor
+    if (!brushCursor || !brushCursor.scene || !brushCursor.active) {
       return
     }
 
     if (this.currentTool === 'eraser') {
-      this.brushCursor.setTexture('art-ui-eraser')
-      this.brushCursor.setDisplaySize(54, 54)
-      this.brushCursor.setOrigin(0.5, 0.5)
+      brushCursor.setTexture('art-ui-eraser')
+      brushCursor.setDisplaySize(54, 54)
+      brushCursor.setOrigin(0.5, 0.5)
+      this.updateBrushColorPreview()
       return
     }
 
-    this.brushCursor.setTexture('art-ui-brush')
-    this.brushCursor.setDisplaySize(48, 48)
-    this.brushCursor.setOrigin(0.18, 0.88)
+    brushCursor.setTexture('art-ui-brush')
+    brushCursor.setDisplaySize(48, 48)
+    brushCursor.setOrigin(0.18, 0.88)
+    this.updateBrushColorPreview()
+  }
+
+  private updateBrushCursorPosition(x: number, y: number) {
+    if (this.brushCursor?.scene && this.brushCursor.active) {
+      this.brushCursor.setPosition(x, y)
+    }
+    if (this.brushColorOverlay?.scene && this.brushColorOverlay.active) {
+      this.brushColorOverlay.setPosition(x, y)
+    }
+  }
+
+  private updateBrushColorPreview() {
+    const brushColorOverlay = this.brushColorOverlay
+    if (!brushColorOverlay || !brushColorOverlay.scene || !brushColorOverlay.active) {
+      return
+    }
+
+    brushColorOverlay.setVisible(this.currentTool === 'brush')
+    brushColorOverlay.setTexture(getArtBrushColorOverlayTextureKey(this, this.currentColor))
+    brushColorOverlay.setDisplaySize(48, 48)
+    brushColorOverlay.setOrigin(0.18, 0.88)
   }
 
   private startHandDrawingMode() {
@@ -776,7 +807,7 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
     }
 
     const smoothedPoint = this.handPointerSmoother.smooth(tracking.point)
-    this.brushCursor?.setPosition(smoothedPoint.x, smoothedPoint.y)
+    this.updateBrushCursorPosition(smoothedPoint.x, smoothedPoint.y)
 
     if (tracking.status !== 'tracked') {
       return
@@ -1010,14 +1041,8 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
   }
 
   private trySelectColorFromHand(point: Phaser.Math.Vector2, timestampMs: number) {
-    const nearest = this.getNearestPaletteColor(point.x, point.y)
+    const nearest = this.getPaletteColorAt(point.x, point.y)
     if (!nearest) {
-      return false
-    }
-
-    const distance = Phaser.Math.Distance.Between(point.x, point.y, nearest.x, nearest.y)
-    const hitRadius = Math.max(24, Math.min(this.scale.width, this.scale.height) * 0.034)
-    if (distance > hitRadius) {
       this.clearPendingHandColor()
       return false
     }
@@ -1052,6 +1077,24 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
     this.currentColor = color
     this.setDrawingTool('brush')
     this.paletteSelection.setVisible(false)
+  }
+
+  private getPaletteColorAt(x: number, y: number): PalettePoint | null {
+    const nearest = this.getNearestPaletteColor(x, y)
+    if (!nearest) {
+      return null
+    }
+
+    const distance = Phaser.Math.Distance.Between(x, y, nearest.x, nearest.y)
+    if (distance > this.getPaletteHitRadius()) {
+      return null
+    }
+
+    return nearest
+  }
+
+  private getPaletteHitRadius() {
+    return Math.max(24, Math.min(this.scale.width, this.scale.height) * 0.034)
   }
 
   private getNearestPaletteColor(x: number, y: number): PalettePoint | null {
