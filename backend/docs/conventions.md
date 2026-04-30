@@ -286,6 +286,32 @@ public record UserSignupRequest(
 | `security.jwt.access-token-ttl-seconds` | Access 토큰 유효시간 | 3600 (1시간) |
 | `security.jwt.issuer` | 발급자 (iss) | `comong` |
 
+### 사용자 역할 (USER / ADMIN)
+
+`UserRole { USER, ADMIN }` 만 존재. 회원가입은 항상 `USER` 로 생성되고, 회원가입 API 에는 role 입력 필드를 노출하지 않는다.
+
+`ADMIN` 부여는 **DB 직접 수정** 으로만 한다. 운영자가 환경별로 SQL 한 줄을 실행:
+
+```sql
+-- 새 admin 계정 생성 (BCrypt 해시는 별도 도구로 생성)
+INSERT INTO users (email, nickname, password, role, created_at)
+VALUES ('admin@comong', 'admin', '<bcrypt-hash>', 'ADMIN', NOW());
+
+-- 또는 기존 USER 를 ADMIN 으로 승격
+UPDATE users SET role = 'ADMIN' WHERE email = 'guardian@example.com';
+```
+
+상세 절차 (BCrypt 해시 생성, 환경별 주의점 등) 는 [`admin-bootstrap.md`](./admin-bootstrap.md) 참고.
+
+이 방식을 택한 이유:
+- 운영 자격증명이 git/VCS 밖에 머무름 (마이그레이션에 박지 않는다)
+- 환경별 admin 셋이 완전히 분리
+- 코드 경로에서 사용자 데이터를 자동 변형하는 부분이 없어 감사·디버깅 표면적이 작음
+
+권한 보호는 `@PreAuthorize("hasRole('ADMIN')")` 사용 — `JwtAuthenticationFilter` 가 토큰의 role claim 을 `ROLE_<enum>` 으로 부여하므로 enum 이름과 자동 매칭.
+
+> **테스트 주의**: 통합 테스트의 `with(user().roles("ADMIN"))` 은 Spring Security Test 가 `SecurityContext` 를 직접 주입해 `JwtAuthenticationFilter` 를 우회한다. 실제 ADMIN 권한 발급 경로 검증은 `AdminAuthorizationIntegrationTest` 가 담당 (운영 절차를 `User#promoteToAdmin()` 호출로 시뮬레이션).
+
 ### Swagger 연동
 
 - `OpenApiConfig` 에 Bearer 스키마 등록 완료.
