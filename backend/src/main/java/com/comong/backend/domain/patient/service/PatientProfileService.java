@@ -111,6 +111,10 @@ public class PatientProfileService {
         return PatientProfileResponse.from(findOwnedOrThrow(userId, profileId));
     }
 
+    public PatientProfile findOwnedEntity(Long userId, Long profileId) {
+        return findOwnedOrThrow(userId, profileId);
+    }
+
     /**
      * 부분 수정. 존재하지 않거나 본인 소유가 아닌 경우 모두 404. 요청 필드가 {@code null} 이면 해당 필드는 기존 값을 유지한다 (PATCH 시맨틱). 변경
      * 감지로 flush.
