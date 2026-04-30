@@ -10,6 +10,7 @@ import { getPointerReference } from '@/game/motion/pointerReference'
 import { PointerSmoother } from '@/game/motion/pointerSmoother'
 import { PointerTrackingGuard } from '@/game/motion/pointerTrackingGuard'
 import { createArtCameraPreview, type ArtCameraPreview } from '../ui/artCameraPreview'
+import { getArtBrushColorOverlayTextureKey } from '../ui/artBrushColorOverlayTexture'
 import { createArtConfirmDialog, type ArtConfirmDialog } from '../ui/artConfirmDialog'
 import { getColoringOption, coloringOptions, type ColoringOption } from './coloringOptions'
 
@@ -76,6 +77,7 @@ export class ArtColoringScene extends Phaser.Scene {
   private paletteSelection!: Phaser.GameObjects.Arc
   private cameraPreview: ArtCameraPreview | null = null
   private brushCursor: Phaser.GameObjects.Image | null = null
+  private brushColorOverlay: Phaser.GameObjects.Image | null = null
   private handFillGauge: Phaser.GameObjects.Graphics | null = null
   private toolButtons: Partial<Record<ColoringTool, Phaser.GameObjects.Image>> = {}
   private toolButtonFrames: Partial<Record<ColoringTool, Phaser.GameObjects.Arc>> = {}
@@ -237,6 +239,7 @@ export class ArtColoringScene extends Phaser.Scene {
     this.handTrackingDisposed = false
     this.currentTool = 'brush'
     this.brushCursor = null
+    this.brushColorOverlay = null
     this.cameraPreview = null
     this.toolButtons = {}
     this.toolButtonFrames = {}
@@ -305,6 +308,7 @@ export class ArtColoringScene extends Phaser.Scene {
       this.cameraPreview = null
       this.stopHandTracking()
       this.brushCursor = null
+      this.brushColorOverlay = null
     })
 
     this.cameras.main.fadeIn(220, 0, 0, 0)
@@ -312,9 +316,7 @@ export class ArtColoringScene extends Phaser.Scene {
 
   update(time: number) {
     const pointer = this.input.activePointer
-    if (this.brushCursor) {
-      this.brushCursor.setPosition(pointer.x, pointer.y)
-    }
+    this.updateBrushCursorPosition(pointer.x, pointer.y)
 
     this.cameraPreview?.update()
     this.updateHandColoring(time)
@@ -681,6 +683,11 @@ export class ArtColoringScene extends Phaser.Scene {
     this.input.setDefaultCursor('none')
     this.brushCursor = this.add.image(0, 0, 'art-ui-brush').setDepth(20)
     this.brushCursor.setScrollFactor(0)
+    this.brushColorOverlay = this.add
+      .image(0, 0, getArtBrushColorOverlayTextureKey(this, this.currentColor))
+      .setDepth(21)
+    this.brushColorOverlay.setScrollFactor(0)
+    this.updateBrushCursorPosition(this.input.activePointer.x, this.input.activePointer.y)
     this.updateBrushCursorTexture()
   }
 
@@ -738,12 +745,35 @@ export class ArtColoringScene extends Phaser.Scene {
       brushCursor.setTexture('art-ui-eraser')
       brushCursor.setDisplaySize(54, 54)
       brushCursor.setOrigin(0.5, 0.5)
+      this.updateBrushColorPreview()
       return
     }
 
     brushCursor.setTexture('art-ui-brush')
     brushCursor.setDisplaySize(48, 48)
     brushCursor.setOrigin(0.18, 0.88)
+    this.updateBrushColorPreview()
+  }
+
+  private updateBrushCursorPosition(x: number, y: number) {
+    if (this.brushCursor?.scene && this.brushCursor.active) {
+      this.brushCursor.setPosition(x, y)
+    }
+    if (this.brushColorOverlay?.scene && this.brushColorOverlay.active) {
+      this.brushColorOverlay.setPosition(x, y)
+    }
+  }
+
+  private updateBrushColorPreview() {
+    const brushColorOverlay = this.brushColorOverlay
+    if (!brushColorOverlay || !brushColorOverlay.scene || !brushColorOverlay.active) {
+      return
+    }
+
+    brushColorOverlay.setVisible(this.currentTool === 'brush')
+    brushColorOverlay.setTexture(getArtBrushColorOverlayTextureKey(this, this.currentColor))
+    brushColorOverlay.setDisplaySize(48, 48)
+    brushColorOverlay.setOrigin(0.18, 0.88)
   }
 
   private startHandColoringMode(delegate: 'GPU' | 'CPU' = 'GPU') {
@@ -829,7 +859,7 @@ export class ArtColoringScene extends Phaser.Scene {
     }
 
     const smoothedPoint = this.handPointerSmoother.smooth(tracking.point)
-    this.brushCursor?.setPosition(smoothedPoint.x, smoothedPoint.y)
+    this.updateBrushCursorPosition(smoothedPoint.x, smoothedPoint.y)
 
     const isTrackedFrame = tracking.status === 'tracked'
     if (isTrackedFrame && !handState?.isColoringGesture) {
