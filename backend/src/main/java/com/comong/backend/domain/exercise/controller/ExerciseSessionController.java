@@ -20,7 +20,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 
-@Tag(name = "Exercise Session", description = "Exercise session result API")
+@Tag(name = "Exercise Session", description = "체조 세션 결과 API")
 @RestController
 @RequestMapping("/exercise-sessions")
 @RequiredArgsConstructor
@@ -28,9 +28,7 @@ public class ExerciseSessionController {
 
     private final ExerciseSessionService exerciseSessionService;
 
-    @Operation(
-            summary = "Save exercise session result",
-            description = "Save exercise session and per-motion results.")
+    @Operation(summary = "체조 세션 기록 저장", description = "체조 세션과 동작별 수행 결과를 저장합니다.")
     @PostMapping
     public ResponseEntity<ApiResponse<ExerciseSessionResponse>> create(
             @AuthenticationPrincipal AuthenticatedUser currentUser,

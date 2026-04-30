@@ -1,6 +1,9 @@
 package com.comong.backend.domain.exercise.service;
 
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,12 +37,10 @@ public class ExerciseSessionService {
 
     @Transactional
     public ExerciseSessionResponse create(Long userId, ExerciseSessionSaveRequest request) {
-        if (request.motions() == null || request.motions().isEmpty()) {
-            throw new BusinessException(ExerciseErrorCode.EXERCISE_SESSION_MOTION_REQUIRED);
-        }
-
         PatientProfile patientProfile =
-                patientProfileService.findOwnedEntity(userId, request.patientProfileId());
+                patientProfileService.findOwnedOrThrow(userId, request.patientProfileId());
+        Map<Long, ExerciseMotion> motionMap = loadExerciseMotionMap(request.motions());
+
         ExerciseSession session =
                 exerciseSessionRepository.save(
                         ExerciseSession.builder()
@@ -52,7 +53,7 @@ public class ExerciseSessionService {
 
         List<ExerciseSessionMotion> sessionMotions =
                 request.motions().stream()
-                        .map(motionRequest -> toSessionMotion(session, motionRequest))
+                        .map(motionRequest -> toSessionMotion(session, motionRequest, motionMap))
                         .toList();
         List<ExerciseSessionMotion> savedSessionMotions =
                 exerciseSessionMotionRepository.saveAll(sessionMotions);
@@ -62,15 +63,28 @@ public class ExerciseSessionService {
                 savedSessionMotions.stream().map(ExerciseSessionMotionResponse::from).toList());
     }
 
+    private Map<Long, ExerciseMotion> loadExerciseMotionMap(
+            List<ExerciseSessionMotionSaveRequest> requests) {
+        List<Long> motionIds =
+                requests.stream()
+                        .map(ExerciseSessionMotionSaveRequest::exerciseMotionId)
+                        .distinct()
+                        .toList();
+        Map<Long, ExerciseMotion> motionMap =
+                exerciseMotionRepository.findAllById(motionIds).stream()
+                        .collect(Collectors.toMap(ExerciseMotion::getId, Function.identity()));
+
+        if (motionMap.size() != motionIds.size()) {
+            throw new BusinessException(ExerciseErrorCode.EXERCISE_MOTION_NOT_FOUND);
+        }
+        return motionMap;
+    }
+
     private ExerciseSessionMotion toSessionMotion(
-            ExerciseSession session, ExerciseSessionMotionSaveRequest request) {
-        ExerciseMotion exerciseMotion =
-                exerciseMotionRepository
-                        .findById(request.exerciseMotionId())
-                        .orElseThrow(
-                                () ->
-                                        new BusinessException(
-                                                ExerciseErrorCode.EXERCISE_MOTION_NOT_FOUND));
+            ExerciseSession session,
+            ExerciseSessionMotionSaveRequest request,
+            Map<Long, ExerciseMotion> motionMap) {
+        ExerciseMotion exerciseMotion = motionMap.get(request.exerciseMotionId());
         if (session.getExerciseType() != exerciseMotion.getExerciseType()) {
             throw new BusinessException(ExerciseErrorCode.EXERCISE_SESSION_MOTION_TYPE_MISMATCH);
         }

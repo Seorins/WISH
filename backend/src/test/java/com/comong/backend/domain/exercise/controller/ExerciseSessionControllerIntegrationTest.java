@@ -162,7 +162,7 @@ class ExerciseSessionControllerIntegrationTest extends IntegrationTestSupport {
                                         saveRequest(
                                                 user.patientProfileId(), motion.getId(), "TOP")))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("EX-005"));
+                .andExpect(jsonPath("$.code").value("EX-004"));
 
         assertThat(exerciseSessionRepository.count()).isZero();
         assertThat(exerciseSessionMotionRepository.count()).isZero();
@@ -184,6 +184,32 @@ class ExerciseSessionControllerIntegrationTest extends IntegrationTestSupport {
                                           "durationSec": 78,
                                           "averageAccuracy": 0.87,
                                           "motions": []
+                                        }
+                                        """
+                                                .formatted(user.patientProfileId())))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("G-001"));
+
+        assertThat(exerciseSessionRepository.count()).isZero();
+        assertThat(exerciseSessionMotionRepository.count()).isZero();
+    }
+
+    @Test
+    void createExerciseSession_rejectsNullMotionElement() throws Exception {
+        TestUser user = setupUserWithProfile("null-motion@example.com", "null-motion-user");
+
+        mockMvc.perform(
+                        post("/exercise-sessions")
+                                .header("Authorization", "Bearer " + user.token())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(
+                                        """
+                                        {
+                                          "patientProfileId": %d,
+                                          "exerciseType": "TOP",
+                                          "durationSec": 78,
+                                          "averageAccuracy": 0.87,
+                                          "motions": [null]
                                         }
                                         """
                                                 .formatted(user.patientProfileId())))

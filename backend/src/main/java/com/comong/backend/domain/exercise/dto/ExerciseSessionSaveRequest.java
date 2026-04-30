@@ -23,5 +23,5 @@ public record ExerciseSessionSaveRequest(
                 @DecimalMin("0.0")
                 @DecimalMax("1.0")
                 Double averageAccuracy,
-        @Schema(description = "동작별 수행 결과") @Valid @NotEmpty
-                List<ExerciseSessionMotionSaveRequest> motions) {}
+        @Schema(description = "동작별 수행 결과") @NotEmpty
+                List<@NotNull @Valid ExerciseSessionMotionSaveRequest> motions) {}
