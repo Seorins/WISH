@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { z } from 'zod'
 import { login as loginApi } from '@wish/api-client'
 import { decodeJwt } from '../shared/auth/jwt'
@@ -14,15 +14,22 @@ const loginSchema = z.object({
 
 type LoginForm = z.infer<typeof loginSchema>
 
+type LocationState = {
+  signedUpEmail?: string
+}
+
 export function LoginPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { setToken, clear, isAdmin, token } = useAuthStore()
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
+  const signedUpEmail = (location.state as LocationState | null)?.signedUpEmail
+
   const { register, handleSubmit, formState } = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
-    defaultValues: { email: '', password: '' },
+    defaultValues: { email: signedUpEmail ?? '', password: '' },
   })
 
   useEffect(() => {
@@ -62,6 +69,12 @@ export function LoginPage() {
       <form onSubmit={handleSubmit(onSubmit)} style={styles.form}>
         <h1 style={styles.title}>WISH Admin</h1>
 
+        {signedUpEmail && (
+          <div style={styles.notice}>
+            가입이 완료되었습니다. 관리자 권한이 부여된 후 로그인 가능합니다.
+          </div>
+        )}
+
         <label style={styles.label}>
           이메일
           <input
@@ -95,6 +108,10 @@ export function LoginPage() {
         <button type="submit" style={styles.submit} disabled={submitting}>
           {submitting ? '로그인 중…' : '로그인'}
         </button>
+
+        <Link to="/signup" style={styles.linkSignup}>
+          계정이 없으신가요? 회원가입 →
+        </Link>
       </form>
     </div>
   )
@@ -119,6 +136,13 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 16,
   },
   title: { margin: 0, fontSize: 24, textAlign: 'center' },
+  notice: {
+    padding: 10,
+    background: '#e8f5e9',
+    color: '#1b5e20',
+    borderRadius: 4,
+    fontSize: 13,
+  },
   label: { display: 'flex', flexDirection: 'column', gap: 6, fontSize: 14 },
   input: {
     padding: '8px 10px',
@@ -142,5 +166,11 @@ const styles: Record<string, React.CSSProperties> = {
     border: 'none',
     borderRadius: 4,
     cursor: 'pointer',
+  },
+  linkSignup: {
+    textAlign: 'center',
+    fontSize: 13,
+    color: '#1976d2',
+    textDecoration: 'none',
   },
 }

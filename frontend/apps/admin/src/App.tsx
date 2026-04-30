@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { LoginPage } from './pages/LoginPage'
 import { MotionsPage } from './pages/MotionsPage'
+import { SignupPage } from './pages/SignupPage'
 import { RequireAdmin } from './routes/RequireAdmin'
 
 function App() {
@@ -9,6 +10,7 @@ function App() {
     <BrowserRouter basename={basename}>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/signup" element={<SignupPage />} />
         <Route
           path="/motions"
           element={

@@ -1,6 +1,6 @@
 export { apiClient } from './client'
 export { authInterceptor } from './interceptors/auth'
-export { issueDemoToken, login } from './auth'
+export { issueDemoToken, login, signup } from './auth'
 export { createArtwork, deleteArtwork, getArtwork, getMyArtworks, updateArtwork } from './artworks'
 export {
   createExerciseMotion,
@@ -9,7 +9,7 @@ export {
   listExerciseMotions,
   updateExerciseMotion,
 } from './exercise-motions'
-export type { LoginRequest, TokenResponse } from './auth'
+export type { LoginRequest, SignupRequest, TokenResponse, UserResponse } from './auth'
 export type {
   ApiResponse,
   Artwork,
