@@ -20,7 +20,16 @@ export default defineConfig(({ mode }) => {
         '@': fileURLToPath(new URL('./src', import.meta.url)),
       },
     },
-    server: { port: 3002 },
+    server: {
+      port: 3001,
+      // 로컬 개발에서 백엔드 (localhost:8080) 로 프록시. 프로덕션 dev/prod 환경에선 nginx 가 처리하므로 영향 없음.
+      proxy: {
+        '/api/v1': {
+          target: env.VITE_API_PROXY_TARGET ?? 'http://localhost:8080',
+          changeOrigin: true,
+        },
+      },
+    },
     test: {
       environment: 'jsdom',
       globals: true,
