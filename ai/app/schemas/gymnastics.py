@@ -86,6 +86,10 @@ class MarchEvaluationRequest(BaseModel):
     candidate_feedback_code: str | None = Field(default=None)
     candidate_feedback_text: str | None = Field(default=None)
     candidate_feedback_streak: int = Field(default=0, ge=0)
+    representative_feedback_totals: dict[str, int] = Field(default_factory=dict)
+    representative_feedback_code: str | None = Field(default=None)
+    representative_feedback_text: str | None = Field(default=None)
+    representative_feedback_frames: int = Field(default=0, ge=0)
 
 
 class MarchFeaturesResponse(BaseModel):
@@ -121,6 +125,10 @@ class MarchEvaluationResponse(BaseModel):
     candidate_feedback_code: str | None = None
     candidate_feedback_text: str | None = None
     candidate_feedback_streak: int = 0
+    representative_feedback_totals: dict[str, int] = Field(default_factory=dict)
+    representative_feedback_code: str | None = None
+    representative_feedback_text: str | None = None
+    representative_feedback_frames: int = 0
     features: MarchFeaturesResponse
 
 
