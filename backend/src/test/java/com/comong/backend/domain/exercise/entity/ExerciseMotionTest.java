@@ -5,12 +5,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import org.junit.jupiter.api.Test;
 
-class MotionTest {
+class ExerciseMotionTest {
 
     @Test
     void builder_setsFieldsAndTimestamp() {
-        Motion motion =
-                Motion.builder()
+        ExerciseMotion exerciseMotion =
+                ExerciseMotion.builder()
                         .exerciseType(ExerciseType.TOP)
                         .name("March")
                         .routineOrder(1)
@@ -20,24 +20,24 @@ class MotionTest {
                         .thumbnailUrl("https://example.com/march.png")
                         .build();
 
-        motion.prePersist();
+        exerciseMotion.prePersist();
 
-        assertThat(motion.getExerciseType()).isEqualTo(ExerciseType.TOP);
-        assertThat(motion.getName()).isEqualTo("March");
-        assertThat(motion.getRoutineOrder()).isEqualTo(1);
-        assertThat(motion.getTargetReps()).isEqualTo(8);
-        assertThat(motion.getDescription()).isEqualTo("Walk in place.");
-        assertThat(motion.getDemoVideoUrl()).isEqualTo("https://example.com/march.mp4");
-        assertThat(motion.getThumbnailUrl()).isEqualTo("https://example.com/march.png");
-        assertThat(motion.getCreatedAt()).isNotNull();
-        assertThat(motion.getUpdatedAt()).isNotNull();
+        assertThat(exerciseMotion.getExerciseType()).isEqualTo(ExerciseType.TOP);
+        assertThat(exerciseMotion.getName()).isEqualTo("March");
+        assertThat(exerciseMotion.getRoutineOrder()).isEqualTo(1);
+        assertThat(exerciseMotion.getTargetReps()).isEqualTo(8);
+        assertThat(exerciseMotion.getDescription()).isEqualTo("Walk in place.");
+        assertThat(exerciseMotion.getDemoVideoUrl()).isEqualTo("https://example.com/march.mp4");
+        assertThat(exerciseMotion.getThumbnailUrl()).isEqualTo("https://example.com/march.png");
+        assertThat(exerciseMotion.getCreatedAt()).isNotNull();
+        assertThat(exerciseMotion.getUpdatedAt()).isNotNull();
     }
 
     @Test
     void builder_rejectsNullExerciseType() {
         assertThatThrownBy(
                         () ->
-                                Motion.builder()
+                                ExerciseMotion.builder()
                                         .exerciseType(null)
                                         .name("March")
                                         .routineOrder(1)
@@ -52,7 +52,7 @@ class MotionTest {
     void builder_rejectsNonPositiveRoutineOrder() {
         assertThatThrownBy(
                         () ->
-                                Motion.builder()
+                                ExerciseMotion.builder()
                                         .exerciseType(ExerciseType.TOP)
                                         .name("March")
                                         .routineOrder(0)
@@ -67,7 +67,7 @@ class MotionTest {
     void builder_rejectsNonPositiveTargetReps() {
         assertThatThrownBy(
                         () ->
-                                Motion.builder()
+                                ExerciseMotion.builder()
                                         .exerciseType(ExerciseType.TOP)
                                         .name("March")
                                         .routineOrder(1)
@@ -82,7 +82,7 @@ class MotionTest {
     void builder_rejectsNullDescription() {
         assertThatThrownBy(
                         () ->
-                                Motion.builder()
+                                ExerciseMotion.builder()
                                         .exerciseType(ExerciseType.TOP)
                                         .name("March")
                                         .routineOrder(1)

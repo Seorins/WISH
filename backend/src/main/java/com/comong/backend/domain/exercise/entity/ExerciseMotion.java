@@ -23,14 +23,14 @@ import lombok.NoArgsConstructor;
 @Entity
 @Getter
 @Table(
-        name = "motion",
+        name = "exercise_motion",
         uniqueConstraints = {
             @UniqueConstraint(
-                    name = "uk_motion_exercise_type_routine_order",
+                    name = "uk_exercise_motion_exercise_type_routine_order",
                     columnNames = {"exercise_type", "routine_order"})
         })
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class Motion {
+public class ExerciseMotion {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -65,7 +65,7 @@ public class Motion {
     private LocalDateTime updatedAt;
 
     @Builder
-    private Motion(
+    private ExerciseMotion(
             ExerciseType exerciseType,
             String name,
             int routineOrder,
