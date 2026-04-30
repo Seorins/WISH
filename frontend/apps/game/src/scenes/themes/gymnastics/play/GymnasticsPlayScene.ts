@@ -360,7 +360,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
       .setDisplaySize(width * TARGET_POSE_FRAME_SCALE, targetH * TARGET_POSE_FRAME_SCALE)
       .setDepth(11)
     this.add
-      .text(sectionTitleX, targetTitleY, '목표 자세', {
+      .text(sectionTitleX, targetTitleY, '가이드 영상', {
         fontFamily: 'sans-serif',
         fontSize: `${Math.round(Phaser.Math.Clamp(targetH * 0.078, 16, 20))}px`,
         color: '#fff4d4',
@@ -369,11 +369,6 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
         strokeThickness: 2,
       })
       .setOrigin(0.5)
-      .setDepth(13)
-
-    this.add
-      .image(x + width / 2, y + targetH * 0.56, 'gymnastics-raccoon')
-      .setDisplaySize(Math.min(width * 0.74, targetH * 0.7), Math.min(width * 0.74, targetH * 0.7))
       .setDepth(13)
 
     this.add
