@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pydantic import BaseModel, Field
 
 
@@ -120,3 +122,27 @@ class MarchEvaluationResponse(BaseModel):
     candidate_feedback_text: str | None = None
     candidate_feedback_streak: int = 0
     features: MarchFeaturesResponse
+
+
+class MarchSummaryRequest(BaseModel):
+    started_at: datetime = Field(..., description="Motion start time in ISO 8601 format")
+    ended_at: datetime = Field(..., description="Motion end time in ISO 8601 format")
+    step_count: int = Field(..., ge=0, description="Final accumulated march step count")
+    accuracy: float = Field(..., ge=0.0, le=1.0, description="Final accuracy score")
+    representative_feedback: str | None = Field(
+        default=None,
+        description="Representative corrective feedback for this motion",
+    )
+    tracking: str = Field(..., description="Final tracking quality status")
+    state: str = Field(..., description="Final evaluator state")
+
+
+class MarchSummaryResponse(BaseModel):
+    motionId: str
+    motionName: str
+    durationSec: float
+    stepCount: int
+    accuracy: float
+    representativeFeedback: str | None = None
+    tracking: str
+    state: str
