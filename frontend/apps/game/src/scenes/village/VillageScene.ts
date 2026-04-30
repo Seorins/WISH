@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { clearDemoAuthToken } from '@/auth/demoAuth'
 import { assetPath } from '@/game/assets/assetPath'
 import {
   createClickTargetMarker,
@@ -11,12 +12,14 @@ import {
   updatePlayerMovement,
 } from '@/game/entities/player'
 import { fadeToScene } from '@/game/systems/sceneTransition'
+import { getPlayerMoveSpeed } from '@/game/settings/gameSettings'
 import {
   createSimpleDialogUi,
   fadeSimpleDialog,
   setCenteredDialogText,
   type SimpleDialogUi,
 } from '@/game/ui/simpleDialog'
+import { createSettingsMenu } from '@/game/ui/settingsMenu'
 import {
   createRatioRectangle,
   getRectangleEntryState,
@@ -60,6 +63,7 @@ export class VillageScene extends Phaser.Scene {
   private lastDirection: PlayerDirection = 'down'
   private isDialogVisible = false
   private dialogDismissed = false
+  private settingsMenu!: ReturnType<typeof createSettingsMenu>
 
   constructor() {
     super({ key: 'VillageScene' })
@@ -70,6 +74,10 @@ export class VillageScene extends Phaser.Scene {
     this.load.image('sehyun_talk', assetPath('images/npcs/sehyun/dialog-frame.png'))
     this.load.image('profile', assetPath('images/common/profile.png'))
     this.load.image('menu', assetPath('images/ui/buttons/menu.png'))
+    this.load.image('menu-frame', assetPath('images/ui/buttons/meunframe.png'))
+    this.load.image('setting-frame', assetPath('images/ui/buttons/settingframe.png'))
+    this.load.image('settings-button', assetPath('images/ui/buttons/settingbutton.png'))
+    this.load.image('exit-button', assetPath('images/ui/buttons/exit button.png'))
     this.load.spritesheet('sehyun', assetPath('images/npcs/sehyun/sprite.png'), {
       frameWidth: 313,
       frameHeight: 313,
@@ -176,14 +184,23 @@ export class VillageScene extends Phaser.Scene {
     this.cameras.main.startFollow(this.player, true, 0.12, 0.12)
 
     this.cursors = this.input.keyboard!.createCursorKeys()
+    this.settingsMenu = createSettingsMenu(this, {
+      onLogout: () => this.logout(),
+    })
 
     this.input.keyboard!.on('keydown-ESC', () => {
       if (this.isDialogVisible) {
         this.hideDialog(true)
+        return
       }
+      this.settingsMenu.toggleButton()
     })
 
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      if (this.settingsMenu.isOpen()) {
+        return
+      }
+
       if (this.isDialogVisible) {
         const b = this.dialog.frame.getBounds()
         const outside =
@@ -207,7 +224,8 @@ export class VillageScene extends Phaser.Scene {
       cursors: this.cursors,
       target: this.target,
       lastDirection: this.lastDirection,
-      blocked: this.isDialogVisible,
+      speed: getPlayerMoveSpeed(),
+      blocked: this.isDialogVisible || this.settingsMenu.isOpen(),
     })
     this.target = movement.target
     this.lastDirection = movement.lastDirection
@@ -333,5 +351,14 @@ export class VillageScene extends Phaser.Scene {
     }
 
     fadeToScene(this, 'TaekwondoSelectScene', { duration: 250 })
+  }
+
+  private logout() {
+    clearDemoAuthToken()
+    this.settingsMenu.close()
+    this.isTransitioning = true
+    this.target = null
+    this.player.setVelocity(0, 0)
+    fadeToScene(this, 'StartScene', { duration: 250 })
   }
 }
