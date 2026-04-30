@@ -9,7 +9,7 @@ import { toPointerCoordinates } from '@/game/motion/pointerCoordinates'
 import { getPointerReference } from '@/game/motion/pointerReference'
 import { PointerSmoother } from '@/game/motion/pointerSmoother'
 import { PointerTrackingGuard } from '@/game/motion/pointerTrackingGuard'
-import { rumiContentDialogs, type RumiContentDialogStage } from '../dialog/rumiDialogs'
+import { createArtCameraPreview, type ArtCameraPreview } from '../ui/artCameraPreview'
 import { createArtConfirmDialog, type ArtConfirmDialog } from '../ui/artConfirmDialog'
 import { getColoringOption, coloringOptions, type ColoringOption } from './coloringOptions'
 
@@ -67,14 +67,12 @@ type ExportedColoringPng = {
 
 export class ArtColoringScene extends Phaser.Scene {
   private selectedOption: ColoringOption = coloringOptions[0]
-  private suppressIntroDialog = false
   private drawBounds = new Phaser.Geom.Rectangle()
   private coloringBaseBounds = new Phaser.Geom.Rectangle()
   private paletteBounds = new Phaser.Geom.Rectangle()
   private coloringTexture!: Phaser.GameObjects.RenderTexture
   private paletteSelection!: Phaser.GameObjects.Arc
-  private rumiBubble!: Phaser.GameObjects.Graphics
-  private rumiBubbleText!: Phaser.GameObjects.Text
+  private cameraPreview: ArtCameraPreview | null = null
   private brushCursor!: Phaser.GameObjects.Image
   private toolButtons: Partial<Record<ColoringTool, Phaser.GameObjects.Image>> = {}
   private toolButtonFrames: Partial<Record<ColoringTool, Phaser.GameObjects.Arc>> = {}
@@ -86,7 +84,6 @@ export class ArtColoringScene extends Phaser.Scene {
   private currentTool: ColoringTool = 'brush'
   private currentColor: number = PALETTE_SWATCHES[0].color
   private palettePoints: PalettePoint[] = []
-  private suppressStartupDialogs = false
   private handTracker: HandTracker | null = null
   private readonly handPointerSmoother = new PointerSmoother({ alpha: 0.38 })
   private readonly handTrackingGuard = new PointerTrackingGuard<Phaser.Math.Vector2>({
@@ -207,7 +204,6 @@ export class ArtColoringScene extends Phaser.Scene {
 
   init(data: ArtColoringSceneData = {}) {
     this.selectedOption = getColoringOption(data.coloringId)
-    this.suppressIntroDialog = Boolean(data.suppressIntroDialog)
     this.editingArtwork = data.editArtwork ?? null
   }
 
@@ -215,7 +211,6 @@ export class ArtColoringScene extends Phaser.Scene {
     this.load.image('art-room-background', assetPath('images/themes/art/background/background.png'))
     this.load.image('art-ui-canvas', assetPath('images/themes/art/ui/canvas.png'))
     this.load.image('art-ui-palette', assetPath('images/themes/art/ui/palette.png'))
-    this.load.image('art-ui-rumi', assetPath('images/themes/art/ui/rumi.png'))
     this.load.image('art-ui-brush', assetPath('images/themes/art/ui/brush.png'))
     this.load.image('art-ui-eraser', assetPath('images/themes/art/ui/eraser.png'))
     this.load.image('art-ui-delete-btn', assetPath('images/themes/art/ui/delete_btn.png'))
@@ -233,8 +228,8 @@ export class ArtColoringScene extends Phaser.Scene {
     this.hasStartedColoring = false
     this.strokeCount = 0
     this.handTrackingDisposed = false
-    this.suppressStartupDialogs = this.suppressIntroDialog
     this.currentTool = 'brush'
+    this.cameraPreview = null
     this.toolButtons = {}
     this.toolButtonFrames = {}
     this.toolButtonGlows = {}
@@ -274,13 +269,8 @@ export class ArtColoringScene extends Phaser.Scene {
     this.createPalette(vw, vh)
     this.createActionButtons()
     this.createToolSelector()
-    this.createRumiArea(vw, vh)
+    this.createCameraPreview(vw, vh)
     this.createBrushCursor()
-    if (this.suppressIntroDialog) {
-      this.setRumiBubbleVisible(false)
-    } else {
-      this.showRumiLine('intro')
-    }
 
     this.input.on('pointerdown', this.handlePointerDown)
     this.input.on('pointermove', this.handlePointerMove)
@@ -297,6 +287,8 @@ export class ArtColoringScene extends Phaser.Scene {
       this.input.setDefaultCursor('default')
       this.hideExitConfirm()
       this.hideSaveVisibilityConfirm()
+      this.cameraPreview?.destroy()
+      this.cameraPreview = null
       this.stopHandTracking()
     })
 
@@ -309,6 +301,7 @@ export class ArtColoringScene extends Phaser.Scene {
       this.brushCursor.setPosition(pointer.x, pointer.y)
     }
 
+    this.cameraPreview?.update()
     this.updateHandColoring(time)
   }
 
@@ -647,44 +640,26 @@ export class ArtColoringScene extends Phaser.Scene {
     this.refreshToolButtons()
   }
 
-  private createRumiArea(vw: number, vh: number) {
+  private createCameraPreview(vw: number, vh: number) {
     const panelCenterX = vw * 0.878
     const paletteHeight = Math.min(this.drawBounds.height * 0.88, vh * 0.41)
     const paletteBottom = this.drawBounds.top + 2 + paletteHeight
-    const bubbleWidth = Math.min(vw * 0.19, 320)
-    const bubbleHeight = Math.min(vh * 0.14, 148)
-    const bubbleX = panelCenterX
-    const bubbleY = Math.min(vh * 0.71, paletteBottom + bubbleHeight / 2 + 10)
-    const rumiHeight = Math.min(vh * 0.24, 252)
-    const rumiY = Math.min(
-      vh - rumiHeight / 2 - 10,
-      bubbleY + bubbleHeight / 2 + rumiHeight / 2 - 28,
-    )
+    const availableTop = paletteBottom + Math.max(10, vh * 0.012)
+    const availableBottom = vh - Math.max(14, vh * 0.018)
+    const availableHeight = Math.max(120, availableBottom - availableTop)
+    const panelWidth = Math.max(160, Math.min(vw * 0.21, 360, availableHeight * (4 / 3)))
+    const panelHeight = panelWidth * 0.75
+    const panelY = Math.min(availableBottom - panelHeight / 2, availableTop + panelHeight / 2)
 
-    this.rumiBubble = this.add.graphics().setDepth(8)
-    this.drawSpeechBubble(bubbleX, bubbleY, bubbleWidth, bubbleHeight)
-    this.rumiBubbleText = this.add
-      .text(bubbleX, bubbleY, '', {
-        fontFamily: 'sans-serif',
-        fontSize: `${Math.max(16, Math.round(vw * 0.01))}px`,
-        color: '#4e321f',
-        align: 'center',
-        wordWrap: { width: bubbleWidth - 42, useAdvancedWrap: true },
-        lineSpacing: 6,
-      })
-      .setDepth(9)
-      .setOrigin(0.5)
-
-    const rumi = this.add.image(panelCenterX, rumiY, 'art-ui-rumi').setDepth(8)
-    rumi.setDisplaySize(rumiHeight * (871 / 1024), rumiHeight)
-  }
-
-  private drawSpeechBubble(x: number, y: number, width: number, height: number) {
-    this.rumiBubble.clear()
-    this.rumiBubble.fillStyle(0xfff6e8, 0.96)
-    this.rumiBubble.lineStyle(4, 0x8f6c48, 1)
-    this.rumiBubble.fillRoundedRect(x - width / 2, y - height / 2, width, height, 22)
-    this.rumiBubble.strokeRoundedRect(x - width / 2, y - height / 2, width, height, 22)
+    this.cameraPreview = createArtCameraPreview(this, {
+      depth: 8,
+      getVideoElement: () => this.handTracker?.video ?? null,
+      height: panelHeight,
+      textureKey: `${this.scene.key}-camera-preview`,
+      width: panelWidth,
+      x: panelCenterX,
+      y: panelY,
+    })
   }
 
   private createBrushCursor() {
@@ -1122,27 +1097,11 @@ export class ArtColoringScene extends Phaser.Scene {
     return nearest
   }
 
-  private showRumiLine(stage: RumiContentDialogStage) {
-    const line = Phaser.Utils.Array.GetRandom(rumiContentDialogs.coloring[stage])
-    this.rumiBubbleText.setText(line.text)
-    this.setRumiBubbleVisible(true)
-  }
-
-  private setRumiBubbleVisible(visible: boolean) {
-    this.rumiBubble.setVisible(visible)
-    this.rumiBubbleText.setVisible(visible)
-  }
-
   private handleSuccessfulFill() {
     this.strokeCount += 1
 
     if (!this.hasStartedColoring) {
       this.hasStartedColoring = true
-      if (!this.suppressStartupDialogs) {
-        this.showRumiLine('first-action')
-      }
-    } else if (this.strokeCount % 4 === 0) {
-      this.showRumiLine('encourage')
     }
   }
 
@@ -1541,7 +1500,6 @@ export class ArtColoringScene extends Phaser.Scene {
     this.coloringTexture.clear()
     this.hasStartedColoring = false
     this.strokeCount = 0
-    this.showRumiLine('intro')
   }
 
   private requestSaveColoring() {
@@ -1590,13 +1548,11 @@ export class ArtColoringScene extends Phaser.Scene {
         })
       })
       .then(() => {
-        this.showRumiLine('complete')
         this.hasStartedColoring = false
         this.returnToArtRoom()
       })
       .catch(error => {
         console.error('Failed to save coloring artwork.', error)
-        this.showSaveError()
       })
       .finally(() => {
         this.isSavingColoring = false
@@ -1774,11 +1730,6 @@ export class ArtColoringScene extends Phaser.Scene {
     this.saveVisibilityConfirmDialog?.destroy()
     this.saveVisibilityConfirmDialog = null
     this.isSaveVisibilityConfirmOpen = false
-  }
-
-  private showSaveError() {
-    this.rumiBubbleText.setText('저장에 실패했어요. 잠시 후 다시 시도해줘.')
-    this.setRumiBubbleVisible(true)
   }
 
   private returnToArtRoom() {
