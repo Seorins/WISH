@@ -19,6 +19,8 @@ const DELETE_BUTTON_SIZE = { width: 344, height: 336 }
 const ART_ROOM_RETURN_SPAWN = { xRatio: 0.5, yRatio: 0.76 }
 const FILLABLE_WHITE_THRESHOLD = 245
 const HAND_FILL_COOLDOWN_MS = 320
+const HAND_FILL_HOLD_MS = 720
+const HAND_FILL_STILL_RADIUS = 58
 const EXIT_CONFIRM_DEPTH = 60
 type ColoringTool = 'brush' | 'eraser'
 const COLORING_TOOLS: ColoringTool[] = ['brush', 'eraser']
@@ -74,6 +76,7 @@ export class ArtColoringScene extends Phaser.Scene {
   private paletteSelection!: Phaser.GameObjects.Arc
   private cameraPreview: ArtCameraPreview | null = null
   private brushCursor!: Phaser.GameObjects.Image
+  private handFillGauge: Phaser.GameObjects.Graphics | null = null
   private toolButtons: Partial<Record<ColoringTool, Phaser.GameObjects.Image>> = {}
   private toolButtonFrames: Partial<Record<ColoringTool, Phaser.GameObjects.Arc>> = {}
   private toolButtonGlows: Partial<Record<ColoringTool, Phaser.GameObjects.Image>> = {}
@@ -116,6 +119,10 @@ export class ArtColoringScene extends Phaser.Scene {
   private activatedHandAction: HandActionKind | null = null
   private lastHandFillRegionId: number | null = null
   private lastHandFillAt = 0
+  private pendingHandFillRegionId: number | null = null
+  private pendingHandFillStartedAt = 0
+  private readonly pendingHandFillPoint = new Phaser.Math.Vector2()
+  private pendingHandFillColor: number | null = null
   private isSavingColoring = false
   private isExitConfirmOpen = false
   private exitConfirmDialog: ArtConfirmDialog | null = null
@@ -236,6 +243,11 @@ export class ArtColoringScene extends Phaser.Scene {
     this.toolButtonBaseScales = {}
     this.lastHandFillRegionId = null
     this.lastHandFillAt = 0
+    this.pendingHandFillRegionId = null
+    this.pendingHandFillStartedAt = 0
+    this.pendingHandFillPoint.set(0, 0)
+    this.pendingHandFillColor = null
+    this.handFillGauge = null
     this.pendingHandTool = null
     this.pendingHandToolStartedAt = 0
     this.lastHandToolSelectedAt = 0
@@ -271,6 +283,7 @@ export class ArtColoringScene extends Phaser.Scene {
     this.createToolSelector()
     this.createCameraPreview(vw, vh)
     this.createBrushCursor()
+    this.createHandFillGauge()
 
     this.input.on('pointerdown', this.handlePointerDown)
     this.input.on('pointermove', this.handlePointerMove)
@@ -669,8 +682,14 @@ export class ArtColoringScene extends Phaser.Scene {
     this.updateBrushCursorTexture()
   }
 
+  private createHandFillGauge() {
+    this.handFillGauge = this.add.graphics().setDepth(21).setVisible(false)
+    this.handFillGauge.setScrollFactor(0)
+  }
+
   private setColoringTool(tool: ColoringTool) {
     this.currentTool = tool
+    this.resetHandFillState()
     this.clearPendingHandTool()
     this.refreshToolButtons()
     this.updateBrushCursorTexture()
@@ -769,11 +788,11 @@ export class ArtColoringScene extends Phaser.Scene {
     this.clearPendingHandAction()
     this.clearPendingHandColor()
     this.clearPendingHandTool()
+    this.resetHandFillState()
     this.handPointerSmoother.reset()
     this.handTrackingGuard.reset()
     this.handTracker?.stop()
     this.handTracker = null
-    this.lastHandFillRegionId = null
   }
 
   private updateHandColoring(timestampMs: number) {
@@ -786,6 +805,7 @@ export class ArtColoringScene extends Phaser.Scene {
       this.isExitConfirmOpen ||
       this.isSaveVisibilityConfirmOpen
     ) {
+      this.clearPendingHandFill()
       return
     }
 
@@ -795,49 +815,50 @@ export class ArtColoringScene extends Phaser.Scene {
 
     if (tracking.shouldResetSmoother) {
       this.handPointerSmoother.reset()
-      this.lastHandFillRegionId = null
+      this.resetHandFillState()
     }
 
     if (!tracking.point) {
       this.clearPendingHandAction()
       this.clearPendingHandTool()
-      this.lastHandFillRegionId = null
+      this.resetHandFillState()
       return
     }
 
     const smoothedPoint = this.handPointerSmoother.smooth(tracking.point)
     this.brushCursor?.setPosition(smoothedPoint.x, smoothedPoint.y)
 
-    if (tracking.status !== 'tracked') {
-      return
-    }
-
-    if (!handState?.isColoringGesture) {
+    const isTrackedFrame = tracking.status === 'tracked'
+    if (isTrackedFrame && !handState?.isColoringGesture) {
       this.clearPendingHandAction()
       this.clearPendingHandTool()
-      this.lastHandFillRegionId = null
+      this.resetHandFillState()
       return
     }
 
-    if (this.tryActivateActionButtonFromHand(smoothedPoint, result.timestampMs)) {
-      this.lastHandFillRegionId = null
-      this.clearPendingHandTool()
-      return
-    }
+    if (isTrackedFrame) {
+      if (this.tryActivateActionButtonFromHand(smoothedPoint, result.timestampMs)) {
+        this.resetHandFillState()
+        this.clearPendingHandTool()
+        return
+      }
 
-    if (this.trySelectToolFromHand(smoothedPoint, result.timestampMs)) {
-      this.lastHandFillRegionId = null
-      return
-    }
+      if (this.trySelectToolFromHand(smoothedPoint, result.timestampMs)) {
+        this.resetHandFillState()
+        return
+      }
 
-    if (this.trySelectColorFromHand(smoothedPoint, result.timestampMs)) {
-      this.lastHandFillRegionId = null
-      this.clearPendingHandTool()
+      if (this.trySelectColorFromHand(smoothedPoint, result.timestampMs)) {
+        this.resetHandFillState()
+        this.clearPendingHandTool()
+        return
+      }
+    } else if (this.pendingHandFillRegionId === null) {
       return
     }
 
     if (!Phaser.Geom.Rectangle.Contains(this.drawBounds, smoothedPoint.x, smoothedPoint.y)) {
-      this.lastHandFillRegionId = null
+      this.resetHandFillState()
       return
     }
 
@@ -1032,6 +1053,20 @@ export class ArtColoringScene extends Phaser.Scene {
     this.pendingHandColorStartedAt = 0
   }
 
+  private resetHandFillState() {
+    this.clearPendingHandFill()
+    this.lastHandFillRegionId = null
+    this.lastHandFillAt = 0
+  }
+
+  private clearPendingHandFill() {
+    this.pendingHandFillRegionId = null
+    this.pendingHandFillStartedAt = 0
+    this.pendingHandFillColor = null
+    this.handFillGauge?.clear()
+    this.handFillGauge?.setVisible(false)
+  }
+
   private tryFillFromHand(
     point: Phaser.Math.Vector2,
     timestampMs: number,
@@ -1039,22 +1074,89 @@ export class ArtColoringScene extends Phaser.Scene {
   ) {
     const regionId = this.getRegionIdAt(point.x, point.y)
     if (regionId < 0) {
-      this.lastHandFillRegionId = null
+      this.resetHandFillState()
       return
     }
 
-    if (
-      this.lastHandFillRegionId === regionId ||
-      timestampMs - this.lastHandFillAt < HAND_FILL_COOLDOWN_MS
-    ) {
+    if (this.lastHandFillRegionId === regionId) {
+      this.clearPendingHandFill()
+      return
+    }
+
+    if (this.lastHandFillAt > 0 && timestampMs - this.lastHandFillAt < HAND_FILL_COOLDOWN_MS) {
+      this.clearPendingHandFill()
+      return
+    }
+
+    if (this.pendingHandFillRegionId !== regionId || this.pendingHandFillColor !== color) {
+      this.startPendingHandFill(regionId, point, timestampMs, color)
+      return
+    }
+
+    const movedDistance = Phaser.Math.Distance.Between(
+      point.x,
+      point.y,
+      this.pendingHandFillPoint.x,
+      this.pendingHandFillPoint.y,
+    )
+    if (movedDistance > HAND_FILL_STILL_RADIUS) {
+      this.startPendingHandFill(regionId, point, timestampMs, color)
+      return
+    }
+
+    const progress = Phaser.Math.Clamp(
+      (timestampMs - this.pendingHandFillStartedAt) / HAND_FILL_HOLD_MS,
+      0,
+      1,
+    )
+    this.drawHandFillGauge(point, progress, color)
+    if (progress < 1) {
       return
     }
 
     this.lastHandFillRegionId = regionId
     this.lastHandFillAt = timestampMs
+    this.clearPendingHandFill()
     if (this.fillRegionById(regionId, color)) {
       this.handleSuccessfulFill()
     }
+  }
+
+  private startPendingHandFill(
+    regionId: number,
+    point: Phaser.Math.Vector2,
+    timestampMs: number,
+    color: number,
+  ) {
+    this.pendingHandFillRegionId = regionId
+    this.pendingHandFillStartedAt = timestampMs
+    this.pendingHandFillPoint.copy(point)
+    this.pendingHandFillColor = color
+    this.drawHandFillGauge(point, 0, color)
+  }
+
+  private drawHandFillGauge(point: Phaser.Math.Vector2, progress: number, color: number) {
+    const gauge = this.handFillGauge
+    if (!gauge) {
+      return
+    }
+
+    const radius = Math.max(24, Math.min(38, Math.round(this.drawBounds.width * 0.032)))
+    const lineWidth = Math.max(4, Math.round(radius * 0.14))
+    const startAngle = -Math.PI / 2
+    const endAngle = startAngle + Math.PI * 2 * Phaser.Math.Clamp(progress, 0, 1)
+    const progressColor = this.currentTool === 'eraser' ? 0xfffbf1 : color
+
+    gauge.clear()
+    gauge.setVisible(true)
+    gauge.lineStyle(lineWidth + 4, 0x3f220c, 0.2)
+    gauge.strokeCircle(point.x, point.y, radius)
+    gauge.lineStyle(lineWidth, 0xffffff, 0.78)
+    gauge.strokeCircle(point.x, point.y, radius)
+    gauge.lineStyle(lineWidth, progressColor, 1)
+    gauge.beginPath()
+    gauge.arc(point.x, point.y, radius, startAngle, endAngle, false)
+    gauge.strokePath()
   }
 
   private applyActionButtonEffect(
@@ -1494,8 +1596,7 @@ export class ArtColoringScene extends Phaser.Scene {
     this.clearPendingHandTool()
     this.handPointerSmoother.reset()
     this.handTrackingGuard.reset()
-    this.lastHandFillRegionId = null
-    this.lastHandFillAt = 0
+    this.resetHandFillState()
     this.filledRegionColorById?.fill(-1)
     this.coloringTexture.clear()
     this.hasStartedColoring = false
