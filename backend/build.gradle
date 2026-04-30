@@ -26,6 +26,7 @@ dependencies {
     // flyway-core 만 넣으면 Flyway 가 기동되지 않는다. flyway-database-postgresql 은
     // Flyway 10+ 에서 DB 벤더 구현이 분리됐기 때문에 런타임에 필요.
     implementation 'org.springframework.boot:spring-boot-flyway'
+    implementation 'io.micrometer:micrometer-registry-prometheus'
     runtimeOnly 'org.flywaydb:flyway-database-postgresql'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
     implementation 'org.springframework.boot:spring-boot-starter-webmvc'
