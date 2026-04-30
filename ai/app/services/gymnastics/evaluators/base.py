@@ -31,6 +31,9 @@ class EvaluatorResult:
     representative_feedback_code: str | None = None
     representative_feedback_text: str | None = None
     representative_feedback_frames: int = 0
+    baseline_left_step_extent: float | None = None
+    baseline_right_step_extent: float | None = None
+    baseline_ankle_span: float | None = None
 
 
 class BaseEvaluator(ABC):
@@ -60,5 +63,8 @@ class BaseEvaluator(ABC):
         representative_feedback_code: str | None = None,
         representative_feedback_text: str | None = None,
         representative_feedback_frames: int = 0,
+        baseline_left_step_extent: float | None = None,
+        baseline_right_step_extent: float | None = None,
+        baseline_ankle_span: float | None = None,
     ) -> EvaluatorResult:
         raise NotImplementedError
