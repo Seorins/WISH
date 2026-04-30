@@ -30,6 +30,10 @@ type MarchApiResponse = {
   candidate_feedback_code: string | null
   candidate_feedback_text: string | null
   candidate_feedback_streak: number
+  representative_feedback_totals: Record<string, number>
+  representative_feedback_code: string | null
+  representative_feedback_text: string | null
+  representative_feedback_frames: number
   features: {
     left_knee_lift: number
     right_knee_lift: number
@@ -76,6 +80,10 @@ function MarchDebugPage() {
   const candidateFeedbackCodeRef = useRef<string | null>(null)
   const candidateFeedbackTextRef = useRef<string | null>(null)
   const candidateFeedbackStreakRef = useRef(0)
+  const representativeFeedbackTotalsRef = useRef<Record<string, number>>({})
+  const representativeFeedbackCodeRef = useRef<string | null>(null)
+  const representativeFeedbackTextRef = useRef<string | null>(null)
+  const representativeFeedbackFramesRef = useRef(0)
 
   const [aiBaseUrl, setAiBaseUrl] = useState(DEFAULT_AI_BASE_URL)
   const [running, setRunning] = useState(false)
@@ -106,6 +114,10 @@ function MarchDebugPage() {
     candidateFeedbackCodeRef.current = null
     candidateFeedbackTextRef.current = null
     candidateFeedbackStreakRef.current = 0
+    representativeFeedbackTotalsRef.current = {}
+    representativeFeedbackCodeRef.current = null
+    representativeFeedbackTextRef.current = null
+    representativeFeedbackFramesRef.current = 0
     setResult(null)
     setStateLogs([])
   }
@@ -171,6 +183,10 @@ function MarchDebugPage() {
                 candidate_feedback_code: candidateFeedbackCodeRef.current,
                 candidate_feedback_text: candidateFeedbackTextRef.current,
                 candidate_feedback_streak: candidateFeedbackStreakRef.current,
+                representative_feedback_totals: representativeFeedbackTotalsRef.current,
+                representative_feedback_code: representativeFeedbackCodeRef.current,
+                representative_feedback_text: representativeFeedbackTextRef.current,
+                representative_feedback_frames: representativeFeedbackFramesRef.current,
               }),
             })
 
@@ -212,6 +228,10 @@ function MarchDebugPage() {
             candidateFeedbackCodeRef.current = payload.candidate_feedback_code
             candidateFeedbackTextRef.current = payload.candidate_feedback_text
             candidateFeedbackStreakRef.current = payload.candidate_feedback_streak
+            representativeFeedbackTotalsRef.current = payload.representative_feedback_totals
+            representativeFeedbackCodeRef.current = payload.representative_feedback_code
+            representativeFeedbackTextRef.current = payload.representative_feedback_text
+            representativeFeedbackFramesRef.current = payload.representative_feedback_frames
             setResult(payload)
             setStatus(payload.feedback ?? 'Running normally')
           } catch (fetchError) {
@@ -352,6 +372,14 @@ function MarchDebugPage() {
           <InfoRow label="stepCount" value={String(result?.step_count ?? 0)} />
           <InfoRow label="accuracy" value={String(result?.accuracy ?? '-')} />
           <InfoRow label="feedback" value={result?.feedback ?? '-'} />
+          <InfoRow
+            label="representativeFeedback"
+            value={result?.representative_feedback_text ?? '-'}
+          />
+          <InfoRow
+            label="representativeFeedbackFrames"
+            value={String(result?.representative_feedback_frames ?? 0)}
+          />
           <InfoRow
             label="displayedFeedbackFrames"
             value={String(result?.displayed_feedback_frames ?? 0)}

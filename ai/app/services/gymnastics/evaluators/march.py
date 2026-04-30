@@ -17,8 +17,10 @@ from app.services.gymnastics.evaluators.base import BaseEvaluator, EvaluatorResu
 from app.services.gymnastics.features.march_features import MarchFeatureSet, extract_march_features
 from app.services.gymnastics.feedback import (
     FeedbackStabilizerState,
+    RepresentativeFeedbackState,
     select_march_feedback_candidate,
     stabilize_feedback,
+    update_representative_feedback,
 )
 from app.services.gymnastics.types import NormalizedPoseFrame
 
@@ -62,6 +64,10 @@ class MarchEvaluator(BaseEvaluator):
         candidate_feedback_code: str | None = None,
         candidate_feedback_text: str | None = None,
         candidate_feedback_streak: int = 0,
+        representative_feedback_totals: dict[str, int] | None = None,
+        representative_feedback_code: str | None = None,
+        representative_feedback_text: str | None = None,
+        representative_feedback_frames: int = 0,
     ) -> EvaluatorResult:
         effective_target = target_steps or self.config.target_steps
 
@@ -89,6 +95,12 @@ class MarchEvaluator(BaseEvaluator):
             candidate_text=candidate_feedback_text,
             candidate_streak=candidate_feedback_streak,
         )
+        previous_representative_state = RepresentativeFeedbackState(
+            totals=dict(representative_feedback_totals or {}),
+            representative_code=representative_feedback_code,
+            representative_text=representative_feedback_text,
+            representative_frames=representative_feedback_frames,
+        )
 
         if frame.tracking != "tracking_ok":
             next_feedback_state = self._stabilize_feedback(
@@ -96,6 +108,10 @@ class MarchEvaluator(BaseEvaluator):
                 state=previous_state,
                 tracking=frame.tracking,
                 previous_feedback_state=previous_feedback_state,
+            )
+            next_representative_state = self._update_representative_feedback(
+                feedback_state=next_feedback_state,
+                previous_representative_state=previous_representative_state,
             )
             return self._make_result(
                 state=previous_state,
@@ -110,6 +126,7 @@ class MarchEvaluator(BaseEvaluator):
                 reference_hip_y=next_reference_hip_y,
                 reference_scale=next_reference_scale,
                 feedback_state=next_feedback_state,
+                representative_state=next_representative_state,
             )
 
         if next_reference_hip_x is None or next_reference_hip_y is None or next_reference_scale is None:
@@ -118,6 +135,10 @@ class MarchEvaluator(BaseEvaluator):
                 state="idle",
                 tracking=frame.tracking,
                 previous_feedback_state=previous_feedback_state,
+            )
+            next_representative_state = self._update_representative_feedback(
+                feedback_state=next_feedback_state,
+                previous_representative_state=previous_representative_state,
             )
             return self._make_result(
                 state="idle",
@@ -132,6 +153,7 @@ class MarchEvaluator(BaseEvaluator):
                 reference_hip_y=next_reference_hip_y,
                 reference_scale=next_reference_scale,
                 feedback_state=next_feedback_state,
+                representative_state=next_representative_state,
             )
 
         next_left_armed = left_armed or features.left_thigh_angle <= self.config.release_threshold
@@ -167,6 +189,10 @@ class MarchEvaluator(BaseEvaluator):
             tracking=frame.tracking,
             previous_feedback_state=previous_feedback_state,
         )
+        next_representative_state = self._update_representative_feedback(
+            feedback_state=next_feedback_state,
+            previous_representative_state=previous_representative_state,
+        )
 
         return self._make_result(
             state=next_state,
@@ -181,6 +207,7 @@ class MarchEvaluator(BaseEvaluator):
             reference_hip_y=next_reference_hip_y,
             reference_scale=next_reference_scale,
             feedback_state=next_feedback_state,
+            representative_state=next_representative_state,
         )
 
     def _resolve_next_state(self, features: MarchFeatureSet) -> str:
@@ -293,6 +320,7 @@ class MarchEvaluator(BaseEvaluator):
         reference_hip_y: float | None,
         reference_scale: float | None,
         feedback_state: FeedbackStabilizerState,
+        representative_state: RepresentativeFeedbackState,
     ) -> EvaluatorResult:
         return EvaluatorResult(
             motion_id=self.motion_id,
@@ -314,4 +342,19 @@ class MarchEvaluator(BaseEvaluator):
             candidate_feedback_code=feedback_state.candidate_code,
             candidate_feedback_text=feedback_state.candidate_text,
             candidate_feedback_streak=feedback_state.candidate_streak,
+            representative_feedback_totals=representative_state.totals,
+            representative_feedback_code=representative_state.representative_code,
+            representative_feedback_text=representative_state.representative_text,
+            representative_feedback_frames=representative_state.representative_frames,
+        )
+
+    def _update_representative_feedback(
+        self,
+        feedback_state: FeedbackStabilizerState,
+        previous_representative_state: RepresentativeFeedbackState,
+    ) -> RepresentativeFeedbackState:
+        return update_representative_feedback(
+            displayed_code=feedback_state.displayed_code,
+            displayed_text=feedback_state.displayed_text,
+            state=previous_representative_state,
         )

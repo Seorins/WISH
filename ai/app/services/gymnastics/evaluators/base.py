@@ -27,6 +27,10 @@ class EvaluatorResult:
     candidate_feedback_code: str | None = None
     candidate_feedback_text: str | None = None
     candidate_feedback_streak: int = 0
+    representative_feedback_totals: dict[str, int] | None = None
+    representative_feedback_code: str | None = None
+    representative_feedback_text: str | None = None
+    representative_feedback_frames: int = 0
 
 
 class BaseEvaluator(ABC):
@@ -52,5 +56,9 @@ class BaseEvaluator(ABC):
         candidate_feedback_code: str | None = None,
         candidate_feedback_text: str | None = None,
         candidate_feedback_streak: int = 0,
+        representative_feedback_totals: dict[str, int] | None = None,
+        representative_feedback_code: str | None = None,
+        representative_feedback_text: str | None = None,
+        representative_feedback_frames: int = 0,
     ) -> EvaluatorResult:
         raise NotImplementedError

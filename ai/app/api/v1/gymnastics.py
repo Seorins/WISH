@@ -53,6 +53,10 @@ def evaluate_march(payload: MarchEvaluationRequest) -> MarchEvaluationResponse:
         candidate_feedback_code=payload.candidate_feedback_code,
         candidate_feedback_text=payload.candidate_feedback_text,
         candidate_feedback_streak=payload.candidate_feedback_streak,
+        representative_feedback_totals=payload.representative_feedback_totals,
+        representative_feedback_code=payload.representative_feedback_code,
+        representative_feedback_text=payload.representative_feedback_text,
+        representative_feedback_frames=payload.representative_feedback_frames,
     )
     features = extract_march_features(
         normalized,
@@ -81,6 +85,10 @@ def evaluate_march(payload: MarchEvaluationRequest) -> MarchEvaluationResponse:
         candidate_feedback_code=result.candidate_feedback_code,
         candidate_feedback_text=result.candidate_feedback_text,
         candidate_feedback_streak=result.candidate_feedback_streak,
+        representative_feedback_totals=result.representative_feedback_totals or {},
+        representative_feedback_code=result.representative_feedback_code,
+        representative_feedback_text=result.representative_feedback_text,
+        representative_feedback_frames=result.representative_feedback_frames,
         features=MarchFeaturesResponse(
             left_knee_lift=features.left_knee_lift,
             right_knee_lift=features.right_knee_lift,
