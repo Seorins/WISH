@@ -32,6 +32,10 @@ export function ensureDemoAuthToken() {
   return pendingDemoAuth
 }
 
+export function clearDemoAuthToken() {
+  localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY)
+}
+
 function isUsableJwt(token: string) {
   const [, payload] = token.split('.')
   if (!payload) return false

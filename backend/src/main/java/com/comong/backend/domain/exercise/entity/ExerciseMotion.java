@@ -23,14 +23,14 @@ import lombok.NoArgsConstructor;
 @Entity
 @Getter
 @Table(
-        name = "motion",
+        name = "exercise_motion",
         uniqueConstraints = {
             @UniqueConstraint(
-                    name = "uk_motion_exercise_type_routine_order",
+                    name = "uk_exercise_motion_exercise_type_routine_order",
                     columnNames = {"exercise_type", "routine_order"})
         })
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class Motion {
+public class ExerciseMotion {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -65,7 +65,7 @@ public class Motion {
     private LocalDateTime updatedAt;
 
     @Builder
-    private Motion(
+    private ExerciseMotion(
             ExerciseType exerciseType,
             String name,
             int routineOrder,
@@ -82,6 +82,30 @@ public class Motion {
         this.description = Objects.requireNonNull(description, "description must not be null");
         this.demoVideoUrl = demoVideoUrl;
         this.thumbnailUrl = thumbnailUrl;
+    }
+
+    public void update(
+            String name,
+            Integer targetReps,
+            String description,
+            String demoVideoUrl,
+            String thumbnailUrl) {
+        if (name != null) {
+            this.name = name;
+        }
+        if (targetReps != null) {
+            validatePositive(targetReps, "targetReps");
+            this.targetReps = targetReps;
+        }
+        if (description != null) {
+            this.description = description;
+        }
+        if (demoVideoUrl != null) {
+            this.demoVideoUrl = demoVideoUrl;
+        }
+        if (thumbnailUrl != null) {
+            this.thumbnailUrl = thumbnailUrl;
+        }
     }
 
     @PrePersist

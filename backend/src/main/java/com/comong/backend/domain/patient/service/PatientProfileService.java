@@ -127,7 +127,7 @@ public class PatientProfileService {
      * 존재하지 않거나 본인 소유가 아닌 경우 모두 404. 403 을 반환하면 "ID 는 존재한다" 는 사실이 유출되어 순차 PK 를 enumerate 하는 공격자에게 ID
      * 공간 밀도를 알려줄 수 있기 때문.
      */
-    private PatientProfile findOwnedOrThrow(Long userId, Long profileId) {
+    public PatientProfile findOwnedOrThrow(Long userId, Long profileId) {
         return patientProfileRepository
                 .findById(profileId)
                 .filter(p -> p.getUser().getId().equals(userId))

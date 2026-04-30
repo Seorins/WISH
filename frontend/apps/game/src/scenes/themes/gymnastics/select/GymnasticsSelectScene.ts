@@ -11,6 +11,7 @@ import {
   updatePlayerMovement,
 } from '@/game/entities/player'
 import { fadeToScene } from '@/game/systems/sceneTransition'
+import { getPlayerMoveSpeed } from '@/game/settings/gameSettings'
 import {
   createFloatingInteractionIcon,
   loadInteractionIcons,
@@ -183,6 +184,7 @@ export class GymnasticsSelectScene extends Phaser.Scene {
       cursors: this.cursors,
       target: this.target,
       lastDirection: this.lastDirection,
+      speed: getPlayerMoveSpeed(),
       blocked: this.isDialogVisible,
     })
     this.target = movement.target
@@ -400,7 +402,18 @@ export class GymnasticsSelectScene extends Phaser.Scene {
 
     hitArea.on('pointerover', () => bg.setAlpha(0.85))
     hitArea.on('pointerout', () => bg.setAlpha(1))
-    hitArea.on('pointerdown', () => this.closeContentSelection())
+    hitArea.on(
+      'pointerdown',
+      (
+        _pointer: Phaser.Input.Pointer,
+        _localX: number,
+        _localY: number,
+        event: Phaser.Types.Input.EventData,
+      ) => {
+        event.stopPropagation()
+        this.closeContentSelection()
+      },
+    )
 
     return this.add
       .container(x, y, [bg, label, hitArea])
@@ -416,7 +429,18 @@ export class GymnasticsSelectScene extends Phaser.Scene {
     card.setInteractive({ useHandCursor: true })
     card.on('pointerover', () => card.setScale(baseScaleX * 1.03, baseScaleY * 1.03))
     card.on('pointerout', () => card.setScale(baseScaleX, baseScaleY))
-    card.on('pointerdown', onClick)
+    card.on(
+      'pointerdown',
+      (
+        _pointer: Phaser.Input.Pointer,
+        _localX: number,
+        _localY: number,
+        event: Phaser.Types.Input.EventData,
+      ) => {
+        event.stopPropagation()
+        onClick()
+      },
+    )
   }
 
   private selectContent(mode: 'top' | 'daniel') {
