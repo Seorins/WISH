@@ -59,7 +59,12 @@ public class SecurityConfig {
      * 경로를 분리하면 이 동적 추가도 제거한다.
      */
     private static final String[] STATIC_PUBLIC_ENDPOINTS = {
-        "/auth/**", "/actuator/health", "/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**"
+        "/auth/**",
+        "/actuator/health",
+        "/actuator/prometheus",
+        "/v3/api-docs/**",
+        "/swagger-ui.html",
+        "/swagger-ui/**"
     };
 
     @Bean
