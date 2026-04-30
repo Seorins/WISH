@@ -465,7 +465,7 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
         event: Phaser.Types.Input.EventData,
       ) => {
         event.stopPropagation()
-        const nearest = this.getNearestPaletteColor(pointer.x, pointer.y)
+        const nearest = this.getPaletteColorAt(pointer.x, pointer.y)
         if (nearest !== null) {
           this.selectColor(nearest.color, nearest.x, nearest.y)
         }
@@ -1010,14 +1010,8 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
   }
 
   private trySelectColorFromHand(point: Phaser.Math.Vector2, timestampMs: number) {
-    const nearest = this.getNearestPaletteColor(point.x, point.y)
+    const nearest = this.getPaletteColorAt(point.x, point.y)
     if (!nearest) {
-      return false
-    }
-
-    const distance = Phaser.Math.Distance.Between(point.x, point.y, nearest.x, nearest.y)
-    const hitRadius = Math.max(24, Math.min(this.scale.width, this.scale.height) * 0.034)
-    if (distance > hitRadius) {
       this.clearPendingHandColor()
       return false
     }
@@ -1052,6 +1046,24 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
     this.currentColor = color
     this.setDrawingTool('brush')
     this.paletteSelection.setVisible(false)
+  }
+
+  private getPaletteColorAt(x: number, y: number): PalettePoint | null {
+    const nearest = this.getNearestPaletteColor(x, y)
+    if (!nearest) {
+      return null
+    }
+
+    const distance = Phaser.Math.Distance.Between(x, y, nearest.x, nearest.y)
+    if (distance > this.getPaletteHitRadius()) {
+      return null
+    }
+
+    return nearest
+  }
+
+  private getPaletteHitRadius() {
+    return Math.max(24, Math.min(this.scale.width, this.scale.height) * 0.034)
   }
 
   private getNearestPaletteColor(x: number, y: number): PalettePoint | null {

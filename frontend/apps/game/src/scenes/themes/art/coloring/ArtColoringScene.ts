@@ -75,7 +75,7 @@ export class ArtColoringScene extends Phaser.Scene {
   private coloringTexture!: Phaser.GameObjects.RenderTexture
   private paletteSelection!: Phaser.GameObjects.Arc
   private cameraPreview: ArtCameraPreview | null = null
-  private brushCursor!: Phaser.GameObjects.Image
+  private brushCursor: Phaser.GameObjects.Image | null = null
   private handFillGauge: Phaser.GameObjects.Graphics | null = null
   private toolButtons: Partial<Record<ColoringTool, Phaser.GameObjects.Image>> = {}
   private toolButtonFrames: Partial<Record<ColoringTool, Phaser.GameObjects.Arc>> = {}
@@ -236,6 +236,7 @@ export class ArtColoringScene extends Phaser.Scene {
     this.strokeCount = 0
     this.handTrackingDisposed = false
     this.currentTool = 'brush'
+    this.brushCursor = null
     this.cameraPreview = null
     this.toolButtons = {}
     this.toolButtonFrames = {}
@@ -303,6 +304,7 @@ export class ArtColoringScene extends Phaser.Scene {
       this.cameraPreview?.destroy()
       this.cameraPreview = null
       this.stopHandTracking()
+      this.brushCursor = null
     })
 
     this.cameras.main.fadeIn(220, 0, 0, 0)
@@ -727,20 +729,21 @@ export class ArtColoringScene extends Phaser.Scene {
   }
 
   private updateBrushCursorTexture() {
-    if (!this.brushCursor) {
+    const brushCursor = this.brushCursor
+    if (!brushCursor || !brushCursor.scene || !brushCursor.active) {
       return
     }
 
     if (this.currentTool === 'eraser') {
-      this.brushCursor.setTexture('art-ui-eraser')
-      this.brushCursor.setDisplaySize(54, 54)
-      this.brushCursor.setOrigin(0.5, 0.5)
+      brushCursor.setTexture('art-ui-eraser')
+      brushCursor.setDisplaySize(54, 54)
+      brushCursor.setOrigin(0.5, 0.5)
       return
     }
 
-    this.brushCursor.setTexture('art-ui-brush')
-    this.brushCursor.setDisplaySize(48, 48)
-    this.brushCursor.setOrigin(0.18, 0.88)
+    brushCursor.setTexture('art-ui-brush')
+    brushCursor.setDisplaySize(48, 48)
+    brushCursor.setOrigin(0.18, 0.88)
   }
 
   private startHandColoringMode(delegate: 'GPU' | 'CPU' = 'GPU') {
