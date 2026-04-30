@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, HTTPException
 
 from app.schemas.gymnastics import (
@@ -18,6 +20,7 @@ from app.services.gymnastics.summary import build_march_motion_summary
 from app.services.gymnastics.types import NormalizedPoseFrame
 
 router = APIRouter(prefix="/gymnastics", tags=["gymnastics"])
+logger = logging.getLogger(__name__)
 
 normalizer = PoseNormalizer()
 march_evaluator = MarchEvaluator()
@@ -106,7 +109,16 @@ def summarize_march(payload: MarchSummaryRequest) -> MarchSummaryResponse:
             state=payload.state,
         )
     except ValueError as exc:
+        logger.warning(
+            "Invalid march summary request: started_at=%s ended_at=%s detail=%s",
+            payload.started_at,
+            payload.ended_at,
+            exc,
+        )
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception:
+        logger.exception("Unexpected error while building march summary")
+        raise
 
     return MarchSummaryResponse(
         motionId=summary.motion_id,
