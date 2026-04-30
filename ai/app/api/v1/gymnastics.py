@@ -112,42 +112,49 @@ def evaluate_march(payload: MarchEvaluationRequest) -> MarchEvaluationResponse:
 
 @router.post("/side-step/evaluate", response_model=SideStepEvaluationResponse)
 def evaluate_side_step(payload: SideStepEvaluationRequest) -> SideStepEvaluationResponse:
-    normalized = normalizer.normalize(payload.frame)
-    result = side_step_evaluator.evaluate(
-        frame=normalized,
-        previous_state=payload.previous_state,
-        step_count=payload.step_count,
-        target_steps=payload.target_steps,
-        last_counted_side=payload.last_counted_side,
-        last_seen_side=payload.last_seen_side,
-        left_armed=payload.left_armed,
-        right_armed=payload.right_armed,
-        reference_hip_x=payload.reference_hip_x,
-        reference_hip_y=payload.reference_hip_y,
-        reference_scale=payload.reference_scale,
-        displayed_feedback_code=payload.displayed_feedback_code,
-        displayed_feedback_text=payload.displayed_feedback_text,
-        displayed_feedback_frames=payload.displayed_feedback_frames,
-        candidate_feedback_code=payload.candidate_feedback_code,
-        candidate_feedback_text=payload.candidate_feedback_text,
-        candidate_feedback_streak=payload.candidate_feedback_streak,
-        representative_feedback_totals=payload.representative_feedback_totals,
-        representative_feedback_code=payload.representative_feedback_code,
-        representative_feedback_text=payload.representative_feedback_text,
-        representative_feedback_frames=payload.representative_feedback_frames,
-        baseline_left_step_extent=payload.baseline_left_step_extent,
-        baseline_right_step_extent=payload.baseline_right_step_extent,
-        baseline_ankle_span=payload.baseline_ankle_span,
-    )
-    features = extract_side_step_features(
-        normalized,
-        reference_hip_x=result.reference_hip_x,
-        reference_hip_y=result.reference_hip_y,
-        reference_scale=result.reference_scale,
-        baseline_left_step_extent=result.baseline_left_step_extent,
-        baseline_right_step_extent=result.baseline_right_step_extent,
-        baseline_ankle_span=result.baseline_ankle_span,
-    )
+    try:
+        normalized = normalizer.normalize(payload.frame)
+        result = side_step_evaluator.evaluate(
+            frame=normalized,
+            previous_state=payload.previous_state,
+            step_count=payload.step_count,
+            target_steps=payload.target_steps,
+            last_counted_side=payload.last_counted_side,
+            last_seen_side=payload.last_seen_side,
+            left_armed=payload.left_armed,
+            right_armed=payload.right_armed,
+            reference_hip_x=payload.reference_hip_x,
+            reference_hip_y=payload.reference_hip_y,
+            reference_scale=payload.reference_scale,
+            displayed_feedback_code=payload.displayed_feedback_code,
+            displayed_feedback_text=payload.displayed_feedback_text,
+            displayed_feedback_frames=payload.displayed_feedback_frames,
+            candidate_feedback_code=payload.candidate_feedback_code,
+            candidate_feedback_text=payload.candidate_feedback_text,
+            candidate_feedback_streak=payload.candidate_feedback_streak,
+            representative_feedback_totals=payload.representative_feedback_totals,
+            representative_feedback_code=payload.representative_feedback_code,
+            representative_feedback_text=payload.representative_feedback_text,
+            representative_feedback_frames=payload.representative_feedback_frames,
+            baseline_left_step_extent=payload.baseline_left_step_extent,
+            baseline_right_step_extent=payload.baseline_right_step_extent,
+            baseline_ankle_span=payload.baseline_ankle_span,
+        )
+        features = extract_side_step_features(
+            normalized,
+            reference_hip_x=result.reference_hip_x,
+            reference_hip_y=result.reference_hip_y,
+            reference_scale=result.reference_scale,
+            baseline_left_step_extent=result.baseline_left_step_extent,
+            baseline_right_step_extent=result.baseline_right_step_extent,
+            baseline_ankle_span=result.baseline_ankle_span,
+        )
+    except ValueError as exc:
+        logger.warning("Invalid side-step evaluation request: %s", exc)
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception:
+        logger.exception("Unexpected error while evaluating side-step motion")
+        raise HTTPException(status_code=500, detail="Failed to evaluate side-step motion")
 
     return SideStepEvaluationResponse(
         motion_id=result.motion_id,

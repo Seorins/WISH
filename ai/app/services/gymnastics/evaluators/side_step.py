@@ -72,6 +72,7 @@ class SideStepEvaluator(BaseEvaluator):
         baseline_ankle_span: float | None = None,
     ) -> EvaluatorResult:
         effective_target = target_steps or self.config.target_steps
+        normalized_step_count = min(max(step_count, 0), effective_target)
 
         next_reference_hip_x = reference_hip_x
         next_reference_hip_y = reference_hip_y
@@ -131,7 +132,7 @@ class SideStepEvaluator(BaseEvaluator):
             )
             return self._make_result(
                 state=previous_state,
-                step_count=step_count,
+                step_count=normalized_step_count,
                 accuracy=0.0,
                 tracking=frame.tracking,
                 last_counted_side=last_counted_side,
@@ -161,7 +162,45 @@ class SideStepEvaluator(BaseEvaluator):
             )
             return self._make_result(
                 state="idle",
-                step_count=step_count,
+                step_count=normalized_step_count,
+                accuracy=0.0,
+                tracking=frame.tracking,
+                last_counted_side=last_counted_side,
+                last_seen_side=last_seen_side,
+                left_armed=True,
+                right_armed=True,
+                reference_hip_x=next_reference_hip_x,
+                reference_hip_y=next_reference_hip_y,
+                reference_scale=next_reference_scale,
+                baseline_left_step_extent=next_baseline_left_step_extent,
+                baseline_right_step_extent=next_baseline_right_step_extent,
+                baseline_ankle_span=next_baseline_ankle_span,
+                feedback_state=next_feedback_state,
+                representative_state=next_representative_state,
+            )
+
+        if (
+            next_baseline_left_step_extent is None
+            or next_baseline_right_step_extent is None
+            or next_baseline_ankle_span is None
+        ):
+            next_baseline_left_step_extent = features.raw_left_step_extent
+            next_baseline_right_step_extent = features.raw_right_step_extent
+            next_baseline_ankle_span = features.raw_ankle_span
+
+            next_feedback_state = self._stabilize_feedback(
+                features=features,
+                state="idle",
+                tracking=frame.tracking,
+                previous_feedback_state=previous_feedback_state,
+            )
+            next_representative_state = self._update_representative_feedback(
+                feedback_state=next_feedback_state,
+                previous_representative_state=previous_representative_state,
+            )
+            return self._make_result(
+                state="idle",
+                step_count=normalized_step_count,
                 accuracy=0.0,
                 tracking=frame.tracking,
                 last_counted_side=last_counted_side,
@@ -182,7 +221,7 @@ class SideStepEvaluator(BaseEvaluator):
         next_right_armed = right_armed or features.right_step_extent <= self.config.release_threshold
 
         next_state = self._resolve_next_state(features)
-        next_step_count = step_count
+        next_step_count = normalized_step_count
         next_counted_side = last_counted_side
 
         open_side = self._get_open_side(next_state)

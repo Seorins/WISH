@@ -128,12 +128,79 @@ def test_side_step_counts_alternating_open_positions() -> None:
     assert right_result.right_armed is False
 
 
+def test_side_step_tracking_low_does_not_initialize_baseline() -> None:
+    evaluator = SideStepEvaluator()
+    tracking_low_frame = build_side_step_frame(
+        hip_center_x=0.5,
+        left_ankle_raw_x=0.40,
+        right_ankle_raw_x=0.60,
+        tracking="tracking_low",
+    )
+
+    result = evaluator.evaluate(
+        frame=tracking_low_frame,
+        previous_state="idle",
+        step_count=0,
+        target_steps=8,
+    )
+
+    assert result.state == "idle"
+    assert result.step_count == 0
+    assert result.baseline_left_step_extent is None
+    assert result.baseline_right_step_extent is None
+    assert result.baseline_ankle_span is None
+
+
+def test_side_step_first_tracking_ok_frame_only_captures_baseline() -> None:
+    evaluator = SideStepEvaluator()
+    first_good_frame = build_side_step_frame(
+        hip_center_x=0.45,
+        left_ankle_raw_x=0.15,
+        right_ankle_raw_x=0.58,
+    )
+
+    result = evaluator.evaluate(
+        frame=first_good_frame,
+        previous_state="idle",
+        step_count=0,
+        target_steps=8,
+    )
+
+    assert result.state == "idle"
+    assert result.step_count == 0
+    assert result.left_armed is True
+    assert result.right_armed is True
+    assert result.baseline_left_step_extent is not None
+    assert result.baseline_right_step_extent is not None
+    assert result.baseline_ankle_span is not None
+
+
+def test_side_step_clamps_step_count_when_input_already_exceeds_target() -> None:
+    evaluator = SideStepEvaluator()
+    neutral_frame = build_side_step_frame(
+        hip_center_x=0.5,
+        left_ankle_raw_x=0.40,
+        right_ankle_raw_x=0.60,
+    )
+
+    result = evaluator.evaluate(
+        frame=neutral_frame,
+        previous_state="complete",
+        step_count=99,
+        target_steps=8,
+    )
+
+    assert result.state == "complete"
+    assert result.step_count == 8
+
+
 def build_side_step_frame(
     hip_center_x: float,
     left_ankle_raw_x: float,
     right_ankle_raw_x: float,
     hip_center_y: float = 0.5,
     scale_reference: float = 0.2,
+    tracking: str = "tracking_ok",
 ) -> NormalizedPoseFrame:
     def landmark(name: str, raw_x: float, raw_y: float) -> NormalizedLandmark:
         return NormalizedLandmark(
@@ -155,7 +222,7 @@ def build_side_step_frame(
         "RIGHT_ANKLE": landmark("RIGHT_ANKLE", right_ankle_raw_x, 0.94),
     }
     return NormalizedPoseFrame(
-        tracking="tracking_ok",
+        tracking=tracking,
         timestamp_ms=0,
         scale_reference=scale_reference,
         hip_center=HipCenter(x=hip_center_x, y=hip_center_y),
