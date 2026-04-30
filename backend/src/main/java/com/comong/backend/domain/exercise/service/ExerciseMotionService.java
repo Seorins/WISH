@@ -7,6 +7,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.comong.backend.domain.exercise.dto.ExerciseMotionCreateRequest;
 import com.comong.backend.domain.exercise.dto.ExerciseMotionResponse;
+import com.comong.backend.domain.exercise.dto.ExerciseMotionUpdateRequest;
 import com.comong.backend.domain.exercise.entity.ExerciseMotion;
 import com.comong.backend.domain.exercise.entity.ExerciseType;
 import com.comong.backend.domain.exercise.exception.ExerciseErrorCode;
@@ -55,6 +56,18 @@ public class ExerciseMotionService {
                                 .thumbnailUrl(request.thumbnailUrl())
                                 .build());
         return ExerciseMotionResponse.from(saved);
+    }
+
+    @Transactional
+    public ExerciseMotionResponse update(Long id, ExerciseMotionUpdateRequest request) {
+        ExerciseMotion exerciseMotion = findOrThrow(id);
+        exerciseMotion.update(
+                request.name(),
+                request.targetReps(),
+                request.description(),
+                request.demoVideoUrl(),
+                request.thumbnailUrl());
+        return ExerciseMotionResponse.from(exerciseMotion);
     }
 
     @Transactional

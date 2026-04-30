@@ -5,6 +5,7 @@ import static org.hamcrest.Matchers.startsWith;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -148,6 +149,93 @@ class ExerciseMotionControllerIntegrationTest extends IntegrationTestSupport {
                                                 + "\"description\":\"Move side to side.\"}"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("EX-002"));
+    }
+
+    @Test
+    void updateExerciseMotion_byAdminUpdatesAllowedFields() throws Exception {
+        ExerciseMotion saved =
+                exerciseMotionRepository.save(
+                        ExerciseMotion.builder()
+                                .exerciseType(ExerciseType.TOP)
+                                .name("March")
+                                .routineOrder(1)
+                                .targetReps(8)
+                                .description("Walk in place.")
+                                .demoVideoUrl("https://example.com/old.mp4")
+                                .thumbnailUrl("https://example.com/old.png")
+                                .build());
+
+        mockMvc.perform(
+                        patch("/exercise-motions/{id}", saved.getId())
+                                .with(user("admin").roles("ADMIN"))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(
+                                        "{\"name\":\"March updated\",\"targetReps\":10,"
+                                                + "\"description\":\"Updated description.\","
+                                                + "\"demoVideoUrl\":\"https://example.com/new.mp4\","
+                                                + "\"thumbnailUrl\":\"https://example.com/new.png\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.id").value(saved.getId()))
+                .andExpect(jsonPath("$.data.exerciseType").value("TOP"))
+                .andExpect(jsonPath("$.data.routineOrder").value(1))
+                .andExpect(jsonPath("$.data.name").value("March updated"))
+                .andExpect(jsonPath("$.data.targetReps").value(10))
+                .andExpect(jsonPath("$.data.description").value("Updated description."))
+                .andExpect(jsonPath("$.data.demoVideoUrl").value("https://example.com/new.mp4"))
+                .andExpect(jsonPath("$.data.thumbnailUrl").value("https://example.com/new.png"));
+
+        ExerciseMotion updated = exerciseMotionRepository.findById(saved.getId()).orElseThrow();
+        assertThat(updated.getExerciseType()).isEqualTo(ExerciseType.TOP);
+        assertThat(updated.getRoutineOrder()).isEqualTo(1);
+        assertThat(updated.getName()).isEqualTo("March updated");
+        assertThat(updated.getTargetReps()).isEqualTo(10);
+    }
+
+    @Test
+    void updateExerciseMotion_byUserIsForbidden() throws Exception {
+        ExerciseMotion saved =
+                exerciseMotionRepository.save(exerciseMotion(ExerciseType.TOP, "March", 1));
+
+        mockMvc.perform(
+                        patch("/exercise-motions/{id}", saved.getId())
+                                .with(user("user").roles("USER"))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"name\":\"March updated\"}"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("G-004"));
+
+        assertThat(exerciseMotionRepository.findById(saved.getId()).orElseThrow().getName())
+                .isEqualTo("March");
+    }
+
+    @Test
+    void updateExerciseMotion_rejectsUnknownMotion() throws Exception {
+        mockMvc.perform(
+                        patch("/exercise-motions/{id}", 999_999L)
+                                .with(user("admin").roles("ADMIN"))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"name\":\"March updated\"}"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("EX-001"));
+    }
+
+    @Test
+    void updateExerciseMotion_rejectsInvalidInput() throws Exception {
+        ExerciseMotion saved =
+                exerciseMotionRepository.save(exerciseMotion(ExerciseType.TOP, "March", 1));
+
+        mockMvc.perform(
+                        patch("/exercise-motions/{id}", saved.getId())
+                                .with(user("admin").roles("ADMIN"))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"name\":\"   \",\"targetReps\":0}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("G-001"));
+
+        ExerciseMotion unchanged = exerciseMotionRepository.findById(saved.getId()).orElseThrow();
+        assertThat(unchanged.getName()).isEqualTo("March");
+        assertThat(unchanged.getTargetReps()).isEqualTo(8);
     }
 
     @Test
