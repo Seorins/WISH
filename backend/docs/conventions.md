@@ -60,9 +60,13 @@ Jackson `@JsonInclude(NON_NULL)` 로 `null` 필드는 응답에서 제외된다.
 | 접두사 | 영역 | 예시 |
 | --- | --- | --- |
 | `G-` | 전역/공통 | `G-001` 입력값 오류, `G-003` 인증 필요, `G-004` 접근 권한 없음 |
-| `U-` | User 도메인 | `U-001` 사용자 없음 |
+| `U-` | User 도메인 | `U-001` 사용자 없음, `U-002` 이메일 중복 |
 | `A-` | Auth 도메인 | `A-001` 자격증명 불일치, `A-002` 토큰 만료 |
-| `(새 접두사)` | 새 도메인 | 신규 도메인 추가 시 팀 논의로 결정 |
+| `P-` | Patient 도메인 (환자 프로필) | `P-001` 프로필 없음, `P-002` 프로필 중복 |
+| `S-` | Storage (이미지 업로드/저장소) | `S-001` 유효 이미지 아님, `S-002` 처리 실패, `S-003` 파일 크기 초과 |
+| `AR-` | Artwork 도메인 | `AR-001` 작품 없음, `AR-002` 접근 권한 없음 |
+| `EX-` | Exercise 도메인 (체조) | `EX-001` 동작 없음, `EX-003` 사용 중 동작, `EX-005` 세션 없음 |
+| `(새 접두사)` | 새 도메인 | 신규 도메인 추가 시 팀 논의로 결정 (충돌 회피 — 위 표에서 사용 중인 prefix 와 겹치지 않게) |
 
 ### enum 정의
 
@@ -220,6 +224,10 @@ public record UserSignupRequest(
 `application-prod.yaml` 에서 `springdoc.*.enabled: false` 로 강제.
 운영 환경에 API 스펙을 외부 노출하지 않기 위함. 필요시 (파트너 공개 등) 팀 논의 후 해제.
 
+### Server URL — 자동 추론에 맡길 것
+
+`OpenApiConfig` 의 `OpenAPI` 빈에 `addServersItem(...)` 을 박지 않는다. 명시하는 순간 springdoc 가 요청 URL 기반 자동 추론을 끈다. dev 의 nginx 가 `X-Forwarded-Prefix=/dev/api/v1` 을 보내고 백엔드는 `server.forward-headers-strategy: framework` 로 받기 때문에, 자동 추론이 동작해야 환경별 base URL 이 알아서 박힌다 (S14P31E103-291 회귀).
+
 ## 12. 인증 / 인가
 
 ### 방식
@@ -282,7 +290,55 @@ Long userId = user.userId();
 
 (추후 `@AuthenticationPrincipal` 용 커스텀 어노테이션 검토 — 새 이슈)
 
-## 13. 커밋 메시지
+## 13. 이미지 업로드 / 저장소
+
+이미지 파일을 다루는 모든 도메인은 `ImageStorage` 추상화를 통해 저장한다. 도메인별로 직접 디스크/외부 SDK 를 만지지 말 것 — 보안 룰을 한 곳에 모아두기 위함.
+
+### 추상화
+
+- `global/storage/ImageStorage` — 인터페이스 (`upload`, `delete`)
+- `global/storage/LocalImageStorage` — 로컬 디스크 구현체 (현재 유일 구현. S3 구현체는 S14P31E103-240 에서 추가 예정)
+- `global/storage/StoredImage` — 반환 URL 래퍼 (DB `image_url` 컬럼에 저장)
+- `global/storage/StorageProperties` — `storage.local.{upload-dir, public-url-prefix}` 바인딩
+
+### 업로드 검증 — 4중 방어
+
+`LocalImageStorage` 가 다음 순서로 검사한다. 어느 한 층만으로는 우회 가능하므로 모두 거친다.
+
+1. **Content-Type** 이 `image/*` 인지 (1차, 클라이언트 헤더라 신뢰도 낮음)
+2. 실제 binary 의 **magic bytes** 가 PNG / JPEG / GIF / WEBP 시그니처와 일치하는지 (2차)
+3. 매직바이트로 검출한 포맷과 **파일명 확장자가 일치**하는지 (3차, mislabeled 차단)
+4. 확장자가 **whitelist** (`.png/.jpg/.jpeg/.webp/.gif`) 에 포함되는지 (4차, 정적 서빙 시 실행 가능 콘텐츠 차단)
+
+검증 실패는 `S-001 INVALID_IMAGE`, IO 실패는 `S-002 STORAGE_FAILURE`. 초과 크기는 `S-003 PAYLOAD_TOO_LARGE`.
+
+### 파일명 / Path Traversal 방어
+
+- 저장 파일명은 **UUID + canonical 확장자**. 원본 파일명 기반 추측 공격을 막는다.
+- `delete(url)` 는 idempotent — 파일이 없으면 조용히 무시한다.
+- 다만 URL 의 filename 부분에 경로 구분자(`/` `\`), `..`, 단일 `.` 가 포함되면 `S-002` 로 거부한다 (DB 변조 등 데이터 무결성 위반 가드).
+- 한 단계 더: 정규화 후에도 `uploadRoot` 하위인지 검사 (defense in depth).
+
+### prefix / public URL 동기화
+
+`storage.local.public-url-prefix` (yaml) → `LocalImageStorage` 가 반환 URL 을 생성, `StorageConfig` 가 정적 리소스 핸들러에 매핑, `SecurityConfig.PUBLIC_ENDPOINTS` 가 같은 prefix 를 permit. **세 군데가 동일한 값을 공유**하므로 yaml 한 곳만 바꾸면 모두 따라간다. 새 prefix 를 도입할 때 한 군데라도 빠뜨리지 말 것.
+
+### 멀티파트 한도
+
+| 키 | 값 | 의미 |
+| --- | --- | --- |
+| `spring.servlet.multipart.max-file-size` | 10MB | 파일 단건 한도 |
+| `spring.servlet.multipart.max-request-size` | 10MB | 요청 본문 전체 한도 |
+| `server.tomcat.max-http-form-post-size` | 10MB | 톰캣 단계 차단 한도 |
+| `server.tomcat.max-swallow-size` | 10MB | 한도 초과 시에도 톰캣이 본문을 읽어들이는 한계 |
+
+위 4개를 **같이** 잡아야 톰캣 단계에서 미리 차단되지 않는다. 한도 초과는 `MaxUploadSizeExceededException` → `S-003` 로 매핑.
+
+### 접근 통제 — 현재 정책
+
+현재 모든 업로드 파일은 정적 리소스 핸들러를 통해 **누구나 URL 만 알면 접근 가능**하다. UUID 가 추측을 어렵게 하지만, 비공개 작품 이미지에 대한 권한 체크는 제공하지 않는다. 인증된 다운로드 컨트롤러로의 전환은 별도 이슈에서 결정.
+
+## 14. 커밋 메시지
 
 ```
 [S14P31E103-<이슈번호>] BE/<타입>: <내용>
