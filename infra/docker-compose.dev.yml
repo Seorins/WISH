@@ -88,6 +88,19 @@ services:
     networks:
       - e103-dev-network
 
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.74.0
+    container_name: e103-redis-exporter
+    restart: unless-stopped
+    environment:
+      REDIS_ADDR: redis://redis-dev:6379
+    depends_on:
+      redis-dev:
+        condition: service_healthy
+    networks:
+      - e103-platform-network
+      - e103-dev-network
+
 volumes:
   postgres_dev_data:
   redis_dev_data:
