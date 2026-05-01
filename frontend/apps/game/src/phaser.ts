@@ -13,6 +13,7 @@ import {
   GymnasticsTopScene,
 } from './scenes/themes/gymnastics/play/GymnasticsPlayScene'
 import { GymnasticsSelectScene } from './scenes/themes/gymnastics/select/GymnasticsSelectScene'
+import { MusicRhythmScene } from './scenes/themes/music/play/MusicRhythmScene'
 import { MusicSelectScene } from './scenes/themes/music/select/MusicSelectScene'
 import { VillageScene } from './scenes/village/VillageScene'
 
@@ -66,6 +67,7 @@ export function createGame(parent: HTMLElement): Phaser.Game {
       GymnasticsTopScene,
       GymnasticsDanielScene,
       MusicSelectScene,
+      MusicRhythmScene,
     ],
     scale: {
       mode: Phaser.Scale.RESIZE,
