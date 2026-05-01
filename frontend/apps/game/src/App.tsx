@@ -66,7 +66,21 @@ function App() {
     return <SquatDebugPage />
   }
 
-  return <div ref={containerRef} style={{ width: '100vw', height: '100vh', overflow: 'hidden' }} />
+  return (
+    <div
+      ref={containerRef}
+      style={{
+        width: '100vw',
+        height: '100vh',
+        overflow: 'hidden',
+        overscrollBehavior: 'none',
+        touchAction: 'none',
+        userSelect: 'none',
+        WebkitTouchCallout: 'none',
+        WebkitUserSelect: 'none',
+      }}
+    />
+  )
 }
 
 export default App

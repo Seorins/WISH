@@ -8,6 +8,8 @@ type ArtConfirmButtonOptions = {
   onSelect: () => void
 }
 
+export type ArtConfirmDialogButtonRole = 'secondary' | 'primary'
+
 type ArtConfirmDialogOptions = {
   depth: number
   title: string
@@ -17,7 +19,17 @@ type ArtConfirmDialogOptions = {
 }
 
 export type ArtConfirmDialog = {
+  getButtonAt: (point: Phaser.Math.Vector2) => ArtConfirmDialogButtonRole | null
+  selectButton: (role: ArtConfirmDialogButtonRole) => void
+  setButtonHover: (role: ArtConfirmDialogButtonRole | null) => void
   destroy: () => void
+}
+
+type ArtConfirmDialogButton = {
+  role: ArtConfirmDialogButtonRole
+  bounds: Phaser.Geom.Rectangle
+  select: () => void
+  setHover: (isHovered: boolean) => void
 }
 
 export function createArtConfirmDialog(
@@ -32,6 +44,7 @@ export function createArtConfirmDialog(
   const panelX = centerX - panelWidth / 2
   const panelY = centerY - panelHeight / 2
   const objects: Phaser.GameObjects.GameObject[] = []
+  const buttons: ArtConfirmDialogButton[] = []
 
   const overlay = scene.add
     .rectangle(centerX, centerY, vw, vh, 0x000000, 0.42)
@@ -75,28 +88,65 @@ export function createArtConfirmDialog(
     .setOrigin(0.5)
 
   objects.push(overlay, panel, titleText, messageText)
-  createConfirmButton(
-    scene,
-    objects,
-    depth,
-    centerX - panelWidth * 0.22,
-    panelY + panelHeight - 54,
-    Math.min(180, panelWidth * 0.36),
-    48,
-    secondaryButton,
+  buttons.push(
+    createConfirmButton(
+      scene,
+      objects,
+      depth,
+      'secondary',
+      centerX - panelWidth * 0.22,
+      panelY + panelHeight - 54,
+      Math.min(180, panelWidth * 0.36),
+      48,
+      secondaryButton,
+    ),
   )
-  createConfirmButton(
-    scene,
-    objects,
-    depth,
-    centerX + panelWidth * 0.22,
-    panelY + panelHeight - 54,
-    Math.min(180, panelWidth * 0.36),
-    48,
-    primaryButton,
+  buttons.push(
+    createConfirmButton(
+      scene,
+      objects,
+      depth,
+      'primary',
+      centerX + panelWidth * 0.22,
+      panelY + panelHeight - 54,
+      Math.min(180, panelWidth * 0.36),
+      48,
+      primaryButton,
+    ),
   )
 
   return {
+    getButtonAt: point => {
+      const candidates = buttons.filter(button => button.bounds.contains(point.x, point.y))
+      if (candidates.length === 0) {
+        return null
+      }
+
+      const nearestButton = candidates.reduce((nearest, button) =>
+        Phaser.Math.Distance.Between(
+          point.x,
+          point.y,
+          button.bounds.centerX,
+          button.bounds.centerY,
+        ) <
+        Phaser.Math.Distance.Between(
+          point.x,
+          point.y,
+          nearest.bounds.centerX,
+          nearest.bounds.centerY,
+        )
+          ? button
+          : nearest,
+      )
+
+      return nearestButton.role
+    },
+    selectButton: role => {
+      buttons.find(button => button.role === role)?.select()
+    },
+    setButtonHover: role => {
+      buttons.forEach(button => button.setHover(button.role === role))
+    },
     destroy: () => {
       objects.forEach(object => object.destroy())
     },
@@ -107,6 +157,7 @@ function createConfirmButton(
   scene: Phaser.Scene,
   objects: Phaser.GameObjects.GameObject[],
   depth: number,
+  role: ArtConfirmDialogButtonRole,
   x: number,
   y: number,
   width: number,
@@ -145,4 +196,17 @@ function createConfirmButton(
   text.on('pointerout', () => button.setScale(1))
   text.on('pointerdown', handlePointerDown)
   objects.push(button, text)
+
+  const hitPadding = Math.max(42, Math.round(scene.scale.width * 0.024))
+  return {
+    role,
+    bounds: new Phaser.Geom.Rectangle(
+      x - width / 2 - hitPadding,
+      y - height / 2 - hitPadding,
+      width + hitPadding * 2,
+      height + hitPadding * 2,
+    ),
+    select: onSelect,
+    setHover: (isHovered: boolean) => button.setScale(isHovered ? 1.03 : 1),
+  }
 }

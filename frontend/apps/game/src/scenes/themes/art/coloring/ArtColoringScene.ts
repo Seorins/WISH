@@ -11,7 +11,11 @@ import { PointerSmoother } from '@/game/motion/pointerSmoother'
 import { PointerTrackingGuard } from '@/game/motion/pointerTrackingGuard'
 import { createArtCameraPreview, type ArtCameraPreview } from '../ui/artCameraPreview'
 import { getArtBrushColorOverlayTextureKey } from '../ui/artBrushColorOverlayTexture'
-import { createArtConfirmDialog, type ArtConfirmDialog } from '../ui/artConfirmDialog'
+import {
+  createArtConfirmDialog,
+  type ArtConfirmDialog,
+  type ArtConfirmDialogButtonRole,
+} from '../ui/artConfirmDialog'
 import { getColoringOption, coloringOptions, type ColoringOption } from './coloringOptions'
 
 const CANVAS_SOURCE_SIZE = { width: 1535, height: 1024 }
@@ -23,6 +27,11 @@ const HAND_FILL_COOLDOWN_MS = 320
 const HAND_FILL_HOLD_MS = 900
 const HAND_FILL_STILL_RADIUS = 58
 const EXIT_CONFIRM_DEPTH = 60
+const BRUSH_CURSOR_DEPTH = EXIT_CONFIRM_DEPTH + 12
+const BRUSH_CURSOR_OVERLAY_DEPTH = BRUSH_CURSOR_DEPTH + 1
+const HAND_DIALOG_SELECT_HOLD_MS = 450
+const HAND_POINTER_REJECT_MARGIN = 0.08
+const HAND_POINTER_CAMERA_BOUNDS = { left: 0.06, right: 0.94, top: 0.06, bottom: 0.78 } as const
 type ColoringTool = 'brush' | 'eraser'
 const COLORING_TOOLS: ColoringTool[] = ['brush', 'eraser']
 const PALETTE_SWATCHES = [
@@ -90,12 +99,13 @@ export class ArtColoringScene extends Phaser.Scene {
   private currentColor: number = PALETTE_SWATCHES[0].color
   private palettePoints: PalettePoint[] = []
   private handTracker: HandTracker | null = null
-  private readonly handPointerSmoother = new PointerSmoother({ alpha: 0.38 })
+  private readonly handPointerSmoother = new PointerSmoother({ alpha: 0.24 })
   private readonly handTrackingGuard = new PointerTrackingGuard<Phaser.Math.Vector2>({
-    holdDurationMs: 120,
+    holdDurationMs: 40,
   })
   private isTransitioning = false
   private isDrawing = false
+  private activeDrawingPointerId: number | null = null
   private isStartingHandTracker = false
   private handTrackingDisposed = false
   private hasStartedColoring = false
@@ -119,6 +129,9 @@ export class ArtColoringScene extends Phaser.Scene {
   private pendingHandAction: HandActionKind | null = null
   private pendingHandActionStartedAt = 0
   private activatedHandAction: HandActionKind | null = null
+  private pendingHandDialogButton: ArtConfirmDialogButtonRole | null = null
+  private pendingHandDialogButtonStartedAt = 0
+  private activatedHandDialogButton: ArtConfirmDialogButtonRole | null = null
   private lastHandFillRegionId: number | null = null
   private lastHandFillAt = 0
   private pendingHandFillRegionId: number | null = null
@@ -151,7 +164,12 @@ export class ArtColoringScene extends Phaser.Scene {
       return
     }
 
+    if (this.activeDrawingPointerId !== null) {
+      return
+    }
+
     if (this.currentTool === 'eraser') {
+      this.activeDrawingPointerId = pointer.id
       this.isDrawing = true
       if (this.fillRegionAt(pointer.x, pointer.y, 0xffffff)) {
         this.handleSuccessfulFill()
@@ -175,6 +193,10 @@ export class ArtColoringScene extends Phaser.Scene {
       return
     }
 
+    if (this.activeDrawingPointerId !== pointer.id) {
+      return
+    }
+
     if (this.currentTool !== 'eraser' || !this.isDrawing || !pointer.isDown) {
       return
     }
@@ -189,7 +211,11 @@ export class ArtColoringScene extends Phaser.Scene {
     }
   }
 
-  private readonly handlePointerUp = () => {
+  private readonly handlePointerUp = (pointer: Phaser.Input.Pointer) => {
+    if (this.activeDrawingPointerId !== pointer.id) {
+      return
+    }
+
     this.stopDrawing()
   }
 
@@ -255,6 +281,7 @@ export class ArtColoringScene extends Phaser.Scene {
     this.pendingHandTool = null
     this.pendingHandToolStartedAt = 0
     this.lastHandToolSelectedAt = 0
+    this.clearPendingHandDialogButton()
     this.isSavingColoring = false
     this.isExitConfirmOpen = false
     this.exitConfirmDialog = null
@@ -681,11 +708,11 @@ export class ArtColoringScene extends Phaser.Scene {
 
   private createBrushCursor() {
     this.input.setDefaultCursor('none')
-    this.brushCursor = this.add.image(0, 0, 'art-ui-brush').setDepth(20)
+    this.brushCursor = this.add.image(0, 0, 'art-ui-brush').setDepth(BRUSH_CURSOR_DEPTH)
     this.brushCursor.setScrollFactor(0)
     this.brushColorOverlay = this.add
       .image(0, 0, getArtBrushColorOverlayTextureKey(this, this.currentColor))
-      .setDepth(21)
+      .setDepth(BRUSH_CURSOR_OVERLAY_DEPTH)
     this.brushColorOverlay.setScrollFactor(0)
     this.updateBrushCursorPosition(this.input.activePointer.x, this.input.activePointer.y)
     this.updateBrushCursorTexture()
@@ -821,6 +848,7 @@ export class ArtColoringScene extends Phaser.Scene {
     this.clearPendingHandAction()
     this.clearPendingHandColor()
     this.clearPendingHandTool()
+    this.clearPendingHandDialogButton()
     this.resetHandFillState()
     this.handPointerSmoother.reset()
     this.handTrackingGuard.reset()
@@ -830,14 +858,7 @@ export class ArtColoringScene extends Phaser.Scene {
 
   private updateHandColoring(timestampMs: number) {
     const tracker = this.handTracker
-    if (
-      !tracker?.isStarted ||
-      this.isDrawing ||
-      this.isTransitioning ||
-      this.isSavingColoring ||
-      this.isExitConfirmOpen ||
-      this.isSaveVisibilityConfirmOpen
-    ) {
+    if (!tracker?.isStarted || this.isDrawing || this.isTransitioning || this.isSavingColoring) {
       this.clearPendingHandFill()
       return
     }
@@ -854,6 +875,7 @@ export class ArtColoringScene extends Phaser.Scene {
     if (!tracking.point) {
       this.clearPendingHandAction()
       this.clearPendingHandTool()
+      this.clearPendingHandDialogButton()
       this.resetHandFillState()
       return
     }
@@ -862,6 +884,19 @@ export class ArtColoringScene extends Phaser.Scene {
     this.updateBrushCursorPosition(smoothedPoint.x, smoothedPoint.y)
 
     const isTrackedFrame = tracking.status === 'tracked'
+    if (
+      this.tryActivateConfirmDialogButtonFromHand(
+        smoothedPoint,
+        result.timestampMs,
+        tracking.status !== 'missing',
+      )
+    ) {
+      this.clearPendingHandAction()
+      this.clearPendingHandTool()
+      this.resetHandFillState()
+      return
+    }
+
     if (isTrackedFrame && !handState?.isColoringGesture) {
       this.clearPendingHandAction()
       this.clearPendingHandTool()
@@ -890,8 +925,19 @@ export class ArtColoringScene extends Phaser.Scene {
       return
     }
 
+    if (
+      isTrackedFrame &&
+      (!handState ||
+        !Phaser.Geom.Rectangle.Contains(this.drawBounds, handState.point.x, handState.point.y))
+    ) {
+      this.resetHandFillState()
+      this.handPointerSmoother.reset()
+      return
+    }
+
     if (!Phaser.Geom.Rectangle.Contains(this.drawBounds, smoothedPoint.x, smoothedPoint.y)) {
       this.resetHandFillState()
+      this.handPointerSmoother.reset()
       return
     }
 
@@ -914,11 +960,16 @@ export class ArtColoringScene extends Phaser.Scene {
       return null
     }
 
-    const pointerCoordinates = toPointerCoordinates(
+    const rawPointerCoordinates = toPointerCoordinates(
       pointerReference,
       { width: this.scale.width, height: this.scale.height },
-      { mirrorX: true },
+      { mirrorX: true, clamp: false },
     )
+    if (!this.isHandPointerInsideViewport(rawPointerCoordinates)) {
+      return null
+    }
+
+    const pointerCoordinates = this.toReachableHandPointerCoordinates(rawPointerCoordinates)
     const canvasCoordinates = toPointerCanvasCoordinates(
       pointerCoordinates,
       {
@@ -938,6 +989,93 @@ export class ArtColoringScene extends Phaser.Scene {
       ),
       isColoringGesture: detectIndexFingerGesture(hand).isIndexOnlyGesture,
     }
+  }
+
+  private isHandPointerInsideViewport(point: { normalizedX: number; normalizedY: number }) {
+    return (
+      point.normalizedX >= -HAND_POINTER_REJECT_MARGIN &&
+      point.normalizedX <= 1 + HAND_POINTER_REJECT_MARGIN &&
+      point.normalizedY >= -HAND_POINTER_REJECT_MARGIN &&
+      point.normalizedY <= 1 + HAND_POINTER_REJECT_MARGIN
+    )
+  }
+
+  private toReachableHandPointerCoordinates(
+    point: ReturnType<typeof toPointerCoordinates>,
+  ): ReturnType<typeof toPointerCoordinates> {
+    const normalizedX = Phaser.Math.Clamp(
+      (point.normalizedX - HAND_POINTER_CAMERA_BOUNDS.left) /
+        (HAND_POINTER_CAMERA_BOUNDS.right - HAND_POINTER_CAMERA_BOUNDS.left),
+      0,
+      1,
+    )
+    const normalizedY = Phaser.Math.Clamp(
+      (point.normalizedY - HAND_POINTER_CAMERA_BOUNDS.top) /
+        (HAND_POINTER_CAMERA_BOUNDS.bottom - HAND_POINTER_CAMERA_BOUNDS.top),
+      0,
+      1,
+    )
+
+    return {
+      ...point,
+      normalizedX,
+      normalizedY,
+      x: normalizedX * this.scale.width,
+      y: normalizedY * this.scale.height,
+    }
+  }
+
+  private tryActivateConfirmDialogButtonFromHand(
+    point: Phaser.Math.Vector2,
+    timestampMs: number,
+    isSelectingGesture: boolean,
+  ) {
+    const dialog = this.getActiveConfirmDialog()
+    if (!dialog) {
+      this.clearPendingHandDialogButton()
+      return false
+    }
+
+    if (!isSelectingGesture) {
+      this.clearPendingHandDialogButton()
+      return true
+    }
+
+    const button = dialog.getButtonAt(point)
+    dialog.setButtonHover(button)
+    if (!button) {
+      this.clearPendingHandDialogButton()
+      return true
+    }
+
+    if (this.pendingHandDialogButton !== button) {
+      this.pendingHandDialogButton = button
+      this.pendingHandDialogButtonStartedAt = timestampMs
+      this.activatedHandDialogButton = null
+      return true
+    }
+
+    if (
+      this.activatedHandDialogButton === button ||
+      timestampMs - this.pendingHandDialogButtonStartedAt < HAND_DIALOG_SELECT_HOLD_MS
+    ) {
+      return true
+    }
+
+    this.activatedHandDialogButton = button
+    dialog.selectButton(button)
+    return true
+  }
+
+  private getActiveConfirmDialog() {
+    return this.saveVisibilityConfirmDialog ?? this.exitConfirmDialog
+  }
+
+  private clearPendingHandDialogButton() {
+    this.pendingHandDialogButton = null
+    this.pendingHandDialogButtonStartedAt = 0
+    this.activatedHandDialogButton = null
+    this.getActiveConfirmDialog()?.setButtonHover(null)
   }
 
   private tryActivateActionButtonFromHand(point: Phaser.Math.Vector2, timestampMs: number) {
@@ -976,15 +1114,26 @@ export class ArtColoringScene extends Phaser.Scene {
   }
 
   private getHandActionAt(point: Phaser.Math.Vector2): HandActionKind | null {
-    if (this.saveButton?.getBounds().contains(point.x, point.y)) {
+    const padding = this.getHandActionHitPadding()
+
+    if (
+      this.saveButton &&
+      this.containsExpandedBounds(this.saveButton.getBounds(), point, padding)
+    ) {
       return 'save'
     }
 
-    if (this.resetButton?.getBounds().contains(point.x, point.y)) {
+    if (
+      this.resetButton &&
+      this.containsExpandedBounds(this.resetButton.getBounds(), point, padding)
+    ) {
       return 'reset'
     }
 
-    if (this.exitButton?.getBounds().contains(point.x, point.y)) {
+    if (
+      this.exitButton &&
+      this.containsExpandedBounds(this.exitButton.getBounds(), point, padding)
+    ) {
       return 'exit'
     }
 
@@ -1033,13 +1182,37 @@ export class ArtColoringScene extends Phaser.Scene {
   }
 
   private getHandToolAt(point: Phaser.Math.Vector2): ColoringTool | null {
+    const padding = this.getHandToolHitPadding()
+
     for (const tool of COLORING_TOOLS) {
-      if (this.toolButtonFrames[tool]?.getBounds().contains(point.x, point.y)) {
+      const bounds = this.toolButtonFrames[tool]?.getBounds()
+      if (bounds && this.containsExpandedBounds(bounds, point, padding)) {
         return tool
       }
     }
 
     return null
+  }
+
+  private getHandActionHitPadding() {
+    return Math.max(36, Math.round(Math.min(this.scale.width, this.scale.height) * 0.045))
+  }
+
+  private getHandToolHitPadding() {
+    return Math.max(24, Math.round(Math.min(this.scale.width, this.scale.height) * 0.03))
+  }
+
+  private containsExpandedBounds(
+    bounds: Phaser.Geom.Rectangle,
+    point: Phaser.Math.Vector2,
+    padding: number,
+  ) {
+    return (
+      point.x >= bounds.left - padding &&
+      point.x <= bounds.right + padding &&
+      point.y >= bounds.top - padding &&
+      point.y <= bounds.bottom + padding
+    )
   }
 
   private clearPendingHandTool() {
@@ -1620,6 +1793,7 @@ export class ArtColoringScene extends Phaser.Scene {
 
   private stopDrawing() {
     this.isDrawing = false
+    this.activeDrawingPointerId = null
   }
 
   private resetColoring() {
@@ -1796,6 +1970,7 @@ export class ArtColoringScene extends Phaser.Scene {
       return
     }
 
+    this.pauseHandInputForConfirmDialog()
     this.isExitConfirmOpen = true
     this.exitConfirmDialog = createArtConfirmDialog(this, {
       depth: EXIT_CONFIRM_DEPTH,
@@ -1826,6 +2001,7 @@ export class ArtColoringScene extends Phaser.Scene {
       return
     }
 
+    this.pauseHandInputForConfirmDialog()
     this.isSaveVisibilityConfirmOpen = true
     this.saveVisibilityConfirmDialog = createArtConfirmDialog(this, {
       depth: EXIT_CONFIRM_DEPTH,
@@ -1854,16 +2030,30 @@ export class ArtColoringScene extends Phaser.Scene {
     })
   }
 
+  private pauseHandInputForConfirmDialog() {
+    this.stopDrawing()
+    this.clearPendingHandAction()
+    this.clearPendingHandColor()
+    this.clearPendingHandTool()
+    this.clearPendingHandDialogButton()
+    this.resetHandFillState()
+    this.handPointerSmoother.reset()
+  }
+
   private hideExitConfirm() {
+    this.exitConfirmDialog?.setButtonHover(null)
     this.exitConfirmDialog?.destroy()
     this.exitConfirmDialog = null
     this.isExitConfirmOpen = false
+    this.clearPendingHandDialogButton()
   }
 
   private hideSaveVisibilityConfirm() {
+    this.saveVisibilityConfirmDialog?.setButtonHover(null)
     this.saveVisibilityConfirmDialog?.destroy()
     this.saveVisibilityConfirmDialog = null
     this.isSaveVisibilityConfirmOpen = false
+    this.clearPendingHandDialogButton()
   }
 
   private returnToArtRoom() {
