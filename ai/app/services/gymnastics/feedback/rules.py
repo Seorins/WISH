@@ -222,15 +222,4 @@ def select_diagonal_face_punch_feedback_candidate(
     if features.stance_span < stance_span_threshold:
         return WIDEN_PUNCH_STANCE
 
-    if (
-        features.left_wrist_forward > features.right_wrist_forward
-        and features.right_elbow_angle is not None
-        and features.right_elbow_angle > guard_bend_threshold
-    ) or (
-        features.right_wrist_forward > features.left_wrist_forward
-        and features.left_elbow_angle is not None
-        and features.left_elbow_angle > guard_bend_threshold
-    ):
-        return BEND_BACK_ARM
-
     return None

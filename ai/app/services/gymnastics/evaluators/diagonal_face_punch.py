@@ -297,12 +297,14 @@ class DiagonalFacePunchEvaluator(BaseEvaluator):
         return (
             features.left_wrist_forward > self.config.release_threshold
             and features.left_wrist_forward > features.right_wrist_forward
+            and features.left_wrist_height >= self.config.height_threshold * 0.5
         )
 
     def _should_hold_right_punch(self, features: DiagonalFacePunchFeatureSet) -> bool:
         return (
             features.right_wrist_forward > self.config.release_threshold
             and features.right_wrist_forward > features.left_wrist_forward
+            and features.right_wrist_height >= self.config.height_threshold * 0.5
         )
 
     def _get_punch_side(self, state: str) -> str | None:
