@@ -1,4 +1,3 @@
-from app.services.gymnastics.evaluators.base import EvaluatorResult
 from app.services.gymnastics.evaluators.diagonal_face_punch import DiagonalFacePunchEvaluator
 from app.services.gymnastics.types import HipCenter, NormalizedLandmark, NormalizedPoseFrame
 
@@ -175,35 +174,6 @@ def test_diagonal_face_punch_requires_punch_height() -> None:
 
     assert low_punch_result.state == "idle"
     assert low_punch_result.step_count == 0
-
-
-def _chain(evaluator: DiagonalFacePunchEvaluator, frame: "NormalizedPoseFrame", prev: "EvaluatorResult") -> "EvaluatorResult":
-    return evaluator.evaluate(
-        frame=frame,
-        previous_state=prev.state,
-        step_count=prev.step_count,
-        target_steps=8,
-        last_counted_side=prev.last_counted_side,
-        last_seen_side=prev.last_seen_side,
-        left_armed=prev.left_armed,
-        right_armed=prev.right_armed,
-        reference_hip_x=prev.reference_hip_x,
-        reference_hip_y=prev.reference_hip_y,
-        reference_scale=prev.reference_scale,
-        displayed_feedback_code=prev.displayed_feedback_code,
-        displayed_feedback_text=prev.displayed_feedback_text,
-        displayed_feedback_frames=prev.displayed_feedback_frames,
-        candidate_feedback_code=prev.candidate_feedback_code,
-        candidate_feedback_text=prev.candidate_feedback_text,
-        candidate_feedback_streak=prev.candidate_feedback_streak,
-        representative_feedback_totals=prev.representative_feedback_totals,
-        representative_feedback_code=prev.representative_feedback_code,
-        representative_feedback_text=prev.representative_feedback_text,
-        representative_feedback_frames=prev.representative_feedback_frames,
-        baseline_left_wrist_forward=prev.baseline_left_wrist_forward,
-        baseline_right_wrist_forward=prev.baseline_right_wrist_forward,
-        baseline_stance_span=prev.baseline_stance_span,
-    )
 
 
 def test_punch_hold_via_previous_state() -> None:
