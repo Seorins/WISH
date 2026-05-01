@@ -293,11 +293,11 @@ class DiagonalBodyPunchEvaluator(BaseEvaluator):
         right_armed: bool,
     ) -> str:
         if previous_state == "left_punch" and not left_armed:
-            if features.left_wrist_forward > self.config.release_threshold:
+            if self._should_hold_left_punch(features):
                 return "left_punch"
 
         if previous_state == "right_punch" and not right_armed:
-            if features.right_wrist_forward > self.config.release_threshold:
+            if self._should_hold_right_punch(features):
                 return "right_punch"
 
         if self._is_left_punch(features):
@@ -322,6 +322,28 @@ class DiagonalBodyPunchEvaluator(BaseEvaluator):
             and features.right_wrist_forward > features.left_wrist_forward + self.config.dominance_margin
             and right_straight
             and features.stance_span >= self.config.stance_span_threshold
+        )
+
+    def _should_hold_left_punch(self, features: DiagonalBodyPunchFeatureSet) -> bool:
+        elbow_ok = (
+            features.left_elbow_angle is not None
+            and features.left_elbow_angle >= self.config.arm_straight_threshold - 12.0
+        )
+        stance_ok = features.stance_span >= self.config.stance_span_threshold * 0.6
+        return (
+            features.left_wrist_forward > self.config.release_threshold
+            or (elbow_ok and stance_ok)
+        )
+
+    def _should_hold_right_punch(self, features: DiagonalBodyPunchFeatureSet) -> bool:
+        elbow_ok = (
+            features.right_elbow_angle is not None
+            and features.right_elbow_angle >= self.config.arm_straight_threshold - 12.0
+        )
+        stance_ok = features.stance_span >= self.config.stance_span_threshold * 0.6
+        return (
+            features.right_wrist_forward > self.config.release_threshold
+            or (elbow_ok and stance_ok)
         )
 
     def _get_punch_side(self, state: str) -> str | None:
