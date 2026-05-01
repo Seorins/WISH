@@ -206,7 +206,7 @@ class DiagonalFacePunchEvaluator(BaseEvaluator):
         next_left_armed = left_armed or features.left_wrist_forward <= self.config.release_threshold
         next_right_armed = right_armed or features.right_wrist_forward <= self.config.release_threshold
 
-        next_state = self._resolve_next_state(features=features, previous_state=previous_state, left_armed=left_armed, right_armed=right_armed)
+        next_state = self._resolve_next_state(features=features, previous_state=previous_state, last_seen_side=last_seen_side, left_armed=left_armed, right_armed=right_armed)
         next_step_count = normalized_step_count
         next_counted_side = last_counted_side
 
@@ -254,16 +254,20 @@ class DiagonalFacePunchEvaluator(BaseEvaluator):
         self,
         features: DiagonalFacePunchFeatureSet,
         previous_state: str,
+        last_seen_side: str | None,
         left_armed: bool,
         right_armed: bool,
     ) -> str:
-        if previous_state == "left_punch" and not left_armed and self._should_hold_left_punch(features):
-            return "left_punch"
-        if previous_state == "right_punch" and not right_armed and self._should_hold_right_punch(features):
-            return "right_punch"
         if self._is_left_punch(features):
             return "left_punch"
         if self._is_right_punch(features):
+            return "right_punch"
+        hold_state = previous_state if previous_state in ("left_punch", "right_punch") else (
+            f"{last_seen_side}_punch" if last_seen_side else None
+        )
+        if hold_state == "left_punch" and self._should_hold_left_punch(features):
+            return "left_punch"
+        if hold_state == "right_punch" and self._should_hold_right_punch(features):
             return "right_punch"
         return "idle"
 
@@ -290,27 +294,15 @@ class DiagonalFacePunchEvaluator(BaseEvaluator):
         )
 
     def _should_hold_left_punch(self, features: DiagonalFacePunchFeatureSet) -> bool:
-        elbow_ok = features.left_elbow_angle is not None and features.left_elbow_angle >= self.config.arm_straight_threshold - 12.0
-        height_ok = features.left_wrist_height >= self.config.height_threshold * 0.7
-        forward_hold_floor = max(self.config.release_threshold * 0.85, self.config.forward_threshold * 0.45)
-        still_dominant = features.left_wrist_forward > features.right_wrist_forward + (self.config.dominance_margin * 0.5)
         return (
-            features.left_wrist_forward > forward_hold_floor
-            and height_ok
-            and elbow_ok
-            and still_dominant
+            features.left_wrist_forward > self.config.release_threshold
+            and features.left_wrist_forward > features.right_wrist_forward
         )
 
     def _should_hold_right_punch(self, features: DiagonalFacePunchFeatureSet) -> bool:
-        elbow_ok = features.right_elbow_angle is not None and features.right_elbow_angle >= self.config.arm_straight_threshold - 12.0
-        height_ok = features.right_wrist_height >= self.config.height_threshold * 0.7
-        forward_hold_floor = max(self.config.release_threshold * 0.85, self.config.forward_threshold * 0.45)
-        still_dominant = features.right_wrist_forward > features.left_wrist_forward + (self.config.dominance_margin * 0.5)
         return (
-            features.right_wrist_forward > forward_hold_floor
-            and height_ok
-            and elbow_ok
-            and still_dominant
+            features.right_wrist_forward > self.config.release_threshold
+            and features.right_wrist_forward > features.left_wrist_forward
         )
 
     def _get_punch_side(self, state: str) -> str | None:
