@@ -16,8 +16,18 @@ import { GymnasticsSelectScene } from './scenes/themes/gymnastics/select/Gymnast
 import { MusicSelectScene } from './scenes/themes/music/select/MusicSelectScene'
 import { VillageScene } from './scenes/village/VillageScene'
 
+function configureTouchSurface(element: HTMLElement) {
+  element.style.setProperty('overscroll-behavior', 'none')
+  element.style.setProperty('touch-action', 'none')
+  element.style.setProperty('user-select', 'none')
+  element.style.setProperty('-webkit-user-select', 'none')
+  element.style.setProperty('-webkit-touch-callout', 'none')
+}
+
 export function createGame(parent: HTMLElement): Phaser.Game {
-  return new Phaser.Game({
+  configureTouchSurface(parent)
+
+  const game = new Phaser.Game({
     type: Phaser.AUTO,
     parent,
     width: window.innerWidth,
@@ -25,6 +35,18 @@ export function createGame(parent: HTMLElement): Phaser.Game {
     backgroundColor: '#000000',
     antialias: true,
     disableContextMenu: true,
+    input: {
+      mouse: {
+        preventDefaultDown: true,
+        preventDefaultMove: true,
+        preventDefaultUp: true,
+        preventDefaultWheel: true,
+      },
+      touch: {
+        capture: true,
+      },
+      windowEvents: true,
+    },
     physics: {
       default: 'arcade',
       arcade: { debug: false },
@@ -50,4 +72,8 @@ export function createGame(parent: HTMLElement): Phaser.Game {
       autoCenter: Phaser.Scale.CENTER_BOTH,
     },
   })
+
+  configureTouchSurface(game.canvas)
+
+  return game
 }
