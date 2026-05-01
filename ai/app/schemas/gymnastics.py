@@ -292,3 +292,76 @@ class DiagonalBodyPunchEvaluationResponse(BaseModel):
     baseline_right_wrist_forward: float | None = None
     baseline_stance_span: float | None = None
     features: DiagonalBodyPunchFeaturesResponse
+
+
+class DiagonalFacePunchEvaluationRequest(BaseModel):
+    frame: PoseFrameRequest
+    previous_state: str = Field(default="idle")
+    step_count: int = Field(default=0, ge=0)
+    target_steps: int = Field(default=8, ge=1)
+    last_counted_side: str | None = Field(default=None)
+    last_seen_side: str | None = Field(default=None)
+    left_armed: bool = Field(default=True)
+    right_armed: bool = Field(default=True)
+    reference_hip_x: float | None = Field(default=None)
+    reference_hip_y: float | None = Field(default=None)
+    reference_scale: float | None = Field(default=None)
+    displayed_feedback_code: str | None = Field(default=None)
+    displayed_feedback_text: str | None = Field(default=None)
+    displayed_feedback_frames: int = Field(default=0, ge=0)
+    candidate_feedback_code: str | None = Field(default=None)
+    candidate_feedback_text: str | None = Field(default=None)
+    candidate_feedback_streak: int = Field(default=0, ge=0)
+    representative_feedback_totals: dict[str, int] = Field(default_factory=dict)
+    representative_feedback_code: str | None = Field(default=None)
+    representative_feedback_text: str | None = Field(default=None)
+    representative_feedback_frames: int = Field(default=0, ge=0)
+    baseline_left_wrist_forward: float | None = Field(default=None)
+    baseline_right_wrist_forward: float | None = Field(default=None)
+    baseline_stance_span: float | None = Field(default=None)
+
+
+class DiagonalFacePunchFeaturesResponse(BaseModel):
+    left_wrist_forward: float
+    right_wrist_forward: float
+    left_wrist_height: float
+    right_wrist_height: float
+    left_arm_extension: float
+    right_arm_extension: float
+    left_elbow_angle: float | None = None
+    right_elbow_angle: float | None = None
+    stance_span: float
+    torso_tilt: float
+    pelvis_shift_x: float
+    pelvis_shift_y: float
+    pelvis_depth_shift: float
+
+
+class DiagonalFacePunchEvaluationResponse(BaseModel):
+    motion_id: str
+    state: str
+    step_count: int
+    accuracy: float
+    feedback: str | None = None
+    tracking: str
+    last_counted_side: str | None = None
+    last_seen_side: str | None = None
+    left_armed: bool = True
+    right_armed: bool = True
+    reference_hip_x: float | None = None
+    reference_hip_y: float | None = None
+    reference_scale: float | None = None
+    displayed_feedback_code: str | None = None
+    displayed_feedback_text: str | None = None
+    displayed_feedback_frames: int = 0
+    candidate_feedback_code: str | None = None
+    candidate_feedback_text: str | None = None
+    candidate_feedback_streak: int = 0
+    representative_feedback_totals: dict[str, int] = Field(default_factory=dict)
+    representative_feedback_code: str | None = None
+    representative_feedback_text: str | None = None
+    representative_feedback_frames: int = 0
+    baseline_left_wrist_forward: float | None = None
+    baseline_right_wrist_forward: float | None = None
+    baseline_stance_span: float | None = None
+    features: DiagonalFacePunchFeaturesResponse

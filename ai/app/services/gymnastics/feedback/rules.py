@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 from app.services.gymnastics.features.diagonal_body_punch_features import DiagonalBodyPunchFeatureSet
+from app.services.gymnastics.features.diagonal_face_punch_features import DiagonalFacePunchFeatureSet
 from app.services.gymnastics.features.march_features import MarchFeatureSet
 from app.services.gymnastics.features.side_step_features import SideStepFeatureSet
 
@@ -58,6 +59,10 @@ WIDEN_PUNCH_STANCE = FeedbackCandidate(
 BEND_BACK_ARM = FeedbackCandidate(
     code="BEND_BACK_ARM",
     text="\ubc18\ub300 \ud314\uc740 \uc811\uc5b4\uc8fc\uc138\uc694",
+)
+RAISE_PUNCH_HIGHER = FeedbackCandidate(
+    code="RAISE_PUNCH_HIGHER",
+    text="\uc8fc\uba39\uc744 \ub354 \ub192\uac8c \uc62c\ub824\uc694",
 )
 
 
@@ -150,6 +155,61 @@ def select_diagonal_body_punch_feedback_candidate(
 
     if features.torso_tilt > torso_tilt_max:
         return STRAIGHTEN_BACK
+
+    dominant_forward = max(features.left_wrist_forward, features.right_wrist_forward)
+    if dominant_forward < forward_threshold:
+        return PUNCH_FURTHER
+
+    dominant_elbow = max(features.left_elbow_angle or 0.0, features.right_elbow_angle or 0.0)
+    if dominant_elbow < arm_straight_threshold:
+        return STRAIGHTEN_PUNCH_ARM
+
+    if features.stance_span < stance_span_threshold:
+        return WIDEN_PUNCH_STANCE
+
+    if (
+        features.left_wrist_forward > features.right_wrist_forward
+        and features.right_elbow_angle is not None
+        and features.right_elbow_angle > guard_bend_threshold
+    ) or (
+        features.right_wrist_forward > features.left_wrist_forward
+        and features.left_elbow_angle is not None
+        and features.left_elbow_angle > guard_bend_threshold
+    ):
+        return BEND_BACK_ARM
+
+    return None
+
+
+def select_diagonal_face_punch_feedback_candidate(
+    features: DiagonalFacePunchFeatureSet,
+    state: str,
+    tracking: str,
+    forward_threshold: float,
+    height_threshold: float,
+    arm_straight_threshold: float,
+    guard_bend_threshold: float,
+    stance_span_threshold: float,
+    depth_shift_max: float,
+    torso_tilt_max: float,
+) -> FeedbackCandidate | None:
+    if state == "complete":
+        return None
+
+    if tracking != "tracking_ok":
+        return TRACKING_LOW
+
+    if state == "idle":
+        if abs(features.pelvis_depth_shift) > depth_shift_max:
+            return STAY_IN_PLACE
+        return None
+
+    if features.torso_tilt > torso_tilt_max:
+        return STRAIGHTEN_BACK
+
+    dominant_height = max(features.left_wrist_height, features.right_wrist_height)
+    if dominant_height < height_threshold:
+        return RAISE_PUNCH_HIGHER
 
     dominant_forward = max(features.left_wrist_forward, features.right_wrist_forward)
     if dominant_forward < forward_threshold:
