@@ -7,6 +7,7 @@ import { ArtFreeDrawingScene } from './scenes/themes/art/free-drawing/ArtFreeDra
 import { ArtSelectScene } from './scenes/themes/art/select/ArtSelectScene'
 import { TaekwondoPoomsaeSelectScene } from './scenes/themes/taekwondo/select/TaekwondoPoomsaeSelectScene'
 import { TaekwondoSelectScene } from './scenes/themes/taekwondo/select/TaekwondoSelectScene'
+import { TaekwondoPoomsaePracticeScene } from './scenes/themes/taekwondo/play/TaekwondoPoomsaePracticeScene'
 import {
   GymnasticsDanielScene,
   GymnasticsTopScene,
@@ -38,6 +39,7 @@ export function createGame(parent: HTMLElement): Phaser.Game {
       ArtColoringScene,
       TaekwondoSelectScene,
       TaekwondoPoomsaeSelectScene,
+      TaekwondoPoomsaePracticeScene,
       GymnasticsSelectScene,
       GymnasticsTopScene,
       GymnasticsDanielScene,
