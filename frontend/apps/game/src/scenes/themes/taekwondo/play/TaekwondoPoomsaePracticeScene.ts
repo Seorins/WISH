@@ -26,10 +26,12 @@ const FEEDBACK_VISIBLE_MS = 2200
 export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
   private mediaStream: MediaStream | null = null
   private videoElement: HTMLVideoElement | null = null
-  private cameraCanvas!: HTMLCanvasElement
-  private cameraContext!: CanvasRenderingContext2D
-  private cameraTexture!: Phaser.Textures.CanvasTexture
+  private cameraCanvas: HTMLCanvasElement | null = null
+  private cameraContext: CanvasRenderingContext2D | null = null
+  private cameraTexture: Phaser.Textures.CanvasTexture | null = null
   private feedbackContainer?: Phaser.GameObjects.Container
+  private hasDrawnCameraPlaceholder = false
+  private lastVideoTime = -1
 
   private readonly handleEscDown = () => {
     this.returnToPoomsaeSelect()
@@ -193,6 +195,10 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     const cameraHeight = height - cameraInset * 2
     this.resizeCameraTexture(cameraWidth, cameraHeight)
 
+    if (!this.cameraTexture) {
+      return
+    }
+
     const cameraImage = this.add
       .image(x, y, this.cameraTexture.key)
       .setDisplaySize(cameraWidth, cameraHeight)
@@ -213,6 +219,10 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
   }
 
   private resizeCameraTexture(displayWidth: number, displayHeight: number) {
+    if (!this.cameraCanvas || !this.cameraTexture) {
+      return
+    }
+
     const canvasWidth = 960
     const canvasHeight = Math.max(1, Math.round(canvasWidth * (displayHeight / displayWidth)))
 
@@ -229,6 +239,8 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     }
     this.cameraContext = context
     this.cameraTexture.refresh()
+    this.hasDrawnCameraPlaceholder = false
+    this.lastVideoTime = -1
   }
 
   private createPanel(x: number, y: number, width: number, height: number, alpha = PANEL_ALPHA) {
@@ -308,6 +320,8 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     } catch {
       this.mediaStream = null
       this.videoElement = null
+      this.hasDrawnCameraPlaceholder = false
+      this.showFeedback('카메라 권한을 허용해주세요')
     }
   }
 
@@ -320,6 +334,21 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
   }
 
   private drawCameraFrame() {
+    if (!this.cameraCanvas || !this.cameraContext || !this.cameraTexture) {
+      return
+    }
+
+    if (this.canReadCameraFrame() && this.videoElement) {
+      if (this.videoElement.currentTime === this.lastVideoTime) {
+        return
+      }
+
+      this.lastVideoTime = this.videoElement.currentTime
+      this.hasDrawnCameraPlaceholder = false
+    } else if (this.hasDrawnCameraPlaceholder) {
+      return
+    }
+
     this.cameraContext.clearRect(0, 0, this.cameraCanvas.width, this.cameraCanvas.height)
 
     if (this.canReadCameraFrame() && this.videoElement) {
@@ -370,6 +399,7 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
         this.cameraCanvas.width / 2,
         this.cameraCanvas.height / 2,
       )
+      this.hasDrawnCameraPlaceholder = true
     }
 
     this.cameraTexture.refresh()
@@ -387,8 +417,14 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
   private stopCamera() {
     this.mediaStream?.getTracks().forEach(track => track.stop())
     this.mediaStream = null
-    this.videoElement?.remove()
+
+    if (this.videoElement) {
+      this.videoElement.pause()
+      this.videoElement.srcObject = null
+    }
     this.videoElement = null
+    this.lastVideoTime = -1
+    this.hasDrawnCameraPlaceholder = false
   }
 
   private cleanup() {
@@ -396,5 +432,17 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     this.feedbackContainer?.destroy()
     this.feedbackContainer = undefined
     this.stopCamera()
+
+    if (this.cameraTexture) {
+      this.textures.remove(this.cameraTexture.key)
+      this.cameraTexture = null
+    }
+
+    if (this.cameraCanvas) {
+      this.cameraCanvas.remove()
+      this.cameraCanvas = null
+    }
+
+    this.cameraContext = null
   }
 }
