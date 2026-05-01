@@ -146,7 +146,7 @@ def select_diagonal_body_punch_feedback_candidate(
     if state == "idle":
         if abs(features.pelvis_depth_shift) > depth_shift_max:
             return STAY_IN_PLACE
-        return ALTERNATE_STEPS
+        return None
 
     if features.torso_tilt > torso_tilt_max:
         return STRAIGHTEN_BACK
