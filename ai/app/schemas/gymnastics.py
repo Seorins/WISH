@@ -365,3 +365,56 @@ class DiagonalFacePunchEvaluationResponse(BaseModel):
     baseline_right_wrist_forward: float | None = None
     baseline_stance_span: float | None = None
     features: DiagonalFacePunchFeaturesResponse
+
+
+class SquatEvaluationRequest(BaseModel):
+    frame: PoseFrameRequest
+    previous_state: str = Field(default="idle")
+    step_count: int = Field(default=0, ge=0)
+    target_steps: int = Field(default=8, ge=1)
+    reference_hip_x: float | None = Field(default=None)
+    reference_hip_y: float | None = Field(default=None)
+    reference_scale: float | None = Field(default=None)
+    displayed_feedback_code: str | None = Field(default=None)
+    displayed_feedback_text: str | None = Field(default=None)
+    displayed_feedback_frames: int = Field(default=0, ge=0)
+    candidate_feedback_code: str | None = Field(default=None)
+    candidate_feedback_text: str | None = Field(default=None)
+    candidate_feedback_streak: int = Field(default=0, ge=0)
+    representative_feedback_totals: dict[str, int] = Field(default_factory=dict)
+    representative_feedback_code: str | None = Field(default=None)
+    representative_feedback_text: str | None = Field(default=None)
+    representative_feedback_frames: int = Field(default=0, ge=0)
+
+
+class SquatFeaturesResponse(BaseModel):
+    hip_drop: float
+    left_knee_angle: float | None = None
+    right_knee_angle: float | None = None
+    avg_knee_angle: float | None = None
+    torso_tilt: float
+    pelvis_shift_x: float
+    pelvis_depth_shift: float
+
+
+class SquatEvaluationResponse(BaseModel):
+    motion_id: str
+    state: str
+    step_count: int
+    accuracy: float
+    feedback: str | None = None
+    tracking: str
+    reference_hip_x: float | None = None
+    reference_hip_y: float | None = None
+    reference_scale: float | None = None
+    displayed_feedback_code: str | None = None
+    displayed_feedback_text: str | None = None
+    displayed_feedback_frames: int = 0
+    candidate_feedback_code: str | None = None
+    candidate_feedback_text: str | None = None
+    candidate_feedback_streak: int = 0
+    representative_feedback_totals: dict[str, int] = Field(default_factory=dict)
+    representative_feedback_code: str | None = None
+    representative_feedback_text: str | None = None
+    representative_feedback_frames: int = 0
+    features: SquatFeaturesResponse

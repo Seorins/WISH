@@ -4,6 +4,7 @@ from app.services.gymnastics.features.diagonal_body_punch_features import Diagon
 from app.services.gymnastics.features.diagonal_face_punch_features import DiagonalFacePunchFeatureSet
 from app.services.gymnastics.features.march_features import MarchFeatureSet
 from app.services.gymnastics.features.side_step_features import SideStepFeatureSet
+from app.services.gymnastics.features.squat_features import SquatFeatureSet
 
 
 @dataclass(slots=True)
@@ -63,6 +64,10 @@ BEND_BACK_ARM = FeedbackCandidate(
 RAISE_PUNCH_HIGHER = FeedbackCandidate(
     code="RAISE_PUNCH_HIGHER",
     text="\uc8fc\uba39\uc744 \ub354 \ub192\uac8c \uc62c\ub824\uc694",
+)
+SQUAT_DEEPER = FeedbackCandidate(
+    code="SQUAT_DEEPER",
+    text="\ub354 \uae4a\uc774 \uc549\uc544\uc694",
 )
 
 
@@ -221,5 +226,30 @@ def select_diagonal_face_punch_feedback_candidate(
 
     if features.stance_span < stance_span_threshold:
         return WIDEN_PUNCH_STANCE
+
+    return None
+
+
+def select_squat_feedback_candidate(
+    features: SquatFeatureSet,
+    state: str,
+    tracking: str,
+    bottom_threshold: float,
+    torso_tilt_max: float,
+) -> FeedbackCandidate | None:
+    if state == "complete":
+        return None
+
+    if tracking != "tracking_ok":
+        return TRACKING_LOW
+
+    if state == "idle":
+        return None
+
+    if features.torso_tilt > torso_tilt_max:
+        return STRAIGHTEN_BACK
+
+    if state == "descending" and features.hip_drop < bottom_threshold * 0.5:
+        return SQUAT_DEEPER
 
     return None

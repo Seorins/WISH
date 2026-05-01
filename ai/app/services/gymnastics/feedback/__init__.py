@@ -8,6 +8,7 @@ from app.services.gymnastics.feedback.rules import (
     select_diagonal_face_punch_feedback_candidate,
     select_march_feedback_candidate,
     select_side_step_feedback_candidate,
+    select_squat_feedback_candidate,
 )
 from app.services.gymnastics.feedback.stabilizer import FeedbackStabilizerState, stabilize_feedback
 
@@ -19,6 +20,7 @@ __all__ = [
     "select_side_step_feedback_candidate",
     "select_diagonal_body_punch_feedback_candidate",
     "select_diagonal_face_punch_feedback_candidate",
+    "select_squat_feedback_candidate",
     "stabilize_feedback",
     "update_representative_feedback",
 ]
