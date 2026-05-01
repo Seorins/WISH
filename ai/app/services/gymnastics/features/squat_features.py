@@ -13,7 +13,7 @@ from app.services.gymnastics.constants import (
     RIGHT_KNEE,
     RIGHT_SHOULDER,
 )
-from app.services.gymnastics.types import NormalizedLandmark, NormalizedPoseFrame
+from app.services.gymnastics.types import NormalizedPoseFrame
 
 
 @dataclass(slots=True)
@@ -115,11 +115,3 @@ def _compute_joint_angle(
     dot = ax * bx + ay * by
     cosine_value = max(min(dot / (mag_a * mag_b), 1.0), -1.0)
     return degrees(acos(cosine_value))
-
-
-def _distance(a: NormalizedLandmark | None, b: NormalizedLandmark | None) -> float:
-    if a is None or b is None:
-        return 0.0
-    dx = b.x - a.x
-    dy = b.y - a.y
-    return sqrt(dx * dx + dy * dy)
