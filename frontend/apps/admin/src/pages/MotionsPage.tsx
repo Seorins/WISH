@@ -10,7 +10,7 @@ import {
 import type { ExerciseMotion, ExerciseType } from '@wish/api-client'
 import { useAuthStore } from '../shared/auth/store'
 import { MotionForm } from './MotionForm'
-import type { MotionFormValues } from './MotionForm'
+import type { MotionFormSubmit } from './MotionForm'
 
 const EXERCISE_TYPES: ExerciseType[] = ['TOP', 'DANIEL']
 
@@ -30,15 +30,17 @@ export function MotionsPage() {
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['motions'] })
 
   const createMutation = useMutation({
-    mutationFn: (values: MotionFormValues) =>
+    mutationFn: (payload: MotionFormSubmit) =>
       createExerciseMotion({
-        exerciseType: values.exerciseType,
-        name: values.name,
-        routineOrder: values.routineOrder,
-        targetReps: values.targetReps,
-        description: values.description,
-        demoVideoUrl: values.demoVideoUrl || null,
-        thumbnailUrl: values.thumbnailUrl || null,
+        request: {
+          exerciseType: payload.values.exerciseType,
+          name: payload.values.name,
+          routineOrder: payload.values.routineOrder,
+          targetReps: payload.values.targetReps,
+          description: payload.values.description,
+        },
+        thumbnail: payload.thumbnail,
+        demoVideo: payload.demoVideo,
       }),
     onSuccess: () => {
       setCreating(false)
@@ -47,15 +49,19 @@ export function MotionsPage() {
   })
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, values }: { id: number; values: MotionFormValues }) =>
+    mutationFn: ({ id, payload }: { id: number; payload: MotionFormSubmit }) =>
       updateExerciseMotion(id, {
-        exerciseType: values.exerciseType,
-        name: values.name,
-        routineOrder: values.routineOrder,
-        targetReps: values.targetReps,
-        description: values.description,
-        demoVideoUrl: values.demoVideoUrl || null,
-        thumbnailUrl: values.thumbnailUrl || null,
+        request: {
+          // exerciseType / routineOrder 는 PATCH 대상 외 (BE UpdateRequest 에 없음). 수정 폼 입력은
+          // metadata 변경에만 의미가 있고, 미디어는 thumbnail/demoVideo + clear* 플래그로 처리.
+          name: payload.values.name,
+          targetReps: payload.values.targetReps,
+          description: payload.values.description,
+          clearThumbnail: payload.clearThumbnail,
+          clearDemoVideo: payload.clearDemoVideo,
+        },
+        thumbnail: payload.thumbnail,
+        demoVideo: payload.demoVideo,
       }),
     onSuccess: () => {
       setEditing(null)
@@ -126,8 +132,8 @@ export function MotionsPage() {
           <MotionForm
             defaultExerciseType={exerciseType}
             onCancel={() => setCreating(false)}
-            onSubmit={async values => {
-              await createMutation.mutateAsync(values)
+            onSubmit={async payload => {
+              await createMutation.mutateAsync(payload)
             }}
             submitting={createMutation.isPending}
           />
@@ -175,8 +181,8 @@ export function MotionsPage() {
                         defaultExerciseType={exerciseType}
                         initial={motion}
                         onCancel={() => setEditing(null)}
-                        onSubmit={async values => {
-                          await updateMutation.mutateAsync({ id: motion.id, values })
+                        onSubmit={async payload => {
+                          await updateMutation.mutateAsync({ id: motion.id, payload })
                         }}
                         submitting={updateMutation.isPending}
                       />

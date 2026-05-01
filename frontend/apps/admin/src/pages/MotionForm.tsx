@@ -1,7 +1,11 @@
+import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import type { ExerciseMotion, ExerciseType } from '@wish/api-client'
+
+const MAX_THUMBNAIL_BYTES = 10 * 1024 * 1024
+const MAX_VIDEO_BYTES = 100 * 1024 * 1024
 
 const motionSchema = z.object({
   exerciseType: z.enum(['TOP', 'DANIEL']),
@@ -9,16 +13,22 @@ const motionSchema = z.object({
   routineOrder: z.coerce.number().int().positive('1 이상 정수'),
   targetReps: z.coerce.number().int().positive('1 이상 정수'),
   description: z.string().min(1, '설명을 입력하세요'),
-  demoVideoUrl: z.string().max(500).optional().or(z.literal('')),
-  thumbnailUrl: z.string().max(500).optional().or(z.literal('')),
 })
 
-export type MotionFormValues = z.infer<typeof motionSchema>
+type MotionMetadataValues = z.infer<typeof motionSchema>
+
+export type MotionFormSubmit = {
+  values: MotionMetadataValues
+  thumbnail?: File
+  demoVideo?: File
+  clearThumbnail?: boolean
+  clearDemoVideo?: boolean
+}
 
 type Props = {
   defaultExerciseType: ExerciseType
   initial?: ExerciseMotion
-  onSubmit: (values: MotionFormValues) => void | Promise<void>
+  onSubmit: (payload: MotionFormSubmit) => void | Promise<void>
   onCancel: () => void
   submitting?: boolean
 }
@@ -30,7 +40,13 @@ export function MotionForm({
   onCancel,
   submitting,
 }: Props) {
-  const { register, handleSubmit, formState } = useForm<MotionFormValues>({
+  const [thumbnail, setThumbnail] = useState<File | undefined>()
+  const [demoVideo, setDemoVideo] = useState<File | undefined>()
+  const [clearThumbnail, setClearThumbnail] = useState(false)
+  const [clearDemoVideo, setClearDemoVideo] = useState(false)
+  const [fileError, setFileError] = useState<string | null>(null)
+
+  const { register, handleSubmit, formState } = useForm<MotionMetadataValues>({
     resolver: zodResolver(motionSchema),
     defaultValues: initial
       ? {
@@ -39,8 +55,6 @@ export function MotionForm({
           routineOrder: initial.routineOrder,
           targetReps: initial.targetReps,
           description: initial.description,
-          demoVideoUrl: initial.demoVideoUrl ?? '',
-          thumbnailUrl: initial.thumbnailUrl ?? '',
         }
       : {
           exerciseType: defaultExerciseType,
@@ -48,13 +62,42 @@ export function MotionForm({
           routineOrder: 1,
           targetReps: 8,
           description: '',
-          demoVideoUrl: '',
-          thumbnailUrl: '',
         },
   })
 
+  const handleThumbnailChange = (file: File | undefined) => {
+    setFileError(null)
+    if (file && file.size > MAX_THUMBNAIL_BYTES) {
+      setFileError('썸네일은 10MB 이하의 이미지여야 합니다')
+      return
+    }
+    setThumbnail(file)
+    if (file) setClearThumbnail(false)
+  }
+
+  const handleDemoVideoChange = (file: File | undefined) => {
+    setFileError(null)
+    if (file && file.size > MAX_VIDEO_BYTES) {
+      setFileError('영상은 100MB 이하여야 합니다')
+      return
+    }
+    setDemoVideo(file)
+    if (file) setClearDemoVideo(false)
+  }
+
+  const submit = async (values: MotionMetadataValues) => {
+    if (fileError) return
+    await onSubmit({
+      values,
+      thumbnail,
+      demoVideo,
+      clearThumbnail: initial ? clearThumbnail : undefined,
+      clearDemoVideo: initial ? clearDemoVideo : undefined,
+    })
+  }
+
   return (
-    <form onSubmit={handleSubmit(onSubmit)} style={styles.form}>
+    <form onSubmit={handleSubmit(submit)} style={styles.form}>
       <h3 style={styles.heading}>{initial ? '동작 수정' : '동작 추가'}</h3>
       <div style={styles.grid}>
         <label style={styles.label}>
@@ -114,27 +157,85 @@ export function MotionForm({
           )}
         </label>
 
-        <label style={styles.label}>
-          시범 영상 URL (선택)
-          <input {...register('demoVideoUrl')} style={styles.input} disabled={submitting} />
-        </label>
+        <div style={styles.label}>
+          <span>썸네일 (선택, 10MB 이하 PNG/JPG/WEBP/GIF)</span>
+          {initial?.thumbnailUrl && !thumbnail && (
+            <span style={styles.mediaHint}>
+              현재:{' '}
+              <a href={initial.thumbnailUrl} target="_blank" rel="noreferrer">
+                {extractFilename(initial.thumbnailUrl)}
+              </a>
+            </span>
+          )}
+          <input
+            type="file"
+            accept="image/*"
+            onChange={e => handleThumbnailChange(e.target.files?.[0])}
+            style={styles.fileInput}
+            disabled={submitting}
+          />
+          {initial?.thumbnailUrl && (
+            <label style={styles.checkboxLabel}>
+              <input
+                type="checkbox"
+                checked={clearThumbnail}
+                onChange={e => setClearThumbnail(e.target.checked)}
+                disabled={submitting || Boolean(thumbnail)}
+              />
+              기존 썸네일 제거
+            </label>
+          )}
+        </div>
 
-        <label style={styles.label}>
-          썸네일 URL (선택)
-          <input {...register('thumbnailUrl')} style={styles.input} disabled={submitting} />
-        </label>
+        <div style={styles.label}>
+          <span>시범 영상 (선택, 100MB 이하 MP4/WebM)</span>
+          {initial?.demoVideoUrl && !demoVideo && (
+            <span style={styles.mediaHint}>
+              현재:{' '}
+              <a href={initial.demoVideoUrl} target="_blank" rel="noreferrer">
+                {extractFilename(initial.demoVideoUrl)}
+              </a>
+            </span>
+          )}
+          <input
+            type="file"
+            accept="video/*"
+            onChange={e => handleDemoVideoChange(e.target.files?.[0])}
+            style={styles.fileInput}
+            disabled={submitting}
+          />
+          {initial?.demoVideoUrl && (
+            <label style={styles.checkboxLabel}>
+              <input
+                type="checkbox"
+                checked={clearDemoVideo}
+                onChange={e => setClearDemoVideo(e.target.checked)}
+                disabled={submitting || Boolean(demoVideo)}
+              />
+              기존 영상 제거
+            </label>
+          )}
+        </div>
       </div>
+
+      {fileError && <div style={styles.errorBox}>{fileError}</div>}
 
       <div style={styles.actions}>
         <button type="button" onClick={onCancel} style={styles.cancel} disabled={submitting}>
           취소
         </button>
-        <button type="submit" style={styles.submit} disabled={submitting}>
+        <button type="submit" style={styles.submit} disabled={submitting || Boolean(fileError)}>
           {submitting ? '저장 중…' : '저장'}
         </button>
       </div>
     </form>
   )
+}
+
+function extractFilename(url: string): string {
+  const trimmed = url.split('?')[0]
+  const last = trimmed.substring(trimmed.lastIndexOf('/') + 1)
+  return last || url
 }
 
 const styles: Record<string, React.CSSProperties> = {
@@ -157,7 +258,28 @@ const styles: Record<string, React.CSSProperties> = {
     border: '1px solid #ccc',
     borderRadius: 4,
   },
+  fileInput: {
+    fontSize: 12,
+  },
+  mediaHint: {
+    fontSize: 11,
+    color: '#555',
+  },
+  checkboxLabel: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    fontSize: 12,
+    color: '#555',
+  },
   error: { color: '#d32f2f', fontSize: 11 },
+  errorBox: {
+    padding: 10,
+    background: '#fdecea',
+    color: '#d32f2f',
+    borderRadius: 4,
+    fontSize: 13,
+  },
   actions: { display: 'flex', justifyContent: 'flex-end', gap: 8 },
   cancel: {
     padding: '6px 12px',
