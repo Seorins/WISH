@@ -143,6 +143,11 @@ def select_diagonal_body_punch_feedback_candidate(
     if tracking != "tracking_ok":
         return TRACKING_LOW
 
+    if state == "idle":
+        if abs(features.pelvis_depth_shift) > depth_shift_max:
+            return STAY_IN_PLACE
+        return ALTERNATE_STEPS
+
     if features.torso_tilt > torso_tilt_max:
         return STRAIGHTEN_BACK
 
@@ -167,11 +172,5 @@ def select_diagonal_body_punch_feedback_candidate(
         and features.left_elbow_angle > guard_bend_threshold
     ):
         return BEND_BACK_ARM
-
-    if state == "idle" and abs(features.pelvis_depth_shift) > depth_shift_max:
-        return STAY_IN_PLACE
-
-    if state == "idle":
-        return ALTERNATE_STEPS
 
     return None
