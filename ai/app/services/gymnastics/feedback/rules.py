@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 
+from app.services.gymnastics.features.diagonal_body_punch_features import DiagonalBodyPunchFeatureSet
 from app.services.gymnastics.features.march_features import MarchFeatureSet
 from app.services.gymnastics.features.side_step_features import SideStepFeatureSet
 
@@ -41,6 +42,22 @@ WIDEN_SIDE_STEP = FeedbackCandidate(
 MOVE_SIDE_ONLY = FeedbackCandidate(
     code="MOVE_SIDE_ONLY",
     text="\uc606\uc73c\ub85c\ub9cc \uc6c0\uc9c1\uc5ec\uc694",
+)
+PUNCH_FURTHER = FeedbackCandidate(
+    code="PUNCH_FURTHER",
+    text="\ud314\uc744 \ub354 \uc55e\uc73c\ub85c \ubed7\uc5b4\uc694",
+)
+STRAIGHTEN_PUNCH_ARM = FeedbackCandidate(
+    code="STRAIGHTEN_PUNCH_ARM",
+    text="\uc9c0\ub974\ub294 \ud314\uc744 \ub354 \uace7\uac8c \ud3b4\uc694",
+)
+WIDEN_PUNCH_STANCE = FeedbackCandidate(
+    code="WIDEN_PUNCH_STANCE",
+    text="\uc55e\ub4a4\ub85c \ub354 \ubc8c\ub824\uc11c \uc11c\uc694",
+)
+BEND_BACK_ARM = FeedbackCandidate(
+    code="BEND_BACK_ARM",
+    text="\ubc18\ub300 \ud314\uc740 \uc811\uc5b4\uc8fc\uc138\uc694",
 )
 
 
@@ -105,5 +122,55 @@ def select_side_step_feedback_candidate(
 
     if state == "idle":
         return ALTERNATE_STEPS
+
+    return None
+
+
+def select_diagonal_body_punch_feedback_candidate(
+    features: DiagonalBodyPunchFeatureSet,
+    state: str,
+    tracking: str,
+    forward_threshold: float,
+    arm_straight_threshold: float,
+    guard_bend_threshold: float,
+    stance_span_threshold: float,
+    depth_shift_max: float,
+    torso_tilt_max: float,
+) -> FeedbackCandidate | None:
+    if state == "complete":
+        return None
+
+    if tracking != "tracking_ok":
+        return TRACKING_LOW
+
+    if state == "idle":
+        if abs(features.pelvis_depth_shift) > depth_shift_max:
+            return STAY_IN_PLACE
+        return None
+
+    if features.torso_tilt > torso_tilt_max:
+        return STRAIGHTEN_BACK
+
+    dominant_forward = max(features.left_wrist_forward, features.right_wrist_forward)
+    if dominant_forward < forward_threshold:
+        return PUNCH_FURTHER
+
+    dominant_elbow = max(features.left_elbow_angle or 0.0, features.right_elbow_angle or 0.0)
+    if dominant_elbow < arm_straight_threshold:
+        return STRAIGHTEN_PUNCH_ARM
+
+    if features.stance_span < stance_span_threshold:
+        return WIDEN_PUNCH_STANCE
+
+    if (
+        features.left_wrist_forward > features.right_wrist_forward
+        and features.right_elbow_angle is not None
+        and features.right_elbow_angle > guard_bend_threshold
+    ) or (
+        features.right_wrist_forward > features.left_wrist_forward
+        and features.left_elbow_angle is not None
+        and features.left_elbow_angle > guard_bend_threshold
+    ):
+        return BEND_BACK_ARM
 
     return None

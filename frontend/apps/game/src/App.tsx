@@ -1,12 +1,14 @@
 import { useEffect, useRef } from 'react'
 import { createGame } from './phaser'
 import type Phaser from 'phaser'
+import DiagonalBodyPunchDebugPage from './debug/DiagonalBodyPunchDebugPage'
 import MarchDebugPage from './debug/MarchDebugPage'
 import SideStepDebugPage from './debug/SideStepDebugPage'
 import { ensureDemoAuthToken } from './auth/demoAuth'
 
 const DEBUG_MARCH_MODE = 'march'
 const DEBUG_SIDE_STEP_MODE = 'side-step'
+const DEBUG_DIAGONAL_BODY_PUNCH_MODE = 'diagonal-body-punch'
 
 function App() {
   const params = new URLSearchParams(window.location.search)
@@ -15,7 +17,13 @@ function App() {
   const gameRef = useRef<Phaser.Game | null>(null)
 
   useEffect(() => {
-    if (debugMode === DEBUG_MARCH_MODE || debugMode === DEBUG_SIDE_STEP_MODE) return
+    if (
+      debugMode === DEBUG_MARCH_MODE ||
+      debugMode === DEBUG_SIDE_STEP_MODE ||
+      debugMode === DEBUG_DIAGONAL_BODY_PUNCH_MODE
+    ) {
+      return
+    }
     if (!containerRef.current || gameRef.current) return
 
     let isCancelled = false
@@ -38,6 +46,10 @@ function App() {
 
   if (debugMode === DEBUG_SIDE_STEP_MODE) {
     return <SideStepDebugPage />
+  }
+
+  if (debugMode === DEBUG_DIAGONAL_BODY_PUNCH_MODE) {
+    return <DiagonalBodyPunchDebugPage />
   }
 
   return <div ref={containerRef} style={{ width: '100vw', height: '100vh', overflow: 'hidden' }} />

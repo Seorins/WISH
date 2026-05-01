@@ -34,6 +34,9 @@ class EvaluatorResult:
     baseline_left_step_extent: float | None = None
     baseline_right_step_extent: float | None = None
     baseline_ankle_span: float | None = None
+    baseline_left_wrist_forward: float | None = None
+    baseline_right_wrist_forward: float | None = None
+    baseline_stance_span: float | None = None
 
 
 class BaseEvaluator(ABC):
@@ -66,5 +69,8 @@ class BaseEvaluator(ABC):
         baseline_left_step_extent: float | None = None,
         baseline_right_step_extent: float | None = None,
         baseline_ankle_span: float | None = None,
+        baseline_left_wrist_forward: float | None = None,
+        baseline_right_wrist_forward: float | None = None,
+        baseline_stance_span: float | None = None,
     ) -> EvaluatorResult:
         raise NotImplementedError
