@@ -176,6 +176,140 @@ def test_diagonal_face_punch_requires_punch_height() -> None:
     assert low_punch_result.step_count == 0
 
 
+def test_punch_hold_via_previous_state() -> None:
+    """punch 자세 유지 중 strict 조건 미달이어도 previous_state로 hold 유지."""
+    evaluator = DiagonalFacePunchEvaluator()
+
+    neutral = evaluator.evaluate(
+        frame=build_diagonal_face_punch_frame(),
+        previous_state="idle",
+        step_count=0,
+        target_steps=8,
+    )
+
+    # right_wrist_forward = max(1.20 - 0.55, 0) - 0.25 = 0.40
+    # 0.30 < 0.40 < 0.60 : release 초과, punch 미달 → hold 조건 충족
+    partial_retract = build_diagonal_face_punch_frame(
+        right_wrist_x=1.20,
+        right_wrist_y=-1.15,
+        right_elbow_x=0.90,
+        right_elbow_y=-1.05,
+    )
+    result = evaluator.evaluate(
+        frame=partial_retract,
+        previous_state="right_punch",
+        step_count=neutral.step_count,
+        target_steps=8,
+        last_seen_side="right",
+        baseline_left_wrist_forward=neutral.baseline_left_wrist_forward,
+        baseline_right_wrist_forward=neutral.baseline_right_wrist_forward,
+        baseline_stance_span=neutral.baseline_stance_span,
+        reference_hip_x=neutral.reference_hip_x,
+        reference_hip_y=neutral.reference_hip_y,
+        reference_scale=neutral.reference_scale,
+    )
+
+    assert result.state == "right_punch"
+
+
+def test_punch_hold_via_last_seen_side() -> None:
+    """previous_state가 idle이어도 last_seen_side로 brief idle 동안 hold 유지."""
+    evaluator = DiagonalFacePunchEvaluator()
+
+    neutral = evaluator.evaluate(
+        frame=build_diagonal_face_punch_frame(),
+        previous_state="idle",
+        step_count=0,
+        target_steps=8,
+    )
+
+    partial_retract = build_diagonal_face_punch_frame(
+        right_wrist_x=1.20,
+        right_wrist_y=-1.15,
+        right_elbow_x=0.90,
+        right_elbow_y=-1.05,
+    )
+    result = evaluator.evaluate(
+        frame=partial_retract,
+        previous_state="idle",
+        step_count=neutral.step_count,
+        target_steps=8,
+        last_seen_side="right",
+        baseline_left_wrist_forward=neutral.baseline_left_wrist_forward,
+        baseline_right_wrist_forward=neutral.baseline_right_wrist_forward,
+        baseline_stance_span=neutral.baseline_stance_span,
+        reference_hip_x=neutral.reference_hip_x,
+        reference_hip_y=neutral.reference_hip_y,
+        reference_scale=neutral.reference_scale,
+    )
+
+    assert result.state == "right_punch"
+
+
+def test_punch_releases_to_idle_when_arm_drops() -> None:
+    """손목이 release_threshold 이하로 내려가면 idle로 전환."""
+    evaluator = DiagonalFacePunchEvaluator()
+
+    neutral = evaluator.evaluate(
+        frame=build_diagonal_face_punch_frame(),
+        previous_state="idle",
+        step_count=0,
+        target_steps=8,
+    )
+
+    # right_wrist_forward = max(1.00 - 0.55, 0) - 0.25 = 0.20 < release_threshold (0.30)
+    dropped_arm = build_diagonal_face_punch_frame(right_wrist_x=1.00)
+    result = evaluator.evaluate(
+        frame=dropped_arm,
+        previous_state="right_punch",
+        step_count=neutral.step_count,
+        target_steps=8,
+        last_seen_side="right",
+        baseline_left_wrist_forward=neutral.baseline_left_wrist_forward,
+        baseline_right_wrist_forward=neutral.baseline_right_wrist_forward,
+        baseline_stance_span=neutral.baseline_stance_span,
+        reference_hip_x=neutral.reference_hip_x,
+        reference_hip_y=neutral.reference_hip_y,
+        reference_scale=neutral.reference_scale,
+    )
+
+    assert result.state == "idle"
+
+
+def test_no_hold_when_last_seen_side_is_none() -> None:
+    """last_seen_side가 None이고 previous_state가 idle이면 hold 없이 idle 반환."""
+    evaluator = DiagonalFacePunchEvaluator()
+
+    neutral = evaluator.evaluate(
+        frame=build_diagonal_face_punch_frame(),
+        previous_state="idle",
+        step_count=0,
+        target_steps=8,
+    )
+
+    partial_retract = build_diagonal_face_punch_frame(
+        right_wrist_x=1.20,
+        right_wrist_y=-1.15,
+        right_elbow_x=0.90,
+        right_elbow_y=-1.05,
+    )
+    result = evaluator.evaluate(
+        frame=partial_retract,
+        previous_state="idle",
+        step_count=neutral.step_count,
+        target_steps=8,
+        last_seen_side=None,
+        baseline_left_wrist_forward=neutral.baseline_left_wrist_forward,
+        baseline_right_wrist_forward=neutral.baseline_right_wrist_forward,
+        baseline_stance_span=neutral.baseline_stance_span,
+        reference_hip_x=neutral.reference_hip_x,
+        reference_hip_y=neutral.reference_hip_y,
+        reference_scale=neutral.reference_scale,
+    )
+
+    assert result.state == "idle"
+
+
 def build_diagonal_face_punch_frame(
     left_wrist_x: float = -0.80,
     right_wrist_x: float = 0.80,
