@@ -46,7 +46,7 @@ const CARD_FONT_FAMILY = '"Malgun Gothic", "Noto Sans KR", sans-serif'
 const CARD_FRAME_ASPECT_RATIO = 408 / 612
 const CONTENT_CONFIRM_VISIBLE_MS = 1300
 const MUSIC_CONTENT_SCENE_KEYS: Record<MusicContentMode, string> = {
-  'rhythm-game': 'MusicRhythmScene',
+  'rhythm-game': 'MusicSongSelectScene',
   'free-play': 'MusicFreePlayScene',
 }
 

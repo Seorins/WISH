@@ -15,6 +15,7 @@ import {
 import { GymnasticsSelectScene } from './scenes/themes/gymnastics/select/GymnasticsSelectScene'
 import { MusicRhythmScene } from './scenes/themes/music/play/MusicRhythmScene'
 import { MusicSelectScene } from './scenes/themes/music/select/MusicSelectScene'
+import { MusicSongSelectScene } from './scenes/themes/music/select/MusicSongSelectScene'
 import { VillageScene } from './scenes/village/VillageScene'
 
 function configureTouchSurface(element: HTMLElement) {
@@ -67,6 +68,7 @@ export function createGame(parent: HTMLElement): Phaser.Game {
       GymnasticsTopScene,
       GymnasticsDanielScene,
       MusicSelectScene,
+      MusicSongSelectScene,
       MusicRhythmScene,
     ],
     scale: {
