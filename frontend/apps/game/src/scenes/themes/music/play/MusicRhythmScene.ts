@@ -2,44 +2,53 @@ import Phaser from 'phaser'
 import { assetPath } from '@/game/assets/assetPath'
 import { fadeToScene } from '@/game/systems/sceneTransition'
 import { addCoverBackground } from '@/game/world/background'
+import { createCameraBackground, type CameraBackground } from '@/game/world/cameraBackground'
+import { HandTracker } from '@/game/motion/handTracker'
+import { OneEuroPointFilter } from '@/game/motion/oneEuroFilter'
 import {
-  TWINKLE_STAR_RHYTHM_CHART,
+  DEFAULT_RHYTHM_CHART,
+  getRhythmChart,
   type RhythmChart,
   type RhythmLane,
   type RhythmNote,
 } from './rhythmCharts'
 
+type MusicRhythmSceneData = {
+  chartId?: string
+}
+
 type ActiveNote = {
   note: RhythmNote
-  icon: Phaser.GameObjects.Image
+  body: Phaser.GameObjects.Graphics
   resolved: boolean
+  holdStartMs?: number
+  holdLabel?: 'PERFECT' | 'GOOD'
 }
 
 type LaneView = {
   lane: RhythmLane
-  x: number
   color: number
-  track: Phaser.GameObjects.Graphics
   pad: Phaser.GameObjects.Graphics
-  label: Phaser.GameObjects.Text
 }
 
 type SeekableSound = Phaser.Sound.BaseSound & {
   seek?: number
 }
 
-const FONT_FAMILY = '"Malgun Gothic", "Noto Sans KR", sans-serif'
-const LANE_KEYS = ['A', 'S', 'D'] as const
-const LANE_COLORS = [0x8ad7ff, 0xffcf7a, 0xff91b6] as const
-const NOTE_LEAD_MS = 1_750
-const PERFECT_WINDOW_MS = 70
-const GOOD_WINDOW_MS = 130
-const MISS_WINDOW_MS = 180
-const HIT_LINE_RATIO = 0.76
-const SPAWN_LINE_RATIO = 0.12
+const FONT_FAMILY = '"Pretendard", "Noto Sans KR", "Malgun Gothic", sans-serif'
+const GAME_FONT = '"Arial Black", "Pretendard", "Noto Sans KR", "Malgun Gothic", sans-serif'
+const LANE_COUNT = 4
+const LANE_COLORS = [0x4fd8ff, 0x8b7cff, 0xffcf5d, 0xff6fbd] as const
+const NOTE_LEAD_MS = 1_800
+const PERFECT_WINDOW_MS = 200
+const GOOD_WINDOW_MS = 360
+const MISS_WINDOW_MS = 520
+const HIT_LINE_RATIO = 0.78
+const SPAWN_LINE_RATIO = 0.16
 
 export class MusicRhythmScene extends Phaser.Scene {
-  private readonly chart: RhythmChart = TWINKLE_STAR_RHYTHM_CHART
+  private chart: RhythmChart = DEFAULT_RHYTHM_CHART
+  private chartId: string | undefined = undefined
   private lanes: LaneView[] = []
   private activeNotes: ActiveNote[] = []
   private keyBindings: Phaser.Input.Keyboard.Key[] = []
@@ -49,10 +58,12 @@ export class MusicRhythmScene extends Phaser.Scene {
   private judgmentText!: Phaser.GameObjects.Text
   private progressFill!: Phaser.GameObjects.Graphics
   private startOverlay!: Phaser.GameObjects.Container
+  private stageCenterX = 0
   private hitLineY = 0
   private spawnLineY = 0
   private playWidth = 0
-  private noteSize = 0
+  private playTopWidth = 0
+  private noteHeight = 0
   private nextNoteIndex = 0
   private startTimeMs = 0
   private score = 0
@@ -61,9 +72,24 @@ export class MusicRhythmScene extends Phaser.Scene {
   private perfectCount = 0
   private goodCount = 0
   private missCount = 0
+  private padRadius = 0
+  private laneHeld: boolean[] = [false, false, false, false]
+  private holdNotes: (ActiveNote | null)[] = [null, null, null, null]
   private isStarted = false
   private isFinished = false
   private isLeaving = false
+  private cameraBackground: CameraBackground | null = null
+  private handTracker: HandTracker | null = null
+  private handCursor: Phaser.GameObjects.Graphics | null = null
+  private laneFingerInside: boolean[] = [false, false, false, false]
+  // 손가락 좌표 적응형 스무딩 (One Euro Filter)
+  // - minCutoff 작게 → 정지 시 강한 평활화 (떨림 거의 0)
+  // - beta 크게  → 빠른 움직임에 즉각 반응
+  private readonly fingerFilter = new OneEuroPointFilter({
+    minCutoff: 0.5,
+    beta: 0.02,
+    dCutoff: 1,
+  })
 
   private readonly handleSpaceDown = () => {
     if (this.isFinished) {
@@ -90,34 +116,58 @@ export class MusicRhythmScene extends Phaser.Scene {
     super({ key: 'MusicRhythmScene' })
   }
 
+  init(data?: MusicRhythmSceneData) {
+    this.chartId = data?.chartId
+    this.chart = getRhythmChart(this.chartId)
+  }
+
   preload() {
     this.load.image(
       'music-rhythm-background',
-      assetPath('images/themes/music/background/background.png'),
+      assetPath('images/themes/music/background/babyshark.png'),
     )
     this.load.audio(this.chart.audioKey, assetPath(this.chart.audioPath))
-    Array.from({ length: 5 }, (_, index) => {
-      this.load.image(
-        `music-rhythm-note-${index + 1}`,
-        assetPath(`images/themes/music/ui/note${index + 1}.png`),
-      )
-    })
   }
 
   create() {
     this.resetRoundState()
 
     const { width: vw, height: vh } = this.scale
-    addCoverBackground(this, 'music-rhythm-background').setAlpha(0.72)
-    this.add.rectangle(vw / 2, vh / 2, vw, vh, 0x151827, 0.54).setDepth(1)
 
+    // ── 레이어 ──
+    // depth 0: 일러스트 배경 (외곽에서 보임)
+    // depth 1: 카메라 영상 (비네팅으로 가운데만 또렷)
+    // depth 2: 어두운 틴트 (가독성)
+    // depth 3+: 게임 UI (또렷)
+    addCoverBackground(this, 'music-rhythm-background', { depth: 0 }).setAlpha(1)
+
+    // HandTracker가 비디오 + MediaPipe HandLandmarker 둘 다 관리
+    this.handTracker = new HandTracker()
+    void this.handTracker.start().catch(err => {
+      console.warn('[MusicRhythmScene] hand tracker start failed:', err)
+    })
+
+    this.cameraBackground = createCameraBackground(this, {
+      getVideoElement: () => this.handTracker?.video ?? null,
+      textureKey: 'music-rhythm-camera',
+      depth: 1,
+      alpha: 0.65,
+      mirror: true,
+      vignette: 0.95,
+    })
+
+    this.createStageBackdrop(vw, vh)
+
+    this.stageCenterX = vw / 2
     this.hitLineY = vh * HIT_LINE_RATIO
     this.spawnLineY = vh * SPAWN_LINE_RATIO
-    this.playWidth = Phaser.Math.Clamp(vw * 0.64, Math.min(360, vw * 0.86), 820)
-    this.noteSize = Phaser.Math.Clamp(Math.min(vw, vh) * 0.075, 46, 76)
+    this.playWidth = Phaser.Math.Clamp(vw * 0.78, Math.min(360, vw * 0.9), 940)
+    this.playTopWidth = Phaser.Math.Clamp(this.playWidth * 0.3, 170, 300)
+    this.noteHeight = Phaser.Math.Clamp(vh * 0.034, 22, 34)
 
     this.createHeader(vw, vh)
-    this.createLaneViews(vw, vh)
+    this.createLaneViews(vh)
+    this.createLightBeams(vw, vh)
     this.createProgressBar(vw, vh)
     this.createStartOverlay(vw, vh)
     this.bindKeyboard()
@@ -130,6 +180,12 @@ export class MusicRhythmScene extends Phaser.Scene {
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.stopMusic()
+      this.handTracker?.stop()
+      this.handTracker = null
+      this.cameraBackground?.destroy()
+      this.cameraBackground = null
+      this.handCursor?.destroy()
+      this.handCursor = null
       this.keyBindings.forEach(key => key.removeAllListeners())
       this.input.keyboard?.off('keydown-SPACE', this.handleSpaceDown)
       this.input.keyboard?.off('keydown-ESC', this.handleEscDown)
@@ -140,18 +196,110 @@ export class MusicRhythmScene extends Phaser.Scene {
   }
 
   update() {
+    // 카메라/손 추적은 게임 시작 전/후에도 항상 동작 (사용자가 본인 위치 확인)
+    this.cameraBackground?.update()
+    this.processHandInput()
+
     if (!this.isStarted || this.isFinished) {
       return
     }
 
     const elapsedMs = this.getSongTimeMs()
     this.spawnDueNotes(elapsedMs)
+    this.checkHoldCompletions(elapsedMs)
     this.updateActiveNotes(elapsedMs)
     this.updateProgress(elapsedMs)
 
-    if (elapsedMs >= this.chart.durationMs && this.activeNotes.length === 0) {
+    if (this.shouldFinishRound(elapsedMs)) {
       this.finishRound()
     }
+  }
+
+  private processHandInput() {
+    const tracker = this.handTracker
+    if (!tracker || !tracker.isStarted) return
+
+    const result = tracker.detect()
+    const hand = result.hands[0]
+
+    if (!hand) {
+      this.handCursor?.setVisible(false)
+      // 손이 사라지면 모든 lane 상태 + 필터 리셋
+      this.laneFingerInside.fill(false)
+      this.fingerFilter.reset()
+      return
+    }
+
+    // landmark 8 = 검지 손가락 끝
+    const indexTip = hand.landmarks[8]
+    if (!indexTip) return
+
+    const { width: vw, height: vh } = this.scale
+    // 카메라가 좌우 미러링되어 표시되므로 x도 뒤집어서 화면 좌표에 맞춤
+    const rawX = (1 - indexTip.x) * vw
+    const rawY = indexTip.y * vh
+
+    // One Euro Filter 로 떨림 제거 + 빠른 움직임 추적
+    const smoothed = this.fingerFilter.filter({ x: rawX, y: rawY })
+    const sx = smoothed.x
+    const sy = smoothed.y
+
+    this.drawHandCursor(sx, sy)
+
+    // 손가락이 패드 원에 걸쳐있고 + 그 레인에 판정 윈도우 안의 노트가 있으면 자동 탭
+    // (손가락이 머무는 동안 새 노트가 들어오는 순간마다 hit, 빈 입력 누적 X)
+    const elapsedMs = this.getSongTimeMs()
+    for (let lane = 0; lane < LANE_COUNT; lane++) {
+      const padX = this.getLaneCenterX(lane as RhythmLane, this.hitLineY)
+      const padY = this.hitLineY
+      const dx = sx - padX
+      const dy = sy - padY
+      const triggerR = this.padRadius * 1.4 // 손가락 정확도 보정
+      const inside = dx * dx + dy * dy <= triggerR * triggerR
+      this.laneFingerInside[lane] = inside
+      if (!inside) continue
+
+      const hasHittableNote = this.activeNotes.some(
+        an =>
+          !an.resolved &&
+          an.note.lane === lane &&
+          Math.abs(an.note.timeMs - elapsedMs) <= MISS_WINDOW_MS,
+      )
+      if (hasHittableNote) {
+        this.handleLaneInput(lane as RhythmLane)
+      }
+    }
+  }
+
+  private drawHandCursor(x: number, y: number) {
+    if (!this.handCursor) {
+      this.handCursor = this.add.graphics().setDepth(45).setScrollFactor(0)
+    }
+    const g = this.handCursor
+    g.setVisible(true)
+    g.clear()
+    // 외곽 글로우
+    for (let i = 0; i < 6; i++) {
+      g.fillStyle(0x4fd8ff, 0.04)
+      g.fillCircle(x, y, 22 - i * 2)
+    }
+    // 중심 점
+    g.fillStyle(0xffffff, 0.95)
+    g.fillCircle(x, y, 6)
+    g.lineStyle(2, 0x4fd8ff, 1)
+    g.strokeCircle(x, y, 10)
+  }
+
+  private shouldFinishRound(elapsedMs: number) {
+    const allNotesSpawned = this.nextNoteIndex >= this.chart.notes.length
+    const noActiveNotes = this.activeNotes.length === 0 && this.holdNotes.every(note => !note)
+    const playableEndMs = this.getLastNoteEndMs() + MISS_WINDOW_MS + 120
+
+    return (
+      allNotesSpawned &&
+      noActiveNotes &&
+      (elapsedMs >= this.chart.durationMs || elapsedMs >= playableEndMs)
+    )
   }
 
   private resetRoundState() {
@@ -167,151 +315,285 @@ export class MusicRhythmScene extends Phaser.Scene {
     this.perfectCount = 0
     this.goodCount = 0
     this.missCount = 0
+    this.laneHeld = [false, false, false, false]
+    this.holdNotes = [null, null, null, null]
     this.isStarted = false
     this.isFinished = false
     this.isLeaving = false
+    this.cameraBackground = null
+    this.handTracker = null
+    this.handCursor = null
+    this.laneFingerInside = [false, false, false, false]
+    this.fingerFilter.reset()
+  }
+
+  private createStageBackdrop(vw: number, vh: number) {
+    // 어두운 틴트를 가운데(카메라 영역)에만 깔고 가장자리는 일러스트가 또렷하게
+    const tintKey = 'music-rhythm-center-tint'
+    if (this.textures.exists(tintKey)) {
+      this.textures.remove(tintKey)
+    }
+    const tintCanvas = document.createElement('canvas')
+    tintCanvas.width = 960
+    tintCanvas.height = 540
+    const tintCtx = tintCanvas.getContext('2d')
+    if (tintCtx) {
+      const cx = tintCanvas.width / 2
+      const cy = tintCanvas.height / 2
+      const inner = Math.min(tintCanvas.width, tintCanvas.height) * 0.2
+      const outer = Math.hypot(cx, cy)
+      const grad = tintCtx.createRadialGradient(cx, cy, inner, cx, cy, outer)
+      grad.addColorStop(0, 'rgba(5,6,14,0.42)')
+      grad.addColorStop(0.7, 'rgba(5,6,14,0.18)')
+      grad.addColorStop(1, 'rgba(5,6,14,0)')
+      tintCtx.fillStyle = grad
+      tintCtx.fillRect(0, 0, tintCanvas.width, tintCanvas.height)
+      this.textures.addCanvas(tintKey, tintCanvas)
+      this.add
+        .image(vw / 2, vh / 2, tintKey)
+        .setDisplaySize(vw, vh)
+        .setDepth(2)
+    }
+
+    // stars
+    Array.from({ length: 60 }, (_, index) => {
+      const x = ((index * 137) % Math.max(1, Math.round(vw))) + 0.5
+      const y = ((index * 89) % Math.max(1, Math.round(vh * 0.85))) + vh * 0.04
+      const alpha = index % 3 === 0 ? 0.55 : 0.25
+      const size = index % 5 === 0 ? 2.5 : 1.4
+      this.add.rectangle(x, y, size, size, 0xffffff, alpha).setDepth(3)
+    })
+  }
+
+  private createLightBeams(vw: number, vh: number) {
+    const beams = this.add.graphics().setDepth(5).setScrollFactor(0)
+
+    const leftX = this.stageCenterX - this.playWidth / 2
+    const rightX = this.stageCenterX + this.playWidth / 2
+    const focusY = this.hitLineY
+    const STEPS = 10
+    const STEP_ALPHA = 0.021
+
+    // left beam: 10 uniform-alpha triangles from widest to narrowest → smooth cumulative gradient
+    for (let i = 0; i < STEPS; i++) {
+      const t = i / (STEPS - 1)
+      const baseL = Phaser.Math.Linear(-vw * 0.22, leftX * 0.2, t)
+      const baseR = Phaser.Math.Linear(vw * 0.08, leftX * 0.72, t)
+      beams.fillStyle(0x2be7ff, STEP_ALPHA)
+      beams.fillTriangle(leftX, focusY, baseL, vh + 40, baseR, vh + 40)
+    }
+
+    // right beam: same technique mirrored
+    for (let i = 0; i < STEPS; i++) {
+      const t = i / (STEPS - 1)
+      const baseL = Phaser.Math.Linear(vw + vw * 0.22, rightX + (vw - rightX) * 0.28, t)
+      const baseR = Phaser.Math.Linear(vw - vw * 0.08, rightX + (vw - rightX) * 0.8, t)
+      beams.fillStyle(0xff59d6, STEP_ALPHA)
+      beams.fillTriangle(rightX, focusY, baseL, vh + 40, baseR, vh + 40)
+    }
   }
 
   private createHeader(vw: number, vh: number) {
-    this.add
-      .text(vw / 2, vh * 0.055, `${this.chart.title}  ·  ${this.chart.subtitle}`, {
-        fontFamily: FONT_FAMILY,
-        fontSize: `${Phaser.Math.Clamp(vh * 0.04, 28, 42)}px`,
-        fontStyle: 'bold',
-        color: '#fff7d6',
-        stroke: '#46301a',
-        strokeThickness: 4,
-      })
-      .setOrigin(0.5)
-      .setDepth(20)
-      .setScrollFactor(0)
-
+    // score — top left
     this.scoreText = this.add
-      .text(vw * 0.07, vh * 0.11, 'SCORE 0', {
-        fontFamily: FONT_FAMILY,
-        fontSize: `${Phaser.Math.Clamp(vh * 0.027, 20, 28)}px`,
+      .text(vw * 0.04, vh * 0.07, '0', {
+        fontFamily: GAME_FONT,
+        fontSize: `${Phaser.Math.Clamp(vh * 0.048, 34, 54)}px`,
         fontStyle: 'bold',
-        color: '#fff7d6',
+        color: '#ffffff',
+        stroke: '#00d4ff',
+        strokeThickness: 3,
       })
       .setOrigin(0, 0.5)
-      .setDepth(20)
+      .setDepth(30)
       .setScrollFactor(0)
 
-    this.comboText = this.add
-      .text(vw * 0.93, vh * 0.11, 'COMBO 0', {
+    this.add
+      .text(vw * 0.04, vh * 0.12, 'SCORE', {
         fontFamily: FONT_FAMILY,
-        fontSize: `${Phaser.Math.Clamp(vh * 0.027, 20, 28)}px`,
+        fontSize: `${Phaser.Math.Clamp(vh * 0.018, 13, 18)}px`,
+        color: '#88ccee',
         fontStyle: 'bold',
-        color: '#fff7d6',
+      })
+      .setOrigin(0, 0.5)
+      .setDepth(30)
+      .setScrollFactor(0)
+
+    // combo — right center, large
+    this.comboText = this.add
+      .text(vw * 0.93, vh * 0.44, '0', {
+        fontFamily: GAME_FONT,
+        fontSize: `${Phaser.Math.Clamp(vh * 0.13, 90, 140)}px`,
+        fontStyle: 'bold',
+        color: '#ffffff',
+        stroke: '#cc44ff',
+        strokeThickness: 4,
+        align: 'right',
       })
       .setOrigin(1, 0.5)
-      .setDepth(20)
+      .setDepth(30)
+      .setScrollFactor(0)
+
+    this.add
+      .text(vw * 0.93, vh * 0.56, 'COMBO', {
+        fontFamily: GAME_FONT,
+        fontSize: `${Phaser.Math.Clamp(vh * 0.028, 20, 30)}px`,
+        fontStyle: 'bold',
+        color: '#cc44ff',
+        stroke: '#44006a',
+        strokeThickness: 4,
+        align: 'right',
+      })
+      .setOrigin(1, 0.5)
+      .setDepth(30)
       .setScrollFactor(0)
 
     this.judgmentText = this.add
-      .text(vw / 2, vh * 0.28, '', {
-        fontFamily: FONT_FAMILY,
-        fontSize: `${Phaser.Math.Clamp(vh * 0.065, 42, 70)}px`,
+      .text(vw * 0.5, vh * 0.38, '', {
+        fontFamily: GAME_FONT,
+        fontSize: `${Phaser.Math.Clamp(vh * 0.07, 48, 80)}px`,
         fontStyle: 'bold',
         color: '#ffffff',
-        stroke: '#312131',
+        stroke: '#000000',
         strokeThickness: 6,
       })
       .setOrigin(0.5)
-      .setDepth(35)
+      .setDepth(55)
       .setAlpha(0)
-      .setScrollFactor(0)
-
-    this.add
-      .text(vw / 2, vh * 0.91, 'A  S  D 또는 아래 패드를 눌러 박자를 맞춰요', {
-        fontFamily: FONT_FAMILY,
-        fontSize: `${Phaser.Math.Clamp(vh * 0.023, 18, 25)}px`,
-        fontStyle: 'bold',
-        color: '#fff0c8',
-        align: 'center',
-      })
-      .setOrigin(0.5)
-      .setDepth(20)
       .setScrollFactor(0)
   }
 
-  private createLaneViews(vw: number, vh: number) {
-    const laneWidth = this.playWidth / 3
-    const startX = vw / 2 - this.playWidth / 2 + laneWidth / 2
-    const trackTop = vh * 0.16
-    const trackHeight = this.hitLineY - trackTop + this.noteSize * 0.78
-    const padHeight = Phaser.Math.Clamp(vh * 0.105, 74, 112)
+  private createLaneViews(_vh: number) {
+    // padRadius: note at hitLineY has same radius → perfect match
+    this.padRadius = (this.playWidth / LANE_COUNT) * 0.26
 
-    for (let index = 0; index < 3; index += 1) {
+    const track = this.add.graphics().setDepth(8).setScrollFactor(0)
+    this.drawPerspectiveTrack(track)
+
+    for (let index = 0; index < LANE_COUNT; index += 1) {
       const lane = index as RhythmLane
-      const x = startX + laneWidth * index
       const color = LANE_COLORS[index]
-      const track = this.add.graphics().setDepth(5)
-      const pad = this.add.graphics().setDepth(16)
+      const x = this.getLaneCenterX(lane, this.hitLineY)
+      const pad = this.add.graphics().setDepth(22).setScrollFactor(0)
 
-      track.fillStyle(0xffffff, 0.08)
-      track.fillRoundedRect(x - laneWidth * 0.43, trackTop, laneWidth * 0.86, trackHeight, 18)
-      track.lineStyle(3, color, 0.34)
-      track.strokeRoundedRect(x - laneWidth * 0.43, trackTop, laneWidth * 0.86, trackHeight, 18)
+      this.drawPad(pad, x, this.hitLineY, this.padRadius, color, 0.65)
 
-      this.drawPad(pad, x, vh - padHeight * 0.75, laneWidth * 0.74, padHeight, color, 0.82)
-
-      const label = this.add
-        .text(x, vh - padHeight * 0.77, LANE_KEYS[index], {
-          fontFamily: FONT_FAMILY,
-          fontSize: `${Math.round(padHeight * 0.36)}px`,
-          fontStyle: 'bold',
-          color: '#33241a',
-        })
-        .setOrigin(0.5)
-        .setDepth(18)
-        .setScrollFactor(0)
-
+      const touchSize = this.padRadius * 2.4
       const zone = this.add
-        .zone(x, vh - padHeight * 0.75, laneWidth * 0.82, padHeight * 1.08)
+        .zone(x, this.hitLineY, touchSize, touchSize)
         .setInteractive({ cursor: 'pointer' })
-        .setDepth(30)
+        .setDepth(50)
         .setScrollFactor(0)
       zone.on('pointerdown', () => this.handleLaneInput(lane))
+      zone.on('pointerup', () => this.handleLaneRelease(lane))
+      zone.on('pointerout', () => this.handleLaneRelease(lane))
 
-      this.lanes.push({ lane, x, color, track, pad, label })
+      this.lanes.push({ lane, color, pad })
+    }
+  }
+
+  private drawPerspectiveTrack(track: Phaser.GameObjects.Graphics) {
+    const topY = this.spawnLineY - this.noteHeight
+    // fills slightly below hitLine for visual continuity; lines STOP at hitLine
+    const fillBottomY = this.hitLineY + this.padRadius * 0.6
+    const lineBottomY = this.hitLineY - this.padRadius * 0.05
+
+    // base dark track
+    track.clear()
+    track.fillStyle(0x04060f, 0.75)
+    this.fillTrackQuad(track, 0, LANE_COUNT, topY, fillBottomY)
+
+    // lane color fills
+    for (let lane = 0; lane < LANE_COUNT; lane += 1) {
+      track.fillStyle(LANE_COLORS[lane], 0.22)
+      this.fillTrackQuad(track, lane, lane + 1, topY, fillBottomY)
     }
 
-    const line = this.add.graphics().setDepth(14)
-    line.lineStyle(6, 0xffffff, 0.9)
-    line.lineBetween(
-      vw / 2 - this.playWidth * 0.5,
-      this.hitLineY,
-      vw / 2 + this.playWidth * 0.5,
-      this.hitLineY,
-    )
-    line.lineStyle(2, 0xfff2b0, 0.96)
-    line.lineBetween(
-      vw / 2 - this.playWidth * 0.48,
-      this.hitLineY - 8,
-      vw / 2 + this.playWidth * 0.48,
-      this.hitLineY - 8,
-    )
+    // horizontal scanlines
+    const scanStep = 52
+    for (let sy = topY + scanStep; sy < lineBottomY; sy += scanStep) {
+      track.lineStyle(1, 0xffffff, 0.055)
+      track.lineBetween(this.getLaneBoundaryX(0, sy), sy, this.getLaneBoundaryX(LANE_COUNT, sy), sy)
+    }
+
+    // lane divider lines — END at lineBottomY (above pad circles)
+    for (let boundary = 0; boundary <= LANE_COUNT; boundary += 1) {
+      const isEdge = boundary === 0 || boundary === LANE_COUNT
+      if (isEdge) {
+        track.lineStyle(2.5, 0xffffff, 0.5)
+      } else {
+        const leftColor = LANE_COLORS[boundary - 1]
+        const rightColor = LANE_COLORS[boundary]
+        const blendR = (((leftColor >> 16) & 0xff) + ((rightColor >> 16) & 0xff)) >> 1
+        const blendG = (((leftColor >> 8) & 0xff) + ((rightColor >> 8) & 0xff)) >> 1
+        const blendB = ((leftColor & 0xff) + (rightColor & 0xff)) >> 1
+        track.lineStyle(1.5, (blendR << 16) | (blendG << 8) | blendB, 0.5)
+      }
+      track.lineBetween(
+        this.getLaneBoundaryX(boundary, topY),
+        topY,
+        this.getLaneBoundaryX(boundary, lineBottomY),
+        lineBottomY,
+      )
+    }
+
+    // hit line glow
+    const hlLeft = this.getLaneBoundaryX(0, this.hitLineY)
+    const hlRight = this.getLaneBoundaryX(LANE_COUNT, this.hitLineY)
+    const hlWidth = hlRight - hlLeft
+
+    track.fillStyle(0xf363ff, 0.08)
+    track.fillRect(hlLeft, this.hitLineY - 20, hlWidth, 40)
+    track.fillStyle(0xf363ff, 0.25)
+    track.fillRect(hlLeft, this.hitLineY - 5, hlWidth, 10)
+    track.lineStyle(3, 0xf363ff, 1)
+    track.lineBetween(hlLeft, this.hitLineY, hlRight, this.hitLineY)
+    track.lineStyle(1, 0xffffff, 0.75)
+    track.lineBetween(hlLeft, this.hitLineY, hlRight, this.hitLineY)
+  }
+
+  private fillTrackQuad(
+    graphics: Phaser.GameObjects.Graphics,
+    leftBoundary: number,
+    rightBoundary: number,
+    topY: number,
+    bottomY: number,
+  ) {
+    graphics.beginPath()
+    graphics.moveTo(this.getLaneBoundaryX(leftBoundary, topY), topY)
+    graphics.lineTo(this.getLaneBoundaryX(rightBoundary, topY), topY)
+    graphics.lineTo(this.getLaneBoundaryX(rightBoundary, bottomY), bottomY)
+    graphics.lineTo(this.getLaneBoundaryX(leftBoundary, bottomY), bottomY)
+    graphics.closePath()
+    graphics.fillPath()
   }
 
   private drawPad(
     pad: Phaser.GameObjects.Graphics,
     x: number,
     y: number,
-    width: number,
-    height: number,
+    radius: number,
     color: number,
     alpha: number,
   ) {
     pad.clear()
-    pad.fillStyle(0x1c1420, 0.35)
-    pad.fillRoundedRect(x - width / 2 + 5, y - height / 2 + 7, width, height, 16)
-    pad.fillStyle(color, alpha)
-    pad.fillRoundedRect(x - width / 2, y - height / 2, width, height, 16)
-    pad.fillStyle(0xffffff, 0.28)
-    pad.fillRoundedRect(x - width / 2 + 8, y - height / 2 + 7, width - 16, height * 0.34, 12)
-    pad.lineStyle(3, 0xffffff, 0.78)
-    pad.strokeRoundedRect(x - width / 2, y - height / 2, width, height, 16)
+    // outer glow: 6 steps, smooth fade
+    for (let g = 0; g < 6; g++) {
+      pad.fillStyle(color, 0.022 * alpha)
+      pad.fillCircle(x, y, radius * (1.55 - g * 0.1))
+    }
+    // dark base
+    pad.fillStyle(0x06020f, 0.78)
+    pad.fillCircle(x, y, radius)
+    // colored tint
+    pad.fillStyle(color, alpha * 0.35)
+    pad.fillCircle(x, y, radius)
+    // bright ring
+    pad.lineStyle(3.5, color, alpha)
+    pad.strokeCircle(x, y, radius)
+    // inner subtle ring
+    pad.lineStyle(1.2, 0xffffff, alpha * 0.25)
+    pad.strokeCircle(x, y, radius * 0.62)
   }
 
   private createProgressBar(vw: number, vh: number) {
@@ -319,13 +601,13 @@ export class MusicRhythmScene extends Phaser.Scene {
     const height = Phaser.Math.Clamp(vh * 0.012, 8, 12)
     const x = vw / 2 - width / 2
     const y = vh * 0.12
-    const frame = this.add.graphics().setDepth(19).setScrollFactor(0)
+    const frame = this.add.graphics().setDepth(29).setScrollFactor(0)
     frame.fillStyle(0xffffff, 0.16)
     frame.fillRoundedRect(x, y, width, height, height / 2)
     frame.lineStyle(2, 0xffffff, 0.28)
     frame.strokeRoundedRect(x, y, width, height, height / 2)
 
-    this.progressFill = this.add.graphics().setDepth(20).setScrollFactor(0)
+    this.progressFill = this.add.graphics().setDepth(30).setScrollFactor(0)
     this.progressFill.setData('x', x)
     this.progressFill.setData('y', y)
     this.progressFill.setData('width', width)
@@ -334,49 +616,92 @@ export class MusicRhythmScene extends Phaser.Scene {
   }
 
   private createStartOverlay(vw: number, vh: number) {
-    const dim = this.add.rectangle(0, 0, vw, vh, 0x10131f, 0.68).setOrigin(0).setDepth(45)
-    const panelWidth = Math.min(vw * 0.72, 660)
-    const panelHeight = Math.min(vh * 0.38, 320)
-    const panel = this.add.graphics()
-    panel.fillStyle(0xfff3cf, 0.96)
-    panel.fillRoundedRect(-panelWidth / 2, -panelHeight / 2, panelWidth, panelHeight, 18)
-    panel.lineStyle(4, 0xd19442, 0.92)
-    panel.strokeRoundedRect(-panelWidth / 2, -panelHeight / 2, panelWidth, panelHeight, 18)
+    // full-screen dim (origin centered so it actually covers the screen — fixes prior bug)
+    const dim = this.add.rectangle(0, 0, vw, vh, 0x05060e, 0.72).setOrigin(0.5)
+
+    // ── floating text only, no chunky panel ──
+    const kicker = this.add
+      .text(0, -120, 'NOW PLAYING', {
+        fontFamily: GAME_FONT,
+        fontSize: `${Phaser.Math.Clamp(vh * 0.02, 12, 16)}px`,
+        color: '#9aa6d6',
+      })
+      .setOrigin(0.5)
+      .setLetterSpacing(8)
 
     const title = this.add
-      .text(0, -panelHeight * 0.24, '작은별 리듬게임', {
+      .text(0, -64, this.chart.title, {
         fontFamily: FONT_FAMILY,
-        fontSize: `${Phaser.Math.Clamp(vh * 0.046, 30, 48)}px`,
+        fontSize: `${Phaser.Math.Clamp(vh * 0.075, 48, 72)}px`,
         fontStyle: 'bold',
-        color: '#3b2a1f',
-        align: 'center',
+        color: '#ffffff',
       })
       .setOrigin(0.5)
+      .setShadow(0, 3, '#000000', 10, false, true)
+
+    // thin gradient accent under the title
+    const underline = this.add.graphics()
+    const ulW = 120
+    underline.fillStyle(0xf363ff, 0.85)
+    underline.fillRoundedRect(-ulW / 2, -8, ulW * 0.7, 2, 1)
+    underline.fillStyle(0x4fd8ff, 0.85)
+    underline.fillRoundedRect(-ulW / 2 + ulW * 0.6, -8, ulW * 0.4, 2, 1)
 
     const guide = this.add
-      .text(0, panelHeight * 0.02, '음표가 선에 닿을 때 A S D를 눌러요', {
+      .text(0, 30, '블록이 판정선에 닿을 때  A · S · D · F', {
         fontFamily: FONT_FAMILY,
-        fontSize: `${Phaser.Math.Clamp(vh * 0.026, 20, 28)}px`,
+        fontSize: `${Phaser.Math.Clamp(vh * 0.022, 14, 18)}px`,
         fontStyle: 'bold',
-        color: '#674728',
+        color: '#9aa6d6',
         align: 'center',
       })
       .setOrigin(0.5)
+      .setLetterSpacing(1)
+      .setShadow(0, 2, '#000000', 6, false, true)
 
-    const start = this.add
-      .text(0, panelHeight * 0.26, '탭하거나 Space로 시작', {
-        fontFamily: FONT_FAMILY,
-        fontSize: `${Phaser.Math.Clamp(vh * 0.024, 18, 26)}px`,
-        fontStyle: 'bold',
-        color: '#9a4f20',
-        align: 'center',
+    // slim pill button with subtle glow
+    const playW = 220
+    const playH = 44
+    const playY = 110
+    const playBg = this.add.graphics()
+    for (let g = 0; g < 6; g++) {
+      playBg.fillStyle(0xf363ff, 0.022)
+      playBg.fillRoundedRect(
+        -playW / 2 - 6 + g,
+        playY - playH / 2 - 6 + g,
+        playW + 12 - g * 2,
+        playH + 12 - g * 2,
+        playH / 2 + 6,
+      )
+    }
+    playBg.fillStyle(0xf363ff, 0.18)
+    playBg.fillRoundedRect(-playW / 2, playY - playH / 2, playW, playH, playH / 2)
+    playBg.lineStyle(1.5, 0xf363ff, 0.9)
+    playBg.strokeRoundedRect(-playW / 2, playY - playH / 2, playW, playH, playH / 2)
+
+    const playLabel = this.add
+      .text(0, playY, '▶  TAP / SPACE', {
+        fontFamily: GAME_FONT,
+        fontSize: `${Phaser.Math.Clamp(vh * 0.022, 14, 18)}px`,
+        color: '#ffffff',
       })
       .setOrigin(0.5)
+      .setLetterSpacing(3)
 
     this.startOverlay = this.add
-      .container(vw / 2, vh / 2, [dim, panel, title, guide, start])
-      .setDepth(45)
+      .container(vw / 2, vh / 2, [dim, kicker, title, underline, guide, playBg, playLabel])
+      .setDepth(60)
       .setScrollFactor(0)
+
+    // subtle pulse on the play button
+    this.tweens.add({
+      targets: playLabel,
+      alpha: 0.55,
+      duration: 720,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    })
   }
 
   private bindKeyboard() {
@@ -389,10 +714,12 @@ export class MusicRhythmScene extends Phaser.Scene {
       Phaser.Input.Keyboard.KeyCodes.A,
       Phaser.Input.Keyboard.KeyCodes.S,
       Phaser.Input.Keyboard.KeyCodes.D,
+      Phaser.Input.Keyboard.KeyCodes.F,
     ]
     const arrowKeyCodes = [
       Phaser.Input.Keyboard.KeyCodes.LEFT,
       Phaser.Input.Keyboard.KeyCodes.DOWN,
+      Phaser.Input.Keyboard.KeyCodes.UP,
       Phaser.Input.Keyboard.KeyCodes.RIGHT,
     ]
 
@@ -400,6 +727,7 @@ export class MusicRhythmScene extends Phaser.Scene {
       const key = keyboard.addKey(keyCode)
       const lane = index as RhythmLane
       key.on('down', () => this.handleLaneInput(lane))
+      key.on('up', () => this.handleLaneRelease(lane))
       this.keyBindings.push(key)
     })
 
@@ -407,6 +735,7 @@ export class MusicRhythmScene extends Phaser.Scene {
       const key = keyboard.addKey(keyCode)
       const lane = index as RhythmLane
       key.on('down', () => this.handleLaneInput(lane))
+      key.on('up', () => this.handleLaneRelease(lane))
       this.keyBindings.push(key)
     })
 
@@ -424,6 +753,7 @@ export class MusicRhythmScene extends Phaser.Scene {
     this.startTimeMs = this.time.now
     this.startOverlay.destroy()
     this.music = this.sound.add(this.chart.audioKey, { volume: 0.78 }) as SeekableSound
+    this.music.once('complete', () => this.finishRound())
     this.music.play()
   }
 
@@ -438,28 +768,32 @@ export class MusicRhythmScene extends Phaser.Scene {
   }
 
   private spawnNote(note: RhythmNote) {
-    const lane = this.lanes[note.lane]
-    const icon = this.add
-      .image(lane.x, this.spawnLineY, `music-rhythm-note-${(note.lane % 3) + 1}`)
-      .setDisplaySize(this.noteSize, this.noteSize)
-      .setTint(lane.color)
-      .setDepth(12)
-      .setAlpha(0.95)
-      .setScrollFactor(0)
-
-    this.activeNotes.push({ note, icon, resolved: false })
+    const body = this.add.graphics().setDepth(24).setAlpha(0.98).setScrollFactor(0)
+    this.activeNotes.push({ note, body, resolved: false })
   }
 
   private updateActiveNotes(elapsedMs: number) {
     this.activeNotes.forEach(activeNote => {
-      if (activeNote.resolved) {
+      if (activeNote.resolved) return
+
+      if (activeNote.holdStartMs !== undefined) {
+        this.drawHeldNote(activeNote, elapsedMs)
         return
       }
 
       const untilHitMs = activeNote.note.timeMs - elapsedMs
-      const progress = Phaser.Math.Clamp(1 - untilHitMs / NOTE_LEAD_MS, 0, 1.18)
-      activeNote.icon.y = Phaser.Math.Linear(this.spawnLineY, this.hitLineY, progress)
-      activeNote.icon.setAlpha(Phaser.Math.Clamp(progress * 1.4, 0.2, 0.98))
+      const progress = Phaser.Math.Clamp(1 - untilHitMs / NOTE_LEAD_MS, 0, 1.0)
+      const y = Phaser.Math.Linear(this.spawnLineY, this.hitLineY, progress)
+
+      // For hold notes: tail end Y = where the hold-end timestamp would visually be
+      let tailEndY = y
+      if (activeNote.note.durationMs && activeNote.note.durationMs > 150) {
+        const tailUntilHit = activeNote.note.timeMs + activeNote.note.durationMs - elapsedMs
+        const tailProgress = Phaser.Math.Clamp(1 - tailUntilHit / NOTE_LEAD_MS, 0, 1.0)
+        tailEndY = Phaser.Math.Linear(this.spawnLineY, this.hitLineY, tailProgress)
+      }
+
+      this.drawFallingNote(activeNote, y, progress, tailEndY)
 
       if (elapsedMs - activeNote.note.timeMs > MISS_WINDOW_MS) {
         this.resolveMiss(activeNote)
@@ -469,45 +803,229 @@ export class MusicRhythmScene extends Phaser.Scene {
     this.activeNotes = this.activeNotes.filter(activeNote => !activeNote.resolved)
   }
 
-  private handleLaneInput(lane: RhythmLane) {
-    if (this.isFinished) {
-      return
+  private drawFallingNote(
+    activeNote: ActiveNote,
+    y: number,
+    _progress: number,
+    tailEndY: number = y,
+  ) {
+    const { note, body } = activeNote
+    const lc = this.lanes[note.lane].color
+    const r = this.getLaneWidthAtY(y) * 0.26 // matches padRadius at hitLineY
+    const x = this.getLaneCenterX(note.lane, y)
+    body.clear()
+
+    // ── Hold note tail ──
+    // tailEndY is the timing-based Y of where the hold END would be right now
+    // It is always ABOVE y (higher on screen = earlier in time)
+    if (note.durationMs && note.durationMs > 150 && tailEndY < y - r) {
+      const tailTop = Math.max(tailEndY, -r * 2) // allow slightly above screen
+      const tailBot = y - r // just above circle top
+      const tailH = tailBot - tailTop
+      const tailW = r // half-width = r → diameter = circle diameter
+
+      if (tailH > 4) {
+        // outer soft glow
+        body.fillStyle(lc, 0.14)
+        body.fillRoundedRect(x - tailW - 5, tailTop, tailW * 2 + 10, tailH, tailW + 5)
+        // main fill
+        body.fillStyle(lc, 0.62)
+        body.fillRoundedRect(x - tailW, tailTop, tailW * 2, tailH, tailW)
+        // left-edge highlight stripe (simulates 3D cylindrical lighting)
+        body.fillStyle(0xffffff, 0.16)
+        body.fillRoundedRect(x - tailW + 2, tailTop + 4, tailW * 0.38, tailH - 8, tailW * 0.38)
+        body.lineStyle(1.5, 0xffffff, 0.35)
+        body.strokeRoundedRect(x - tailW, tailTop, tailW * 2, tailH, tailW)
+      }
     }
 
+    // ── 3D orb: solid base + transparent overlays ──
+
+    // outer glow: 7 steps, each ~0.025 alpha → smooth fade, no visible rings
+    for (let g = 0; g < 7; g++) {
+      body.fillStyle(lc, 0.025)
+      body.fillCircle(x, y, r * (1.72 - g * 0.1))
+    }
+
+    // drop shadow (offset → feels grounded)
+    body.fillStyle(0x000000, 0.34)
+    body.fillCircle(x + r * 0.1, y + r * 0.13, r * 0.92)
+
+    // ① SOLID base: the lane color
+    body.fillStyle(lc, 1)
+    body.fillCircle(x, y, r)
+
+    // ② Dark shading bottom-right: 7 steps at low alpha → smooth shadow, no visible ring edges
+    for (let i = 0; i < 7; i++) {
+      const t = i / 6
+      body.fillStyle(0x000000, 0.048)
+      body.fillCircle(x + r * (0.06 + 0.16 * t), y + r * (0.08 + 0.16 * t), r * (0.97 - 0.17 * t))
+    }
+
+    // ③ Bright overlay top-left: 7 steps at low alpha → smooth highlight, no visible ring edges
+    for (let i = 0; i < 7; i++) {
+      const t = i / 6
+      body.fillStyle(0xffffff, 0.052)
+      body.fillCircle(x - r * (0.04 + 0.12 * t), y - r * (0.05 + 0.16 * t), r * (0.9 - 0.2 * t))
+    }
+
+    // ④ Specular: 3 overlapping soft circles (largest→softest, smallest→hardest)
+    body.fillStyle(0xffffff, 0.42)
+    body.fillCircle(x - r * 0.29, y - r * 0.31, r * 0.28)
+    body.fillStyle(0xffffff, 0.78)
+    body.fillCircle(x - r * 0.31, y - r * 0.33, r * 0.14)
+    body.fillStyle(0xffffff, 1)
+    body.fillCircle(x - r * 0.33, y - r * 0.35, r * 0.055)
+
+    // ⑤ Rim highlight
+    body.lineStyle(1.8, 0xffffff, 0.45)
+    body.strokeCircle(x, y, r)
+  }
+
+  private handleLaneInput(lane: RhythmLane) {
+    if (this.isFinished) return
     if (!this.isStarted) {
       this.startRound()
       return
     }
+    if (this.laneHeld[lane]) return
 
     this.flashPad(lane)
     const elapsedMs = this.getSongTimeMs()
     const candidates = this.activeNotes
-      .filter(activeNote => !activeNote.resolved && activeNote.note.lane === lane)
-      .map(activeNote => ({
-        activeNote,
-        diffMs: Math.abs(activeNote.note.timeMs - elapsedMs),
-      }))
-      .filter(candidate => candidate.diffMs <= MISS_WINDOW_MS)
+      .filter(an => !an.resolved && an.holdStartMs === undefined && an.note.lane === lane)
+      .map(an => ({ activeNote: an, diffMs: Math.abs(an.note.timeMs - elapsedMs) }))
+      .filter(c => c.diffMs <= MISS_WINDOW_MS)
       .sort((a, b) => a.diffMs - b.diffMs)
 
     const best = candidates[0]
     if (!best) {
-      this.breakCombo()
-      this.showJudgment('MISS', '#f87171')
+      // 노트가 판정 범위 안에 없으면 빈 탭으로 간주 — MISS 처리하지 않음
       return
     }
+
+    const isHold = Boolean(best.activeNote.note.durationMs && best.activeNote.note.durationMs > 150)
+
+    let label: 'PERFECT' | 'GOOD'
+    let color: string
 
     if (best.diffMs <= PERFECT_WINDOW_MS) {
-      this.resolveHit(best.activeNote, 'PERFECT', 1_000, '#fff4a8')
+      label = 'PERFECT'
+      color = '#fff4a8'
+    } else if (best.diffMs <= GOOD_WINDOW_MS) {
+      label = 'GOOD'
+      color = '#a7f3d0'
+    } else {
+      this.resolveMiss(best.activeNote)
       return
     }
 
-    if (best.diffMs <= GOOD_WINDOW_MS) {
-      this.resolveHit(best.activeNote, 'GOOD', 650, '#a7f3d0')
+    if (isHold) {
+      best.activeNote.holdStartMs = elapsedMs
+      best.activeNote.holdLabel = label
+      this.laneHeld[lane] = true
+      this.holdNotes[lane] = best.activeNote
+      this.combo += 1
+      this.maxCombo = Math.max(this.maxCombo, this.combo)
+      const baseScore = label === 'PERFECT' ? 500 : 300
+      this.score += baseScore + this.combo * 6
+      if (label === 'PERFECT') this.perfectCount += 1
+      else this.goodCount += 1
+      this.updateScoreHud()
+      this.showJudgment(label, color)
+      this.spawnBurst(this.getLaneCenterX(lane, this.hitLineY), this.hitLineY, lane)
+    } else {
+      const baseScore = label === 'PERFECT' ? 1_000 : 650
+      this.resolveHit(best.activeNote, label, baseScore, color)
+    }
+  }
+
+  private handleLaneRelease(lane: RhythmLane) {
+    if (!this.laneHeld[lane]) return
+    this.laneHeld[lane] = false
+
+    const holdNote = this.holdNotes[lane]
+    if (!holdNote || holdNote.resolved) {
+      this.holdNotes[lane] = null
       return
     }
+    this.holdNotes[lane] = null
 
-    this.resolveMiss(best.activeNote)
+    const elapsedMs = this.getSongTimeMs()
+    const holdDuration = elapsedMs - (holdNote.holdStartMs ?? elapsedMs)
+    const targetDuration = holdNote.note.durationMs ?? 1
+    const completion = Math.min(holdDuration / targetDuration, 1)
+    const bonusScore = Math.floor(500 * completion)
+    this.score += bonusScore
+    this.updateScoreHud()
+
+    holdNote.resolved = true
+    this.tweens.add({
+      targets: holdNote.body,
+      alpha: 0,
+      duration: 120,
+      ease: 'Sine.easeOut',
+      onComplete: () => holdNote.body.destroy(),
+    })
+  }
+
+  private checkHoldCompletions(elapsedMs: number) {
+    for (let i = 0; i < LANE_COUNT; i++) {
+      const holdNote = this.holdNotes[i]
+      if (!holdNote || holdNote.resolved || holdNote.holdStartMs === undefined) continue
+
+      const holdEnd = holdNote.note.timeMs + (holdNote.note.durationMs ?? 0)
+      if (elapsedMs < holdEnd) continue
+
+      holdNote.resolved = true
+      this.holdNotes[i] = null
+      this.laneHeld[i] = false
+      this.score += 500
+      this.updateScoreHud()
+      this.spawnBurst(
+        this.getLaneCenterX(holdNote.note.lane, this.hitLineY),
+        this.hitLineY,
+        holdNote.note.lane,
+      )
+      this.tweens.add({
+        targets: holdNote.body,
+        alpha: 0,
+        duration: 160,
+        ease: 'Sine.easeOut',
+        onComplete: () => holdNote.body.destroy(),
+      })
+    }
+  }
+
+  private drawHeldNote(activeNote: ActiveNote, elapsedMs: number) {
+    const { note, body } = activeNote
+    const laneColor = this.lanes[note.lane].color
+    const holdEnd = note.timeMs + (note.durationMs ?? 0)
+    const remainingMs = Math.max(0, holdEnd - elapsedMs)
+    const totalMs = note.durationMs ?? 1
+    const remainingRatio = remainingMs / totalMs
+
+    const x = this.getLaneCenterX(note.lane, this.hitLineY)
+    const r = this.padRadius
+    const tailW = r // same width as circle diameter
+    const trackHeight = this.hitLineY - this.spawnLineY
+    const maxTail = Phaser.Math.Clamp(
+      (totalMs / NOTE_LEAD_MS) * trackHeight * 0.9,
+      r * 2,
+      trackHeight * 0.82,
+    )
+    const tailHeight = maxTail * remainingRatio
+    const tailTop = this.hitLineY - r - tailHeight
+
+    body.clear()
+    if (tailHeight > 4) {
+      body.fillStyle(laneColor, 0.18)
+      body.fillRoundedRect(x - tailW - 5, tailTop, tailW * 2 + 10, tailHeight, tailW + 5)
+      body.fillStyle(laneColor, 0.65)
+      body.fillRoundedRect(x - tailW, tailTop, tailW * 2, tailHeight, tailW)
+      body.lineStyle(2, 0xffffff, 0.5)
+      body.strokeRoundedRect(x - tailW, tailTop, tailW * 2, tailHeight, tailW)
+    }
   }
 
   private resolveHit(
@@ -529,14 +1047,17 @@ export class MusicRhythmScene extends Phaser.Scene {
 
     this.updateScoreHud()
     this.showJudgment(label, color)
-    this.spawnBurst(activeNote.icon.x, this.hitLineY, activeNote.note.lane)
+    this.spawnBurst(
+      this.getLaneCenterX(activeNote.note.lane, this.hitLineY),
+      this.hitLineY,
+      activeNote.note.lane,
+    )
     this.tweens.add({
-      targets: activeNote.icon,
-      scale: 1.35,
+      targets: activeNote.body,
       alpha: 0,
-      duration: 130,
+      duration: 120,
       ease: 'Sine.easeOut',
-      onComplete: () => activeNote.icon.destroy(),
+      onComplete: () => activeNote.body.destroy(),
     })
   }
 
@@ -546,12 +1067,11 @@ export class MusicRhythmScene extends Phaser.Scene {
     this.breakCombo()
     this.showJudgment('MISS', '#f87171')
     this.tweens.add({
-      targets: activeNote.icon,
-      y: this.hitLineY + this.noteSize * 0.5,
+      targets: activeNote.body,
       alpha: 0,
-      duration: 120,
+      duration: 140,
       ease: 'Sine.easeIn',
-      onComplete: () => activeNote.icon.destroy(),
+      onComplete: () => activeNote.body.destroy(),
     })
   }
 
@@ -561,31 +1081,30 @@ export class MusicRhythmScene extends Phaser.Scene {
   }
 
   private flashPad(lane: RhythmLane) {
-    const pad = this.lanes[lane].pad
-    this.tweens.killTweensOf(pad)
-    pad.setAlpha(1)
-    this.tweens.add({
-      targets: pad,
-      alpha: 0.72,
-      duration: 120,
-      ease: 'Sine.easeOut',
+    const laneView = this.lanes[lane]
+    const x = this.getLaneCenterX(lane, this.hitLineY)
+    this.tweens.killTweensOf(laneView.pad)
+    this.drawPad(laneView.pad, x, this.hitLineY, this.padRadius, laneView.color, 1)
+    this.time.delayedCall(140, () => {
+      if (!laneView.pad.active) return
+      this.drawPad(laneView.pad, x, this.hitLineY, this.padRadius, laneView.color, 0.65)
     })
   }
 
   private spawnBurst(x: number, y: number, lane: RhythmLane) {
     const color = this.lanes[lane].color
-    for (let index = 0; index < 8; index += 1) {
-      const angle = (Math.PI * 2 * index) / 8
+    for (let index = 0; index < 10; index += 1) {
+      const angle = (Math.PI * 2 * index) / 10
       const sparkle = this.add
-        .circle(x, y, Phaser.Math.Between(4, 8), color, 0.86)
-        .setDepth(24)
+        .rectangle(x, y, Phaser.Math.Between(5, 10), Phaser.Math.Between(5, 10), color, 0.9)
+        .setDepth(42)
         .setScrollFactor(0)
       this.tweens.add({
         targets: sparkle,
-        x: x + Math.cos(angle) * Phaser.Math.Between(28, 54),
-        y: y + Math.sin(angle) * Phaser.Math.Between(22, 42),
+        x: x + Math.cos(angle) * Phaser.Math.Between(30, 62),
+        y: y + Math.sin(angle) * Phaser.Math.Between(22, 46),
         alpha: 0,
-        scale: 0.35,
+        scale: 0.28,
         duration: 260,
         ease: 'Sine.easeOut',
         onComplete: () => sparkle.destroy(),
@@ -600,7 +1119,7 @@ export class MusicRhythmScene extends Phaser.Scene {
       .setColor(color)
       .setAlpha(1)
       .setScale(0.96)
-      .setY(this.scale.height * 0.28)
+      .setY(this.scale.height * 0.29)
 
     this.tweens.add({
       targets: this.judgmentText,
@@ -613,8 +1132,8 @@ export class MusicRhythmScene extends Phaser.Scene {
   }
 
   private updateScoreHud() {
-    this.scoreText.setText(`SCORE ${this.score.toLocaleString('ko-KR')}`)
-    this.comboText.setText(`COMBO ${this.combo}`)
+    this.scoreText.setText(this.score.toLocaleString('ko-KR'))
+    this.comboText.setText(`${this.combo}`)
   }
 
   private updateProgress(elapsedMs: number) {
@@ -627,6 +1146,15 @@ export class MusicRhythmScene extends Phaser.Scene {
     this.progressFill.clear()
     this.progressFill.fillStyle(0xffd166, 0.96)
     this.progressFill.fillRoundedRect(x, y, width * progress, height, height / 2)
+  }
+
+  private getLastNoteEndMs() {
+    const lastNote = this.chart.notes[this.chart.notes.length - 1]
+    if (!lastNote) {
+      return 0
+    }
+
+    return lastNote.timeMs + (lastNote.durationMs ?? 0)
   }
 
   private getSongTimeMs() {
@@ -644,79 +1172,219 @@ export class MusicRhythmScene extends Phaser.Scene {
     }
 
     this.isFinished = true
+    this.resolvePendingNotesAsMisses()
+    this.updateProgress(this.chart.durationMs)
     this.stopMusic()
     this.showResultOverlay()
   }
 
-  private showResultOverlay() {
-    const { width: vw, height: vh } = this.scale
-    const dim = this.add.rectangle(0, 0, vw, vh, 0x11131f, 0.72).setOrigin(0)
-    const panelWidth = Math.min(vw * 0.76, 720)
-    const panelHeight = Math.min(vh * 0.58, 470)
-    const panel = this.add.graphics()
-    panel.fillStyle(0xfff4d6, 0.97)
-    panel.fillRoundedRect(-panelWidth / 2, -panelHeight / 2, panelWidth, panelHeight, 18)
-    panel.lineStyle(4, 0xd19442, 0.95)
-    panel.strokeRoundedRect(-panelWidth / 2, -panelHeight / 2, panelWidth, panelHeight, 18)
+  private resolvePendingNotesAsMisses() {
+    let misses = 0
 
-    const title = this.add
-      .text(0, -panelHeight * 0.31, '연주 완료!', {
-        fontFamily: FONT_FAMILY,
-        fontSize: `${Phaser.Math.Clamp(vh * 0.052, 34, 54)}px`,
-        fontStyle: 'bold',
-        color: '#3b2a1f',
-      })
-      .setOrigin(0.5)
+    this.activeNotes.forEach(activeNote => {
+      if (!activeNote.resolved) {
+        misses += 1
+      }
+      activeNote.resolved = true
+      if (activeNote.body.active) {
+        activeNote.body.destroy()
+      }
+    })
+    this.activeNotes = []
 
-    const summary = this.add
-      .text(
-        0,
-        -panelHeight * 0.03,
-        [
-          `점수 ${this.score.toLocaleString('ko-KR')}`,
-          `최대 콤보 ${this.maxCombo}`,
-          `Perfect ${this.perfectCount}   Good ${this.goodCount}   Miss ${this.missCount}`,
-        ],
-        {
-          fontFamily: FONT_FAMILY,
-          fontSize: `${Phaser.Math.Clamp(vh * 0.026, 20, 28)}px`,
-          fontStyle: 'bold',
-          color: '#594026',
-          align: 'center',
-          lineSpacing: 12,
-        },
-      )
-      .setOrigin(0.5)
+    const unspawnedNotes = this.chart.notes.length - this.nextNoteIndex
+    if (unspawnedNotes > 0) {
+      misses += unspawnedNotes
+      this.nextNoteIndex = this.chart.notes.length
+    }
 
-    const retryButton = this.createTextButton(
-      -panelWidth * 0.18,
-      panelHeight * 0.31,
-      190,
-      64,
-      '다시하기',
-      () => this.restartRound(),
-    )
-    const exitButton = this.createTextButton(
-      panelWidth * 0.18,
-      panelHeight * 0.31,
-      190,
-      64,
-      '돌아가기',
-      () => this.returnToMusicSelect(),
-    )
+    this.holdNotes = [null, null, null, null]
+    this.laneHeld = [false, false, false, false]
 
-    this.add
-      .container(vw / 2, vh / 2, [dim, panel, title, summary, retryButton, exitButton])
-      .setDepth(55)
-      .setScrollFactor(0)
+    if (misses > 0) {
+      this.missCount += misses
+      this.combo = 0
+      this.updateScoreHud()
+    }
   }
 
-  private createTextButton(
+  private showResultOverlay() {
+    const { width: vw, height: vh } = this.scale
+
+    // full-screen dim (origin centered → covers whole screen)
+    const dim = this.add.rectangle(0, 0, vw, vh, 0x05060e, 0.78).setOrigin(0.5)
+
+    // determine rank
+    const totalNotes = this.perfectCount + this.goodCount + this.missCount
+    const accuracy = totalNotes > 0 ? (this.perfectCount + this.goodCount * 0.6) / totalNotes : 0
+    const rank =
+      accuracy >= 0.95
+        ? 'S'
+        : accuracy >= 0.85
+          ? 'A'
+          : accuracy >= 0.7
+            ? 'B'
+            : accuracy >= 0.5
+              ? 'C'
+              : 'D'
+    const rankColor =
+      rank === 'S'
+        ? '#ffe066'
+        : rank === 'A'
+          ? '#a7f3d0'
+          : rank === 'B'
+            ? '#4fd8ff'
+            : rank === 'C'
+              ? '#ff9a6c'
+              : '#f87171'
+    const rankColorNum = Phaser.Display.Color.HexStringToColor(rankColor).color
+
+    // 아이용 따뜻한 메시지 (랭크별)
+    const kickerMessage =
+      rank === 'S'
+        ? '최고예요!'
+        : rank === 'A'
+          ? '정말 잘했어요!'
+          : rank === 'B'
+            ? '잘했어요!'
+            : rank === 'C'
+              ? '수고했어요!'
+              : '조금만 더 연습해요!'
+
+    // ── floating text only, no panel ──
+
+    // kicker — friendly Korean message
+    const kicker = this.add
+      .text(0, -210, kickerMessage, {
+        fontFamily: FONT_FAMILY,
+        fontSize: `${Phaser.Math.Clamp(vh * 0.034, 22, 30)}px`,
+        fontStyle: 'bold',
+        color: '#ffffff',
+      })
+      .setOrigin(0.5)
+      .setShadow(0, 2, '#000000', 8, false, true)
+
+    // rank — big letter with subtle ring
+    const rankRing = this.add.graphics()
+    for (let g = 0; g < 6; g++) {
+      rankRing.fillStyle(rankColorNum, 0.012)
+      rankRing.fillCircle(0, -100, 96 - g * 4)
+    }
+    rankRing.lineStyle(2, rankColorNum, 0.7)
+    rankRing.strokeCircle(0, -100, 78)
+
+    const rankText = this.add
+      .text(0, -100, rank, {
+        fontFamily: GAME_FONT,
+        fontSize: `${Phaser.Math.Clamp(vh * 0.14, 88, 130)}px`,
+        color: rankColor,
+      })
+      .setOrigin(0.5)
+      .setShadow(0, 4, '#000000', 12, false, true)
+
+    // gradient accent line
+    const underline = this.add.graphics()
+    const ulW = 140
+    underline.fillStyle(0xf363ff, 0.85)
+    underline.fillRoundedRect(-ulW / 2, 0, ulW * 0.7, 2, 1)
+    underline.fillStyle(0x4fd8ff, 0.85)
+    underline.fillRoundedRect(-ulW / 2 + ulW * 0.6, 0, ulW * 0.4, 2, 1)
+
+    // ── 점수 (hero stat) ──
+    const scoreLabel = this.add
+      .text(0, 30, '점수', {
+        fontFamily: FONT_FAMILY,
+        fontSize: '13px',
+        fontStyle: 'bold',
+        color: '#9aa6d6',
+      })
+      .setOrigin(0.5)
+      .setLetterSpacing(4)
+
+    const scoreValue = this.add
+      .text(0, 64, this.score.toLocaleString('ko-KR'), {
+        fontFamily: GAME_FONT,
+        fontSize: `${Phaser.Math.Clamp(vh * 0.06, 36, 56)}px`,
+        color: '#ffffff',
+      })
+      .setOrigin(0.5)
+      .setShadow(0, 3, '#000000', 8, false, true)
+
+    // ── 4-column stats row (Korean labels) ──
+    const colStats = [
+      { label: '콤보', value: `${this.maxCombo}`, color: '#cc44ff' },
+      { label: '퍼펙트', value: `${this.perfectCount}`, color: '#fff4a8' },
+      { label: '굿', value: `${this.goodCount}`, color: '#a7f3d0' },
+      { label: '미스', value: `${this.missCount}`, color: '#f87171' },
+    ]
+    const colW = 90
+    const colStartX = -((colStats.length - 1) * colW) / 2
+    const colY = 145
+    const colNodes: Phaser.GameObjects.GameObject[] = []
+    colStats.forEach((s, i) => {
+      const cx = colStartX + i * colW
+      const value = this.add
+        .text(cx, colY, s.value, {
+          fontFamily: GAME_FONT,
+          fontSize: '24px',
+          color: s.color,
+        })
+        .setOrigin(0.5)
+        .setShadow(0, 2, '#000000', 6, false, true)
+      const label = this.add
+        .text(cx, colY + 24, s.label, {
+          fontFamily: FONT_FAMILY,
+          fontSize: '12px',
+          fontStyle: 'bold',
+          color: '#9aa6d6',
+        })
+        .setOrigin(0.5)
+        .setLetterSpacing(2)
+      colNodes.push(value, label)
+    })
+
+    // ── slim pill buttons ──
+    const btnY = 220
+    const retry = this.makePillButton(-110, btnY, 180, 40, '다시하기', 0xf363ff, () =>
+      this.restartRound(),
+    )
+    const exit = this.makePillButton(110, btnY, 180, 40, '돌아가기', 0x4fd8ff, () =>
+      this.returnToMusicSelect(),
+    )
+
+    const container = this.add
+      .container(vw / 2, vh / 2, [
+        dim,
+        kicker,
+        rankRing,
+        rankText,
+        underline,
+        scoreLabel,
+        scoreValue,
+        ...colNodes,
+        retry,
+        exit,
+      ])
+      .setDepth(70)
+      .setScrollFactor(0)
+
+    // entrance — fade only, no scale (matches the calm start-overlay vibe)
+    container.setAlpha(0)
+    this.tweens.add({
+      targets: container,
+      alpha: 1,
+      duration: 240,
+      ease: 'Sine.easeOut',
+    })
+  }
+
+  private makePillButton(
     x: number,
     y: number,
     width: number,
     height: number,
     label: string,
+    color: number,
     onClick: () => void,
   ) {
     const container = this.add.container(x, y)
@@ -724,18 +1392,31 @@ export class MusicRhythmScene extends Phaser.Scene {
     const text = this.add
       .text(0, 0, label, {
         fontFamily: FONT_FAMILY,
-        fontSize: '24px',
+        fontSize: '15px',
         fontStyle: 'bold',
-        color: '#fff6df',
+        color: '#ffffff',
       })
       .setOrigin(0.5)
+      .setLetterSpacing(2)
 
     const draw = (hovered: boolean) => {
       bg.clear()
-      bg.fillStyle(hovered ? 0xb96f2d : 0x9f5f28, 1)
-      bg.fillRoundedRect(-width / 2, -height / 2, width, height, 12)
-      bg.lineStyle(3, 0x4a2a12, 0.95)
-      bg.strokeRoundedRect(-width / 2, -height / 2, width, height, 12)
+      if (hovered) {
+        for (let g = 0; g < 5; g++) {
+          bg.fillStyle(color, 0.022)
+          bg.fillRoundedRect(
+            -width / 2 - 5 + g,
+            -height / 2 - 5 + g,
+            width + 10 - g * 2,
+            height + 10 - g * 2,
+            height / 2 + 5,
+          )
+        }
+      }
+      bg.fillStyle(color, hovered ? 0.28 : 0.16)
+      bg.fillRoundedRect(-width / 2, -height / 2, width, height, height / 2)
+      bg.lineStyle(1.5, color, hovered ? 1 : 0.85)
+      bg.strokeRoundedRect(-width / 2, -height / 2, width, height, height / 2)
     }
     draw(false)
 
@@ -748,13 +1429,36 @@ export class MusicRhythmScene extends Phaser.Scene {
     return container
   }
 
+  private getTrackProgressAtY(y: number) {
+    return Phaser.Math.Clamp((y - this.spawnLineY) / (this.hitLineY - this.spawnLineY), 0, 1)
+  }
+
+  private getStageWidthAtY(y: number) {
+    const progress = this.getTrackProgressAtY(y)
+    const easedProgress = Math.pow(progress, 1.15)
+    return Phaser.Math.Linear(this.playTopWidth, this.playWidth, easedProgress)
+  }
+
+  private getLaneBoundaryX(boundary: number, y: number) {
+    const width = this.getStageWidthAtY(y)
+    return this.stageCenterX - width / 2 + (width / LANE_COUNT) * boundary
+  }
+
+  private getLaneCenterX(lane: RhythmLane, y: number) {
+    return (this.getLaneBoundaryX(lane, y) + this.getLaneBoundaryX(lane + 1, y)) / 2
+  }
+
+  private getLaneWidthAtY(y: number) {
+    return this.getStageWidthAtY(y) / LANE_COUNT
+  }
+
   private restartRound() {
     if (this.isLeaving) {
       return
     }
 
     this.stopMusic()
-    this.scene.restart()
+    this.scene.restart({ chartId: this.chartId } satisfies MusicRhythmSceneData)
   }
 
   private returnToMusicSelect() {
@@ -764,7 +1468,7 @@ export class MusicRhythmScene extends Phaser.Scene {
 
     this.isLeaving = true
     this.stopMusic()
-    fadeToScene(this, 'MusicSelectScene', { duration: 220 })
+    fadeToScene(this, 'MusicSongSelectScene', { duration: 220 })
   }
 
   private stopMusic() {
