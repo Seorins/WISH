@@ -11,9 +11,29 @@
 - 채점 정규화 통계:  ``ai/app/resources/taegeuk1/stats/``
 - 비교 기준 템플릿:  ``ai/app/resources/taegeuk1/templates/``
 
-후속 작업 (별도 이슈)
----------------------
-- ``lstm_autoencoder.py`` 모델 클래스를 노트북에서 추출 / 모듈화
-- 기존 ``ai/app/services/taekwondo/`` 와의 채점 파이프라인 통합
-- 동작별 weights 로딩 헬퍼 (``load_models() -> dict[str, nn.Module]``)
+관련 작업
+---------
+- 모델 클래스 추출:    `S14P31E103-341` (본 PR)
+- 채점 서비스 통합:    `S14P31E103-341` (본 PR)
+- 가중치 버전 관리:    `S14P31E103-342` (별도 이슈)
 """
+
+from app.models.taegeuk1.lstm_autoencoder import (
+    Decoder,
+    Encoder,
+    LSTMAutoencoder,
+    INPUT_DIM,
+    HIDDEN_DIM,
+    LATENT_DIM,
+    SEQ_LEN,
+)
+
+__all__ = [
+    "Decoder",
+    "Encoder",
+    "LSTMAutoencoder",
+    "INPUT_DIM",
+    "HIDDEN_DIM",
+    "LATENT_DIM",
+    "SEQ_LEN",
+]
