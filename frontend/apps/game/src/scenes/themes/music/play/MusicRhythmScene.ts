@@ -17,6 +17,15 @@ type MusicRhythmSceneData = {
   chartId?: string
 }
 
+const RHYTHM_BACKGROUND_BY_CHART: Record<string, string> = {
+  'baby-shark': 'images/themes/music/background/babyshark.png',
+  'twinkle-star': 'images/themes/music/background/littlestar.png',
+}
+
+function getRhythmBackgroundPath(chartId: string): string {
+  return RHYTHM_BACKGROUND_BY_CHART[chartId] ?? 'images/themes/music/background/background.png'
+}
+
 type ActiveNote = {
   note: RhythmNote
   body: Phaser.GameObjects.Graphics
@@ -122,11 +131,17 @@ export class MusicRhythmScene extends Phaser.Scene {
   }
 
   preload() {
+    // unique texture key per chart — otherwise Phaser caches the first-loaded image
+    // and reuses it for every other chart
     this.load.image(
-      'music-rhythm-background',
-      assetPath('images/themes/music/background/babyshark.png'),
+      this.getRhythmBackgroundKey(),
+      assetPath(getRhythmBackgroundPath(this.chart.id)),
     )
     this.load.audio(this.chart.audioKey, assetPath(this.chart.audioPath))
+  }
+
+  private getRhythmBackgroundKey() {
+    return `music-rhythm-background:${this.chart.id}`
   }
 
   create() {
@@ -139,7 +154,7 @@ export class MusicRhythmScene extends Phaser.Scene {
     // depth 1: 카메라 영상 (비네팅으로 가운데만 또렷)
     // depth 2: 어두운 틴트 (가독성)
     // depth 3+: 게임 UI (또렷)
-    addCoverBackground(this, 'music-rhythm-background', { depth: 0 }).setAlpha(1)
+    addCoverBackground(this, this.getRhythmBackgroundKey(), { depth: 0 }).setAlpha(1)
 
     // HandTracker가 비디오 + MediaPipe HandLandmarker 둘 다 관리
     this.handTracker = new HandTracker()
@@ -616,92 +631,196 @@ export class MusicRhythmScene extends Phaser.Scene {
   }
 
   private createStartOverlay(vw: number, vh: number) {
-    // full-screen dim (origin centered so it actually covers the screen — fixes prior bug)
-    const dim = this.add.rectangle(0, 0, vw, vh, 0x05060e, 0.72).setOrigin(0.5)
+    // soft warm dim
+    const dim = this.add.rectangle(0, 0, vw, vh, 0x1a1530, 0.6).setOrigin(0.5)
 
-    // ── floating text only, no chunky panel ──
-    const kicker = this.add
-      .text(0, -120, 'NOW PLAYING', {
-        fontFamily: GAME_FONT,
-        fontSize: `${Phaser.Math.Clamp(vh * 0.02, 12, 16)}px`,
-        color: '#9aa6d6',
+    // ── card panel with proper glow + gradient ──
+    const panelW = Phaser.Math.Clamp(vw * 0.38, 380, 480)
+    const panelH = Phaser.Math.Clamp(vh * 0.5, 360, 440)
+    const panel = this.drawGlowingPanel(panelW, panelH, 0xffc6e0)
+
+    // ── top tag pill ──
+    const tagText = '♪  플레이 준비'
+    const tagFontSize = Phaser.Math.Clamp(vh * 0.02, 13, 16)
+    const tagLabel = this.add
+      .text(0, 0, tagText, {
+        fontFamily: FONT_FAMILY,
+        fontSize: `${tagFontSize}px`,
+        fontStyle: 'bold',
+        color: '#ffe9bf',
       })
       .setOrigin(0.5)
-      .setLetterSpacing(8)
+      .setLetterSpacing(3)
+    const tagW = tagLabel.width + 28
+    const tagH = 26
+    const tagY = -panelH / 2 + 44
+    const tagBg = this.add.graphics()
+    tagBg.fillStyle(0xffb597, 0.18)
+    tagBg.fillRoundedRect(-tagW / 2, tagY - tagH / 2, tagW, tagH, tagH / 2)
+    tagBg.lineStyle(1, 0xffd6b3, 0.5)
+    tagBg.strokeRoundedRect(-tagW / 2, tagY - tagH / 2, tagW, tagH, tagH / 2)
+    tagLabel.setPosition(0, tagY)
 
+    // ── title — generous breathing room from tag ──
+    const titleY = tagY + 80
     const title = this.add
-      .text(0, -64, this.chart.title, {
+      .text(0, titleY, this.chart.title, {
         fontFamily: FONT_FAMILY,
-        fontSize: `${Phaser.Math.Clamp(vh * 0.075, 48, 72)}px`,
+        fontSize: `${Phaser.Math.Clamp(vh * 0.06, 38, 54)}px`,
         fontStyle: 'bold',
-        color: '#ffffff',
+        color: '#fff8f0',
       })
       .setOrigin(0.5)
       .setShadow(0, 3, '#000000', 10, false, true)
 
-    // thin gradient accent under the title
+    // soft pastel underline
     const underline = this.add.graphics()
-    const ulW = 120
-    underline.fillStyle(0xf363ff, 0.85)
-    underline.fillRoundedRect(-ulW / 2, -8, ulW * 0.7, 2, 1)
-    underline.fillStyle(0x4fd8ff, 0.85)
-    underline.fillRoundedRect(-ulW / 2 + ulW * 0.6, -8, ulW * 0.4, 2, 1)
+    const ulW = 72
+    underline.fillStyle(0xffc6e0, 0.85)
+    underline.fillRoundedRect(-ulW / 2, titleY + 42, ulW, 3, 2)
 
-    const guide = this.add
-      .text(0, 30, '블록이 판정선에 닿을 때  A · S · D · F', {
+    // ── guide message — sits close under the title ──
+    const guideY = titleY + 88
+    const guideMain = this.add
+      .text(0, guideY, '블록이 선에 닿는 순간 박자에 맞춰 눌러주세요', {
         fontFamily: FONT_FAMILY,
-        fontSize: `${Phaser.Math.Clamp(vh * 0.022, 14, 18)}px`,
+        fontSize: `${Phaser.Math.Clamp(vh * 0.022, 14, 17)}px`,
         fontStyle: 'bold',
-        color: '#9aa6d6',
+        color: '#dcd4ee',
         align: 'center',
       })
       .setOrigin(0.5)
-      .setLetterSpacing(1)
+      .setLetterSpacing(0.5)
       .setShadow(0, 2, '#000000', 6, false, true)
 
-    // slim pill button with subtle glow
-    const playW = 220
-    const playH = 44
-    const playY = 110
+    // ── start button ──
+    const playW = 200
+    const playH = 50
+    const playY = panelH / 2 - 80
     const playBg = this.add.graphics()
-    for (let g = 0; g < 6; g++) {
-      playBg.fillStyle(0xf363ff, 0.022)
+    // soft outer glow
+    for (let g = 0; g < 8; g++) {
+      playBg.fillStyle(0xffb6d9, 0.03)
       playBg.fillRoundedRect(
-        -playW / 2 - 6 + g,
-        playY - playH / 2 - 6 + g,
-        playW + 12 - g * 2,
-        playH + 12 - g * 2,
-        playH / 2 + 6,
+        -playW / 2 - 8 + g,
+        playY - playH / 2 - 8 + g,
+        playW + 16 - g * 2,
+        playH + 16 - g * 2,
+        playH / 2 + 8,
       )
     }
-    playBg.fillStyle(0xf363ff, 0.18)
+    playBg.fillStyle(0xffb6d9, 0.85)
     playBg.fillRoundedRect(-playW / 2, playY - playH / 2, playW, playH, playH / 2)
-    playBg.lineStyle(1.5, 0xf363ff, 0.9)
+    // subtle inner highlight on button (top half)
+    playBg.fillStyle(0xffffff, 0.12)
+    playBg.fillRoundedRect(-playW / 2 + 3, playY - playH / 2 + 3, playW - 6, playH / 2, playH / 2)
+    playBg.lineStyle(1.5, 0xfff0f6, 0.9)
     playBg.strokeRoundedRect(-playW / 2, playY - playH / 2, playW, playH, playH / 2)
 
     const playLabel = this.add
-      .text(0, playY, '▶  TAP / SPACE', {
-        fontFamily: GAME_FONT,
-        fontSize: `${Phaser.Math.Clamp(vh * 0.022, 14, 18)}px`,
-        color: '#ffffff',
+      .text(0, playY, '▶  시작하기', {
+        fontFamily: FONT_FAMILY,
+        fontSize: `${Phaser.Math.Clamp(vh * 0.024, 15, 19)}px`,
+        fontStyle: 'bold',
+        color: '#3d1d2e',
       })
       .setOrigin(0.5)
-      .setLetterSpacing(3)
+      .setLetterSpacing(2)
+
+    const playHint = this.add
+      .text(0, playY + playH / 2 + 22, 'SPACE  또는  화면 클릭', {
+        fontFamily: FONT_FAMILY,
+        fontSize: '11px',
+        fontStyle: 'bold',
+        color: '#9890b0',
+      })
+      .setOrigin(0.5)
+      .setLetterSpacing(2)
 
     this.startOverlay = this.add
-      .container(vw / 2, vh / 2, [dim, kicker, title, underline, guide, playBg, playLabel])
+      .container(vw / 2, vh / 2, [
+        dim,
+        panel,
+        tagBg,
+        tagLabel,
+        title,
+        underline,
+        guideMain,
+        playBg,
+        playLabel,
+        playHint,
+      ])
       .setDepth(60)
       .setScrollFactor(0)
 
-    // subtle pulse on the play button
+    // gentle pulse on play button label
     this.tweens.add({
       targets: playLabel,
-      alpha: 0.55,
-      duration: 720,
+      alpha: 0.6,
+      duration: 900,
       yoyo: true,
       repeat: -1,
       ease: 'Sine.easeInOut',
     })
+  }
+
+  // ── shared helper: a frosted dark panel with proper soft glow + vertical gradient depth ──
+  private drawGlowingPanel(
+    panelW: number,
+    panelH: number,
+    accentNum: number,
+    options: { surfaceColor?: number; surfaceAlpha?: number } = {},
+  ) {
+    const surfaceColor = options.surfaceColor ?? 0x1f1a35
+    const surfaceAlpha = options.surfaceAlpha ?? 0.94
+    const g = this.add.graphics()
+
+    // 1. wide soft outer aura — multiple expanding rounded rects, very low alpha
+    for (let i = 0; i < 16; i++) {
+      const spread = 28 - i * 1.6
+      g.fillStyle(accentNum, 0.014)
+      g.fillRoundedRect(
+        -panelW / 2 - spread,
+        -panelH / 2 - spread,
+        panelW + spread * 2,
+        panelH + spread * 2,
+        30 + spread * 0.4,
+      )
+    }
+
+    // 2. panel body — solid frosted surface (color is configurable so the
+    // result overlay can use a brighter, friendlier shade than the in-game
+    // pause panel)
+    g.fillStyle(surfaceColor, surfaceAlpha)
+    g.fillRoundedRect(-panelW / 2, -panelH / 2, panelW, panelH, 26)
+
+    // 3. inner top→middle gradient (lighter top, fading down — sense of light source above)
+    const gradSteps = 18
+    const gradH = panelH * 0.55
+    for (let i = 0; i < gradSteps; i++) {
+      const t = i / (gradSteps - 1)
+      const stripY = -panelH / 2 + i * (gradH / gradSteps)
+      g.fillStyle(0xffffff, 0.05 * (1 - t))
+      g.fillRect(-panelW / 2 + 6, stripY, panelW - 12, gradH / gradSteps + 1)
+    }
+
+    // 4. inner bottom shadow — adds depth at bottom
+    const shadowSteps = 10
+    const shadowH = panelH * 0.3
+    for (let i = 0; i < shadowSteps; i++) {
+      const t = i / (shadowSteps - 1)
+      const stripY = panelH / 2 - shadowH + i * (shadowH / shadowSteps)
+      g.fillStyle(0x000000, 0.04 * t)
+      g.fillRect(-panelW / 2 + 6, stripY, panelW - 12, shadowH / shadowSteps + 1)
+    }
+
+    // 5. soft accent border with double-line glow
+    g.lineStyle(2.5, accentNum, 0.18)
+    g.strokeRoundedRect(-panelW / 2 - 1, -panelH / 2 - 1, panelW + 2, panelH + 2, 27)
+    g.lineStyle(1.5, accentNum, 0.55)
+    g.strokeRoundedRect(-panelW / 2, -panelH / 2, panelW, panelH, 26)
+
+    return g
   }
 
   private bindKeyboard() {
@@ -1211,156 +1330,118 @@ export class MusicRhythmScene extends Phaser.Scene {
   private showResultOverlay() {
     const { width: vw, height: vh } = this.scale
 
-    // full-screen dim (origin centered → covers whole screen)
-    const dim = this.add.rectangle(0, 0, vw, vh, 0x05060e, 0.78).setOrigin(0.5)
+    // softer dim — keeps the playfield visible behind, lighter mood overall
+    const dim = this.add.rectangle(0, 0, vw, vh, 0x2a2350, 0.5).setOrigin(0.5)
 
-    // determine rank
+    // pick a celebratory message tier from accuracy (still varied, but no visible rank)
     const totalNotes = this.perfectCount + this.goodCount + this.missCount
     const accuracy = totalNotes > 0 ? (this.perfectCount + this.goodCount * 0.6) / totalNotes : 0
-    const rank =
-      accuracy >= 0.95
-        ? 'S'
-        : accuracy >= 0.85
-          ? 'A'
-          : accuracy >= 0.7
-            ? 'B'
-            : accuracy >= 0.5
-              ? 'C'
-              : 'D'
-    const rankColor =
-      rank === 'S'
-        ? '#ffe066'
-        : rank === 'A'
-          ? '#a7f3d0'
-          : rank === 'B'
-            ? '#4fd8ff'
-            : rank === 'C'
-              ? '#ff9a6c'
-              : '#f87171'
-    const rankColorNum = Phaser.Display.Color.HexStringToColor(rankColor).color
+    const tier =
+      accuracy >= 0.95 ? 0 : accuracy >= 0.85 ? 1 : accuracy >= 0.7 ? 2 : accuracy >= 0.5 ? 3 : 4
 
-    // 아이용 따뜻한 메시지 (랭크별)
-    const kickerMessage =
-      rank === 'S'
-        ? '최고예요!'
-        : rank === 'A'
-          ? '정말 잘했어요!'
-          : rank === 'B'
-            ? '잘했어요!'
-            : rank === 'C'
-              ? '수고했어요!'
-              : '조금만 더 연습해요!'
+    const kickerMessage = [
+      '최고예요!',
+      '정말 잘했어요!',
+      '잘했어요!',
+      '수고했어요!',
+      '조금만 더 연습해요!',
+    ][tier]
+    const accentHex = ['#ffd97d', '#b6f0c8', '#a7e5ff', '#ffc49b', '#ffadad'][tier]
+    const accentNum = Phaser.Display.Color.HexStringToColor(accentHex).color
 
-    // ── floating text only, no panel ──
+    // ── card panel: bigger, brighter shade so the screen feels lighter ──
+    const panelW = Phaser.Math.Clamp(vw * 0.48, 460, 600)
+    const panelH = Phaser.Math.Clamp(vh * 0.62, 460, 560)
+    const panel = this.drawGlowingPanel(panelW, panelH, accentNum, {
+      surfaceColor: 0x3a3168,
+      surfaceAlpha: 0.92,
+    })
+    void kickerMessage // tier still drives accent color; message no longer rendered
 
-    // kicker — friendly Korean message
-    const kicker = this.add
-      .text(0, -210, kickerMessage, {
-        fontFamily: FONT_FAMILY,
-        fontSize: `${Phaser.Math.Clamp(vh * 0.034, 22, 30)}px`,
-        fontStyle: 'bold',
-        color: '#ffffff',
-      })
-      .setOrigin(0.5)
-      .setShadow(0, 2, '#000000', 8, false, true)
-
-    // rank — big letter with subtle ring
-    const rankRing = this.add.graphics()
-    for (let g = 0; g < 6; g++) {
-      rankRing.fillStyle(rankColorNum, 0.012)
-      rankRing.fillCircle(0, -100, 96 - g * 4)
-    }
-    rankRing.lineStyle(2, rankColorNum, 0.7)
-    rankRing.strokeCircle(0, -100, 78)
-
-    const rankText = this.add
-      .text(0, -100, rank, {
-        fontFamily: GAME_FONT,
-        fontSize: `${Phaser.Math.Clamp(vh * 0.14, 88, 130)}px`,
-        color: rankColor,
-      })
-      .setOrigin(0.5)
-      .setShadow(0, 4, '#000000', 12, false, true)
-
-    // gradient accent line
-    const underline = this.add.graphics()
-    const ulW = 140
-    underline.fillStyle(0xf363ff, 0.85)
-    underline.fillRoundedRect(-ulW / 2, 0, ulW * 0.7, 2, 1)
-    underline.fillStyle(0x4fd8ff, 0.85)
-    underline.fillRoundedRect(-ulW / 2 + ulW * 0.6, 0, ulW * 0.4, 2, 1)
-
-    // ── 점수 (hero stat) ──
+    // ── HERO: SCORE (label + big value) ──
+    const scoreLabelY = -panelH / 2 + 88
     const scoreLabel = this.add
-      .text(0, 30, '점수', {
+      .text(0, scoreLabelY, 'SCORE', {
         fontFamily: FONT_FAMILY,
-        fontSize: '13px',
-        fontStyle: 'bold',
-        color: '#9aa6d6',
+        fontSize: '14px',
+        fontStyle: '700',
+        color: accentHex,
       })
       .setOrigin(0.5)
       .setLetterSpacing(4)
 
+    const scoreValueY = scoreLabelY + 64
     const scoreValue = this.add
-      .text(0, 64, this.score.toLocaleString('ko-KR'), {
+      .text(0, scoreValueY, this.score.toLocaleString('ko-KR'), {
         fontFamily: GAME_FONT,
-        fontSize: `${Phaser.Math.Clamp(vh * 0.06, 36, 56)}px`,
-        color: '#ffffff',
+        fontSize: `${Phaser.Math.Clamp(vh * 0.075, 48, 68)}px`,
+        color: '#fff8f0',
       })
       .setOrigin(0.5)
-      .setShadow(0, 3, '#000000', 8, false, true)
+      .setShadow(0, 4, '#000000', 12, false, true)
 
-    // ── 4-column stats row (Korean labels) ──
+    // soft pastel underline below score
+    const underline = this.add.graphics()
+    const ulW = 90
+    underline.fillStyle(accentNum, 0.7)
+    underline.fillRoundedRect(-ulW / 2, scoreValueY + 50, ulW, 3, 2)
+
+    // ── 4 stat chips with rounded backgrounds ──
     const colStats = [
-      { label: '콤보', value: `${this.maxCombo}`, color: '#cc44ff' },
-      { label: '퍼펙트', value: `${this.perfectCount}`, color: '#fff4a8' },
-      { label: '굿', value: `${this.goodCount}`, color: '#a7f3d0' },
-      { label: '미스', value: `${this.missCount}`, color: '#f87171' },
+      { label: '콤보', value: `${this.maxCombo}`, color: 0xc4b5fd, hex: '#c4b5fd' },
+      { label: '퍼펙트', value: `${this.perfectCount}`, color: 0xfff4a8, hex: '#fff4a8' },
+      { label: '굿', value: `${this.goodCount}`, color: 0xb6f0c8, hex: '#b6f0c8' },
+      { label: '미스', value: `${this.missCount}`, color: 0xffadad, hex: '#ffadad' },
     ]
-    const colW = 90
-    const colStartX = -((colStats.length - 1) * colW) / 2
-    const colY = 145
+    const chipW = 88
+    const chipH = 64
+    const chipGap = 18
+    const totalW = colStats.length * chipW + (colStats.length - 1) * chipGap
+    const startX = -totalW / 2 + chipW / 2
+    const colY = scoreValueY + 130
     const colNodes: Phaser.GameObjects.GameObject[] = []
     colStats.forEach((s, i) => {
-      const cx = colStartX + i * colW
+      const cx = startX + i * (chipW + chipGap)
+      const chipBg = this.add.graphics()
+      chipBg.fillStyle(s.color, 0.16)
+      chipBg.fillRoundedRect(cx - chipW / 2, colY - chipH / 2, chipW, chipH, 12)
+      chipBg.lineStyle(1, s.color, 0.5)
+      chipBg.strokeRoundedRect(cx - chipW / 2, colY - chipH / 2, chipW, chipH, 12)
       const value = this.add
-        .text(cx, colY, s.value, {
+        .text(cx, colY - 9, s.value, {
           fontFamily: GAME_FONT,
-          fontSize: '24px',
-          color: s.color,
+          fontSize: '22px',
+          color: s.hex,
         })
         .setOrigin(0.5)
-        .setShadow(0, 2, '#000000', 6, false, true)
+        .setShadow(0, 2, '#000000', 4, false, true)
       const label = this.add
-        .text(cx, colY + 24, s.label, {
+        .text(cx, colY + 18, s.label, {
           fontFamily: FONT_FAMILY,
           fontSize: '12px',
-          fontStyle: 'bold',
-          color: '#9aa6d6',
+          fontStyle: '700',
+          color: '#cfc7e0',
         })
         .setOrigin(0.5)
-        .setLetterSpacing(2)
-      colNodes.push(value, label)
+      colNodes.push(chipBg, value, label)
     })
 
-    // ── slim pill buttons ──
-    const btnY = 220
-    const retry = this.makePillButton(-110, btnY, 180, 40, '다시하기', 0xf363ff, () =>
+    // ── action buttons — pushed further apart so they breathe ──
+    const btnY = panelH / 2 - 56
+    const retry = this.makePillButton(-110, btnY, 180, 48, '다시하기', 0xffb6d9, () =>
       this.restartRound(),
     )
-    const exit = this.makePillButton(110, btnY, 180, 40, '돌아가기', 0x4fd8ff, () =>
+    const exit = this.makePillButton(110, btnY, 180, 48, '돌아가기', 0xa7e5ff, () =>
       this.returnToMusicSelect(),
     )
 
     const container = this.add
       .container(vw / 2, vh / 2, [
         dim,
-        kicker,
-        rankRing,
-        rankText,
-        underline,
+        panel,
         scoreLabel,
         scoreValue,
+        underline,
         ...colNodes,
         retry,
         exit,
@@ -1368,12 +1449,24 @@ export class MusicRhythmScene extends Phaser.Scene {
       .setDepth(70)
       .setScrollFactor(0)
 
-    // entrance — fade only, no scale (matches the calm start-overlay vibe)
+    // gentle pulse on the score
+    this.tweens.add({
+      targets: scoreValue,
+      scale: 1.03,
+      duration: 1200,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    })
+
+    // gentle entrance — fade + slight rise
     container.setAlpha(0)
+    container.y = vh / 2 + 12
     this.tweens.add({
       targets: container,
       alpha: 1,
-      duration: 240,
+      y: vh / 2,
+      duration: 320,
       ease: 'Sine.easeOut',
     })
   }
@@ -1392,30 +1485,33 @@ export class MusicRhythmScene extends Phaser.Scene {
     const text = this.add
       .text(0, 0, label, {
         fontFamily: FONT_FAMILY,
-        fontSize: '15px',
-        fontStyle: 'bold',
-        color: '#ffffff',
+        fontSize: '16px',
+        fontStyle: '700',
+        color: '#2a1f3d',
       })
       .setOrigin(0.5)
-      .setLetterSpacing(2)
 
     const draw = (hovered: boolean) => {
       bg.clear()
-      if (hovered) {
-        for (let g = 0; g < 5; g++) {
-          bg.fillStyle(color, 0.022)
-          bg.fillRoundedRect(
-            -width / 2 - 5 + g,
-            -height / 2 - 5 + g,
-            width + 10 - g * 2,
-            height + 10 - g * 2,
-            height / 2 + 5,
-          )
-        }
+      // soft outer glow always
+      for (let g = 0; g < (hovered ? 8 : 5); g++) {
+        bg.fillStyle(color, hovered ? 0.035 : 0.022)
+        bg.fillRoundedRect(
+          -width / 2 - 6 + g,
+          -height / 2 - 6 + g,
+          width + 12 - g * 2,
+          height + 12 - g * 2,
+          height / 2 + 6,
+        )
       }
-      bg.fillStyle(color, hovered ? 0.28 : 0.16)
+      // solid filled button
+      bg.fillStyle(color, hovered ? 1 : 0.92)
       bg.fillRoundedRect(-width / 2, -height / 2, width, height, height / 2)
-      bg.lineStyle(1.5, color, hovered ? 1 : 0.85)
+      // top inner highlight (subtle gloss)
+      bg.fillStyle(0xffffff, hovered ? 0.18 : 0.14)
+      bg.fillRoundedRect(-width / 2 + 3, -height / 2 + 3, width - 6, height / 2, height / 2)
+      // crisp border
+      bg.lineStyle(1.5, 0xffffff, hovered ? 0.95 : 0.7)
       bg.strokeRoundedRect(-width / 2, -height / 2, width, height, height / 2)
     }
     draw(false)
