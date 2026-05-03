@@ -88,7 +88,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
   preload() {
     this.load.image(
       'gymnastics-play-background',
-      assetPath('images/themes/gymnastics/background/background.png'),
+      assetPath('images/themes/gymnastics/background/gymbackground.png'),
     )
     this.load.image(
       'gymnastics-raccoon',
