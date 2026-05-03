@@ -1,4 +1,7 @@
-from fastapi import APIRouter
+import logging
+
+import numpy as np
+from fastapi import APIRouter, HTTPException
 
 from app.schemas.gymnastics import HipCenterResponse, NormalizedLandmarkResponse
 from app.schemas.taekwondo import (
@@ -10,13 +13,18 @@ from app.schemas.taekwondo import (
     TaekwondoDirectionClassificationRequest,
     TaekwondoDirectionClassificationResponse,
     TaekwondoDirectionFeaturesResponse,
+    TaekwondoDtwScoreDetail,
+    TaekwondoLstmScoreDetail,
     TaekwondoNormalizedPoseResponse,
     TaekwondoPoseFrameRequest,
+    TaekwondoScoringRequest,
+    TaekwondoScoringResponse,
     TaekwondoStanceClassificationRequest,
     TaekwondoStanceClassificationResponse,
     TaekwondoStanceFeaturesResponse,
     TrackingQualityResponse,
 )
+from app.services.taekwondo.calibration.calibration_service import CalibrationService
 from app.services.taekwondo.classification.basic_motion_classifier import (
     BasicMotionClassificationResult,
     BasicMotionClassifier,
@@ -29,9 +37,14 @@ from app.services.taekwondo.classification.stance_classifier import (
     StanceClassificationResult,
     StanceClassifier,
 )
-from app.services.taekwondo.calibration.calibration_service import CalibrationService
 from app.services.taekwondo.normalization.pose_normalizer import PoseNormalizer
+from app.services.taekwondo.scoring import EnsembleScoreResult, score_ensemble
 from app.services.taekwondo.types import CalibrationResult, NormalizedPoseFrame
+
+logger = logging.getLogger(__name__)
+
+# 채점 입력 시퀀스의 관절 차원 (LSTM AE INPUT_DIM 과 일치해야 함)
+SCORING_JOINT_DIM = 8
 
 router = APIRouter(prefix="/taekwondo", tags=["taekwondo"])
 
@@ -213,3 +226,63 @@ def classify_direction(
     normalized = normalizer.normalize(request.frame)
     result = direction_classifier.classify(normalized, request.previous_direction)
     return to_taekwondo_direction_response(normalized, result)
+
+
+def to_taekwondo_scoring_response(result: EnsembleScoreResult) -> TaekwondoScoringResponse:
+    return TaekwondoScoringResponse(
+        action_name=result.action_name,
+        final_score=result.final_score,
+        lstm=TaekwondoLstmScoreDetail(
+            score=result.lstm_result.score,
+            recon_error=result.lstm_result.recon_error,
+            joint_errors=result.lstm_result.joint_errors,
+            worst_joint=result.lstm_result.worst_joint,
+        ),
+        dtw=TaekwondoDtwScoreDetail(
+            score=result.dtw_result.score,
+            distance=result.dtw_result.dtw_distance,
+        ),
+    )
+
+
+@router.post("/score", response_model=TaekwondoScoringResponse)
+def score_poomsae(request: TaekwondoScoringRequest) -> TaekwondoScoringResponse:
+    """태극 1장 동작 채점 — LSTM Autoencoder + DTW 가중평균 (S14P31E103-341)."""
+    seq = np.asarray(request.keypoints, dtype=np.float32)
+
+    # shape 검증: (T, SCORING_JOINT_DIM)
+    if seq.ndim != 2 or seq.shape[1] != SCORING_JOINT_DIM:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"keypoints는 (T, {SCORING_JOINT_DIM}) shape이어야 합니다. "
+                f"받은 shape: {seq.shape}"
+            ),
+        )
+
+    try:
+        result = score_ensemble(seq, request.action_name)
+    except FileNotFoundError as exc:
+        # 학습되지 않은 동작 이름 (사용자 입력 문제) → 404
+        logger.warning(f"채점 실패 — 자산 누락: action_name='{request.action_name}'")
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except KeyError as exc:
+        # 모델 / 템플릿은 있으나 stats JSON 에는 누락 = 배포 일관성 오류 → 500
+        logger.error(
+            f"채점 실패 — stats 일관성 오류: action='{request.action_name}', missing_key={exc}"
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="서버 채점 통계가 누락되어 있습니다. 관리자에게 문의해 주세요.",
+        ) from exc
+    except RuntimeError as exc:
+        # GPU OOM / CUDA 오류 / 모델 구조 불일치 등 → 503 (재시도 가능)
+        logger.exception(
+            f"채점 실패 — 모델 추론 오류: action='{request.action_name}'"
+        )
+        raise HTTPException(
+            status_code=503,
+            detail="AI 모델 추론에 일시적 문제가 발생했습니다. 잠시 후 다시 시도해 주세요.",
+        ) from exc
+
+    return to_taekwondo_scoring_response(result)
