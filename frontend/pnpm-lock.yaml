@@ -120,6 +120,9 @@ importers:
 
   apps/game:
     dependencies:
+      '@hookform/resolvers':
+        specifier: ^3.10.0
+        version: 3.10.0(react-hook-form@7.72.1(react@19.2.5))
       '@mediapipe/tasks-vision':
         specifier: ^0.10.21
         version: 0.10.34
