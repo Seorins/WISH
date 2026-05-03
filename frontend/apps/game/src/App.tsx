@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { createGame } from './phaser'
 import type Phaser from 'phaser'
 import DiagonalBodyPunchDebugPage from './debug/DiagonalBodyPunchDebugPage'
@@ -7,6 +7,7 @@ import MarchDebugPage from './debug/MarchDebugPage'
 import SideStepDebugPage from './debug/SideStepDebugPage'
 import SquatDebugPage from './debug/SquatDebugPage'
 import { ensureDemoAuthToken } from './auth/demoAuth'
+import { AuthOverlay } from './features/auth'
 
 const DEBUG_MARCH_MODE = 'march'
 const DEBUG_SIDE_STEP_MODE = 'side-step'
@@ -19,6 +20,7 @@ function App() {
   const debugMode = params.get('debug')
   const containerRef = useRef<HTMLDivElement>(null)
   const gameRef = useRef<Phaser.Game | null>(null)
+  const [showAuth, setShowAuth] = useState(false)
 
   useEffect(() => {
     if (
@@ -36,7 +38,9 @@ function App() {
 
     void ensureDemoAuthToken().then(() => {
       if (isCancelled || !containerRef.current || gameRef.current) return
-      gameRef.current = createGame(containerRef.current)
+      const game = createGame(containerRef.current)
+      gameRef.current = game
+      game.events.on('auth:request', () => setShowAuth(true))
     })
 
     return () => {
@@ -45,6 +49,16 @@ function App() {
       gameRef.current = null
     }
   }, [debugMode])
+
+  const handleAuthSuccess = useCallback(() => {
+    setShowAuth(false)
+    gameRef.current?.events.emit('auth:completed')
+  }, [])
+
+  const handleAuthCancel = useCallback(() => {
+    setShowAuth(false)
+    gameRef.current?.events.emit('auth:cancelled')
+  }, [])
 
   if (debugMode === DEBUG_MARCH_MODE) {
     return <MarchDebugPage />
@@ -67,19 +81,22 @@ function App() {
   }
 
   return (
-    <div
-      ref={containerRef}
-      style={{
-        width: '100vw',
-        height: '100vh',
-        overflow: 'hidden',
-        overscrollBehavior: 'none',
-        touchAction: 'none',
-        userSelect: 'none',
-        WebkitTouchCallout: 'none',
-        WebkitUserSelect: 'none',
-      }}
-    />
+    <>
+      <div
+        ref={containerRef}
+        style={{
+          width: '100vw',
+          height: '100vh',
+          overflow: 'hidden',
+          overscrollBehavior: 'none',
+          touchAction: 'none',
+          userSelect: 'none',
+          WebkitTouchCallout: 'none',
+          WebkitUserSelect: 'none',
+        }}
+      />
+      <AuthOverlay open={showAuth} onAuthSuccess={handleAuthSuccess} onCancel={handleAuthCancel} />
+    </>
   )
 }
 

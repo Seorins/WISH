@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
 import { assetPath } from '@/game/assets/assetPath'
+import { hasValidAuthToken } from '@/features/auth'
 
 export class StartScene extends Phaser.Scene {
   constructor() {
@@ -53,11 +54,43 @@ export class StartScene extends Phaser.Scene {
       this.tweens.killTweensOf(btn)
       this.tweens.add({ targets: btn, scale: baseScale, duration: 120 })
     })
-    btn.on('pointerdown', () => {
+    let waitingForAuth = false
+
+    const proceedToVillage = () => {
       this.cameras.main.fadeOut(400, 0, 0, 0)
       this.cameras.main.once('camerafadeoutcomplete', () => {
         this.scene.start('VillageScene')
       })
+    }
+
+    btn.on('pointerdown', () => {
+      if (waitingForAuth) return
+
+      if (hasValidAuthToken()) {
+        proceedToVillage()
+        return
+      }
+
+      waitingForAuth = true
+
+      const onCompleted = () => {
+        waitingForAuth = false
+        this.game.events.off('auth:cancelled', onCancelled)
+        proceedToVillage()
+      }
+      const onCancelled = () => {
+        waitingForAuth = false
+        this.game.events.off('auth:completed', onCompleted)
+      }
+
+      this.game.events.once('auth:completed', onCompleted)
+      this.game.events.once('auth:cancelled', onCancelled)
+      this.game.events.emit('auth:request')
+    })
+
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.game.events.off('auth:completed')
+      this.game.events.off('auth:cancelled')
     })
   }
 
