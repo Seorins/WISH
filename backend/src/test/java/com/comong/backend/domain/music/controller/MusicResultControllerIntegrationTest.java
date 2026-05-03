@@ -161,14 +161,7 @@ class MusicResultControllerIntegrationTest extends IntegrationTestSupport {
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(
                                         saveRequest(
-                                                "baby-shark",
-                                                24830,
-                                                87,
-                                                100,
-                                                10,
-                                                10,
-                                                175,
-                                                96196)))
+                                                "baby-shark", 24830, 87, 100, 10, 10, 175, 96196)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("MU-002"));
 
@@ -185,14 +178,7 @@ class MusicResultControllerIntegrationTest extends IntegrationTestSupport {
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(
                                         saveRequest(
-                                                "baby-shark",
-                                                24830,
-                                                87,
-                                                141,
-                                                23,
-                                                10,
-                                                174,
-                                                96196)))
+                                                "baby-shark", 24830, 87, 141, 23, 10, 174, 96196)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("MU-003"));
 

@@ -10,8 +10,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 public record MusicResultSaveRequest(
         @Schema(description = "곡 식별자", example = "baby-shark") @NotBlank String chartId,
         @Schema(description = "점수", example = "24830") @NotNull @PositiveOrZero Integer score,
-        @Schema(description = "최대 콤보", example = "87") @NotNull @PositiveOrZero
-                Integer maxCombo,
+        @Schema(description = "최대 콤보", example = "87") @NotNull @PositiveOrZero Integer maxCombo,
         @Schema(description = "Perfect 판정 개수", example = "142") @NotNull @PositiveOrZero
                 Integer perfectCount,
         @Schema(description = "Good 판정 개수", example = "23") @NotNull @PositiveOrZero
