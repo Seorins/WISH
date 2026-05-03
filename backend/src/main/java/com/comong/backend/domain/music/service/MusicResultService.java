@@ -1,8 +1,16 @@
 package com.comong.backend.domain.music.service;
 
+import java.time.LocalDateTime;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
+import java.util.stream.Collectors;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.comong.backend.domain.music.dto.MusicBestResultResponse;
 import com.comong.backend.domain.music.dto.MusicResultResponse;
 import com.comong.backend.domain.music.dto.MusicResultSaveRequest;
 import com.comong.backend.domain.music.entity.MusicChart;
@@ -22,6 +30,11 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class MusicResultService {
+
+    private static final Comparator<MusicResult> BEST_RESULT_COMPARATOR =
+            Comparator.comparingInt(MusicResult::getScore)
+                    .thenComparingDouble(MusicResult::getAccuracy)
+                    .thenComparing(MusicResult::getPlayedAt);
 
     private final MusicChartRepository musicChartRepository;
     private final MusicResultRepository musicResultRepository;
@@ -71,6 +84,28 @@ public class MusicResultService {
         return MusicResultResponse.of(saved, isNewBest, previousBestScore);
     }
 
+    public List<MusicBestResultResponse> findMyBest(Long userId) {
+        PatientProfile patientProfile =
+                patientProfileService
+                        .findEntityByUserId(userId)
+                        .orElseThrow(
+                                () ->
+                                        new BusinessException(
+                                                PatientErrorCode.PATIENT_PROFILE_NOT_FOUND));
+
+        Map<String, List<MusicResult>> resultsByChart =
+                musicResultRepository
+                        .findAllByPatientProfileIdWithMusicChart(patientProfile.getId())
+                        .stream()
+                        .collect(
+                                Collectors.groupingBy(
+                                        result -> result.getMusicChart().getChartId(),
+                                        TreeMap::new,
+                                        Collectors.toList()));
+
+        return resultsByChart.values().stream().map(this::toBestResultResponse).toList();
+    }
+
     private MusicChart findActiveChartOrThrow(String chartId) {
         return musicChartRepository
                 .findByChartIdAndActiveTrue(chartId)
@@ -92,5 +127,16 @@ public class MusicResultService {
 
     private double calculateAccuracy(MusicResultSaveRequest request) {
         return (request.perfectCount() + request.goodCount() * 0.6) / request.totalNotes();
+    }
+
+    private MusicBestResultResponse toBestResultResponse(List<MusicResult> results) {
+        MusicResult bestResult = results.stream().max(BEST_RESULT_COMPARATOR).orElseThrow();
+        LocalDateTime lastPlayedAt =
+                results.stream()
+                        .map(MusicResult::getPlayedAt)
+                        .max(LocalDateTime::compareTo)
+                        .orElseThrow();
+
+        return MusicBestResultResponse.of(bestResult, results.size(), lastPlayedAt);
     }
 }
