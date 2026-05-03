@@ -31,19 +31,25 @@ const HAND_POINTER_REJECT_MARGIN = 0.08
 const HAND_POINTER_CAMERA_BOUNDS = { left: 0.06, right: 0.94, top: 0.06, bottom: 0.78 } as const
 type DrawingTool = 'brush' | 'eraser'
 const DRAWING_TOOLS: DrawingTool[] = ['brush', 'eraser']
+// Source dimensions of palette.png. Swatch coordinates below are in this space.
+const PALETTE_SOURCE_WIDTH = 773
+const PALETTE_SOURCE_HEIGHT = 1547
+const PALETTE_ASPECT = PALETTE_SOURCE_WIDTH / PALETTE_SOURCE_HEIGHT
+
+// Coordinates are in palette image source-pixel space (773 × 1547, 2 cols × 6 rows).
 const PALETTE_SWATCHES = [
-  { color: 0xff2b2b, sourceX: 1470, sourceY: 262 },
-  { color: 0xff4d9a, sourceX: 1902, sourceY: 262 },
-  { color: 0xff6a1f, sourceX: 1467, sourceY: 588 },
-  { color: 0xffd12c, sourceX: 1903, sourceY: 589 },
-  { color: 0x7bdd1e, sourceX: 1476, sourceY: 905 },
-  { color: 0x138f2d, sourceX: 1890, sourceY: 895 },
-  { color: 0x36b7ff, sourceX: 1467, sourceY: 1253 },
-  { color: 0x3679ff, sourceX: 1895, sourceY: 1249 },
-  { color: 0x9a43d9, sourceX: 1483, sourceY: 1609 },
-  { color: 0xffb05a, sourceX: 1900, sourceY: 1598 },
-  { color: 0x8e5c32, sourceX: 1490, sourceY: 1968 },
-  { color: 0x2f2f2f, sourceX: 1873, sourceY: 2006 },
+  { color: 0xff2b2b, sourceX: 228, sourceY: 212 },
+  { color: 0xff4d9a, sourceX: 545, sourceY: 212 },
+  { color: 0xff6a1f, sourceX: 228, sourceY: 437 },
+  { color: 0xffd12c, sourceX: 545, sourceY: 437 },
+  { color: 0x7bdd1e, sourceX: 228, sourceY: 661 },
+  { color: 0x138f2d, sourceX: 545, sourceY: 661 },
+  { color: 0x36b7ff, sourceX: 228, sourceY: 885 },
+  { color: 0x3679ff, sourceX: 545, sourceY: 885 },
+  { color: 0x9a43d9, sourceX: 228, sourceY: 1110 },
+  { color: 0xffb05a, sourceX: 545, sourceY: 1110 },
+  { color: 0x8e5c32, sourceX: 228, sourceY: 1334 },
+  { color: 0x2f2f2f, sourceX: 545, sourceY: 1334 },
 ] as const
 
 type PalettePoint = { color: number; x: number; y: number }
@@ -269,7 +275,8 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
     const backgroundScale = Math.max(vw / backgroundSource.width, vh / backgroundSource.height)
     background.setScale(backgroundScale).setDepth(0)
 
-    this.add.rectangle(vw / 2, vh / 2, vw, vh, 0xf4ead7, 0.08).setDepth(1)
+    // soft warm dim — keeps the room's mood but pushes focus onto the canvas
+    this.add.rectangle(vw / 2, vh / 2, vw, vh, 0x1a1208, 0.32).setDepth(1)
 
     this.createCanvas(vw, vh)
     if (this.applyInitialArtworkImage()) {
@@ -417,18 +424,18 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
   }
 
   private createPalette(vw: number, vh: number) {
-    const paletteHeight = Math.min(this.drawBounds.height * 0.88, vh * 0.41)
-    const paletteWidth = paletteHeight * (3429 / 2286)
+    const paletteHeight = Math.min(this.drawBounds.height * 0.78, vh * 0.72)
+    const paletteWidth = paletteHeight * PALETTE_ASPECT
     const toolIconSize = Math.max(68, Math.min(90, Math.round(vw * 0.044)))
     const toolHitSize = toolIconSize + 18
     const toolGap = Math.max(10, Math.round(toolHitSize * 0.14))
-    const minPanelCenterX = this.drawBounds.right + paletteWidth * 0.24
+    const minPanelCenterX = this.drawBounds.right + paletteWidth * 0.6
     const maxPanelCenterX = Math.max(
       minPanelCenterX,
-      vw - toolHitSize - toolGap - paletteWidth * 0.18 - 24,
+      vw - toolHitSize - toolGap - paletteWidth / 2 - 24,
     )
     const panelCenterX = Phaser.Math.Clamp(
-      this.drawBounds.right + paletteWidth * 0.35,
+      this.drawBounds.right + paletteWidth * 0.75,
       minPanelCenterX,
       maxPanelCenterX,
     )
@@ -440,11 +447,11 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
 
     const paletteLeft = palette.x - palette.displayWidth / 2
     const paletteBoundsTop = palette.y - palette.displayHeight / 2
-    const scaleX = palette.displayWidth / 3429
-    const scaleY = palette.displayHeight / 2286
-    const selectionRadius = Math.max(11, palette.displayWidth * 0.034)
-    const hitWidth = palette.displayWidth * 0.115
-    const hitHeight = palette.displayHeight * 0.06
+    const scaleX = palette.displayWidth / PALETTE_SOURCE_WIDTH
+    const scaleY = palette.displayHeight / PALETTE_SOURCE_HEIGHT
+    const selectionRadius = Math.max(18, palette.displayWidth * 0.085)
+    const hitWidth = palette.displayWidth * 0.34
+    const hitHeight = palette.displayHeight * 0.115
     const minSwatchSourceX = Math.min(...PALETTE_SWATCHES.map(swatch => swatch.sourceX))
     const maxSwatchSourceX = Math.max(...PALETTE_SWATCHES.map(swatch => swatch.sourceX))
     const visualPaddingX = hitWidth * 0.9
@@ -633,12 +640,12 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
 
   private createCameraPreview(vw: number, vh: number) {
     const panelCenterX = vw * 0.878
-    const paletteHeight = Math.min(this.drawBounds.height * 0.88, vh * 0.41)
+    const paletteHeight = Math.min(this.drawBounds.height * 0.78, vh * 0.72)
     const paletteBottom = this.drawBounds.top + 2 + paletteHeight
     const availableTop = paletteBottom + Math.max(10, vh * 0.012)
     const availableBottom = vh - Math.max(14, vh * 0.018)
     const availableHeight = Math.max(120, availableBottom - availableTop)
-    const panelWidth = Math.max(160, Math.min(vw * 0.21, 360, availableHeight * (4 / 3)))
+    const panelWidth = Math.max(180, Math.min(vw * 0.18, 300, availableHeight * (4 / 3)))
     const panelHeight = panelWidth * 0.75
     const panelY = Math.min(availableBottom - panelHeight / 2, availableTop + panelHeight / 2)
 

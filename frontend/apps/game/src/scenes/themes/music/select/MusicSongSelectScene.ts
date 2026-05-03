@@ -12,6 +12,7 @@ type SongMeta = {
   coverPath: string
   accent: number
   tag: string
+  coverOffsetY?: number // vertical nudge to reframe the cover crop
 }
 
 type SongCardView = {
@@ -33,6 +34,7 @@ const SONG_META: SongMeta[] = [
     coverPath: 'images/themes/music/ui/babyshark_thum.png',
     accent: 0x65d8ff,
     tag: '동요 · POP',
+    coverOffsetY: -20, // shift up slightly so fish characters sit in upper area
   },
   {
     chart: ALL_RHYTHM_CHARTS[1], // 작은별
@@ -40,6 +42,7 @@ const SONG_META: SongMeta[] = [
     coverPath: 'images/themes/music/ui/littlestart_thum.png',
     accent: 0xc8b6ff,
     tag: '클래식 · 입문',
+    coverOffsetY: -30, // pull up so the star character is more centered in card
   },
 ]
 
@@ -211,7 +214,7 @@ export class MusicSongSelectScene extends Phaser.Scene {
     container.add(panel)
 
     // ── cover fills the ENTIRE card ──
-    const cover = this.add.image(0, 0, meta.coverKey)
+    const cover = this.add.image(0, meta.coverOffsetY ?? 0, meta.coverKey)
     const src = cover.texture.getSourceImage() as HTMLImageElement
     const scale = Math.max(w / src.width, h / src.height)
     cover.setScale(scale)
