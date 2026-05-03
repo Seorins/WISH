@@ -37,7 +37,8 @@ const TALK_DISTANCE = 100
 const GYMNASTICS_ROOM_SPAWN = { xRatio: 0.5, yRatio: 0.76 }
 const GYMNASTICS_EXIT_PORTAL = { xRatio: 0.44, yRatio: 0.86, widthRatio: 0.12, heightRatio: 0.12 }
 const GYMNASTICS_RETURN_SPAWN = { xRatio: 0.72, yRatio: 0.58 }
-const DIALOG_TEXT_BOX = { x: 900, y: 445, width: 1040, height: 190 }
+const DIALOG_TEXT_BOX = { x: 520, y: 210, width: 1240, height: 240 }
+const DIALOG_NAME_BOX = { x: 450, y: 115, width: 360, height: 95 }
 const CARD_DEPTH = 24
 const CARD_FRAME_ASPECT_RATIO = 408 / 612
 const CONTENT_CONFIRM_VISIBLE_MS = 1000
@@ -144,7 +145,10 @@ export class GymnasticsSelectScene extends Phaser.Scene {
       assetPath('images/themes/gymnastics/characters/dinielracoon.png'),
     )
     loadInteractionIcons(this)
-    this.load.image('seongsu-dialog', assetPath('images/npcs/seongsu/dialog-frame.png'))
+    this.load.image(
+      'gymnastics-seongsu-dialog-frame',
+      assetPath('images/npcs/seongsu/dialog_frame.png'),
+    )
     loadPlayerSpritesheet(this)
   }
 
@@ -284,13 +288,18 @@ export class GymnasticsSelectScene extends Phaser.Scene {
 
   private createDialogUi() {
     this.dialog = createSimpleDialogUi(this, {
-      frameKey: 'seongsu-dialog',
+      frameKey: 'gymnastics-seongsu-dialog-frame',
       textBox: DIALOG_TEXT_BOX,
-      dialogWidthRatio: 0.78,
-      maxDialogWidth: 1080,
+      dialogWidthRatio: 0.7,
+      maxDialogWidth: 1000,
       fontSize: 40,
       lineSpacing: 4,
-      frameBottomMargin: 18,
+      frameBottomMargin: -30,
+      nameBox: DIALOG_NAME_BOX,
+      nameText: '체조선생님 성수',
+      nameFontColor: '#3b2414',
+      nameFontSize: 34,
+      opticalOffsets: { single: 0 },
     })
   }
 
