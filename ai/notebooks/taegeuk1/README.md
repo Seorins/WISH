@@ -29,9 +29,9 @@ DTW(베이스라인) 와 LSTM Autoencoder 두 방식을 각각 구현·평가한
 | LSTM | 65.3 | 100.0 | 9.1 | 21.0 | **0.9** |
 | LSTM + DTW (앙상블) | 65.6 | 100.0 | 8.6 | 21.3 | (합산) |
 
-**핵심 인사이트**: 점수 분포는 세 방식이 거의 동일하지만, **LSTM 추론이 DTW보다 약 5배 빠름** (0.9 vs 4.4 ms). 실시간 채점이 필요한 환경에서 LSTM 비중을 높게 잡았으며, DTW 를 보조로 두어 한쪽이 흔들릴 때 보완하도록 설계했다.
+> 🚨 **단일 동작("앞서고 지르기") · 50개 샘플 기준 — 일반화 X.** 8개 품새 동작 전체에 대한 성능 지표가 아니며, 표 수치만 보고 모델 품질을 판단하지 마세요. 검증 데이터셋 확보 후 [S14P31E103-343](https://ssafy.atlassian.net/browse/S14P31E103-343) 에서 동작별 / 전체 지표 재측정 예정.
 
-> ⚠️ 위 수치는 **단일 동작("앞서고 지르기")** 에 대한 50개 샘플 비교 결과로, 8개 품새 동작 전체에 대한 일반화된 지표는 아니다. 추후 검증용 데이터셋이 확보되면 동작별 / 전체 지표를 다시 측정해야 한다.
+**핵심 인사이트**: 점수 분포는 세 방식이 거의 동일하지만, **LSTM 추론이 DTW보다 약 5배 빠름** (0.9 vs 4.4 ms). 실시간 채점이 필요한 환경에서 LSTM 비중을 높게 잡았으며, DTW 를 보조로 두어 한쪽이 흔들릴 때 보완하도록 설계했다.
 
 ---
 
@@ -71,6 +71,32 @@ LSTM Autoencoder (`02_lstm_train.ipynb` 정의):
 
 ---
 
+## 통계 파일 생성 방법
+
+`ai/app/resources/taegeuk1/stats/` 안의 두 JSON 은 채점 점수를 0~100 으로 정규화하기 위한 **percentile 룩업 테이블**이다. 어느 노트북에서 어떻게 만들어졌는지 명시한다.
+
+### `distance_stats.json` — DTW 거리 percentile
+
+- **생성 위치**: `03_method_comparison_dtw_vs_lstm.ipynb` 의 DTW 평가 단계
+- **입력**: 동작별 시연자 시퀀스 (`~/taekwondo-scorer/processed/normalized/{action_name}/`)
+- **처리**: 각 시퀀스 ↔ 기준 템플릿(`templates/{action_name}.npy`) 사이 DTW 거리 계산 → percentile (`min, p10, p25, p50, p75, p90, max`) 추출
+- **사용처**: 채점 시 `dtw_distance` → 점수 변환 룩업
+
+### `error_stats.json` — LSTM 재구성 오차 percentile
+
+- **생성 위치**: `02_lstm_train.ipynb` 의 학습 후 평가 단계
+- **입력**: 동작별 학습 데이터셋 → LSTM Autoencoder 통과
+- **처리**: MSE 재구성 오차 → percentile 추출
+- **사용처**: 채점 시 `recon_error` → 점수 변환 룩업
+
+### 재계산 시 주의
+
+- 데이터셋이나 모델이 바뀌면 두 파일 모두 재계산 필요
+- 자동화된 재계산 스크립트 + 회귀 검증 메커니즘은 [S14P31E103-343](https://ssafy.atlassian.net/browse/S14P31E103-343) 에서 분리 예정
+- 현 시점 두 파일은 **노트북 수동 실행 결과** 이며, 메타데이터(생성 시각, 데이터셋 버전 등) 는 포함되어 있지 않다
+
+---
+
 ## 데이터셋
 
 **AI Hub 71259** — 소아 태권도 품새 동작 데이터셋 (별도 다운로드 필요).
@@ -86,10 +112,9 @@ LSTM Autoencoder (`02_lstm_train.ipynb` 정의):
 
 ---
 
-## 후속 작업 (별도 이슈로 진행 예정)
+## 후속 작업 (별도 이슈)
 
-- 노트북 내 LSTM 클래스를 `ai/app/models/taegeuk1/lstm_autoencoder.py` 로 추출
-- 채점 헬퍼 (`load_models()`, `score(seq, action_name)`) 모듈 작성
-- 기존 `ai/app/services/taekwondo/` 채점 파이프라인과 통합
-- FastAPI 라우트 (`api/v1/taekwondo.py`) 에 채점 엔드포인트 추가
-- 8개 품새 동작 전체에 대한 검증 데이터셋 / 지표 재측정
+- [S14P31E103-341](https://ssafy.atlassian.net/browse/S14P31E103-341) — LSTM AE 모델 클래스 모듈화 + FastAPI 채점 서비스 통합
+- [S14P31E103-342](https://ssafy.atlassian.net/browse/S14P31E103-342) — 모델 가중치 버전 관리 정책 (Git LFS / DVC / 외부 스토리지 검토)
+- [S14P31E103-343](https://ssafy.atlassian.net/browse/S14P31E103-343) — 통계 재계산 스크립트 + 회귀 검증 메커니즘
+- 8개 품새 동작 전체에 대한 검증 데이터셋 / 지표 재측정 (위 343 이슈에 포함)
