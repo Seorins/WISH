@@ -45,60 +45,59 @@ export function LoginScreen({ initialEmail, onAuthSuccess, onSwitchToSignup }: L
   }
 
   return (
-    <>
-      <h2 style={authStyles.titleTab}>로그인</h2>
-      <form onSubmit={handleSubmit(onSubmit)} style={authStyles.form}>
-        <label style={authStyles.label}>
-          이메일
-          <input
-            type="email"
-            autoComplete="email"
-            className="auth-input"
-            {...register('email')}
-            style={authStyles.input}
-            disabled={submitting}
-          />
-          {formState.errors.email && (
-            <span style={authStyles.error}>{formState.errors.email.message}</span>
-          )}
-        </label>
+    <form onSubmit={handleSubmit(onSubmit)} style={authStyles.form}>
+      <h2 style={authStyles.title}>로그인</h2>
 
-        <label style={authStyles.label}>
-          비밀번호
-          <input
-            type="password"
-            autoComplete="current-password"
-            className="auth-input"
-            {...register('password')}
-            style={authStyles.input}
-            disabled={submitting}
-          />
-          {formState.errors.password && (
-            <span style={authStyles.error}>{formState.errors.password.message}</span>
-          )}
-        </label>
-
-        {error && <div style={authStyles.errorBox}>{error}</div>}
-
-        <button
-          type="submit"
-          className="auth-primary"
-          style={authStyles.primaryButton}
+      <label style={authStyles.label}>
+        이메일
+        <input
+          type="email"
+          autoComplete="email"
+          className="auth-input"
+          {...register('email')}
+          style={authStyles.input}
           disabled={submitting}
-        >
-          {submitting ? '로그인 중…' : '로그인'}
-        </button>
+        />
+        {formState.errors.email && (
+          <span style={authStyles.error}>{formState.errors.email.message}</span>
+        )}
+      </label>
 
-        <button
-          type="button"
-          onClick={onSwitchToSignup}
-          className="auth-link"
-          style={authStyles.linkButton}
+      <label style={authStyles.label}>
+        비밀번호
+        <input
+          type="password"
+          autoComplete="current-password"
+          className="auth-input"
+          {...register('password')}
+          style={authStyles.input}
           disabled={submitting}
-        >
-          아직 회원이 아니신가요? <strong>회원가입</strong>
-        </button>
-      </form>
-    </>
+        />
+        {formState.errors.password && (
+          <span style={authStyles.error}>{formState.errors.password.message}</span>
+        )}
+      </label>
+
+      {error && <div style={authStyles.errorBox}>{error}</div>}
+
+      <button
+        type="submit"
+        className="auth-primary"
+        style={authStyles.primaryButton}
+        disabled={submitting}
+      >
+        {submitting ? '로그인 중…' : '로그인'}
+      </button>
+
+      <button
+        type="button"
+        onClick={onSwitchToSignup}
+        className="auth-link"
+        style={authStyles.linkButton}
+        disabled={submitting}
+      >
+        아직 회원이 아니신가요?<span style={authStyles.linkAction}>회원가입 →</span>
+      </button>
+    </form>
   )
 }

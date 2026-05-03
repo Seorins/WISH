@@ -18,37 +18,24 @@ const AUTH_OVERLAY_CSS = `
   to { opacity: 1; }
 }
 @keyframes auth-card-in {
-  0% { opacity: 0; transform: scale(0.92) translateY(-14px); }
-  100% { opacity: 1; transform: scale(1) translateY(0); }
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 .auth-backdrop {
-  animation: auth-backdrop-in 200ms ease-out;
+  animation: auth-backdrop-in 150ms ease-out;
 }
 .auth-card {
-  animation: auth-card-in 280ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  animation: auth-card-in 200ms ease-out;
 }
 .auth-input:focus {
   border-color: #5a3818;
-  box-shadow: 0 0 0 3px rgba(139, 90, 43, 0.25);
 }
 .auth-primary:hover:not(:disabled) {
-  filter: brightness(1.06);
-  transform: translateY(-1px);
-}
-.auth-primary:active:not(:disabled) {
-  transform: translateY(2px);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 220, 150, 0.55),
-    inset 0 -2px 0 rgba(110, 55, 18, 0.45),
-    0 2px 0 #6e3712,
-    0 3px 6px rgba(0,0,0,0.3);
+  background: #d76a1f;
 }
 .auth-primary:disabled {
   opacity: 0.6;
   cursor: not-allowed;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 220, 150, 0.3),
-    0 4px 0 #6e3712;
 }
 .auth-link:hover:not(:disabled) {
   text-decoration: underline;
