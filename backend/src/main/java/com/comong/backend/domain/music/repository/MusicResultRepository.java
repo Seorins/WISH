@@ -1,0 +1,24 @@
+package com.comong.backend.domain.music.repository;
+
+import java.util.List;
+import java.util.Optional;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+import com.comong.backend.domain.music.entity.MusicResult;
+
+public interface MusicResultRepository extends JpaRepository<MusicResult, Long> {
+
+    Optional<MusicResult>
+            findTopByPatientProfileIdAndMusicChartIdOrderByScoreDescAccuracyDescPlayedAtDesc(
+                    Long patientProfileId, Long musicChartId);
+
+    @Query(
+            "select r from MusicResult r "
+                    + "join fetch r.musicChart "
+                    + "where r.patientProfile.id = :patientProfileId")
+    List<MusicResult> findAllByPatientProfileIdWithMusicChart(
+            @Param("patientProfileId") Long patientProfileId);
+}
