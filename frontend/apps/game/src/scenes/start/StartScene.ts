@@ -55,6 +55,20 @@ export class StartScene extends Phaser.Scene {
       this.tweens.add({ targets: btn, scale: baseScale, duration: 120 })
     })
     let waitingForAuth = false
+    let authFadeTween: Phaser.Tweens.Tween | null = null
+
+    const fadeAuthFocus = (toAlpha: number) => {
+      authFadeTween?.stop()
+      authFadeTween = this.tweens.add({
+        targets: [logo, btn],
+        alpha: toAlpha,
+        duration: 220,
+        ease: 'Sine.easeOut',
+        onComplete: () => {
+          authFadeTween = null
+        },
+      })
+    }
 
     const proceedToVillage = () => {
       this.cameras.main.fadeOut(400, 0, 0, 0)
@@ -81,11 +95,13 @@ export class StartScene extends Phaser.Scene {
       const onCancelled = () => {
         waitingForAuth = false
         this.game.events.off('auth:completed', onCompleted)
+        fadeAuthFocus(1)
       }
 
       this.game.events.once('auth:completed', onCompleted)
       this.game.events.once('auth:cancelled', onCancelled)
       this.game.events.emit('auth:request')
+      fadeAuthFocus(0.2)
     })
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
