@@ -7,3 +7,5 @@ pytest==8.3.5
 # 태극 1장 LSTM AE 채점 (S14P31E103-341)
 torch==2.5.1
 numpy==1.26.4
+scipy==1.14.1
+fastdtw==0.3.4
