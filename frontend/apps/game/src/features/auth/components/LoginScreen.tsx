@@ -45,51 +45,60 @@ export function LoginScreen({ initialEmail, onAuthSuccess, onSwitchToSignup }: L
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} style={authStyles.form}>
-      <h2 style={authStyles.title}>로그인</h2>
+    <>
+      <h2 style={authStyles.titleTab}>로그인</h2>
+      <form onSubmit={handleSubmit(onSubmit)} style={authStyles.form}>
+        <label style={authStyles.label}>
+          이메일
+          <input
+            type="email"
+            autoComplete="email"
+            className="auth-input"
+            {...register('email')}
+            style={authStyles.input}
+            disabled={submitting}
+          />
+          {formState.errors.email && (
+            <span style={authStyles.error}>{formState.errors.email.message}</span>
+          )}
+        </label>
 
-      <label style={authStyles.label}>
-        이메일
-        <input
-          type="email"
-          autoComplete="email"
-          {...register('email')}
-          style={authStyles.input}
+        <label style={authStyles.label}>
+          비밀번호
+          <input
+            type="password"
+            autoComplete="current-password"
+            className="auth-input"
+            {...register('password')}
+            style={authStyles.input}
+            disabled={submitting}
+          />
+          {formState.errors.password && (
+            <span style={authStyles.error}>{formState.errors.password.message}</span>
+          )}
+        </label>
+
+        {error && <div style={authStyles.errorBox}>{error}</div>}
+
+        <button
+          type="submit"
+          className="auth-primary"
+          style={authStyles.primaryButton}
           disabled={submitting}
-        />
-        {formState.errors.email && (
-          <span style={authStyles.error}>{formState.errors.email.message}</span>
-        )}
-      </label>
+        >
+          {submitting ? '로그인 중…' : '로그인'}
+        </button>
 
-      <label style={authStyles.label}>
-        비밀번호
-        <input
-          type="password"
-          autoComplete="current-password"
-          {...register('password')}
-          style={authStyles.input}
+        <button
+          type="button"
+          onClick={onSwitchToSignup}
+          className="auth-link"
+          style={authStyles.linkButton}
           disabled={submitting}
-        />
-        {formState.errors.password && (
-          <span style={authStyles.error}>{formState.errors.password.message}</span>
-        )}
-      </label>
-
-      {error && <div style={authStyles.errorBox}>{error}</div>}
-
-      <button type="submit" style={authStyles.primaryButton} disabled={submitting}>
-        {submitting ? '로그인 중…' : '로그인'}
-      </button>
-
-      <button
-        type="button"
-        onClick={onSwitchToSignup}
-        style={authStyles.linkButton}
-        disabled={submitting}
-      >
-        아직 회원이 아니신가요? <strong>회원가입</strong>
-      </button>
-    </form>
+        >
+          아직 회원이 아니신가요? <strong>회원가입</strong>
+        </button>
+      </form>
+    </>
   )
 }
