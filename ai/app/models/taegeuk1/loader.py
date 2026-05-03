@@ -64,7 +64,10 @@ def list_available_actions() -> list[str]:
     return actions
 
 
-@lru_cache(maxsize=None)
+# maxsize 는 학습된 동작 9개 + 향후 확장 여유. 이론상 ``FileNotFoundError`` 가
+# raise 되는 호출은 lru_cache 가 캐시하지 않아 메모리 누수는 없으나, 명시적
+# 상한을 두어 의도를 분명히 한다.
+@lru_cache(maxsize=32)
 def get_model(action_name: str) -> LSTMAutoencoder:
     """학습된 가중치를 로드한 모델을 반환 (메모리 캐시).
 

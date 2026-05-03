@@ -77,17 +77,19 @@ def calc_score(value: float, stats: Mapping[str, float]) -> float:
     """
     mn, p10, p25, p50, p75, p90, mx = (stats[k] for k in PERCENTILE_KEYS)
 
+    # 분모는 max(diff, _EPS) 로 보호한다. 학습 데이터가 비정상적으로 균질하여
+    # percentile 들이 모두 동일한 케이스에서도 NaN / 비합리 점수를 방지.
     if value <= mn:
         return 100.0
     if value <= p10:
-        return 85 + 15 * (1 - (value - mn) / (p10 - mn + _EPS))
+        return 85 + 15 * (1 - (value - mn) / max(p10 - mn, _EPS))
     if value <= p25:
-        return 70 + 15 * (1 - (value - p10) / (p25 - p10 + _EPS))
+        return 70 + 15 * (1 - (value - p10) / max(p25 - p10, _EPS))
     if value <= p50:
-        return 55 + 15 * (1 - (value - p25) / (p50 - p25 + _EPS))
+        return 55 + 15 * (1 - (value - p25) / max(p50 - p25, _EPS))
     if value <= p75:
-        return 40 + 15 * (1 - (value - p50) / (p75 - p50 + _EPS))
+        return 40 + 15 * (1 - (value - p50) / max(p75 - p50, _EPS))
     if value <= p90:
-        return 20 + 20 * (1 - (value - p75) / (p90 - p75 + _EPS))
+        return 20 + 20 * (1 - (value - p75) / max(p90 - p75, _EPS))
     # value > p90: max 까지 0~20 으로 떨어지고, 그 너머는 0
-    return max(0.0, 20 * (1 - (value - p90) / (mx - p90 + _EPS)))
+    return max(0.0, 20 * (1 - (value - p90) / max(mx - p90, _EPS)))

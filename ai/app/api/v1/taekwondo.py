@@ -263,15 +263,26 @@ def score_poomsae(request: TaekwondoScoringRequest) -> TaekwondoScoringResponse:
     try:
         result = score_ensemble(seq, request.action_name)
     except FileNotFoundError as exc:
-        # 학습되지 않은 동작 이름
+        # 학습되지 않은 동작 이름 (사용자 입력 문제) → 404
         logger.warning(f"채점 실패 — 자산 누락: action_name='{request.action_name}'")
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except KeyError as exc:
-        # stats JSON 에 해당 동작 누락
-        logger.warning(f"채점 실패 — 통계 누락: {exc}")
+        # 모델 / 템플릿은 있으나 stats JSON 에는 누락 = 배포 일관성 오류 → 500
+        logger.error(
+            f"채점 실패 — stats 일관성 오류: action='{request.action_name}', missing_key={exc}"
+        )
         raise HTTPException(
-            status_code=404,
-            detail=f"동작 '{request.action_name}' 의 채점 통계를 찾을 수 없습니다.",
+            status_code=500,
+            detail="서버 채점 통계가 누락되어 있습니다. 관리자에게 문의해 주세요.",
+        ) from exc
+    except RuntimeError as exc:
+        # GPU OOM / CUDA 오류 / 모델 구조 불일치 등 → 503 (재시도 가능)
+        logger.exception(
+            f"채점 실패 — 모델 추론 오류: action='{request.action_name}'"
+        )
+        raise HTTPException(
+            status_code=503,
+            detail="AI 모델 추론에 일시적 문제가 발생했습니다. 잠시 후 다시 시도해 주세요.",
         ) from exc
 
     return to_taekwondo_scoring_response(result)
