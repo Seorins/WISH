@@ -2,6 +2,7 @@ package com.comong.backend.domain.music.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.closeTo;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -195,12 +196,88 @@ class MusicResultControllerIntegrationTest extends IntegrationTestSupport {
                 .andExpect(jsonPath("$.code").value("G-003"));
     }
 
+    @Test
+    void findMyBest_returnsBestResultsGroupedByChart() throws Exception {
+        String token = setupUserWithProfile("music-best@example.com", "music-best-user");
+        saveMusicResult(token, saveRequest("baby-shark", 10000, 50, 100, 50, 25, 175, 96196));
+        saveMusicResult(token, validSaveRequest(24830));
+        saveMusicResult(token, saveRequest("twinkle-star", 9000, 42, 40, 2, 0, 42, 27000));
+
+        mockMvc.perform(get("/music/results/me/best").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.length()").value(2))
+                .andExpect(jsonPath("$.data[0].chartId").value("baby-shark"))
+                .andExpect(jsonPath("$.data[0].bestScore").value(24830))
+                .andExpect(jsonPath("$.data[0].bestRank").value("A"))
+                .andExpect(
+                        jsonPath("$.data[0].bestAccuracy")
+                                .value(closeTo(expectedAccuracy(142, 23, 175), 0.000001)))
+                .andExpect(jsonPath("$.data[0].playCount").value(2))
+                .andExpect(jsonPath("$.data[0].lastPlayedAt").exists())
+                .andExpect(jsonPath("$.data[1].chartId").value("twinkle-star"))
+                .andExpect(jsonPath("$.data[1].bestScore").value(9000))
+                .andExpect(jsonPath("$.data[1].bestRank").value("S"))
+                .andExpect(
+                        jsonPath("$.data[1].bestAccuracy")
+                                .value(closeTo(expectedAccuracy(40, 2, 42), 0.000001)))
+                .andExpect(jsonPath("$.data[1].playCount").value(1))
+                .andExpect(jsonPath("$.data[1].lastPlayedAt").exists());
+    }
+
+    @Test
+    void findMyBest_selectsHigherAccuracyWhenScoresTie() throws Exception {
+        String token =
+                setupUserWithProfile("music-best-accuracy@example.com", "music-best-accuracy-user");
+        saveMusicResult(token, saveRequest("baby-shark", 10000, 50, 100, 50, 25, 175, 96196));
+        saveMusicResult(token, saveRequest("baby-shark", 10000, 87, 142, 23, 10, 175, 96196));
+
+        mockMvc.perform(get("/music/results/me/best").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(1))
+                .andExpect(jsonPath("$.data[0].chartId").value("baby-shark"))
+                .andExpect(jsonPath("$.data[0].bestScore").value(10000))
+                .andExpect(jsonPath("$.data[0].bestRank").value("A"))
+                .andExpect(
+                        jsonPath("$.data[0].bestAccuracy")
+                                .value(closeTo(expectedAccuracy(142, 23, 175), 0.000001)))
+                .andExpect(jsonPath("$.data[0].playCount").value(2));
+    }
+
+    @Test
+    void findMyBest_excludesOtherUsersResults() throws Exception {
+        String ownerToken = setupUserWithProfile("music-owner@example.com", "music-owner-user");
+        String otherToken = setupUserWithProfile("music-other@example.com", "music-other-user");
+        saveMusicResult(ownerToken, validSaveRequest(12000));
+        saveMusicResult(otherToken, validSaveRequest(50000));
+
+        mockMvc.perform(
+                        get("/music/results/me/best")
+                                .header("Authorization", "Bearer " + ownerToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(1))
+                .andExpect(jsonPath("$.data[0].chartId").value("baby-shark"))
+                .andExpect(jsonPath("$.data[0].bestScore").value(12000))
+                .andExpect(jsonPath("$.data[0].playCount").value(1));
+    }
+
+    @Test
+    void findMyBest_requiresAuthentication() throws Exception {
+        mockMvc.perform(get("/music/results/me/best"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("G-003"));
+    }
+
     private void saveMusicResult(String token, int score) throws Exception {
+        saveMusicResult(token, validSaveRequest(score));
+    }
+
+    private void saveMusicResult(String token, String requestBody) throws Exception {
         mockMvc.perform(
                         post("/music/results")
                                 .header("Authorization", "Bearer " + token)
                                 .contentType(MediaType.APPLICATION_JSON)
-                                .content(validSaveRequest(score)))
+                                .content(requestBody))
                 .andExpect(status().isCreated());
     }
 
