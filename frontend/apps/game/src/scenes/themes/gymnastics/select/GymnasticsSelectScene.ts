@@ -20,24 +20,29 @@ import {
 import {
   createSimpleDialogUi,
   fadeSimpleDialog,
-  setDialogTextAtBase,
+  setCenteredDialogText,
   type SimpleDialogUi,
 } from '@/game/ui/simpleDialog'
-import { addCoverBackground } from '@/game/world/background'
 import {
-  createRatioRectangle,
-  getRectangleEntryState,
-  isPointInRectangle,
-} from '@/game/world/portal'
-import { seongsuDialogs, type SeongsuDialogLine } from './dialog/seongsuDialogs'
+  CUTE_CARD_PALETTES,
+  drawCuteCardPanel,
+  drawCutePillButton,
+  type CuteCardPalette,
+} from '@/game/ui/cuteCard'
+import { addCoverBackground } from '@/game/world/background'
+import { createRatioRectangle, getRectangleEntryState } from '@/game/world/portal'
+import { seongsuDialogs } from './dialog/seongsuDialogs'
 
 const TALK_DISTANCE = 100
 const GYMNASTICS_ROOM_SPAWN = { xRatio: 0.5, yRatio: 0.76 }
 const GYMNASTICS_EXIT_PORTAL = { xRatio: 0.44, yRatio: 0.86, widthRatio: 0.12, heightRatio: 0.12 }
 const GYMNASTICS_RETURN_SPAWN = { xRatio: 0.72, yRatio: 0.58 }
 const DIALOG_TEXT_BOX = { x: 900, y: 445, width: 1040, height: 190 }
-const GYM_SELECT_CARD_SIZE = { width: 538, height: 785 }
-const GYM_SELECT_TITLE_SIZE = { width: 893, height: 207 }
+const CARD_DEPTH = 24
+const CARD_FRAME_ASPECT_RATIO = 408 / 612
+const CONTENT_CONFIRM_VISIBLE_MS = 1000
+const CARD_FONT_FAMILY =
+  '"Pretendard Variable", Pretendard, "Noto Sans KR", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", sans-serif'
 const RACCOON_IDLE_ANIM_KEY = 'raccoon-gymnastics-idle'
 const RACCOON_TEXTURE_KEY = 'raccoon-clean'
 const RACCOON_FRAME_SIZE = 360
@@ -47,6 +52,49 @@ const RACCOON_CROP_RECTS = [
   { x: 1040, y: 640, width: 360, height: 340 },
   { x: 1460, y: 640, width: 360, height: 340 },
 ]
+
+type GymnasticsContentMode = 'top' | 'daniel'
+type GymnasticsDialogPhase = 'closed' | 'intro' | 'choice' | 'confirm'
+
+type GymnasticsChoiceOption = {
+  mode: GymnasticsContentMode
+  label: string
+  description: string
+}
+
+type GymnasticsCardView = {
+  choice: GymnasticsChoiceOption
+  container: Phaser.GameObjects.Container
+  panel: Phaser.GameObjects.Graphics
+  selectButton: Phaser.GameObjects.Graphics
+  selectLabel: Phaser.GameObjects.Text
+  baseX: number
+  baseY: number
+  width: number
+  height: number
+  palette: CuteCardPalette
+}
+
+const CARD_LAYOUT = {
+  tagTopOffset: 0.085,
+  characterCenterY: -0.065,
+  characterSize: 0.42,
+  titleY: 0.21,
+  descGap: 0.07,
+  buttonCenterY: 0.4,
+  buttonWidth: 0.55,
+  buttonHeight: 0.078,
+} as const
+
+const gymnasticsChoiceOptions: GymnasticsChoiceOption[] = [
+  { mode: 'top', label: 'TOP 체조', description: 'TOP 동작을 따라 하며 몸을 풀어봐.' },
+  { mode: 'daniel', label: '다니엘 체조', description: '다니엘 동작으로 신나게 움직여봐.' },
+]
+
+const GYMNASTICS_CONTENT_SCENE_KEYS: Record<GymnasticsContentMode, string> = {
+  top: 'GymnasticsTopScene',
+  daniel: 'GymnasticsDanielScene',
+}
 
 type GymnasticsSelectSceneData = {
   spawn?: RatioPoint
@@ -65,13 +113,14 @@ export class GymnasticsSelectScene extends Phaser.Scene {
   private raccoonAnchor = new Phaser.Math.Vector2()
   private talkIcon!: Phaser.GameObjects.Image
   private dialog!: SimpleDialogUi
+  private cards: GymnasticsCardView[] = []
   private isDialogVisible = false
   private dialogDismissed = false
-  private dialogSteps: SeongsuDialogLine[] = []
-  private dialogStepIndex = 0
-
-  private isSelectVisible = false
-  private selectContainer: Phaser.GameObjects.Container | null = null
+  private dialogPhase: GymnasticsDialogPhase = 'closed'
+  private hoveredMode: GymnasticsContentMode | null = null
+  private selectedMode: GymnasticsContentMode | null = null
+  private isWaitingContentStart = false
+  private contentStartTimer: Phaser.Time.TimerEvent | null = null
 
   constructor() {
     super({ key: 'GymnasticsSelectScene' })
@@ -82,25 +131,17 @@ export class GymnasticsSelectScene extends Phaser.Scene {
       'gymnastics-background',
       assetPath('images/themes/gymnastics/background/background.png'),
     )
-
-    this.load.image('raccoon', assetPath('images/themes/gymnastics/characters/Raccoon.png'))
-
     this.load.image(
       'raccoon-source',
       assetPath('images/themes/gymnastics/characters/raccoon_exercise_spritesheet.png'),
     )
-
     this.load.image(
-      'gym-select-title',
-      assetPath('images/themes/gymnastics/ui/gym_select_title_component.png'),
+      'gym-card-top-raccoon',
+      assetPath('images/themes/gymnastics/characters/TOPracoon.png'),
     )
     this.load.image(
-      'gym-card-top',
-      assetPath('images/themes/gymnastics/ui/topgymnastics_select.png'),
-    )
-    this.load.image(
-      'gym-card-daniel',
-      assetPath('images/themes/gymnastics/ui/daniel_gymnastics_select.png'),
+      'gym-card-daniel-raccoon',
+      assetPath('images/themes/gymnastics/characters/dinielracoon.png'),
     )
     loadInteractionIcons(this)
     this.load.image('seongsu-dialog', assetPath('images/npcs/seongsu/dialog-frame.png'))
@@ -111,11 +152,13 @@ export class GymnasticsSelectScene extends Phaser.Scene {
     const { width: vw, height: vh } = this.scale
     this.isTransitioning = false
     this.isDialogVisible = false
-    this.isSelectVisible = false
     this.dialogDismissed = false
-    this.dialogSteps = []
-    this.dialogStepIndex = 0
-
+    this.dialogPhase = 'closed'
+    this.hoveredMode = null
+    this.selectedMode = null
+    this.isWaitingContentStart = false
+    this.cards = []
+    this.clearContentStartTimer()
     this.target = null
 
     addCoverBackground(this, 'gymnastics-background')
@@ -140,6 +183,7 @@ export class GymnasticsSelectScene extends Phaser.Scene {
     })
 
     this.createDialogUi()
+    this.createChoiceCards(vw, vh)
     ensurePlayerWalkAnimations(this)
 
     const spawn = data.spawn ?? GYMNASTICS_ROOM_SPAWN
@@ -150,26 +194,14 @@ export class GymnasticsSelectScene extends Phaser.Scene {
     this.input.keyboard!.on('keydown-ENTER', () => {
       if (this.isDialogVisible) this.advanceDialog()
     })
-
     this.input.keyboard!.on('keydown-ESC', () => {
       if (this.isDialogVisible) this.closeDialog(true)
     })
+    this.input.on('pointerdown', this.handlePointerDown)
 
-    this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      if (this.isSelectVisible) return
-
-      if (this.isDialogVisible) {
-        const bounds = this.dialog.frame.getBounds()
-        if (isPointInRectangle(bounds, pointer.x, pointer.y)) {
-          this.advanceDialog()
-        } else {
-          this.closeDialog(true)
-        }
-        return
-      }
-
-      this.target = new Phaser.Math.Vector2(pointer.x, pointer.y)
-      createClickTargetMarker(this, pointer.x, pointer.y)
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.clearContentStartTimer()
+      this.input.off('pointerdown', this.handlePointerDown)
     })
 
     this.playerWasInExitPortal = true
@@ -177,8 +209,6 @@ export class GymnasticsSelectScene extends Phaser.Scene {
   }
 
   update() {
-    if (this.isSelectVisible) return
-
     const movement = updatePlayerMovement({
       player: this.player,
       cursors: this.cursors,
@@ -204,6 +234,32 @@ export class GymnasticsSelectScene extends Phaser.Scene {
       this.returnToVillage()
     }
     this.playerWasInExitPortal = exitState.isInside
+  }
+
+  private readonly handlePointerDown = (pointer: Phaser.Input.Pointer) => {
+    if (this.isDialogVisible) {
+      if (this.isWaitingContentStart) return
+
+      const clickedDialog = this.dialog.frame.getBounds().contains(pointer.x, pointer.y)
+      if (this.dialogPhase === 'intro' && clickedDialog) {
+        this.showChoicePrompt()
+        return
+      }
+      if (this.dialogPhase === 'choice') {
+        const clickedCard = this.getCardAtPointer(pointer)
+        if (clickedCard) {
+          this.handleChoiceSelected(clickedCard.choice.mode)
+          return
+        }
+        this.closeDialog(true)
+        return
+      }
+      if (!clickedDialog) this.closeDialog(true)
+      return
+    }
+
+    this.target = new Phaser.Math.Vector2(pointer.x, pointer.y)
+    createClickTargetMarker(this, pointer.x, pointer.y)
   }
 
   private updateSeongsuConversation() {
@@ -246,9 +302,7 @@ export class GymnasticsSelectScene extends Phaser.Scene {
     canvas.width = RACCOON_FRAME_SIZE * RACCOON_CROP_RECTS.length
     canvas.height = RACCOON_FRAME_SIZE
     const context = canvas.getContext('2d')
-    if (!context) {
-      throw new Error('Raccoon canvas context is not available.')
-    }
+    if (!context) throw new Error('Raccoon canvas context is not available.')
 
     RACCOON_CROP_RECTS.forEach((rect, index) => {
       context.drawImage(
@@ -265,9 +319,7 @@ export class GymnasticsSelectScene extends Phaser.Scene {
     })
 
     const texture = this.textures.addCanvas(RACCOON_TEXTURE_KEY, canvas)
-    if (!texture) {
-      throw new Error('Clean raccoon texture is not available.')
-    }
+    if (!texture) throw new Error('Clean raccoon texture is not available.')
 
     RACCOON_CROP_RECTS.forEach((_, index) => {
       texture.add(index, 0, index * RACCOON_FRAME_SIZE, 0, RACCOON_FRAME_SIZE, RACCOON_FRAME_SIZE)
@@ -286,123 +338,158 @@ export class GymnasticsSelectScene extends Phaser.Scene {
   }
 
   private startConversation() {
-    this.dialogSteps = [
-      Phaser.Utils.Array.GetRandom(seongsuDialogs.guide),
-      Phaser.Utils.Array.GetRandom(seongsuDialogs.choicePrompt),
-    ]
-    this.dialogStepIndex = 0
-    setDialogTextAtBase(this.dialog, this.dialogSteps[0].text)
+    this.hoveredMode = null
+    this.selectedMode = null
+    this.isWaitingContentStart = false
+    this.clearContentStartTimer()
+    this.dialogPhase = 'intro'
+    setCenteredDialogText(this.dialog, Phaser.Utils.Array.GetRandom(seongsuDialogs.guide).text)
     this.isDialogVisible = true
     setInteractionIconActive(this.talkIcon, true)
     fadeSimpleDialog(this, this.dialog, 1, 220)
   }
 
   private advanceDialog() {
-    if (this.dialogStepIndex < this.dialogSteps.length - 1) {
-      this.dialogStepIndex += 1
-      setDialogTextAtBase(this.dialog, this.dialogSteps[this.dialogStepIndex].text)
-      return
-    }
-    // 마지막 단계 → 대화 닫고 선택 화면 표시
-    this.closeDialog(false)
-    this.showContentSelection()
+    if (this.dialogPhase === 'intro') this.showChoicePrompt()
   }
 
-  private closeDialog(markDismissed: boolean) {
-    this.isDialogVisible = false
-    this.dialogDismissed = markDismissed
-    this.dialogSteps = []
-    this.dialogStepIndex = 0
-    setInteractionIconActive(this.talkIcon, false)
-    fadeSimpleDialog(this, this.dialog, 0, 180)
-  }
+  private showChoicePrompt() {
+    if (this.dialogPhase !== 'intro') return
 
-  private showContentSelection() {
-    const { width: vw, height: vh } = this.scale
-    this.isSelectVisible = true
-    this.player.setVelocity(0, 0)
-
-    const titleW = Math.min(vw * 0.34, 420)
-    const titleH = titleW * (GYM_SELECT_TITLE_SIZE.height / GYM_SELECT_TITLE_SIZE.width)
-    const titleY = Math.max(vh * 0.11, titleH / 2 + 24)
-    const title = this.add
-      .image(vw / 2, titleY, 'gym-select-title')
-      .setDepth(20)
-      .setScrollFactor(0)
-      .setAlpha(0)
-    title.setDisplaySize(titleW, titleH)
-
-    const gap = Phaser.Math.Clamp(vw * 0.06, 36, 96)
-    const cardAspect = GYM_SELECT_CARD_SIZE.width / GYM_SELECT_CARD_SIZE.height
-    const rowMaxWidth = vw * 0.86
-    const maxCardHByWidth = (rowMaxWidth - gap) / 2 / cardAspect
-    const cardTop = titleY + titleH / 2 + Phaser.Math.Clamp(vh * 0.035, 24, 44)
-    const cardBottomPadding = Math.max(28, vh * 0.04)
-    const maxCardHByHeight = vh - cardTop - cardBottomPadding
-    const cardH = Math.max(280, Math.min(640, vh * 0.68, maxCardHByWidth, maxCardHByHeight))
-    const cardW = cardH * cardAspect
-    const cardY = cardTop + cardH / 2
-    const firstCardX = vw / 2 - (cardW + gap) / 2
-    const secondCardX = vw / 2 + (cardW + gap) / 2
-
-    const topCard = this.add.image(0, cardY, 'gym-card-top').setDepth(20).setAlpha(0)
-    topCard.setScrollFactor(0).setDisplaySize(cardW, cardH).setX(firstCardX)
-
-    const danielCard = this.add.image(0, cardY, 'gym-card-daniel').setDepth(20).setAlpha(0)
-    danielCard.setScrollFactor(0).setDisplaySize(cardW, cardH).setX(secondCardX)
-
-    this.makeCardClickable(topCard, () => this.selectContent('top'))
-    this.makeCardClickable(danielCard, () => this.selectContent('daniel'))
-
-    const backBtn = this.createBackButton(104, Math.max(44, vh * 0.07))
-
-    this.selectContainer = this.add.container(0, 0, [title, topCard, danielCard, backBtn])
-    this.selectContainer.setDepth(20)
-
-    this.tweens.add({
-      targets: [title, topCard, danielCard, backBtn],
-      alpha: 1,
-      duration: 300,
-      ease: 'Sine.easeOut',
+    this.dialogPhase = 'choice'
+    setCenteredDialogText(
+      this.dialog,
+      Phaser.Utils.Array.GetRandom(seongsuDialogs.choicePrompt).text,
+    )
+    fadeSimpleDialog(this, this.dialog, 0, 160)
+    this.time.delayedCall(110, () => {
+      if (this.isDialogVisible && this.dialogPhase === 'choice') this.showCards()
     })
   }
 
-  private closeContentSelection() {
-    if (!this.selectContainer) return
-    this.selectContainer.destroy(true)
-    this.selectContainer = null
-    this.isSelectVisible = false
-    this.dialogDismissed = true
+  private createChoiceCards(vw: number, vh: number) {
+    const cardHeight = Phaser.Math.Clamp(vh * 0.78, 540, 690)
+    const cardWidth = cardHeight * (CARD_FRAME_ASPECT_RATIO + 0.055)
+    const gap = Phaser.Math.Clamp(vw * 0.04, 56, 86)
+    const totalWidth = cardWidth * gymnasticsChoiceOptions.length + gap
+    const firstX = vw / 2 - totalWidth / 2 + cardWidth / 2
+    const centerY = Phaser.Math.Clamp(vh * 0.48, 24 + cardHeight / 2, vh - cardHeight / 2 - 24)
+
+    this.cards = gymnasticsChoiceOptions.map((choice, index) =>
+      this.createChoiceCard(
+        choice,
+        firstX + index * (cardWidth + gap),
+        centerY,
+        cardWidth,
+        cardHeight,
+      ),
+    )
+    this.hideCards(true)
   }
 
-  private createBackButton(x: number, y: number): Phaser.GameObjects.Container {
-    const btnW = 160
-    const btnH = 52
-    const radius = 14
+  private createChoiceCard(
+    choice: GymnasticsChoiceOption,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+  ) {
+    const container = this.add.container(x, y).setDepth(CARD_DEPTH).setAlpha(0).setVisible(false)
+    container.setSize(width, height)
+    container.setScrollFactor(0)
+    container.setInteractive(
+      new Phaser.Geom.Rectangle(-width / 2, -height / 2, width, height),
+      Phaser.Geom.Rectangle.Contains,
+    )
+    container.input!.cursor = 'pointer'
 
-    const bg = this.add.graphics()
-    bg.fillStyle(0xc67c2e, 1)
-    bg.fillRoundedRect(-btnW / 2, -btnH / 2, btnW, btnH, radius)
-    bg.lineStyle(3, 0x7a4510, 1)
-    bg.strokeRoundedRect(-btnW / 2, -btnH / 2, btnW, btnH, radius)
+    const palette = choice.mode === 'top' ? CUTE_CARD_PALETTES.butter : CUTE_CARD_PALETTES.sage
+    const panel = this.add.graphics()
+    const tagFontSize = Math.round(height * 0.028)
+    const tagLabel = this.add
+      .text(0, 0, choice.label, {
+        fontFamily: CARD_FONT_FAMILY,
+        fontSize: `${tagFontSize}px`,
+        fontStyle: 'bold',
+        color: palette.accentHex,
+      })
+      .setOrigin(0.5)
+    const tagW = tagLabel.width + Math.round(height * 0.055)
+    const tagH = Math.round(height * 0.052)
+    const tagY = -height / 2 + Math.round(height * CARD_LAYOUT.tagTopOffset)
+    const tagBg = this.add.graphics()
+    tagBg.fillStyle(palette.accent, 0.22)
+    tagBg.fillRoundedRect(-tagW / 2, tagY - tagH / 2, tagW, tagH, tagH / 2)
+    tagBg.lineStyle(1.2, palette.accent, 0.55)
+    tagBg.strokeRoundedRect(-tagW / 2, tagY - tagH / 2, tagW, tagH, tagH / 2)
+    tagLabel.setPosition(0, tagY)
 
-    const label = this.add
-      .text(0, 0, '뒤로가기', {
-        fontFamily: 'sans-serif',
-        fontSize: '22px',
-        color: '#fff8e7',
-        stroke: '#7a4510',
-        strokeThickness: 3,
+    const characterKey = choice.mode === 'top' ? 'gym-card-top-raccoon' : 'gym-card-daniel-raccoon'
+    const character = this.add
+      .image(0, height * CARD_LAYOUT.characterCenterY, characterKey)
+      .setDisplaySize(height * CARD_LAYOUT.characterSize, height * CARD_LAYOUT.characterSize)
+
+    const titleY = height * CARD_LAYOUT.titleY
+    const title = this.add
+      .text(0, titleY, choice.label, {
+        fontFamily: CARD_FONT_FAMILY,
+        fontSize: `${Math.round(height * 0.056)}px`,
+        fontStyle: '700',
+        color: '#3b2a44',
+        align: 'center',
       })
       .setOrigin(0.5)
 
-    const hitArea = this.add
-      .rectangle(0, 0, btnW, btnH, 0x000000, 0)
-      .setInteractive({ useHandCursor: true })
+    const description = this.add
+      .text(0, titleY + Math.round(height * CARD_LAYOUT.descGap), choice.description, {
+        fontFamily: CARD_FONT_FAMILY,
+        fontSize: `${Math.round(height * 0.026)}px`,
+        fontStyle: 'bold',
+        color: '#7a6e85',
+        align: 'center',
+        wordWrap: { width: width * 0.78, useAdvancedWrap: true },
+      })
+      .setOrigin(0.5)
 
-    hitArea.on('pointerover', () => bg.setAlpha(0.85))
-    hitArea.on('pointerout', () => bg.setAlpha(1))
-    hitArea.on(
+    const selectButton = this.add.graphics()
+    const selectLabel = this.add
+      .text(0, height * CARD_LAYOUT.buttonCenterY, '선택', {
+        fontFamily: CARD_FONT_FAMILY,
+        fontSize: `${Math.round(height * 0.034)}px`,
+        fontStyle: 'bold',
+        color: '#ffffff',
+        align: 'center',
+      })
+      .setOrigin(0.5)
+      .setShadow(0, 1, `#${palette.shadow.toString(16).padStart(6, '0')}`, 2, false, true)
+
+    container.add([
+      panel,
+      tagBg,
+      tagLabel,
+      character,
+      title,
+      description,
+      selectButton,
+      selectLabel,
+    ])
+
+    const card = {
+      choice,
+      container,
+      panel,
+      selectButton,
+      selectLabel,
+      baseX: x,
+      baseY: y,
+      width,
+      height,
+      palette,
+    }
+
+    container.on('pointerover', () => this.handleCardHover(choice.mode))
+    container.on('pointerout', () => this.handleCardOut(choice.mode))
+    container.on(
       'pointerdown',
       (
         _pointer: Phaser.Input.Pointer,
@@ -411,44 +498,156 @@ export class GymnasticsSelectScene extends Phaser.Scene {
         event: Phaser.Types.Input.EventData,
       ) => {
         event.stopPropagation()
-        this.closeContentSelection()
+        this.handleChoiceSelected(choice.mode)
       },
     )
 
-    return this.add
-      .container(x, y, [bg, label, hitArea])
-      .setDepth(25)
-      .setScrollFactor(0)
-      .setAlpha(0)
+    return card
   }
 
-  private makeCardClickable(card: Phaser.GameObjects.Image, onClick: () => void) {
-    const baseScaleX = card.scaleX
-    const baseScaleY = card.scaleY
+  private getCardAtPointer(pointer: Phaser.Input.Pointer) {
+    return this.cards.find(card => {
+      if (!card.container.visible || card.container.alpha <= 0) return false
 
-    card.setInteractive({ useHandCursor: true })
-    card.on('pointerover', () => card.setScale(baseScaleX * 1.03, baseScaleY * 1.03))
-    card.on('pointerout', () => card.setScale(baseScaleX, baseScaleY))
-    card.on(
-      'pointerdown',
-      (
-        _pointer: Phaser.Input.Pointer,
-        _localX: number,
-        _localY: number,
-        event: Phaser.Types.Input.EventData,
-      ) => {
-        event.stopPropagation()
-        onClick()
-      },
-    )
+      const width = card.width * card.container.scaleX
+      const height = card.height * card.container.scaleY
+
+      return Phaser.Geom.Rectangle.Contains(
+        new Phaser.Geom.Rectangle(
+          card.container.x - width / 2,
+          card.container.y - height / 2,
+          width,
+          height,
+        ),
+        pointer.x,
+        pointer.y,
+      )
+    })
   }
 
-  private selectContent(mode: 'top' | 'daniel') {
+  private handleCardHover(mode: GymnasticsContentMode) {
+    if (!this.isDialogVisible || this.isWaitingContentStart) return
+
+    this.hoveredMode = mode
+    this.updateCardStates()
+  }
+
+  private handleCardOut(mode: GymnasticsContentMode) {
+    if (this.isWaitingContentStart || this.hoveredMode !== mode) return
+
+    this.hoveredMode = null
+    this.updateCardStates()
+  }
+
+  private handleChoiceSelected(mode: GymnasticsContentMode) {
+    if (this.isTransitioning || this.isWaitingContentStart) return
+
+    this.selectedMode = mode
+    this.hoveredMode = null
+    this.isWaitingContentStart = true
+    this.dialogPhase = 'confirm'
+    this.updateCardStates()
+    this.hideCards()
+
+    const choice = gymnasticsChoiceOptions.find(option => option.mode === mode)
+    setCenteredDialogText(this.dialog, `${choice?.label ?? '체조'}로 시작할게! 준비됐지?`)
+    fadeSimpleDialog(this, this.dialog, 1, 180)
+
+    this.contentStartTimer = this.time.delayedCall(CONTENT_CONFIRM_VISIBLE_MS, () => {
+      this.contentStartTimer = null
+      this.startSelectedContent(mode)
+    })
+  }
+
+  private updateCardStates() {
+    this.cards.forEach(card => {
+      const isSelected = card.choice.mode === this.selectedMode
+      const isHovered = card.choice.mode === this.hoveredMode
+      const dimmed = this.isWaitingContentStart && !isSelected
+      const state = isSelected ? 'selected' : isHovered ? 'hover' : 'default'
+
+      card.container.setScale(isSelected ? 1.035 : isHovered ? 1.02 : 1)
+      card.container.setAlpha(dimmed ? 0.55 : 1)
+      drawCuteCardPanel(card.panel, card.width, card.height, card.palette, state, 28)
+      drawCutePillButton(
+        card.selectButton,
+        0,
+        card.height * CARD_LAYOUT.buttonCenterY,
+        card.width * CARD_LAYOUT.buttonWidth,
+        card.height * CARD_LAYOUT.buttonHeight,
+        card.palette,
+        state,
+      )
+    })
+  }
+
+  private showCards() {
+    this.cards.forEach((card, index) => {
+      card.container.setVisible(true)
+      card.container.setAlpha(0)
+      card.container.setPosition(card.baseX, card.baseY + 18)
+      card.container.setScale(1)
+      this.tweens.killTweensOf(card.container)
+      this.tweens.add({
+        targets: card.container,
+        alpha: 1,
+        y: card.baseY,
+        duration: 240,
+        delay: index * 70,
+        ease: 'Sine.easeOut',
+      })
+    })
+    this.updateCardStates()
+  }
+
+  private hideCards(immediate = false) {
+    this.cards.forEach(card => {
+      this.tweens.killTweensOf(card.container)
+      if (immediate) {
+        card.container.setVisible(false).setAlpha(0)
+        return
+      }
+
+      this.tweens.add({
+        targets: card.container,
+        alpha: 0,
+        y: card.baseY + 12,
+        duration: 160,
+        ease: 'Sine.easeIn',
+        onComplete: () => {
+          card.container.setVisible(false)
+          card.container.setPosition(card.baseX, card.baseY)
+        },
+      })
+    })
+  }
+
+  private closeDialog(markDismissed: boolean) {
+    this.clearContentStartTimer()
+    this.isDialogVisible = false
+    this.dialogDismissed = markDismissed
+    this.dialogPhase = 'closed'
+    this.hoveredMode = null
+    this.selectedMode = null
+    this.isWaitingContentStart = false
+    setInteractionIconActive(this.talkIcon, false)
+    this.hideCards()
+    fadeSimpleDialog(this, this.dialog, 0, 180)
+  }
+
+  private clearContentStartTimer() {
+    this.contentStartTimer?.remove(false)
+    this.contentStartTimer = null
+  }
+
+  private startSelectedContent(mode: GymnasticsContentMode) {
     if (this.isTransitioning) return
-    this.isTransitioning = true
 
-    const sceneKey = mode === 'top' ? 'GymnasticsTopScene' : 'GymnasticsDanielScene'
-    fadeToScene(this, sceneKey, { duration: 250 })
+    this.isTransitioning = true
+    this.target = null
+    this.player.setVelocity(0, 0)
+    this.closeDialog(false)
+    fadeToScene(this, GYMNASTICS_CONTENT_SCENE_KEYS[mode], { duration: 250 })
   }
 
   private returnToVillage() {
