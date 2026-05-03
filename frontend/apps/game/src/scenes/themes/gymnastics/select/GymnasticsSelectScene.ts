@@ -129,7 +129,7 @@ export class GymnasticsSelectScene extends Phaser.Scene {
   preload() {
     this.load.image(
       'gymnastics-background',
-      assetPath('images/themes/gymnastics/background/background.png'),
+      assetPath('images/themes/gymnastics/background/gymbackground.png'),
     )
     this.load.image(
       'raccoon-source',
