@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
+import { assetPath } from '@/game/assets/assetPath'
 import { LoginScreen } from './LoginScreen'
 import { SignupScreen } from './SignupScreen'
 import { authStyles } from './authStyles'
+
+const PIXEL_FONT_URL = assetPath('fonts/galmuri11.woff2')
 
 type AuthMode = 'login' | 'signup'
 
@@ -13,19 +16,19 @@ type AuthOverlayProps = {
 }
 
 const AUTH_OVERLAY_CSS = `
-@keyframes auth-backdrop-in {
+@font-face {
+  font-family: 'Galmuri11';
+  src: url('${PIXEL_FONT_URL}') format('woff2');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+@keyframes auth-card-in {
   from { opacity: 0; }
   to { opacity: 1; }
 }
-@keyframes auth-card-in {
-  from { opacity: 0; transform: translateY(-6px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-.auth-backdrop {
-  animation: auth-backdrop-in 150ms ease-out;
-}
 .auth-card {
-  animation: auth-card-in 200ms ease-out;
+  animation: auth-card-in 220ms ease-out;
 }
 .auth-input:focus {
   border-color: #5a3818;
@@ -84,16 +87,12 @@ export function AuthOverlay({
     setMode('login')
   }, [])
 
-  const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (e.target === e.currentTarget) onCancel()
-  }
-
   if (!open) return null
 
   return (
     <>
       <style>{AUTH_OVERLAY_CSS}</style>
-      <div className="auth-backdrop" style={authStyles.backdrop} onClick={handleBackdropClick}>
+      <div style={authStyles.backdrop}>
         <div className="auth-card" style={authStyles.card}>
           <button
             type="button"

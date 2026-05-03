@@ -101,7 +101,7 @@ export class StartScene extends Phaser.Scene {
       this.game.events.once('auth:completed', onCompleted)
       this.game.events.once('auth:cancelled', onCancelled)
       this.game.events.emit('auth:request')
-      fadeAuthFocus(0.2)
+      fadeAuthFocus(0)
     })
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
