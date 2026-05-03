@@ -139,3 +139,59 @@ class TaekwondoDirectionClassificationResponse(BaseModel):
     confidence: float = Field(..., ge=0.0, le=1.0)
     scores: dict[str, float]
     features: TaekwondoDirectionFeaturesResponse
+
+
+# ---------- 태극 1장 채점 (S14P31E103-341) ----------
+
+class TaekwondoScoringRequest(BaseModel):
+    """태극 1장 동작 채점 요청.
+
+    8개 관절 순서: 왼팔꿈치, 오른팔꿈치, 왼어깨, 오른어깨,
+    왼무릎, 오른무릎, 왼엉덩이, 오른엉덩이 (각도, 도 단위 0~180).
+    """
+
+    action_name: str = Field(
+        ...,
+        description="채점할 동작 이름 (예: '기본준비', '앞굽이하고 아래막기')",
+        min_length=1,
+    )
+    keypoints: list[list[float]] = Field(
+        ...,
+        description=(
+            "(T, 8) 형태의 관절 각도 시퀀스. T 는 가변 길이 (서버에서 60프레임으로 보간)."
+        ),
+        min_length=1,
+    )
+
+
+class TaekwondoLstmScoreDetail(BaseModel):
+    score: float = Field(..., ge=0.0, le=100.0, description="LSTM 단독 점수 (0~100)")
+    recon_error: float = Field(..., ge=0.0, description="재구성 평균 MSE (0~1 정규화)")
+    joint_errors: dict[str, float] = Field(
+        ...,
+        description="마지막 프레임 기준 관절별 각도 오차 (도 단위)",
+    )
+    worst_joint: str = Field(..., description="가장 큰 오차의 관절명 (피드백용)")
+
+
+class TaekwondoDtwScoreDetail(BaseModel):
+    score: float = Field(..., ge=0.0, le=100.0, description="DTW 단독 점수 (0~100)")
+    distance: float = Field(..., ge=0.0, description="사용자 시퀀스 ↔ 기준 템플릿 DTW 거리")
+
+
+class TaekwondoScoringResponse(BaseModel):
+    """LSTM + DTW 앙상블 채점 결과.
+
+    프론트엔드는 ``final_score`` 만으로 화면 표시 가능하며, 보호자 리포트 등은
+    ``lstm`` / ``dtw`` 의 상세 정보를 활용한다.
+    """
+
+    action_name: str = Field(..., description="채점된 동작 이름")
+    final_score: float = Field(
+        ...,
+        ge=0.0,
+        le=100.0,
+        description="최종 점수 (LSTM × 0.6 + DTW × 0.4 가중평균, 0~100)",
+    )
+    lstm: TaekwondoLstmScoreDetail
+    dtw: TaekwondoDtwScoreDetail
