@@ -29,7 +29,7 @@ CREATE TABLE music_result (
     miss_count          INTEGER             NOT NULL,
     total_notes         INTEGER             NOT NULL,
     accuracy            DOUBLE PRECISION    NOT NULL,
-    rank                VARCHAR(1)          NOT NULL,
+    rank                CHAR(1)             NOT NULL,
     played_duration_ms  INTEGER             NOT NULL,
     played_at           TIMESTAMP(6)        NOT NULL,
     CONSTRAINT fk_music_result_patient_profile
