@@ -39,13 +39,22 @@ import {
   type MusicContentMode,
 } from '../dialog/gisungDialogs'
 
-const MUSIC_SPRITE_FRAME = { width: 600, height: 600 }
+// gisung_sprite.png is 2400x600 with four dogs in 600-wide cells, but the
+// dogs aren't perfectly centered in their cells (dog 1 center=356, dog 2
+// center=932 within naive 600-wide halves). We only use the first two frames
+// and slice them as 576x600 windows centered on each dog so animation stays
+// rock-steady: frame 0 = x[68..644], frame 1 = x[644..1220].
+const MUSIC_SPRITE_FRAME = { width: 576, height: 600 }
+const MUSIC_SPRITE_FRAME_RECTS: Array<{ x: number; y: number; w: number; h: number }> = [
+  { x: 68, y: 0, w: 576, h: 600 },
+  { x: 644, y: 0, w: 576, h: 600 },
+]
 const MUSIC_ROOM_SPAWN = { xRatio: 0.5, yRatio: 0.78 }
 const MUSIC_EXIT_PORTAL = { xRatio: 0.43, yRatio: 0.86, widthRatio: 0.14, heightRatio: 0.12 }
 const MUSIC_RETURN_SPAWN = { xRatio: 0.235, yRatio: 0.44 }
-const GISUNG_ON_WINDOW = { xRatio: 0.5, bottomYRatio: 0.38, heightRatio: 0.22 }
-const GISUNG_INTERACTION_RADIUS_RATIO = 0.12
-const GISUNG_TALK_ICON_OFFSET_RATIO = 1.05
+const GISUNG_ON_WINDOW = { xRatio: 0.5, yRatio: 0.42, heightRatio: 0.36 }
+const GISUNG_INTERACTION_RADIUS_RATIO = 0.16
+const GISUNG_TALK_ICON_OFFSET_RATIO = 1.18
 // frame asset is 2172 x 724 — values below are in that pixel space
 const DIALOG_TEXT_BOX = { x: 580, y: 180, width: 1500, height: 400 }
 const DIALOG_NAME_BOX = { x: 505, y: 107, width: 390, height: 150 }
@@ -168,15 +177,11 @@ export class MusicSelectScene extends Phaser.Scene {
 
   preload() {
     this.load.image('music-background', assetPath('images/themes/music/background/background.png'))
-    this.load.spritesheet(
+    // load as a plain image — frames are defined manually in create() because
+    // the two dogs are not symmetrically placed within naive halves of the sheet
+    this.load.image(
       'music-gisung-sprite',
       assetPath('images/themes/music/characters/gisung_sprite.png'),
-      {
-        frameWidth: MUSIC_SPRITE_FRAME.width,
-        frameHeight: MUSIC_SPRITE_FRAME.height,
-        margin: 0,
-        spacing: 0,
-      },
     )
     loadInteractionIcons(this)
     this.load.image('gisung-dialog-frame', assetPath('images/npcs/gisung/dialog-frame.png'))
@@ -208,6 +213,7 @@ export class MusicSelectScene extends Phaser.Scene {
     this.clearContentStartTimer()
 
     const background = addCoverBackground(this, 'music-background')
+    this.setupGisungFrames()
     this.createGisungAnimation()
     this.createGisungOnWindow(background)
     this.createDialogUi()
@@ -264,6 +270,16 @@ export class MusicSelectScene extends Phaser.Scene {
     this.playerWasInExitPortal = exitState.isInside
   }
 
+  private setupGisungFrames() {
+    const tex = this.textures.get('music-gisung-sprite')
+    if (tex.has('0') && tex.has('1')) {
+      return
+    }
+    MUSIC_SPRITE_FRAME_RECTS.forEach((rect, index) => {
+      tex.add(index, 0, rect.x, rect.y, rect.w, rect.h)
+    })
+  }
+
   private createGisungAnimation() {
     if (this.anims.exists('music-gisung-play')) {
       return
@@ -280,22 +296,25 @@ export class MusicSelectScene extends Phaser.Scene {
   private createGisungOnWindow(background: Phaser.GameObjects.Image) {
     const backgroundLeft = background.x - background.displayWidth / 2
     const backgroundTop = background.y - background.displayHeight / 2
-    const displaySize = Math.min(
+    const frameAspect = MUSIC_SPRITE_FRAME.width / MUSIC_SPRITE_FRAME.height
+    const targetHeight = Math.min(
       background.displayHeight * GISUNG_ON_WINDOW.heightRatio,
-      background.displayWidth * 0.14,
+      (background.displayWidth * 0.14) / frameAspect,
     )
+    const displayHeight = targetHeight
+    const displayWidth = targetHeight * frameAspect
 
     this.gisungNpc = this.add
       .sprite(
         backgroundLeft + background.displayWidth * GISUNG_ON_WINDOW.xRatio,
-        backgroundTop + background.displayHeight * GISUNG_ON_WINDOW.bottomYRatio,
+        backgroundTop + background.displayHeight * GISUNG_ON_WINDOW.yRatio,
         'music-gisung-sprite',
         0,
       )
-      .setOrigin(0.5, 1)
+      .setOrigin(0.5, 0.5)
       .setDepth(4)
 
-    this.gisungNpc.setDisplaySize(displaySize, displaySize)
+    this.gisungNpc.setDisplaySize(displayWidth, displayHeight)
     this.gisungNpc.anims.play('music-gisung-play')
     this.gisungAnchor.set(this.gisungNpc.x, this.gisungNpc.y)
     this.gisungInteractionRadius =
@@ -303,7 +322,7 @@ export class MusicSelectScene extends Phaser.Scene {
 
     this.talkIcon = createFloatingInteractionIcon(this, {
       x: this.gisungNpc.x,
-      y: this.gisungNpc.y - this.gisungNpc.displayHeight * GISUNG_TALK_ICON_OFFSET_RATIO,
+      y: this.gisungNpc.y - this.gisungNpc.displayHeight * (GISUNG_TALK_ICON_OFFSET_RATIO - 0.5),
       displaySize: 44,
       depth: 6,
       bobOffset: 8,
