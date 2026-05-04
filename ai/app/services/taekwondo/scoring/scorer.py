@@ -41,6 +41,45 @@ DTW_WEIGHT = 0.4
 # 입력 정규화: 관절 각도(0~180°) 를 0~1 로
 ANGLE_SCALE = 180.0
 
+# ---------- 모션 페널티 (학습 데이터 한계 보완) ----------
+# AI Hub 71259 데이터의 8프레임 시퀀스가 부드러운 모션이 아니라 키프레임 묶음에 가까워서
+# LSTM/DTW만으로는 정적 입력과 동적 입력을 구별하기 어려운 한계 보완용.
+# 학습 데이터 동작별 평균 프레임간 변화량(11~17°) 의 약 절반을 임계값으로 설정.
+
+# 모션 임계값 (도 단위 — 프레임간 평균 각도 변화)
+MOTION_THRESHOLD_DEG = 7.0
+
+# 모션 부족 시 최소 점수 비율 (정지 자세는 30% 까지만 인정)
+MOTION_PENALTY_FLOOR = 0.3
+
+# 모션 페널티 미적용 동작 (본질적으로 정적인 자세)
+STATIC_ACTIONS: frozenset[str] = frozenset({"기본준비"})
+
+
+def _compute_motion_intensity(seq: np.ndarray) -> float:
+    """시퀀스의 프레임간 평균 각도 변화량 (도 단위).
+
+    가만히 서있으면 거의 0, 큰 동작이면 10~20° 이상.
+    """
+    if len(seq) < 2:
+        return 0.0
+    diffs = np.abs(np.diff(seq, axis=0))
+    return float(diffs.mean())
+
+
+def _apply_motion_penalty(final_score: float, motion_intensity: float) -> float:
+    """모션 강도에 따른 점수 페널티 적용.
+
+    - motion_intensity ≥ MOTION_THRESHOLD_DEG: 페널티 없음 (factor=1.0)
+    - motion_intensity = 0:                    factor = MOTION_PENALTY_FLOOR
+    - 그 사이:                                  선형 보간
+    """
+    if motion_intensity >= MOTION_THRESHOLD_DEG:
+        return final_score
+    ratio = motion_intensity / MOTION_THRESHOLD_DEG
+    factor = MOTION_PENALTY_FLOOR + (1.0 - MOTION_PENALTY_FLOOR) * ratio
+    return final_score * factor
+
 # LSTMAutoencoder 입력 8차원과 1:1 대응 (순서 중요!)
 JOINT_NAMES: tuple[str, ...] = (
     "왼팔꿈치", "오른팔꿈치", "왼어깨", "오른어깨",
@@ -185,6 +224,11 @@ def score_ensemble(seq: np.ndarray, action_name: str) -> EnsembleScoreResult:
     lstm = score_with_lstm(seq, action_name)
     dtw = score_with_dtw(seq, action_name)
     final = lstm.score * LSTM_WEIGHT + dtw.score * DTW_WEIGHT
+
+    # 모션 페널티 적용 (정적 동작은 제외)
+    if action_name not in STATIC_ACTIONS:
+        motion_intensity = _compute_motion_intensity(seq)
+        final = _apply_motion_penalty(final, motion_intensity)
 
     return EnsembleScoreResult(
         final_score=final,
