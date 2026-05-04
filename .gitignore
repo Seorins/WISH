@@ -18,6 +18,7 @@ desktop.ini
 # ===== IDE (루트 방어용, 각 모듈 .gitignore에도 있음) =====
 .idea/
 .vscode/
+.claude/
 *.swp
 
 # ===== Docker local volumes (바인드 마운트 방어) =====

@@ -10,6 +10,7 @@ export {
   updateExerciseMotion,
 } from './exercise-motions'
 export { getMyBestMusicResults, saveMusicResult } from './music-results'
+export { createPatientProfile, listPatientProfiles } from './patient-profiles'
 export type { LoginRequest, SignupRequest, TokenResponse, UserResponse } from './auth'
 export type {
   ApiResponse,
@@ -33,3 +34,4 @@ export type {
   UpdateExerciseMotionRequest,
 } from './exercise-motions'
 export type { MusicBestResult, MusicResult, MusicResultRequest } from './music-results'
+export type { Gender, PatientProfile, PatientProfileCreateRequest } from './patient-profiles'
