@@ -7,6 +7,7 @@ export {
   deleteExerciseMotion,
   getExerciseMotion,
   listExerciseMotions,
+  reorderExerciseMotions,
   updateExerciseMotion,
 } from './exercise-motions'
 export { getMyBestMusicResults, saveMusicResult } from './music-results'
@@ -30,6 +31,7 @@ export type {
   CreateExerciseMotionParams,
   CreateExerciseMotionRequest,
   ExerciseMotion,
+  ExerciseMotionReorderRequest,
   ExerciseType,
   UpdateExerciseMotionParams,
   UpdateExerciseMotionRequest,

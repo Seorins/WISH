@@ -16,7 +16,6 @@ export type ExerciseMotion = {
   updatedAt: string
 }
 
-/** 생성 요청의 메타데이터 부분 (multipart 의 request part 에 JSON 으로 직렬화). */
 export type CreateExerciseMotionRequest = {
   exerciseType: ExerciseType
   name: string
@@ -25,15 +24,18 @@ export type CreateExerciseMotionRequest = {
   description: string
 }
 
-/**
- * 부분 수정 요청 (PATCH). 텍스트 필드는 모두 optional, `clear*` 플래그는 파일 part 가 없을 때만 의미가 있고 true 이면 기존 미디어를 제거.
- */
 export type UpdateExerciseMotionRequest = {
   name?: string
+  routineOrder?: number
   targetReps?: number
   description?: string
   clearThumbnail?: boolean
   clearDemoVideo?: boolean
+}
+
+export type ExerciseMotionReorderRequest = {
+  exerciseType: ExerciseType
+  motionIds: number[]
 }
 
 export type CreateExerciseMotionParams = {
@@ -78,6 +80,14 @@ export async function updateExerciseMotion(
   const response = await apiClient.patch<ApiResponse<ExerciseMotion>>(
     `/exercise-motions/${id}`,
     formData,
+  )
+  return response.data
+}
+
+export async function reorderExerciseMotions(request: ExerciseMotionReorderRequest) {
+  const response = await apiClient.patch<ApiResponse<ExerciseMotion[]>>(
+    '/exercise-motions/reorder',
+    request,
   )
   return response.data
 }
