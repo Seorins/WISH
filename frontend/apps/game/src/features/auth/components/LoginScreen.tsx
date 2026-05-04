@@ -15,19 +15,17 @@ const loginSchema = z.object({
 type LoginForm = z.infer<typeof loginSchema>
 
 type LoginScreenProps = {
-  initialEmail?: string
   onAuthSuccess: () => void
-  onSwitchToSignup: () => void
 }
 
-export function LoginScreen({ initialEmail, onAuthSuccess, onSwitchToSignup }: LoginScreenProps) {
+export function LoginScreen({ onAuthSuccess }: LoginScreenProps) {
   const setToken = useAuthStore(state => state.setToken)
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
   const { register, handleSubmit, formState } = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
-    defaultValues: { email: initialEmail ?? '', password: '' },
+    defaultValues: { email: '', password: '' },
   })
 
   const onSubmit = async (values: LoginForm) => {
@@ -87,16 +85,6 @@ export function LoginScreen({ initialEmail, onAuthSuccess, onSwitchToSignup }: L
         disabled={submitting}
       >
         {submitting ? '로그인 중…' : '로그인'}
-      </button>
-
-      <button
-        type="button"
-        onClick={onSwitchToSignup}
-        className="auth-link"
-        style={authStyles.linkButton}
-        disabled={submitting}
-      >
-        아직 회원이 아니신가요?<span style={authStyles.linkAction}>회원가입 →</span>
       </button>
     </form>
   )
