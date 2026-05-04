@@ -9,6 +9,7 @@ export {
   listExerciseMotions,
   updateExerciseMotion,
 } from './exercise-motions'
+export { getMyBestMusicResults, saveMusicResult } from './music-results'
 export type { LoginRequest, SignupRequest, TokenResponse, UserResponse } from './auth'
 export type {
   ApiResponse,
@@ -31,3 +32,4 @@ export type {
   UpdateExerciseMotionParams,
   UpdateExerciseMotionRequest,
 } from './exercise-motions'
+export type { MusicResult, MusicResultRequest } from './music-results'
