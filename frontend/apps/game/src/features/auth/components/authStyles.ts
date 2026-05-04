@@ -96,18 +96,4 @@ export const authStyles: Record<string, CSSProperties> = {
     fontFamily: PIXEL_FONT,
     letterSpacing: '0.06em',
   },
-  linkButton: {
-    background: 'transparent',
-    border: 'none',
-    color: '#5a3818',
-    fontSize: 14,
-    cursor: 'pointer',
-    padding: 4,
-    textAlign: 'center',
-    fontFamily: PIXEL_FONT,
-  },
-  linkAction: {
-    color: '#c25a17',
-    marginLeft: 6,
-  },
 }

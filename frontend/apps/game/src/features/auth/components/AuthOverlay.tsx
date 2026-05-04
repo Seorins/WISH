@@ -1,18 +1,14 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { assetPath } from '@/game/assets/assetPath'
 import { LoginScreen } from './LoginScreen'
-import { SignupScreen } from './SignupScreen'
 import { authStyles } from './authStyles'
 
 const PIXEL_FONT_URL = assetPath('fonts/galmuri11.woff2')
-
-type AuthMode = 'login' | 'signup'
 
 type AuthOverlayProps = {
   open: boolean
   onAuthSuccess: () => void
   onCancel: () => void
-  initialMode?: AuthMode
 }
 
 const AUTH_OVERLAY_CSS = `
@@ -40,34 +36,12 @@ const AUTH_OVERLAY_CSS = `
   opacity: 0.6;
   cursor: not-allowed;
 }
-.auth-link:hover:not(:disabled) {
-  text-decoration: underline;
-}
-.auth-link:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
 .auth-close:hover {
   color: #c25a17;
 }
 `
 
-export function AuthOverlay({
-  open,
-  onAuthSuccess,
-  onCancel,
-  initialMode = 'login',
-}: AuthOverlayProps) {
-  const [mode, setMode] = useState<AuthMode>(initialMode)
-  const [prefillEmail, setPrefillEmail] = useState<string | undefined>(undefined)
-
-  useEffect(() => {
-    if (open) {
-      setMode(initialMode)
-      setPrefillEmail(undefined)
-    }
-  }, [open, initialMode])
-
+export function AuthOverlay({ open, onAuthSuccess, onCancel }: AuthOverlayProps) {
   useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent) => {
@@ -76,16 +50,6 @@ export function AuthOverlay({
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [open, onCancel])
-
-  const handleSwitchToSignup = useCallback(() => {
-    setPrefillEmail(undefined)
-    setMode('signup')
-  }, [])
-
-  const handleSwitchToLogin = useCallback((email?: string) => {
-    setPrefillEmail(email)
-    setMode('login')
-  }, [])
 
   if (!open) return null
 
@@ -103,15 +67,7 @@ export function AuthOverlay({
           >
             ✕
           </button>
-          {mode === 'login' ? (
-            <LoginScreen
-              initialEmail={prefillEmail}
-              onAuthSuccess={onAuthSuccess}
-              onSwitchToSignup={handleSwitchToSignup}
-            />
-          ) : (
-            <SignupScreen onAuthSuccess={onAuthSuccess} onSwitchToLogin={handleSwitchToLogin} />
-          )}
+          <LoginScreen onAuthSuccess={onAuthSuccess} />
         </div>
       </div>
     </>
