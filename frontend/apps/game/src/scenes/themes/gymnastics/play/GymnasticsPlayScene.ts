@@ -182,10 +182,21 @@ const FLAT_COLORS = {
   primaryDark: 0x237a42,
   secondary: 0xfff6e7,
 }
-const TARGET_POSE_FRAME_SCALE = 1.12
+const TARGET_POSE_FRAME_SCALE = 1
 const HEADER_FRAME_TEXTURE_KEY = 'gymnastics-header-frame-cropped'
-const HEADER_FRAME_CROP = { x: 39, y: 134, width: 1920, height: 246 }
-const HEADER_FRAME_CAP_WIDTH = 360
+const HEADER_FRAME_CROP = { x: 38, y: 165, width: 1924, height: 315 }
+const HEADER_FRAME_CAP_WIDTH = 260
+const SIDE_FRAME_ASPECT = 1448 / 1086
+const GUIDE_FRAME_CAP_WIDTH = 260
+const FEEDBACK_FRAME_CAP_WIDTH = 360
+const SIDE_FRAME_VISIBLE_SCALE = 0.96
+const GUIDE_TITLE_Y_RATIO = 0.082
+const FEEDBACK_TITLE_Y_RATIO = 0.086
+const FEEDBACK_MAIN_Y_RATIO = 0.47
+const FEEDBACK_TIP_Y_RATIO = 0.66
+const FRAME_TEXT_COLOR = '#5a2f12'
+const FRAME_TEXT_STROKE = '#fff0c8'
+const FRAME_TEXT_SHADOW = '#2f1708'
 
 function createInitialAiState(): GymnasticsAiState {
   return {
@@ -243,6 +254,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
   private feedbackTitleText!: Phaser.GameObjects.Text
   private feedbackStarImage!: Phaser.GameObjects.Image
   private feedbackTipTexts: Phaser.GameObjects.Text[] = []
+  private feedbackFrameBounds!: PanelBounds
   private timerEvent?: Phaser.Time.TimerEvent
   private isCameraRecognized = false
   private motionCounterMaxWidth = 0
@@ -274,13 +286,16 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
       'gymnastics-raccoon',
       assetPath('images/themes/gymnastics/characters/Raccoon.png'),
     )
-    this.load.image('gymnastics-pose-frame', assetPath('images/themes/gymnastics/ui/pose.png'))
+    this.load.image(
+      'gymnastics-pose-frame',
+      assetPath('images/themes/gymnastics/ui/GuideframeUI.png'),
+    )
     this.load.image(
       'gymnastics-feedback-frame',
-      assetPath('images/themes/gymnastics/ui/livefeedback.png'),
+      assetPath('images/themes/gymnastics/ui/feedfackframeUI.png'),
     )
     this.load.image('gymnastics-feedback-star', assetPath('images/themes/gymnastics/ui/star.png'))
-    this.load.image('gymnastics-header-frame', assetPath('images/themes/gymnastics/ui/frame.png'))
+    this.load.image('gymnastics-header-frame', assetPath('images/themes/gymnastics/ui/FrameUI.png'))
     this.load.image(
       'gymnastics-delete-button',
       assetPath('images/themes/gymnastics/ui/delete_btn.png'),
@@ -383,11 +398,10 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     const maxGroupW = vw - margin * 2
     const maxCameraW = maxGroupW - sideW - gap
     const sidePanelGap = Math.max(12, availableH * 0.04)
-    const frameAspect = 1448 / 1086
-    const sidePanelH = Math.min((availableH - sidePanelGap) / 2, sideW / frameAspect)
+    const sidePanelH = Math.min((availableH - sidePanelGap) / 2, sideW / SIDE_FRAME_ASPECT)
     const contentH = sidePanelH * 2 + sidePanelGap
     const cameraH = contentH
-    const cameraW = Math.min(maxCameraW * 0.74, cameraH * frameAspect)
+    const cameraW = Math.min(maxCameraW * 0.74, cameraH * SIDE_FRAME_ASPECT)
     const groupW = cameraW + gap + sideW
     const groupX = (vw - groupW) / 2
     const contentY = contentTop + Math.max(0, (availableH - contentH) / 2)
@@ -427,11 +441,18 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     const headerTextStyle: Phaser.Types.GameObjects.Text.TextStyle = {
       fontFamily: 'sans-serif',
       fontSize: `${headerFontSize}px`,
-      color: '#fff4d4',
+      color: FRAME_TEXT_COLOR,
       fontStyle: 'bold',
       align: 'center',
-      stroke: '#4b250c',
-      strokeThickness: 2,
+      stroke: FRAME_TEXT_STROKE,
+      strokeThickness: 3,
+      shadow: {
+        offsetX: 0,
+        offsetY: 1,
+        color: FRAME_TEXT_SHADOW,
+        blur: 1,
+        fill: true,
+      },
     }
 
     this.createHeaderFrame(headerX, headerTop, modePanelW, headerH)
@@ -547,65 +568,116 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     const targetH = panelH
     const feedbackY = y + panelH + panelGap
     const feedbackH = panelH
+    const frameW = width * SIDE_FRAME_VISIBLE_SCALE
+    const targetFrameH = targetH * SIDE_FRAME_VISIBLE_SCALE
+    const feedbackFrameH = feedbackH * SIDE_FRAME_VISIBLE_SCALE
+    const frameLeft = x + (width - frameW) / 2
+    const targetFrameTop = y + (targetH - targetFrameH) / 2
+    const feedbackFrameTop = feedbackY + (feedbackH - feedbackFrameH) / 2
     const sectionTitleX = x + width / 2
-    const targetTitleY = y + targetH * 0.088
-    const feedbackTitleY = feedbackY + feedbackH * 0.094
+    const targetTitleY = targetFrameTop + targetFrameH * GUIDE_TITLE_Y_RATIO
+    const feedbackTitleY = feedbackFrameTop + feedbackFrameH * FEEDBACK_TITLE_Y_RATIO
+    this.feedbackFrameBounds = {
+      x: frameLeft,
+      y: feedbackFrameTop,
+      width: frameW,
+      height: feedbackFrameH,
+    }
 
     this.add
-      .image(x + width / 2, y + targetH / 2, 'gymnastics-pose-frame')
-      .setDisplaySize(width * TARGET_POSE_FRAME_SCALE, targetH * TARGET_POSE_FRAME_SCALE)
+      .image(
+        x + width / 2,
+        y + targetH / 2,
+        this.createHorizontalSlicedFrameTexture(
+          'gymnastics-pose-frame',
+          frameW * TARGET_POSE_FRAME_SCALE,
+          targetFrameH * TARGET_POSE_FRAME_SCALE,
+          GUIDE_FRAME_CAP_WIDTH,
+        ),
+      )
       .setDepth(11)
     this.add
       .text(sectionTitleX, targetTitleY, '가이드 영상', {
         fontFamily: 'sans-serif',
-        fontSize: `${Math.round(Phaser.Math.Clamp(targetH * 0.078, 16, 20))}px`,
-        color: '#fff4d4',
+        fontSize: `${Math.round(Phaser.Math.Clamp(targetFrameH * 0.07, 15, 18))}px`,
+        color: FRAME_TEXT_COLOR,
         fontStyle: 'bold',
-        stroke: '#4b250c',
-        strokeThickness: 2,
+        stroke: FRAME_TEXT_STROKE,
+        strokeThickness: 3,
+        shadow: {
+          offsetX: 0,
+          offsetY: 1,
+          color: FRAME_TEXT_SHADOW,
+          blur: 1,
+          fill: true,
+        },
       })
       .setOrigin(0.5)
       .setDepth(13)
 
     this.add
-      .image(x + width / 2, feedbackY + feedbackH / 2, 'gymnastics-feedback-frame')
-      .setDisplaySize(width, feedbackH)
+      .image(
+        x + width / 2,
+        feedbackY + feedbackH / 2,
+        this.createHorizontalSlicedFrameTexture(
+          'gymnastics-feedback-frame',
+          frameW,
+          feedbackFrameH,
+          FEEDBACK_FRAME_CAP_WIDTH,
+        ),
+      )
       .setDepth(11)
     this.add
       .text(sectionTitleX, feedbackTitleY, '실시간 피드백', {
         fontFamily: 'sans-serif',
-        fontSize: `${Math.round(Phaser.Math.Clamp(feedbackH * 0.082, 15, 20))}px`,
-        color: '#fff4d4',
+        fontSize: `${Math.round(Phaser.Math.Clamp(feedbackFrameH * 0.07, 15, 18))}px`,
+        color: FRAME_TEXT_COLOR,
         fontStyle: 'bold',
-        stroke: '#4b250c',
-        strokeThickness: 2,
+        stroke: FRAME_TEXT_STROKE,
+        strokeThickness: 3,
+        shadow: {
+          offsetX: 0,
+          offsetY: 1,
+          color: FRAME_TEXT_SHADOW,
+          blur: 1,
+          fill: true,
+        },
       })
       .setOrigin(0.5)
       .setDepth(13)
 
-    const feedbackTitleFontSize = Math.round(Phaser.Math.Clamp(feedbackH * 0.18, 26, 38))
+    const feedbackTitleFontSize = Math.round(Phaser.Math.Clamp(feedbackFrameH * 0.15, 24, 32))
     this.feedbackTitleText = this.add
-      .text(x + width * 0.58, feedbackY + feedbackH * 0.42, '', {
-        fontFamily: 'sans-serif',
-        fontSize: `${feedbackTitleFontSize}px`,
-        color: '#3b2412',
-        fontStyle: 'bold',
-        stroke: '#fff1d0',
-        strokeThickness: 2,
-        align: 'center',
-      })
+      .text(
+        this.feedbackFrameBounds.x + this.feedbackFrameBounds.width / 2,
+        feedbackFrameTop + feedbackFrameH * FEEDBACK_MAIN_Y_RATIO,
+        '',
+        {
+          fontFamily: 'sans-serif',
+          fontSize: `${feedbackTitleFontSize}px`,
+          color: '#3b2412',
+          fontStyle: 'bold',
+          stroke: '#fff1d0',
+          strokeThickness: 2,
+          align: 'center',
+        },
+      )
       .setOrigin(0.5)
       .setDepth(13)
-    this.feedbackTitleMaxWidth = width * 0.78
+    this.feedbackTitleMaxWidth = frameW * 0.72
 
     this.feedbackStarImage = this.add
-      .image(0, this.feedbackTitleText.y, 'gymnastics-feedback-star')
+      .image(
+        this.feedbackFrameBounds.x + this.feedbackFrameBounds.width * 0.18,
+        this.feedbackTitleText.y,
+        'gymnastics-feedback-star',
+      )
       .setOrigin(0.5)
       .setDepth(13)
 
     this.feedbackTipTexts = [
       this.add
-        .text(x + width / 2, feedbackY + feedbackH * 0.64, '', {
+        .text(x + width / 2, feedbackFrameTop + feedbackFrameH * FEEDBACK_TIP_Y_RATIO, '', {
           fontFamily: 'sans-serif',
           fontSize: `${Math.round(Phaser.Math.Clamp(feedbackH * 0.08, 15, 22))}px`,
           color: '#b94122',
@@ -613,7 +685,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
           align: 'center',
           stroke: '#fff1d0',
           strokeThickness: 1,
-          wordWrap: { width: width * 0.78, useAdvancedWrap: true },
+          wordWrap: { width: frameW * 0.78, useAdvancedWrap: true },
         })
         .setOrigin(0.5)
         .setDepth(13),
@@ -622,14 +694,16 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
 
   private createPanel(x: number, y: number, width: number, height: number, radius: number) {
     const graphics = this.add.graphics().setDepth(4)
-    graphics.fillStyle(0x241106, 0.28)
+    graphics.fillStyle(0x4b250c, 0.26)
     graphics.fillRoundedRect(x, y + 7, width, height, radius)
-    graphics.fillStyle(0x7f4a24, 0.98)
+    graphics.fillStyle(0xf3d59a, 0.98)
     graphics.fillRoundedRect(x, y, width, height, radius)
-    graphics.lineStyle(3, 0x4b250c, 1)
+    graphics.lineStyle(4, 0x7a471c, 1)
     graphics.strokeRoundedRect(x, y, width, height, radius)
-    graphics.lineStyle(1, 0xd7a55a, 0.72)
+    graphics.lineStyle(2, 0xffefbd, 0.86)
     graphics.strokeRoundedRect(x + 4, y + 4, width - 8, height - 8, Math.max(4, radius - 4))
+    graphics.lineStyle(2, 0x3f210c, 0.48)
+    graphics.strokeRoundedRect(x + 8, y + 8, width - 16, height - 16, Math.max(4, radius - 8))
     return graphics
   }
 
@@ -680,6 +754,124 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     return textureKey
   }
 
+  private createCroppedFrameTexture(sourceKey: string) {
+    const textureKey = `${sourceKey}-visible-crop`
+    if (this.textures.exists(textureKey)) return textureKey
+
+    const source = this.textures.get(sourceKey).getSourceImage() as
+      | HTMLCanvasElement
+      | HTMLImageElement
+    const visibleBounds = this.getTextureVisibleBounds(source)
+    const canvas = document.createElement('canvas')
+    canvas.width = visibleBounds.width
+    canvas.height = visibleBounds.height
+    const context = canvas.getContext('2d')
+    if (!context) {
+      throw new Error('Cropped frame canvas context is not available.')
+    }
+    context.drawImage(
+      source,
+      visibleBounds.x,
+      visibleBounds.y,
+      visibleBounds.width,
+      visibleBounds.height,
+      0,
+      0,
+      visibleBounds.width,
+      visibleBounds.height,
+    )
+
+    this.textures.addCanvas(textureKey, canvas)
+    return textureKey
+  }
+
+  private createHorizontalSlicedFrameTexture(
+    sourceKey: string,
+    width: number,
+    height: number,
+    capWidth: number,
+  ) {
+    const targetW = Math.max(1, Math.round(width))
+    const targetH = Math.max(1, Math.round(height))
+    const textureKey = `${sourceKey}-h-slice-${targetW}x${targetH}-${capWidth}`
+    if (this.textures.exists(textureKey)) return textureKey
+
+    const croppedKey = this.createCroppedFrameTexture(sourceKey)
+    const source = this.textures.get(croppedKey).getSourceImage() as HTMLCanvasElement
+    const sourceW = source.width
+    const sourceH = source.height
+    const capSrcW = Math.min(capWidth, sourceW / 2)
+    const dstCapW = Math.min(targetW / 2, capSrcW * (targetH / sourceH))
+    const centerSrcW = Math.max(1, sourceW - capSrcW * 2)
+    const centerDstW = Math.max(0, targetW - dstCapW * 2)
+
+    const canvas = document.createElement('canvas')
+    canvas.width = targetW
+    canvas.height = targetH
+    const context = canvas.getContext('2d')
+    if (!context) {
+      throw new Error('Horizontal sliced frame canvas context is not available.')
+    }
+
+    context.drawImage(source, 0, 0, capSrcW, sourceH, 0, 0, dstCapW, targetH)
+    if (centerDstW > 0) {
+      context.drawImage(source, capSrcW, 0, centerSrcW, sourceH, dstCapW, 0, centerDstW, targetH)
+    }
+    context.drawImage(
+      source,
+      sourceW - capSrcW,
+      0,
+      capSrcW,
+      sourceH,
+      targetW - dstCapW,
+      0,
+      dstCapW,
+      targetH,
+    )
+
+    this.textures.addCanvas(textureKey, canvas)
+    return textureKey
+  }
+
+  private getTextureVisibleBounds(source: HTMLCanvasElement | HTMLImageElement) {
+    const canvas = document.createElement('canvas')
+    canvas.width = source.width
+    canvas.height = source.height
+    const context = canvas.getContext('2d')
+    if (!context) {
+      return { x: 0, y: 0, width: source.width, height: source.height }
+    }
+
+    context.drawImage(source, 0, 0)
+    const pixels = context.getImageData(0, 0, source.width, source.height).data
+    let minX = source.width
+    let minY = source.height
+    let maxX = -1
+    let maxY = -1
+
+    for (let y = 0; y < source.height; y += 1) {
+      for (let x = 0; x < source.width; x += 1) {
+        const alpha = pixels[(y * source.width + x) * 4 + 3]
+        if (alpha <= 8) continue
+        minX = Math.min(minX, x)
+        minY = Math.min(minY, y)
+        maxX = Math.max(maxX, x)
+        maxY = Math.max(maxY, y)
+      }
+    }
+
+    if (maxX < minX || maxY < minY) {
+      return { x: 0, y: 0, width: source.width, height: source.height }
+    }
+
+    return {
+      x: minX,
+      y: minY,
+      width: maxX - minX + 1,
+      height: maxY - minY + 1,
+    }
+  }
+
   private createDeleteButton(x: number, y: number, size: number, onClick: () => void) {
     const bg = this.add
       .image(0, 0, 'gymnastics-delete-button')
@@ -703,24 +895,40 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     const container = this.add.container(x, y).setDepth(14)
     const width = size
     const height = size
+    const direction = label === '<' ? -1 : 1
+    const arrow = this.add.graphics()
+    const arrowW = size * 0.36
+    const arrowH = size * 0.28
+    const bevel = size * 0.08
+    const tipX = direction * arrowW * 0.46
+    const backX = -direction * arrowW * 0.38
 
-    const text = this.add
-      .text(0, -1, label, {
-        fontFamily: 'sans-serif',
-        fontSize: `${Math.round(height * 0.82)}px`,
-        color: '#ffffff',
-        fontStyle: 'bold',
-        stroke: '#4b250c',
-        strokeThickness: 3,
-      })
-      .setOrigin(0.5)
+    const drawWoodArrow = (offsetX: number, offsetY: number, fill: number, alpha = 1) => {
+      arrow.fillStyle(fill, alpha)
+      arrow.beginPath()
+      arrow.moveTo(backX + offsetX, -arrowH * 0.5 + offsetY)
+      arrow.lineTo(tipX + offsetX, offsetY)
+      arrow.lineTo(backX + offsetX, arrowH * 0.5 + offsetY)
+      arrow.lineTo(backX - direction * bevel + offsetX, arrowH * 0.32 + offsetY)
+      arrow.lineTo(backX - direction * bevel + offsetX, -arrowH * 0.32 + offsetY)
+      arrow.closePath()
+      arrow.fillPath()
+    }
+
+    drawWoodArrow(0, 2, 0x5b2f14, 0.22)
+    drawWoodArrow(0, 0, 0xa86d38)
+    arrow.lineStyle(2, 0xd6a56d, 0.55)
+    arrow.beginPath()
+    arrow.moveTo(backX - direction * bevel * 0.6, -arrowH * 0.28)
+    arrow.lineTo(backX + direction * arrowW * 0.12, -arrowH * 0.16)
+    arrow.strokePath()
 
     const hitArea = this.add.rectangle(0, 0, width, height, 0xffffff, 0).setInteractive({
       useHandCursor: true,
     })
     hitArea.on('pointerdown', onClick)
 
-    container.add([text, hitArea])
+    container.add([arrow, hitArea])
     return container
   }
 
@@ -1288,11 +1496,11 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     this.motionCounterText?.setText(
       `${this.modeLabel} ${this.motionIndex + 1}/${this.motions.length}`,
     )
-    this.motionTitleText?.setText(`${this.motions[this.motionIndex].title} ${progressText}`)
+    this.motionTitleText?.setText(this.motions[this.motionIndex].title)
 
     this.fitTextToWidth(this.motionCounterText, this.motionCounterMaxWidth, this.headerFontSize, 14)
     this.fitTextToWidth(this.motionTitleText, this.motionTitleMaxWidth, this.headerFontSize, 14)
-    this.fitTextToWidth(this.feedbackTitleText, this.feedbackTitleMaxWidth, 38, 22)
+    this.fitTextToWidth(this.feedbackTitleText, this.feedbackTitleMaxWidth, 34, 20)
     this.fitTextToWidth(this.feedbackTipTexts[0], this.feedbackTitleMaxWidth, 22, 14)
     this.positionFeedbackStar()
   }
@@ -1357,7 +1565,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     this.feedbackTitleText?.setText(isRecognized ? '좋아요!' : '기다릴게요')
     if (this.feedbackTitleText) {
       this.layoutStatusBadge()
-      this.fitTextToWidth(this.feedbackTitleText, this.feedbackTitleMaxWidth, 38, 22)
+      this.fitTextToWidth(this.feedbackTitleText, this.feedbackTitleMaxWidth, 34, 20)
       this.positionFeedbackStar()
     }
   }
@@ -1371,7 +1579,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     this.fitTextToWidth(this.motionCounterText, this.motionCounterMaxWidth, this.headerFontSize, 14)
     this.fitTextToWidth(this.motionTitleText, this.motionTitleMaxWidth, this.headerFontSize, 14)
     this.fitTextToWidth(this.timerText, this.timerMaxWidth, this.headerFontSize, 14)
-    this.fitTextToWidth(this.feedbackTitleText, this.feedbackTitleMaxWidth, 38, 22)
+    this.fitTextToWidth(this.feedbackTitleText, this.feedbackTitleMaxWidth, 34, 20)
     this.positionFeedbackStar()
     this.feedbackTipTexts.forEach((text, index) => {
       text.setText(index === 0 ? motion.goal : '')
@@ -1380,15 +1588,16 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
   }
 
   private positionFeedbackStar() {
-    const starSize = Phaser.Math.Clamp(this.feedbackTitleText.height * 1.35, 42, 68)
+    const starSize = Phaser.Math.Clamp(this.feedbackTitleText.height * 0.95, 32, 46)
     this.feedbackStarImage.setDisplaySize(starSize, starSize)
-    const gap = Math.max(10, this.feedbackTitleText.height * 0.2)
-    const x =
-      this.feedbackTitleText.x -
-      this.feedbackTitleText.width / 2 -
-      this.feedbackStarImage.displayWidth / 2 -
-      gap
-    this.feedbackStarImage.setPosition(x, this.feedbackTitleText.y)
+    const gap = Math.max(12, this.feedbackTitleText.height * 0.22)
+    const groupW = this.feedbackStarImage.displayWidth + gap + this.feedbackTitleText.width
+    const groupLeft = this.feedbackFrameBounds.x + (this.feedbackFrameBounds.width - groupW) / 2
+    const starX = groupLeft + this.feedbackStarImage.displayWidth / 2
+    const textX =
+      groupLeft + this.feedbackStarImage.displayWidth + gap + this.feedbackTitleText.width / 2
+    this.feedbackTitleText.setPosition(textX, this.feedbackTitleText.y)
+    this.feedbackStarImage.setPosition(starX, this.feedbackTitleText.y)
   }
 
   private fitTextToWidth(
