@@ -18,10 +18,13 @@ export type SignupRequest = {
   password: string
 }
 
+export type UserRole = 'USER' | 'ADMIN'
+
 export type UserResponse = {
   id: number
   email: string
   nickname: string
+  role?: UserRole
   createdAt?: string
 }
 

@@ -11,7 +11,8 @@ export {
 } from './exercise-motions'
 export { getMyBestMusicResults, saveMusicResult } from './music-results'
 export { createPatientProfile, listPatientProfiles } from './patient-profiles'
-export type { LoginRequest, SignupRequest, TokenResponse, UserResponse } from './auth'
+export { listUsers } from './users'
+export type { LoginRequest, SignupRequest, TokenResponse, UserResponse, UserRole } from './auth'
 export type {
   ApiResponse,
   Artwork,
