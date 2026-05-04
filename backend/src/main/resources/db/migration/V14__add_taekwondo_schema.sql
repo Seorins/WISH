@@ -108,3 +108,8 @@ CREATE TABLE taekwondo_belt_history (
 );
 CREATE INDEX idx_taekwondo_belt_history_patient_promoted
     ON taekwondo_belt_history (patient_id, promoted_at DESC);
+
+-- 환자별 첫 진입 (NULL → WHITE) 항목은 1번만 적재되어야 한다 — 도메인 불변식의 DB 레벨 방어.
+-- Progress 가 1:1 UNIQUE 라 정상 흐름에선 자연 보호되지만, partial unique index 로 다중 안전망을 둔다.
+CREATE UNIQUE INDEX uk_taekwondo_belt_history_patient_first_entry
+    ON taekwondo_belt_history (patient_id) WHERE from_belt IS NULL;
