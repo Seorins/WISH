@@ -271,6 +271,16 @@
     let fpsCount = 0;
     let lastFpsUpdate = performance.now();
 
+    // 녹화 품질 추적 (트래킹 실패 프레임 비율 검증용)
+    let recordingStats = {
+      totalFrames: 0,   // 녹화 중 onResults 호출 총 횟수 (=캡처된 카메라 프레임)
+      validFrames: 0,   // 그중 poseLandmarks 가 인식된 프레임 수
+    };
+
+    // 녹화 품질 임계값
+    const MIN_TOTAL_FRAMES = 5;          // 최소 캡처 프레임 (이 미만은 채점 불가)
+    const MIN_VALID_CAPTURE_RATE = 0.7;  // 최소 트래킹 성공률 (70%)
+
     function angleAt(a, b, c) {
       const bax = a.x - b.x, bay = a.y - b.y;
       const bcx = c.x - b.x, bcy = c.y - b.y;
@@ -317,11 +327,23 @@
       return okCount / requiredIdx.length;
     }
 
+    // 관절 그리드 안전하게 생성 (innerHTML 미사용 — XSS 방어)
     const grid = document.getElementById('angleGrid');
     JOINT_NAMES.forEach((name, idx) => {
       const div = document.createElement('div');
       div.className = 'angle-cell';
-      div.innerHTML = `<span class="name">${name}</span><span class="val" id="angle-${idx}">--</span>`;
+
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'name';
+      nameSpan.textContent = name;
+
+      const valSpan = document.createElement('span');
+      valSpan.className = 'val';
+      valSpan.id = `angle-${idx}`;
+      valSpan.textContent = '--';
+
+      div.appendChild(nameSpan);
+      div.appendChild(valSpan);
       grid.appendChild(div);
     });
 
@@ -370,6 +392,11 @@
       canvasCtx.save();
       canvasCtx.clearRect(0, 0, canvasEl.width, canvasEl.height);
 
+      // 녹화 중이면 모든 카메라 프레임을 통계로 카운트
+      if (isRecording) {
+        recordingStats.totalFrames++;
+      }
+
       if (results.poseLandmarks) {
         drawConnectors(canvasCtx, results.poseLandmarks, POSE_CONNECTIONS, {
           color: '#4a7cff', lineWidth: 3,
@@ -390,6 +417,7 @@
 
         if (isRecording) {
           recordedAngles.push(angles);
+          recordingStats.validFrames++;
         }
       } else {
         setStatus('사람이 보이지 않음', 'err');
@@ -451,6 +479,7 @@
       cdEl.classList.add('hidden');
 
       recordedAngles = [];
+      recordingStats = { totalFrames: 0, validFrames: 0 };
       isRecording = true;
       recDot.classList.remove('hidden');
       recordingInfo.textContent = '녹화 중...';
@@ -473,15 +502,29 @@
       meterFill.style.width = '0%';
 
       const T = recordedAngles.length;
-      recordingInfo.textContent = `녹화 완료 — ${T} 프레임 캡처`;
+      const totalFrames = recordingStats.totalFrames;
+      const captureRate = totalFrames > 0 ? recordingStats.validFrames / totalFrames : 0;
+      const ratePct = (captureRate * 100).toFixed(0);
+
+      recordingInfo.textContent =
+        `녹화 완료 — ${T}/${totalFrames} 프레임 (트래킹 ${ratePct}%)`;
 
       recordBtn.disabled = false;
-      if (T >= 5) {
-        scoreBtn.disabled = false;
-        document.getElementById('scoreInfo').textContent = `${T} 프레임 준비됨 — 채점 가능`;
-      } else {
+
+      // 검증: 최소 프레임 수 + 트래킹 성공률
+      if (T < MIN_TOTAL_FRAMES) {
+        scoreBtn.disabled = true;
         document.getElementById('scoreInfo').textContent =
-          `프레임이 너무 적습니다 (${T}). 다시 녹화하세요.`;
+          `❌ 프레임이 너무 적습니다 (${T} < ${MIN_TOTAL_FRAMES}). 다시 녹화하세요.`;
+      } else if (captureRate < MIN_VALID_CAPTURE_RATE) {
+        scoreBtn.disabled = true;
+        document.getElementById('scoreInfo').textContent =
+          `⚠️ 트래킹 품질 낮음 (${ratePct}% — 최소 ${MIN_VALID_CAPTURE_RATE * 100}% 필요). ` +
+          `정확도 위해 전신이 잘 보이게 하고 다시 녹화하세요.`;
+      } else {
+        scoreBtn.disabled = false;
+        document.getElementById('scoreInfo').textContent =
+          `✅ ${T} 프레임 준비됨 (트래킹 ${ratePct}%) — 채점 가능`;
       }
     }
 
@@ -540,14 +583,38 @@
       document.getElementById('dtwScore').textContent = data.dtw.score.toFixed(1);
       document.getElementById('dtwDistance').textContent = data.dtw.distance.toFixed(2);
 
+      // 관절 오차 테이블 안전하게 생성 (innerHTML 미사용 — XSS 방어)
       const tbody = document.getElementById('jointTable');
       const worst = data.lstm.worst_joint;
-      const rows = ['<tr><th>관절</th><th>오차 (°)</th></tr>'];
+
+      // 기존 내용 모두 제거
+      while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
+
+      // 헤더 행
+      const headerRow = document.createElement('tr');
+      const thJoint = document.createElement('th');
+      thJoint.textContent = '관절';
+      const thError = document.createElement('th');
+      thError.textContent = '오차 (°)';
+      headerRow.appendChild(thJoint);
+      headerRow.appendChild(thError);
+      tbody.appendChild(headerRow);
+
+      // 데이터 행 — 모든 동적 값은 textContent 로 안전 삽입
       for (const [joint, err] of Object.entries(data.lstm.joint_errors)) {
-        const cls = joint === worst ? 'worst' : '';
-        rows.push(`<tr class="${cls}"><td>${joint}</td><td>${err.toFixed(2)}</td></tr>`);
+        const tr = document.createElement('tr');
+        if (joint === worst) tr.className = 'worst';
+
+        const tdJoint = document.createElement('td');
+        tdJoint.textContent = joint;
+        tr.appendChild(tdJoint);
+
+        const tdError = document.createElement('td');
+        tdError.textContent = err.toFixed(2);
+        tr.appendChild(tdError);
+
+        tbody.appendChild(tr);
       }
-      tbody.innerHTML = rows.join('');
 
       document.getElementById('resultCard').classList.remove('hidden');
       document.getElementById('resultCard').scrollIntoView({ behavior: 'smooth' });
