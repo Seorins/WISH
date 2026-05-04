@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { getMyBestMusicResults, type MusicBestResult } from '@wish/api-client'
 import { assetPath } from '@/game/assets/assetPath'
 import { fadeToScene } from '@/game/systems/sceneTransition'
 import { addCoverBackground } from '@/game/world/background'
@@ -25,6 +26,7 @@ type SongCardView = {
   index: number
   width: number
   height: number
+  bestResult?: MusicBestResult
 }
 
 const SONG_META: SongMeta[] = [
@@ -81,6 +83,21 @@ export class MusicSongSelectScene extends Phaser.Scene {
 
     this.refreshCardStates()
     this.cameras.main.fadeIn(220, 0, 0, 0)
+
+    this.fetchBestResults()
+  }
+
+  private fetchBestResults() {
+    getMyBestMusicResults()
+      .then(({ data }) => {
+        const byChartId = new Map(data.map(result => [result.chartId, result]))
+        this.cards.forEach(card => {
+          card.bestResult = byChartId.get(card.meta.chart.id)
+        })
+      })
+      .catch(error => {
+        console.warn('[MusicSongSelectScene] failed to fetch best results', error)
+      })
   }
 
   private createBackdrop(vw: number, vh: number) {

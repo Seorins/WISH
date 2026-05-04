@@ -33,5 +33,5 @@ export type {
   UpdateExerciseMotionParams,
   UpdateExerciseMotionRequest,
 } from './exercise-motions'
-export type { MusicResult, MusicResultRequest } from './music-results'
+export type { MusicBestResult, MusicResult, MusicResultRequest } from './music-results'
 export type { Gender, PatientProfile, PatientProfileCreateRequest } from './patient-profiles'
