@@ -2,7 +2,12 @@ package com.comong.backend.domain.exercise.service;
 
 import static org.springframework.transaction.support.TransactionSynchronization.STATUS_ROLLED_BACK;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -11,6 +16,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.springframework.web.multipart.MultipartFile;
 
 import com.comong.backend.domain.exercise.dto.ExerciseMotionCreateRequest;
+import com.comong.backend.domain.exercise.dto.ExerciseMotionReorderRequest;
 import com.comong.backend.domain.exercise.dto.ExerciseMotionResponse;
 import com.comong.backend.domain.exercise.dto.ExerciseMotionUpdateRequest;
 import com.comong.backend.domain.exercise.entity.ExerciseMotion;
@@ -118,6 +124,29 @@ public class ExerciseMotionService {
         applyDemoVideoChange(motion, request, demoVideo);
 
         return ExerciseMotionResponse.from(motion);
+    }
+
+    @Transactional
+    public List<ExerciseMotionResponse> reorder(ExerciseMotionReorderRequest request) {
+        List<ExerciseMotion> motions =
+                exerciseMotionRepository.findAllByExerciseTypeOrderByRoutineOrderAsc(
+                        request.exerciseType());
+        Set<Long> currentIds =
+                motions.stream().map(ExerciseMotion::getId).collect(Collectors.toSet());
+        Set<Long> requestedIds = new HashSet<>(request.motionIds());
+        if (requestedIds.size() != request.motionIds().size() || !currentIds.equals(requestedIds)) {
+            throw new BusinessException(ExerciseErrorCode.EXERCISE_MOTION_REORDER_SET_MISMATCH);
+        }
+
+        Map<Long, ExerciseMotion> motionsById =
+                motions.stream()
+                        .collect(Collectors.toMap(ExerciseMotion::getId, Function.identity()));
+        for (int i = 0; i < request.motionIds().size(); i++) {
+            motionsById.get(request.motionIds().get(i)).changeRoutineOrder(i + 1);
+        }
+        exerciseMotionRepository.flush();
+
+        return findAllByExerciseType(request.exerciseType());
     }
 
     @Transactional

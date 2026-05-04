@@ -108,6 +108,11 @@ public class ExerciseMotion {
         }
     }
 
+    public void changeRoutineOrder(int routineOrder) {
+        validatePositive(routineOrder, "routineOrder");
+        this.routineOrder = routineOrder;
+    }
+
     public void replaceThumbnail(String url) {
         this.thumbnailUrl = Objects.requireNonNull(url, "url must not be null");
     }

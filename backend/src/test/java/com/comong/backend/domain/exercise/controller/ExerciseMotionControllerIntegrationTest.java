@@ -6,6 +6,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -247,6 +248,66 @@ class ExerciseMotionControllerIntegrationTest extends IntegrationTestSupport {
 
         ExerciseMotion unchanged = exerciseMotionRepository.findById(march.getId()).orElseThrow();
         assertThat(unchanged.getRoutineOrder()).isEqualTo(1);
+    }
+
+    @Test
+    void reorderExerciseMotions_byAdminReassignsRoutineOrder() throws Exception {
+        ExerciseMotion march =
+                exerciseMotionRepository.save(exerciseMotion(ExerciseType.TOP, "March", 1));
+        ExerciseMotion sideStep =
+                exerciseMotionRepository.save(exerciseMotion(ExerciseType.TOP, "Side step", 2));
+        ExerciseMotion stretch =
+                exerciseMotionRepository.save(exerciseMotion(ExerciseType.TOP, "Stretch", 3));
+        exerciseMotionRepository.save(exerciseMotion(ExerciseType.DANIEL, "Daniel stretch", 1));
+
+        String requestJson =
+                """
+                {"exerciseType":"TOP","motionIds":[%d,%d,%d]}
+                """
+                        .formatted(sideStep.getId(), stretch.getId(), march.getId());
+
+        mockMvc.perform(
+                        patch("/exercise-motions/reorder")
+                                .with(user("admin").roles("ADMIN"))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(requestJson))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data[0].id").value(sideStep.getId()))
+                .andExpect(jsonPath("$.data[0].routineOrder").value(1))
+                .andExpect(jsonPath("$.data[1].id").value(stretch.getId()))
+                .andExpect(jsonPath("$.data[1].routineOrder").value(2))
+                .andExpect(jsonPath("$.data[2].id").value(march.getId()))
+                .andExpect(jsonPath("$.data[2].routineOrder").value(3));
+
+        assertThat(
+                        exerciseMotionRepository
+                                .findAllByExerciseTypeOrderByRoutineOrderAsc(ExerciseType.TOP)
+                                .stream()
+                                .map(ExerciseMotion::getName)
+                                .toList())
+                .containsExactly("Side step", "Stretch", "March");
+    }
+
+    @Test
+    void reorderExerciseMotions_rejectsMismatchedMotionIds() throws Exception {
+        ExerciseMotion march =
+                exerciseMotionRepository.save(exerciseMotion(ExerciseType.TOP, "March", 1));
+        exerciseMotionRepository.save(exerciseMotion(ExerciseType.TOP, "Side step", 2));
+
+        String requestJson =
+                """
+                {"exerciseType":"TOP","motionIds":[%d]}
+                """
+                        .formatted(march.getId());
+
+        mockMvc.perform(
+                        patch("/exercise-motions/reorder")
+                                .with(user("admin").roles("ADMIN"))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(requestJson))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("EX-006"));
     }
 
     @Test
