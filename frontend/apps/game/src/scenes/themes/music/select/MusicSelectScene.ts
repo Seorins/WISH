@@ -40,7 +40,7 @@ const MUSIC_SPRITE_FRAME_RECTS: Array<{ x: number; y: number; w: number; h: numb
 const MUSIC_ROOM_SPAWN = { xRatio: 0.5, yRatio: 0.78 }
 const MUSIC_EXIT_PORTAL = { xRatio: 0.43, yRatio: 0.86, widthRatio: 0.14, heightRatio: 0.12 }
 const MUSIC_RETURN_SPAWN = { xRatio: 0.235, yRatio: 0.44 }
-const GISUNG_ON_WINDOW = { xRatio: 0.5, yRatio: 0.42, heightRatio: 0.36 }
+const GISUNG_ON_WINDOW = { xRatio: 0.5, yRatio: 0.42, heightRatio: 0.32 }
 const GISUNG_INTERACTION_RADIUS_RATIO = 0.16
 const GISUNG_TALK_ICON_OFFSET_RATIO = 1.18
 // frame asset is 2172 x 724 — values below are in that pixel space
