@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestPart;
@@ -20,6 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.comong.backend.domain.exercise.dto.ExerciseMotionCreateRequest;
+import com.comong.backend.domain.exercise.dto.ExerciseMotionReorderRequest;
 import com.comong.backend.domain.exercise.dto.ExerciseMotionResponse;
 import com.comong.backend.domain.exercise.dto.ExerciseMotionUpdateRequest;
 import com.comong.backend.domain.exercise.entity.ExerciseType;
@@ -67,6 +69,16 @@ public class ExerciseMotionController {
                 exerciseMotionService.create(request, thumbnail, demoVideo);
         URI location = URI.create("/exercise-motions/" + response.id());
         return ResponseEntity.created(location).body(ApiResponse.success(response));
+    }
+
+    @Operation(
+            summary = "체조 동작 순서 변경",
+            description = "ADMIN 권한으로 체조 타입별 동작 ID 전체 목록을 원하는 순서로 보내 루틴 순서를 재정렬한다.")
+    @PreAuthorize("hasRole('ADMIN')")
+    @PatchMapping("/reorder")
+    public ResponseEntity<ApiResponse<List<ExerciseMotionResponse>>> reorder(
+            @Valid @RequestBody ExerciseMotionReorderRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(exerciseMotionService.reorder(request)));
     }
 
     @Operation(
