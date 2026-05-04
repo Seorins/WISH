@@ -3,12 +3,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Link, useNavigate } from 'react-router-dom'
 import { z } from 'zod'
-import {
-  createPatientProfile,
-  login as loginApi,
-  signup as signupApi,
-  type Gender,
-} from '@wish/api-client'
+import { createPatientProfile, login as loginApi, signup as signupApi } from '@wish/api-client'
 import { useAuthStore } from '@/shared/auth/store'
 import logoImage from '@/assets/logo.png'
 import modelImage from '@/assets/model.png'
@@ -29,15 +24,14 @@ const signupSchema = z.object({
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, '생년월일을 입력하세요')
     .refine(value => new Date(value) < new Date(), { message: '오늘 이전 날짜를 입력하세요' }),
-  gender: z.enum(['MALE', 'FEMALE', 'OTHER'], { required_error: '성별을 선택하세요' }),
+  gender: z.enum(['MALE', 'FEMALE'], { required_error: '성별을 선택하세요' }),
 })
 
 type SignupForm = z.infer<typeof signupSchema>
 
-const GENDER_OPTIONS: { value: Gender; label: string }[] = [
+const GENDER_OPTIONS: { value: SignupForm['gender']; label: string }[] = [
   { value: 'MALE', label: '남자' },
   { value: 'FEMALE', label: '여자' },
-  { value: 'OTHER', label: '기타' },
 ]
 
 export function SignupPage() {
