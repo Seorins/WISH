@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { saveMusicResult } from '@wish/api-client'
 import { assetPath } from '@/game/assets/assetPath'
 import { fadeToScene } from '@/game/systems/sceneTransition'
 import { addCoverBackground } from '@/game/world/background'
@@ -1294,7 +1295,23 @@ export class MusicRhythmScene extends Phaser.Scene {
     this.resolvePendingNotesAsMisses()
     this.updateProgress(this.chart.durationMs)
     this.stopMusic()
+    this.submitResult()
     this.showResultOverlay()
+  }
+
+  private submitResult() {
+    saveMusicResult({
+      chartId: this.chart.id,
+      score: this.score,
+      maxCombo: this.maxCombo,
+      perfectCount: this.perfectCount,
+      goodCount: this.goodCount,
+      missCount: this.missCount,
+      totalNotes: this.chart.notes.length,
+      playedDurationMs: Math.round(this.getSongTimeMs()),
+    }).catch(error => {
+      console.warn('[MusicRhythmScene] failed to save result', error)
+    })
   }
 
   private resolvePendingNotesAsMisses() {
