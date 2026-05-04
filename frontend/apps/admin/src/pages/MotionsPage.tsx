@@ -1,31 +1,43 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import type { CSSProperties, DragEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
 import {
   createExerciseMotion,
   deleteExerciseMotion,
   listExerciseMotions,
+  reorderExerciseMotions,
   updateExerciseMotion,
 } from '@wish/api-client'
 import type { ExerciseMotion, ExerciseType } from '@wish/api-client'
-import { useAuthStore } from '../shared/auth/store'
+import { AdminShell } from '../shared/components/AdminShell'
 import { MotionForm } from './MotionForm'
 import type { MotionFormSubmit } from './MotionForm'
 
 const EXERCISE_TYPES: ExerciseType[] = ['TOP', 'DANIEL']
+const EXERCISE_LABELS: Record<ExerciseType, string> = {
+  TOP: 'TOP',
+  DANIEL: 'DANIEL',
+}
 
 export function MotionsPage() {
-  const navigate = useNavigate()
-  const { email, clear } = useAuthStore()
   const queryClient = useQueryClient()
   const [exerciseType, setExerciseType] = useState<ExerciseType>('TOP')
   const [editing, setEditing] = useState<ExerciseMotion | null>(null)
   const [creating, setCreating] = useState(false)
+  const [orderedMotions, setOrderedMotions] = useState<ExerciseMotion[]>([])
+  const [draggingId, setDraggingId] = useState<number | null>(null)
 
   const motionsQuery = useQuery({
     queryKey: ['motions', exerciseType],
     queryFn: () => listExerciseMotions(exerciseType).then(r => r.data),
   })
+
+  useEffect(() => {
+    if (motionsQuery.data) {
+      setOrderedMotions(motionsQuery.data)
+      setDraggingId(null)
+    }
+  }, [motionsQuery.data])
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['motions'] })
 
@@ -52,9 +64,8 @@ export function MotionsPage() {
     mutationFn: ({ id, payload }: { id: number; payload: MotionFormSubmit }) =>
       updateExerciseMotion(id, {
         request: {
-          // exerciseType / routineOrder 는 PATCH 대상 외 (BE UpdateRequest 에 없음). 수정 폼 입력은
-          // metadata 변경에만 의미가 있고, 미디어는 thumbnail/demoVideo + clear* 플래그로 처리.
           name: payload.values.name,
+          routineOrder: payload.values.routineOrder,
           targetReps: payload.values.targetReps,
           description: payload.values.description,
           clearThumbnail: payload.clearThumbnail,
@@ -74,109 +85,201 @@ export function MotionsPage() {
     onSuccess: invalidate,
   })
 
-  const onLogout = () => {
-    clear()
-    navigate('/login', { replace: true })
+  const reorderMutation = useMutation({
+    mutationFn: ({ type, motionIds }: { type: ExerciseType; motionIds: number[] }) =>
+      reorderExerciseMotions({ exerciseType: type, motionIds }),
+    onSuccess: (response, variables) => {
+      queryClient.setQueryData(['motions', variables.type], response.data)
+      setOrderedMotions(response.data)
+      invalidate()
+    },
+  })
+
+  const hasOrderChanges = motionsQuery.data
+    ? !isSameOrder(orderedMotions, motionsQuery.data)
+    : false
+  const thumbnailCount = orderedMotions.filter(motion => motion.thumbnailUrl).length
+
+  const onExerciseTypeChange = (nextType: ExerciseType) => {
+    setExerciseType(nextType)
+    setEditing(null)
+    setCreating(false)
+    setDraggingId(null)
   }
 
   const onDelete = (motion: ExerciseMotion) => {
-    if (!confirm(`"${motion.name}" 동작을 삭제할까요? 수행 기록이 있으면 거부됩니다.`)) return
+    if (!window.confirm(`Delete "${motion.name}"? Motions used by sessions may be rejected.`)) {
+      return
+    }
     deleteMutation.mutate(motion.id)
   }
 
-  return (
-    <div style={styles.container}>
-      <header style={styles.header}>
-        <h1 style={styles.title}>WISH Admin · 체조 모션</h1>
-        <div style={styles.headerRight}>
-          <span style={styles.userBadge}>{email}</span>
-          <button onClick={onLogout} style={styles.logout}>
-            로그아웃
-          </button>
-        </div>
-      </header>
+  const onDragStart = (event: DragEvent<HTMLTableRowElement>, motionId: number) => {
+    setDraggingId(motionId)
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('text/plain', String(motionId))
+  }
 
-      <main style={styles.main}>
+  const onDragOver = (event: DragEvent<HTMLTableRowElement>, targetId: number) => {
+    event.preventDefault()
+    const activeId = draggingId ?? Number(event.dataTransfer.getData('text/plain'))
+    if (!activeId || activeId === targetId) return
+    setOrderedMotions(current => moveMotion(current, activeId, targetId))
+  }
+
+  const onDragEnd = () => {
+    setDraggingId(null)
+  }
+
+  const onMoveByButton = (motionId: number, direction: -1 | 1) => {
+    setOrderedMotions(current => {
+      const index = current.findIndex(motion => motion.id === motionId)
+      const targetIndex = index + direction
+      if (index < 0 || targetIndex < 0 || targetIndex >= current.length) return current
+      const next = [...current]
+      const [moved] = next.splice(index, 1)
+      next.splice(targetIndex, 0, moved)
+      return next
+    })
+  }
+
+  const onSaveOrder = () => {
+    reorderMutation.mutate({
+      type: exerciseType,
+      motionIds: orderedMotions.map(motion => motion.id),
+    })
+  }
+
+  const onResetOrder = () => {
+    if (motionsQuery.data) setOrderedMotions(motionsQuery.data)
+  }
+
+  return (
+    <AdminShell
+      title="Exercise Motions"
+      description="Manage routine order, thumbnails, and demo videos."
+    >
+      <section style={styles.panel}>
         <div style={styles.toolbar}>
           <label style={styles.typeLabel}>
-            체조 타입
+            Exercise type
             <select
               value={exerciseType}
-              onChange={e => {
-                setExerciseType(e.target.value as ExerciseType)
-                setEditing(null)
-                setCreating(false)
-              }}
+              onChange={event => onExerciseTypeChange(event.target.value as ExerciseType)}
               style={styles.select}
             >
-              {EXERCISE_TYPES.map(t => (
-                <option key={t} value={t}>
-                  {t}
+              {EXERCISE_TYPES.map(type => (
+                <option key={type} value={type}>
+                  {EXERCISE_LABELS[type]}
                 </option>
               ))}
             </select>
           </label>
-          <button
-            onClick={() => {
-              setCreating(true)
-              setEditing(null)
-            }}
-            style={styles.addButton}
-            disabled={creating}
-          >
-            + 동작 추가
-          </button>
+
+          <div style={styles.toolbarActions}>
+            <button
+              onClick={onResetOrder}
+              style={styles.secondaryButton}
+              disabled={!hasOrderChanges || reorderMutation.isPending}
+            >
+              Reset
+            </button>
+            <button
+              onClick={onSaveOrder}
+              style={styles.primaryButton}
+              disabled={!hasOrderChanges || reorderMutation.isPending}
+            >
+              {reorderMutation.isPending ? 'Saving' : 'Save Order'}
+            </button>
+            <button
+              onClick={() => {
+                setCreating(true)
+                setEditing(null)
+              }}
+              style={styles.addButton}
+              disabled={creating}
+            >
+              Add Motion
+            </button>
+          </div>
         </div>
 
-        {creating && (
-          <MotionForm
-            defaultExerciseType={exerciseType}
-            onCancel={() => setCreating(false)}
-            onSubmit={async payload => {
-              await createMutation.mutateAsync(payload)
-            }}
-            submitting={createMutation.isPending}
-          />
-        )}
+        <div style={styles.summary}>
+          <span style={styles.summaryItem}>Total {orderedMotions.length}</span>
+          <span style={styles.summaryItem}>Thumbnails {thumbnailCount}</span>
+          {hasOrderChanges && <span style={styles.changedBadge}>Order changed</span>}
+        </div>
+      </section>
 
-        {createMutation.isError && (
-          <div style={styles.errorBox}>추가 실패: {extractMessage(createMutation.error)}</div>
-        )}
-        {updateMutation.isError && (
-          <div style={styles.errorBox}>수정 실패: {extractMessage(updateMutation.error)}</div>
-        )}
-        {deleteMutation.isError && (
-          <div style={styles.errorBox}>삭제 실패: {extractMessage(deleteMutation.error)}</div>
-        )}
+      {creating && (
+        <MotionForm
+          defaultExerciseType={exerciseType}
+          onCancel={() => setCreating(false)}
+          onSubmit={async payload => {
+            await createMutation.mutateAsync(payload)
+          }}
+          submitting={createMutation.isPending}
+        />
+      )}
 
-        {motionsQuery.isLoading && <div>불러오는 중…</div>}
-        {motionsQuery.isError && (
-          <div style={styles.errorBox}>목록 조회 실패: {extractMessage(motionsQuery.error)}</div>
-        )}
+      {createMutation.isError && (
+        <div style={styles.errorBox}>Create failed: {extractMessage(createMutation.error)}</div>
+      )}
+      {updateMutation.isError && (
+        <div style={styles.errorBox}>Update failed: {extractMessage(updateMutation.error)}</div>
+      )}
+      {deleteMutation.isError && (
+        <div style={styles.errorBox}>Delete failed: {extractMessage(deleteMutation.error)}</div>
+      )}
+      {reorderMutation.isError && (
+        <div style={styles.errorBox}>
+          Order save failed: {extractMessage(reorderMutation.error)}
+        </div>
+      )}
 
-        {motionsQuery.data && (
+      {motionsQuery.isLoading && <div style={styles.loading}>Loading</div>}
+      {motionsQuery.isError && (
+        <div style={styles.errorBox}>List failed: {extractMessage(motionsQuery.error)}</div>
+      )}
+
+      {motionsQuery.data && (
+        <div style={styles.tableWrap}>
           <table style={styles.table}>
             <thead>
               <tr>
-                <th style={styles.th}>순서</th>
-                <th style={styles.th}>이름</th>
-                <th style={styles.th}>목표</th>
-                <th style={styles.th}>설명</th>
-                <th style={styles.th}>액션</th>
+                <th style={styles.th}>Move</th>
+                <th style={styles.th}>Thumbnail</th>
+                <th style={styles.th}>Order</th>
+                <th style={styles.th}>Name</th>
+                <th style={styles.th}>Target</th>
+                <th style={styles.th}>Description</th>
+                <th style={styles.th}>Media</th>
+                <th style={styles.th}>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {motionsQuery.data.length === 0 && (
+              {orderedMotions.length === 0 && (
                 <tr>
-                  <td colSpan={5} style={styles.emptyRow}>
-                    동작이 없습니다.
+                  <td colSpan={8} style={styles.emptyRow}>
+                    No motions.
                   </td>
                 </tr>
               )}
-              {motionsQuery.data.map(motion => (
-                <tr key={motion.id}>
+              {orderedMotions.map((motion, index) => (
+                <tr
+                  key={motion.id}
+                  draggable={!editing && !reorderMutation.isPending}
+                  onDragStart={event => onDragStart(event, motion.id)}
+                  onDragOver={event => onDragOver(event, motion.id)}
+                  onDrop={onDragEnd}
+                  onDragEnd={onDragEnd}
+                  style={{
+                    ...styles.row,
+                    ...(draggingId === motion.id ? styles.draggingRow : {}),
+                  }}
+                >
                   {editing?.id === motion.id ? (
-                    <td colSpan={5} style={styles.editCell}>
+                    <td colSpan={8} style={styles.editCell}>
                       <MotionForm
                         defaultExerciseType={exerciseType}
                         initial={motion}
@@ -189,11 +292,63 @@ export function MotionsPage() {
                     </td>
                   ) : (
                     <>
-                      <td style={styles.td}>{motion.routineOrder}</td>
-                      <td style={styles.td}>{motion.name}</td>
-                      <td style={styles.td}>{motion.targetReps}회</td>
-                      <td style={styles.td}>{motion.description}</td>
+                      <td style={styles.dragCell}>
+                        <span style={styles.dragHandle} title="Drag to reorder">
+                          ::
+                        </span>
+                        <div style={styles.orderControls}>
+                          <button
+                            type="button"
+                            onClick={() => onMoveByButton(motion.id, -1)}
+                            style={styles.moveButton}
+                            disabled={index === 0 || reorderMutation.isPending}
+                          >
+                            Up
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onMoveByButton(motion.id, 1)}
+                            style={styles.moveButton}
+                            disabled={
+                              index === orderedMotions.length - 1 || reorderMutation.isPending
+                            }
+                          >
+                            Down
+                          </button>
+                        </div>
+                      </td>
                       <td style={styles.td}>
+                        {motion.thumbnailUrl ? (
+                          <img
+                            src={motion.thumbnailUrl}
+                            alt={`${motion.name} thumbnail`}
+                            style={styles.thumbnail}
+                          />
+                        ) : (
+                          <div style={styles.thumbnailPlaceholder}>None</div>
+                        )}
+                      </td>
+                      <td style={styles.td}>
+                        <span style={styles.orderBadge}>{index + 1}</span>
+                      </td>
+                      <td style={styles.nameCell}>{motion.name}</td>
+                      <td style={styles.td}>{motion.targetReps} reps</td>
+                      <td style={styles.descriptionCell}>{motion.description}</td>
+                      <td style={styles.td}>
+                        {motion.demoVideoUrl ? (
+                          <a
+                            href={motion.demoVideoUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            style={styles.link}
+                          >
+                            Demo video
+                          </a>
+                        ) : (
+                          <span style={styles.muted}>None</span>
+                        )}
+                      </td>
+                      <td style={styles.actionCell}>
                         <button
                           onClick={() => {
                             setEditing(motion)
@@ -201,10 +356,10 @@ export function MotionsPage() {
                           }}
                           style={styles.editButton}
                         >
-                          수정
+                          Edit
                         </button>
                         <button onClick={() => onDelete(motion)} style={styles.deleteButton}>
-                          삭제
+                          Delete
                         </button>
                       </td>
                     </>
@@ -213,10 +368,25 @@ export function MotionsPage() {
               ))}
             </tbody>
           </table>
-        )}
-      </main>
-    </div>
+        </div>
+      )}
+    </AdminShell>
   )
+}
+
+function moveMotion(motions: ExerciseMotion[], activeId: number, targetId: number) {
+  const fromIndex = motions.findIndex(motion => motion.id === activeId)
+  const toIndex = motions.findIndex(motion => motion.id === targetId)
+  if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return motions
+  const next = [...motions]
+  const [moved] = next.splice(fromIndex, 1)
+  next.splice(toIndex, 0, moved)
+  return next
+}
+
+function isSameOrder(left: ExerciseMotion[], right: ExerciseMotion[]) {
+  if (left.length !== right.length) return false
+  return left.every((motion, index) => motion.id === right[index]?.id)
 }
 
 function extractMessage(error: unknown): string {
@@ -226,95 +396,272 @@ function extractMessage(error: unknown): string {
     if (res?.data?.code) return res.data.code
   }
   if (error instanceof Error) return error.message
-  return '알 수 없는 오류'
+  return 'Unknown error'
 }
 
-const styles: Record<string, React.CSSProperties> = {
-  container: { minHeight: '100vh', background: '#f5f5f5' },
-  header: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: '12px 24px',
-    background: '#1976d2',
-    color: '#fff',
+const styles: Record<string, CSSProperties> = {
+  panel: {
+    padding: 18,
+    marginBottom: 16,
+    background: '#fff',
+    border: '1px solid #d9e2ec',
+    borderRadius: 8,
   },
-  title: { margin: 0, fontSize: 18 },
-  headerRight: { display: 'flex', alignItems: 'center', gap: 12 },
-  userBadge: { fontSize: 13, opacity: 0.85 },
-  logout: {
-    padding: '6px 12px',
-    background: 'transparent',
-    color: '#fff',
-    border: '1px solid #fff',
-    borderRadius: 4,
-    cursor: 'pointer',
-    fontSize: 13,
-  },
-  main: { padding: 24, maxWidth: 1100, margin: '0 auto' },
   toolbar: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'flex-end',
-    marginBottom: 16,
+    gap: 16,
+    flexWrap: 'wrap',
   },
-  typeLabel: { display: 'flex', flexDirection: 'column', gap: 4, fontSize: 13 },
+  typeLabel: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 6,
+    color: '#486581',
+    fontSize: 13,
+  },
   select: {
-    padding: '6px 8px',
+    minWidth: 150,
+    padding: '8px 10px',
     fontSize: 14,
-    border: '1px solid #ccc',
-    borderRadius: 4,
-    minWidth: 120,
+    border: '1px solid #bcccdc',
+    borderRadius: 6,
+    background: '#fff',
+  },
+  toolbarActions: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  primaryButton: {
+    padding: '8px 12px',
+    background: '#0b7285',
+    color: '#fff',
+    border: '1px solid #0b7285',
+    borderRadius: 6,
+    cursor: 'pointer',
+    fontSize: 13,
+  },
+  secondaryButton: {
+    padding: '8px 12px',
+    background: '#fff',
+    color: '#334e68',
+    border: '1px solid #bcccdc',
+    borderRadius: 6,
+    cursor: 'pointer',
+    fontSize: 13,
   },
   addButton: {
-    padding: '8px 14px',
-    background: '#2e7d32',
+    padding: '8px 12px',
+    background: '#2f855a',
     color: '#fff',
-    border: 'none',
-    borderRadius: 4,
+    border: '1px solid #2f855a',
+    borderRadius: 6,
     cursor: 'pointer',
-    fontSize: 14,
+    fontSize: 13,
+  },
+  summary: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+    marginTop: 14,
+  },
+  summaryItem: {
+    padding: '5px 8px',
+    background: '#f0f4f8',
+    border: '1px solid #d9e2ec',
+    borderRadius: 6,
+    color: '#486581',
+    fontSize: 12,
+  },
+  changedBadge: {
+    padding: '5px 8px',
+    background: '#fff3bf',
+    border: '1px solid #ffe066',
+    borderRadius: 6,
+    color: '#8d6b00',
+    fontSize: 12,
+    fontWeight: 700,
+  },
+  tableWrap: {
+    overflowX: 'auto',
+    background: '#fff',
+    border: '1px solid #d9e2ec',
+    borderRadius: 8,
   },
   table: {
     width: '100%',
-    borderCollapse: 'collapse',
-    background: '#fff',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+    minWidth: 980,
+    borderCollapse: 'separate',
+    borderSpacing: 0,
   },
   th: {
-    padding: 10,
+    padding: '11px 12px',
     textAlign: 'left',
-    fontSize: 13,
-    background: '#fafafa',
-    borderBottom: '1px solid #ddd',
+    fontSize: 12,
+    color: '#486581',
+    background: '#f8fafc',
+    borderBottom: '1px solid #d9e2ec',
   },
-  td: { padding: 10, borderBottom: '1px solid #eee', fontSize: 13, verticalAlign: 'top' },
-  editCell: { padding: 0, borderBottom: '1px solid #eee' },
-  emptyRow: { padding: 20, textAlign: 'center', color: '#888' },
-  editButton: {
-    padding: '4px 10px',
+  row: {
     background: '#fff',
-    border: '1px solid #1976d2',
-    color: '#1976d2',
-    borderRadius: 4,
+  },
+  draggingRow: {
+    opacity: 0.55,
+    background: '#e6f6ff',
+  },
+  td: {
+    padding: 12,
+    borderBottom: '1px solid #edf2f7',
+    color: '#334e68',
+    fontSize: 13,
+    verticalAlign: 'middle',
+  },
+  dragCell: {
+    width: 120,
+    padding: 12,
+    borderBottom: '1px solid #edf2f7',
+    verticalAlign: 'middle',
+  },
+  dragHandle: {
+    width: 30,
+    height: 30,
+    display: 'inline-grid',
+    placeItems: 'center',
+    border: '1px solid #bcccdc',
+    borderRadius: 6,
+    background: '#fff',
+    color: '#486581',
+    cursor: 'grab',
+    fontSize: 14,
+    lineHeight: 1,
+  },
+  orderControls: {
+    display: 'inline-flex',
+    flexDirection: 'column',
+    gap: 4,
+    marginLeft: 8,
+    verticalAlign: 'middle',
+  },
+  moveButton: {
+    minWidth: 46,
+    padding: '3px 6px',
+    background: '#fff',
+    color: '#486581',
+    border: '1px solid #d9e2ec',
+    borderRadius: 5,
+    cursor: 'pointer',
+    fontSize: 11,
+  },
+  thumbnail: {
+    width: 84,
+    height: 56,
+    objectFit: 'cover',
+    border: '1px solid #d9e2ec',
+    borderRadius: 6,
+    background: '#f0f4f8',
+    display: 'block',
+  },
+  thumbnailPlaceholder: {
+    width: 84,
+    height: 56,
+    display: 'grid',
+    placeItems: 'center',
+    border: '1px dashed #bcccdc',
+    borderRadius: 6,
+    color: '#829ab1',
+    fontSize: 12,
+    background: '#f8fafc',
+  },
+  orderBadge: {
+    minWidth: 30,
+    height: 30,
+    display: 'inline-grid',
+    placeItems: 'center',
+    borderRadius: 6,
+    background: '#e6f6ff',
+    color: '#0b7285',
+    fontWeight: 700,
+  },
+  nameCell: {
+    width: 160,
+    padding: 12,
+    borderBottom: '1px solid #edf2f7',
+    color: '#102a43',
+    fontSize: 13,
+    fontWeight: 700,
+    verticalAlign: 'middle',
+  },
+  descriptionCell: {
+    maxWidth: 320,
+    padding: 12,
+    borderBottom: '1px solid #edf2f7',
+    color: '#486581',
+    fontSize: 13,
+    lineHeight: 1.45,
+    verticalAlign: 'middle',
+  },
+  actionCell: {
+    width: 130,
+    padding: 12,
+    borderBottom: '1px solid #edf2f7',
+    verticalAlign: 'middle',
+    whiteSpace: 'nowrap',
+  },
+  editButton: {
+    padding: '5px 9px',
+    background: '#fff',
+    border: '1px solid #0b7285',
+    color: '#0b7285',
+    borderRadius: 5,
     cursor: 'pointer',
     fontSize: 12,
     marginRight: 6,
   },
   deleteButton: {
-    padding: '4px 10px',
+    padding: '5px 9px',
     background: '#fff',
-    border: '1px solid #d32f2f',
-    color: '#d32f2f',
-    borderRadius: 4,
+    border: '1px solid #c92a2a',
+    color: '#c92a2a',
+    borderRadius: 5,
     cursor: 'pointer',
     fontSize: 12,
   },
+  link: {
+    color: '#0b7285',
+    textDecoration: 'none',
+    fontWeight: 700,
+  },
+  muted: {
+    color: '#829ab1',
+  },
+  editCell: {
+    padding: 0,
+    borderBottom: '1px solid #edf2f7',
+  },
+  emptyRow: {
+    padding: 28,
+    textAlign: 'center',
+    color: '#829ab1',
+    fontSize: 13,
+  },
+  loading: {
+    padding: 20,
+    background: '#fff',
+    border: '1px solid #d9e2ec',
+    borderRadius: 8,
+    color: '#486581',
+  },
   errorBox: {
-    padding: 10,
-    background: '#fdecea',
-    color: '#d32f2f',
-    borderRadius: 4,
+    padding: 12,
+    background: '#fff5f5',
+    color: '#c92a2a',
+    border: '1px solid #ffc9c9',
+    borderRadius: 8,
     fontSize: 13,
     marginBottom: 12,
   },

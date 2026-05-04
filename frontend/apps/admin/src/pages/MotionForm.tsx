@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import type { CSSProperties } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -9,10 +10,10 @@ const MAX_VIDEO_BYTES = 100 * 1024 * 1024
 
 const motionSchema = z.object({
   exerciseType: z.enum(['TOP', 'DANIEL']),
-  name: z.string().min(1, '이름을 입력하세요').max(100),
-  routineOrder: z.coerce.number().int().positive('1 이상 정수'),
-  targetReps: z.coerce.number().int().positive('1 이상 정수'),
-  description: z.string().min(1, '설명을 입력하세요'),
+  name: z.string().min(1, 'Enter a name').max(100),
+  routineOrder: z.coerce.number().int().positive('Use a positive integer'),
+  targetReps: z.coerce.number().int().positive('Use a positive integer'),
+  description: z.string().min(1, 'Enter a description'),
 })
 
 type MotionMetadataValues = z.infer<typeof motionSchema>
@@ -45,6 +46,7 @@ export function MotionForm({
   const [clearThumbnail, setClearThumbnail] = useState(false)
   const [clearDemoVideo, setClearDemoVideo] = useState(false)
   const [fileError, setFileError] = useState<string | null>(null)
+  const [thumbnailPreviewUrl, setThumbnailPreviewUrl] = useState<string | null>(null)
 
   const { register, handleSubmit, formState } = useForm<MotionMetadataValues>({
     resolver: zodResolver(motionSchema),
@@ -68,17 +70,27 @@ export function MotionForm({
   const handleThumbnailChange = (file: File | undefined) => {
     setFileError(null)
     if (file && file.size > MAX_THUMBNAIL_BYTES) {
-      setFileError('썸네일은 10MB 이하의 이미지여야 합니다')
+      setFileError('Thumbnail must be 10MB or smaller')
       return
     }
     setThumbnail(file)
     if (file) setClearThumbnail(false)
   }
 
+  useEffect(() => {
+    if (!thumbnail) {
+      setThumbnailPreviewUrl(null)
+      return
+    }
+    const previewUrl = URL.createObjectURL(thumbnail)
+    setThumbnailPreviewUrl(previewUrl)
+    return () => URL.revokeObjectURL(previewUrl)
+  }, [thumbnail])
+
   const handleDemoVideoChange = (file: File | undefined) => {
     setFileError(null)
     if (file && file.size > MAX_VIDEO_BYTES) {
-      setFileError('영상은 100MB 이하여야 합니다')
+      setFileError('Demo video must be 100MB or smaller')
       return
     }
     setDemoVideo(file)
@@ -96,34 +108,54 @@ export function MotionForm({
     })
   }
 
+  const visibleThumbnailUrl =
+    thumbnailPreviewUrl ?? (!clearThumbnail ? (initial?.thumbnailUrl ?? null) : null)
+
   return (
     <form onSubmit={handleSubmit(submit)} style={styles.form}>
-      <h3 style={styles.heading}>{initial ? '동작 수정' : '동작 추가'}</h3>
+      <h3 style={styles.heading}>{initial ? 'Edit Motion' : 'Add Motion'}</h3>
       <div style={styles.grid}>
-        <label style={styles.label}>
-          체조 타입
-          <select {...register('exerciseType')} style={styles.input} disabled={submitting}>
-            <option value="TOP">TOP</option>
-            <option value="DANIEL">DANIEL</option>
-          </select>
-        </label>
+        {initial ? (
+          <>
+            <input type="hidden" {...register('exerciseType')} />
+            <input type="hidden" {...register('routineOrder')} />
+            <div style={styles.label}>
+              <span>Exercise type</span>
+              <span style={styles.readonlyValue}>{initial.exerciseType}</span>
+            </div>
+            <div style={styles.label}>
+              <span>Order</span>
+              <span style={styles.readonlyValue}>{initial.routineOrder}</span>
+            </div>
+          </>
+        ) : (
+          <>
+            <label style={styles.label}>
+              Exercise type
+              <select {...register('exerciseType')} style={styles.input} disabled={submitting}>
+                <option value="TOP">TOP</option>
+                <option value="DANIEL">DANIEL</option>
+              </select>
+            </label>
+
+            <label style={styles.label}>
+              Order
+              <input
+                type="number"
+                min={1}
+                {...register('routineOrder')}
+                style={styles.input}
+                disabled={submitting}
+              />
+              {formState.errors.routineOrder && (
+                <span style={styles.error}>{formState.errors.routineOrder.message}</span>
+              )}
+            </label>
+          </>
+        )}
 
         <label style={styles.label}>
-          순서
-          <input
-            type="number"
-            min={1}
-            {...register('routineOrder')}
-            style={styles.input}
-            disabled={submitting}
-          />
-          {formState.errors.routineOrder && (
-            <span style={styles.error}>{formState.errors.routineOrder.message}</span>
-          )}
-        </label>
-
-        <label style={styles.label}>
-          이름
+          Name
           <input {...register('name')} style={styles.input} disabled={submitting} />
           {formState.errors.name && (
             <span style={styles.error}>{formState.errors.name.message}</span>
@@ -131,7 +163,7 @@ export function MotionForm({
         </label>
 
         <label style={styles.label}>
-          목표 횟수
+          Target reps
           <input
             type="number"
             min={1}
@@ -145,7 +177,7 @@ export function MotionForm({
         </label>
 
         <label style={{ ...styles.label, gridColumn: 'span 2' }}>
-          설명
+          Description
           <textarea
             rows={2}
             {...register('description')}
@@ -158,10 +190,13 @@ export function MotionForm({
         </label>
 
         <div style={styles.label}>
-          <span>썸네일 (선택, 10MB 이하 PNG/JPG/WEBP/GIF)</span>
+          <span>Thumbnail (optional, image under 10MB)</span>
+          {visibleThumbnailUrl && (
+            <img src={visibleThumbnailUrl} alt="Motion thumbnail" style={styles.thumbnailPreview} />
+          )}
           {initial?.thumbnailUrl && !thumbnail && (
             <span style={styles.mediaHint}>
-              현재:{' '}
+              Current:{' '}
               <a href={initial.thumbnailUrl} target="_blank" rel="noreferrer">
                 {extractFilename(initial.thumbnailUrl)}
               </a>
@@ -182,16 +217,16 @@ export function MotionForm({
                 onChange={e => setClearThumbnail(e.target.checked)}
                 disabled={submitting || Boolean(thumbnail)}
               />
-              기존 썸네일 제거
+              Remove existing thumbnail
             </label>
           )}
         </div>
 
         <div style={styles.label}>
-          <span>시범 영상 (선택, 100MB 이하 MP4/WebM)</span>
+          <span>Demo video (optional, video under 100MB)</span>
           {initial?.demoVideoUrl && !demoVideo && (
             <span style={styles.mediaHint}>
-              현재:{' '}
+              Current:{' '}
               <a href={initial.demoVideoUrl} target="_blank" rel="noreferrer">
                 {extractFilename(initial.demoVideoUrl)}
               </a>
@@ -212,7 +247,7 @@ export function MotionForm({
                 onChange={e => setClearDemoVideo(e.target.checked)}
                 disabled={submitting || Boolean(demoVideo)}
               />
-              기존 영상 제거
+              Remove existing video
             </label>
           )}
         </div>
@@ -222,10 +257,10 @@ export function MotionForm({
 
       <div style={styles.actions}>
         <button type="button" onClick={onCancel} style={styles.cancel} disabled={submitting}>
-          취소
+          Cancel
         </button>
         <button type="submit" style={styles.submit} disabled={submitting || Boolean(fileError)}>
-          {submitting ? '저장 중…' : '저장'}
+          {submitting ? 'Saving' : 'Save'}
         </button>
       </div>
     </form>
@@ -238,7 +273,7 @@ function extractFilename(url: string): string {
   return last || url
 }
 
-const styles: Record<string, React.CSSProperties> = {
+const styles: Record<string, CSSProperties> = {
   form: {
     background: '#fafafa',
     border: '1px solid #ddd',
@@ -249,17 +284,48 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: 'column',
     gap: 12,
   },
-  heading: { margin: 0, fontSize: 16 },
-  grid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 },
-  label: { display: 'flex', flexDirection: 'column', gap: 4, fontSize: 13 },
+  heading: {
+    margin: 0,
+    fontSize: 16,
+  },
+  grid: {
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr',
+    gap: 12,
+  },
+  label: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 4,
+    fontSize: 13,
+  },
   input: {
     padding: '6px 8px',
     fontSize: 13,
     border: '1px solid #ccc',
     borderRadius: 4,
   },
+  readonlyValue: {
+    minHeight: 30,
+    display: 'flex',
+    alignItems: 'center',
+    padding: '0 8px',
+    background: '#eef2f6',
+    border: '1px solid #d9e2ec',
+    borderRadius: 4,
+    color: '#334e68',
+    fontSize: 13,
+  },
   fileInput: {
     fontSize: 12,
+  },
+  thumbnailPreview: {
+    width: 120,
+    height: 76,
+    objectFit: 'cover',
+    border: '1px solid #d9e2ec',
+    borderRadius: 6,
+    background: '#fff',
   },
   mediaHint: {
     fontSize: 11,
@@ -272,7 +338,10 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 12,
     color: '#555',
   },
-  error: { color: '#d32f2f', fontSize: 11 },
+  error: {
+    color: '#d32f2f',
+    fontSize: 11,
+  },
   errorBox: {
     padding: 10,
     background: '#fdecea',
@@ -280,7 +349,11 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 4,
     fontSize: 13,
   },
-  actions: { display: 'flex', justifyContent: 'flex-end', gap: 8 },
+  actions: {
+    display: 'flex',
+    justifyContent: 'flex-end',
+    gap: 8,
+  },
   cancel: {
     padding: '6px 12px',
     background: '#fff',
