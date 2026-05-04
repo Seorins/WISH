@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
 import { assetPath } from '@/game/assets/assetPath'
+import { POSE_LANDMARK_NAMES, PoseTracker } from '@/game/motion/poseTracker'
 import { fadeToScene } from '@/game/systems/sceneTransition'
 import { addCoverBackground } from '@/game/world/background'
 
@@ -14,6 +15,112 @@ type PanelBounds = {
   y: number
   width: number
   height: number
+}
+
+type GymnasticsMotionKind =
+  | 'march'
+  | 'side-step'
+  | 'diagonal-body-punch'
+  | 'diagonal-face-punch'
+  | 'squat'
+
+type LandmarkPayload = {
+  name: string
+  x: number
+  y: number
+  z?: number
+  visibility?: number
+}
+
+type GymnasticsAiResponse = {
+  state: string
+  step_count: number
+  accuracy: number
+  feedback: string | null
+  tracking: string
+  last_counted_side?: string | null
+  last_seen_side?: string | null
+  left_armed?: boolean
+  right_armed?: boolean
+  reference_hip_x: number | null
+  reference_hip_y: number | null
+  reference_scale: number | null
+  displayed_feedback_code: string | null
+  displayed_feedback_text: string | null
+  displayed_feedback_frames: number
+  candidate_feedback_code: string | null
+  candidate_feedback_text: string | null
+  candidate_feedback_streak: number
+  representative_feedback_totals: Record<string, number>
+  representative_feedback_code: string | null
+  representative_feedback_text: string | null
+  representative_feedback_frames: number
+  baseline_left_step_extent?: number | null
+  baseline_right_step_extent?: number | null
+  baseline_ankle_span?: number | null
+  baseline_left_wrist_forward?: number | null
+  baseline_right_wrist_forward?: number | null
+  baseline_stance_span?: number | null
+}
+
+type GymnasticsAiState = {
+  previousState: string
+  stepCount: number
+  lastCountedSide: string | null
+  lastSeenSide: string | null
+  leftArmed: boolean
+  rightArmed: boolean
+  referenceHipX: number | null
+  referenceHipY: number | null
+  referenceScale: number | null
+  displayedFeedbackCode: string | null
+  displayedFeedbackText: string | null
+  displayedFeedbackFrames: number
+  candidateFeedbackCode: string | null
+  candidateFeedbackText: string | null
+  candidateFeedbackStreak: number
+  representativeFeedbackTotals: Record<string, number>
+  representativeFeedbackCode: string | null
+  representativeFeedbackText: string | null
+  representativeFeedbackFrames: number
+  baselineLeftStepExtent: number | null
+  baselineRightStepExtent: number | null
+  baselineAnkleSpan: number | null
+  baselineLeftWristForward: number | null
+  baselineRightWristForward: number | null
+  baselineStanceSpan: number | null
+  baselineLeftKneeY: number | null
+  baselineRightKneeY: number | null
+  baselineLeftWristZ: number | null
+  baselineRightWristZ: number | null
+  accuracy: number
+  tracking: string
+  feedback: string | null
+  localPhase: 'ready' | 'active' | 'returning'
+  lastLocalRepAtMs: number
+}
+
+const AI_BASE_URL = (import.meta.env.VITE_AI_BASE_URL ?? 'http://localhost:8001/api/v1').replace(
+  /\/$/,
+  '',
+)
+
+const TOP_AI_SEQUENCE: { kind: GymnasticsMotionKind; targetSteps: number }[] = [
+  { kind: 'march', targetSteps: 8 },
+  { kind: 'side-step', targetSteps: 8 },
+  { kind: 'diagonal-body-punch', targetSteps: 8 },
+  { kind: 'diagonal-face-punch', targetSteps: 8 },
+  { kind: 'squat', targetSteps: 8 },
+]
+
+const DANIEL_AI_SEQUENCE = TOP_AI_SEQUENCE
+
+const MOTION_ENDPOINTS: Record<GymnasticsMotionKind, string> = {
+  march: 'march',
+  'side-step': 'side-step',
+  'diagonal-body-punch': 'diagonal-body-punch',
+  'diagonal-face-punch': 'diagonal-face-punch',
+  squat: 'squat',
 }
 
 const TOP_MOTIONS: GymnasticsMotion[] = [
@@ -36,6 +143,34 @@ const TOP_MOTIONS: GymnasticsMotion[] = [
 
 const DANIEL_MOTIONS: GymnasticsMotion[] = TOP_MOTIONS
 
+const TOP_AI_MOTIONS: GymnasticsMotion[] = [
+  {
+    title: '제자리 걷기',
+    goal: '왼쪽 무릎과 오른쪽 무릎을 번갈아 들어요.',
+    tips: ['무릎을 조금 더 높이 들어요', '상체는 곧게 세워요', '제자리에서 움직여요'],
+  },
+  {
+    title: '사이드 스텝',
+    goal: '다리를 옆으로 크게 벌렸다가 다시 모아요.',
+    tips: ['발까지 보이게 서요', '옆으로 크게 벌려요', '다시 중앙으로 돌아와요'],
+  },
+  {
+    title: '대각선 몸통 지르기',
+    goal: '몸통 높이로 양팔을 번갈아 앞으로 뻗어요.',
+    tips: ['팔을 앞으로 뻗어요', '반대쪽 팔도 번갈아 해요', '몸은 정면을 봐요'],
+  },
+  {
+    title: '대각선 얼굴 지르기',
+    goal: '얼굴 높이로 양팔을 번갈아 앞으로 뻗어요.',
+    tips: ['주먹을 더 높게 올려요', '팔을 앞으로 뻗어요', '좌우를 번갈아 해요'],
+  },
+  {
+    title: '스쿼트',
+    goal: '무릎을 굽혀 앉았다가 천천히 일어나요.',
+    tips: ['무릎까지 보이게 서요', '조금 더 깊이 앉아요', '천천히 일어나요'],
+  },
+]
+
 const FLAT_COLORS = {
   surface: 0xfffbf2,
   surfaceAlt: 0xfff6e7,
@@ -51,11 +186,50 @@ const TARGET_POSE_FRAME_SCALE = 1.12
 const HEADER_FRAME_TEXTURE_KEY = 'gymnastics-header-frame-cropped'
 const HEADER_FRAME_CROP = { x: 39, y: 134, width: 1920, height: 246 }
 const HEADER_FRAME_CAP_WIDTH = 360
+
+function createInitialAiState(): GymnasticsAiState {
+  return {
+    previousState: 'idle',
+    stepCount: 0,
+    lastCountedSide: null,
+    lastSeenSide: null,
+    leftArmed: true,
+    rightArmed: true,
+    referenceHipX: null,
+    referenceHipY: null,
+    referenceScale: null,
+    displayedFeedbackCode: null,
+    displayedFeedbackText: null,
+    displayedFeedbackFrames: 0,
+    candidateFeedbackCode: null,
+    candidateFeedbackText: null,
+    candidateFeedbackStreak: 0,
+    representativeFeedbackTotals: {},
+    representativeFeedbackCode: null,
+    representativeFeedbackText: null,
+    representativeFeedbackFrames: 0,
+    baselineLeftStepExtent: null,
+    baselineRightStepExtent: null,
+    baselineAnkleSpan: null,
+    baselineLeftWristForward: null,
+    baselineRightWristForward: null,
+    baselineStanceSpan: null,
+    baselineLeftKneeY: null,
+    baselineRightKneeY: null,
+    baselineLeftWristZ: null,
+    baselineRightWristZ: null,
+    accuracy: 0,
+    tracking: 'idle',
+    feedback: null,
+    localPhase: 'ready',
+    lastLocalRepAtMs: 0,
+  }
+}
+
 class GymnasticsPlaySceneBase extends Phaser.Scene {
   private motionIndex = 0
   private remainingSeconds = 72
-  private mediaStream: MediaStream | null = null
-  private videoElement: HTMLVideoElement | null = null
+  private poseTracker: PoseTracker | null = null
   private cameraCanvas!: HTMLCanvasElement
   private cameraContext!: CanvasRenderingContext2D
   private cameraTexture!: Phaser.Textures.CanvasTexture
@@ -76,11 +250,17 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
   private timerMaxWidth = 0
   private headerFontSize = 0
   private feedbackTitleMaxWidth = 0
+  private requestInFlight = false
+  private aiRequestsEnabled = true
+  private isMotionAdvancing = false
+  private aiState = createInitialAiState()
+  private aiError: string | null = null
 
   constructor(
     sceneKey: string,
     private readonly motions: GymnasticsMotion[],
     private readonly modeLabel: string,
+    private readonly aiSequence: { kind: GymnasticsMotionKind; targetSteps: number }[],
   ) {
     super({ key: sceneKey })
   }
@@ -112,6 +292,11 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     this.motionIndex = 0
     this.remainingSeconds = 72
     this.isCameraRecognized = false
+    this.aiState = createInitialAiState()
+    this.aiError = null
+    this.requestInFlight = false
+    this.aiRequestsEnabled = true
+    this.isMotionAdvancing = false
 
     addCoverBackground(this, 'gymnastics-play-background').setDepth(0)
     this.add.rectangle(vw / 2, vh / 2, vw, vh, 0x2d1b10, 0.16).setDepth(1)
@@ -120,7 +305,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     this.createHeaderFrameTexture()
     this.createLayout(vw, vh)
     this.renderMotion()
-    this.startCamera()
+    this.startPoseTracker()
 
     this.timerEvent = this.time.addEvent({
       delay: 1000,
@@ -138,7 +323,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
 
   update() {
     this.drawCameraFrame()
-    this.updateRecognitionStatus(this.canReadCameraFrame())
+    this.evaluateCurrentPose()
   }
 
   private createCameraTexture() {
@@ -255,7 +440,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     const headerTextInset = Math.max(18, headerH * 0.9)
     const modeTextCenterX = headerX + headerTextInset + (modePanelW - headerTextInset * 2) / 2
     this.motionCounterMaxWidth = modePanelW - headerTextInset * 2
-    this.motionTitleMaxWidth = motionPanelW - 32
+    this.motionTitleMaxWidth = motionPanelW - headerH * 2.4
     this.timerMaxWidth = Math.max(64, rightHeaderW - headerH - headerGap - 28)
     this.headerFontSize = headerFontSize
 
@@ -268,6 +453,17 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
       .text(motionPanelX + motionPanelW / 2, y, '', headerTextStyle)
       .setOrigin(0.5)
       .setDepth(12)
+
+    this.createArrowButton(motionPanelX + headerH * 0.54, y, headerH * 0.86, '<', () =>
+      this.returnToPreviousMotion(),
+    )
+    this.createArrowButton(
+      motionPanelX + motionPanelW - headerH * 0.54,
+      y,
+      headerH * 0.86,
+      '>',
+      () => this.advanceToNextMotion(true),
+    )
 
     const timerPanelX = rightHeaderX
     const timerPanelW = Math.max(0, rightHeaderW - headerH - headerGap)
@@ -497,46 +693,72 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     return this.add.container(x, y, [bg, hitArea]).setDepth(14)
   }
 
-  private async startCamera() {
+  private createArrowButton(
+    x: number,
+    y: number,
+    size: number,
+    label: string,
+    onClick: () => void,
+  ) {
+    const container = this.add.container(x, y).setDepth(14)
+    const width = size
+    const height = size
+
+    const text = this.add
+      .text(0, -1, label, {
+        fontFamily: 'sans-serif',
+        fontSize: `${Math.round(height * 0.82)}px`,
+        color: '#ffffff',
+        fontStyle: 'bold',
+        stroke: '#4b250c',
+        strokeThickness: 3,
+      })
+      .setOrigin(0.5)
+
+    const hitArea = this.add.rectangle(0, 0, width, height, 0xffffff, 0).setInteractive({
+      useHandCursor: true,
+    })
+    hitArea.on('pointerdown', onClick)
+
+    container.add([text, hitArea])
+    return container
+  }
+
+  private async startPoseTracker() {
     try {
-      this.mediaStream = await navigator.mediaDevices.getUserMedia({
+      const tracker = new PoseTracker({
+        delegate: 'CPU',
         video: {
           facingMode: 'user',
           width: { ideal: 960 },
           height: { ideal: 720 },
         },
-        audio: false,
       })
-
-      this.videoElement = document.createElement('video')
-      this.videoElement.srcObject = this.mediaStream
-      this.videoElement.muted = true
-      this.videoElement.playsInline = true
-      await this.videoElement.play()
-    } catch {
-      this.mediaStream = null
-      this.videoElement = null
+      await tracker.start()
+      this.poseTracker = tracker
+    } catch (error) {
+      this.poseTracker = null
+      this.aiError = error instanceof Error ? error.message : 'Camera start failed'
       this.updateRecognitionStatus(false)
     }
   }
 
   private canReadCameraFrame() {
     return Boolean(
-      this.videoElement &&
-      this.videoElement.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA &&
-      this.mediaStream?.active,
+      this.poseTracker?.video &&
+      this.poseTracker.video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA,
     )
   }
 
   private drawCameraFrame() {
     this.cameraContext.clearRect(0, 0, this.cameraCanvas.width, this.cameraCanvas.height)
 
-    if (this.canReadCameraFrame() && this.videoElement) {
+    if (this.canReadCameraFrame() && this.poseTracker?.video) {
       this.cameraContext.save()
       this.cameraContext.translate(this.cameraCanvas.width, 0)
       this.cameraContext.scale(-1, 1)
       this.cameraContext.drawImage(
-        this.videoElement,
+        this.poseTracker.video,
         0,
         0,
         this.cameraCanvas.width,
@@ -560,6 +782,571 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     }
 
     this.cameraTexture.refresh()
+  }
+
+  private evaluateCurrentPose() {
+    const tracker = this.poseTracker
+    if (!tracker) {
+      this.updateRecognitionStatus(false)
+      return
+    }
+
+    if (this.isMotionAdvancing) return
+
+    const detection = tracker.detect()
+    const pose = detection.poses[0]
+    if (!pose) {
+      this.updateRecognitionStatus(this.canReadCameraFrame())
+      return
+    }
+
+    this.updateRecognitionStatus(true)
+    this.drawPoseLandmarks(pose.landmarks)
+    this.evaluatePoseLocally(detection.timestampMs, pose.landmarks)
+
+    if (this.requestInFlight || !this.aiRequestsEnabled) return
+
+    this.requestInFlight = true
+    void this.requestAiEvaluation(detection.timestampMs, pose.landmarks)
+      .catch(error => {
+        this.aiError = error instanceof Error ? error.message : 'AI request failed'
+        this.aiRequestsEnabled = false
+      })
+      .finally(() => {
+        this.requestInFlight = false
+      })
+  }
+
+  private async requestAiEvaluation(
+    timestampMs: number,
+    landmarks: readonly { x: number; y: number; z: number; visibility?: number }[],
+  ) {
+    const motionSpec = this.getCurrentAiMotionSpec()
+    const response = await fetch(
+      `${AI_BASE_URL}/gymnastics/${MOTION_ENDPOINTS[motionSpec.kind]}/evaluate`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          frame: {
+            timestamp_ms: Math.floor(timestampMs),
+            mirrored: true,
+            landmarks: this.toLandmarkPayload(landmarks),
+          },
+          previous_state: this.aiState.previousState,
+          step_count: this.aiState.stepCount,
+          target_steps: motionSpec.targetSteps,
+          last_counted_side: this.aiState.lastCountedSide,
+          last_seen_side: this.aiState.lastSeenSide,
+          left_armed: this.aiState.leftArmed,
+          right_armed: this.aiState.rightArmed,
+          reference_hip_x: this.aiState.referenceHipX,
+          reference_hip_y: this.aiState.referenceHipY,
+          reference_scale: this.aiState.referenceScale,
+          displayed_feedback_code: this.aiState.displayedFeedbackCode,
+          displayed_feedback_text: this.aiState.displayedFeedbackText,
+          displayed_feedback_frames: this.aiState.displayedFeedbackFrames,
+          candidate_feedback_code: this.aiState.candidateFeedbackCode,
+          candidate_feedback_text: this.aiState.candidateFeedbackText,
+          candidate_feedback_streak: this.aiState.candidateFeedbackStreak,
+          representative_feedback_totals: this.aiState.representativeFeedbackTotals,
+          representative_feedback_code: this.aiState.representativeFeedbackCode,
+          representative_feedback_text: this.aiState.representativeFeedbackText,
+          representative_feedback_frames: this.aiState.representativeFeedbackFrames,
+          baseline_left_step_extent: this.aiState.baselineLeftStepExtent,
+          baseline_right_step_extent: this.aiState.baselineRightStepExtent,
+          baseline_ankle_span: this.aiState.baselineAnkleSpan,
+          baseline_left_wrist_forward: this.aiState.baselineLeftWristForward,
+          baseline_right_wrist_forward: this.aiState.baselineRightWristForward,
+          baseline_stance_span: this.aiState.baselineStanceSpan,
+        }),
+      },
+    )
+
+    if (!response.ok) {
+      this.aiError = `AI response error: ${response.status}`
+      this.applyAiFeedback()
+      return
+    }
+
+    this.updateAiState((await response.json()) as GymnasticsAiResponse)
+    this.aiError = null
+    this.applyAiFeedback()
+    this.advanceMotionIfCompleted()
+  }
+
+  private evaluatePoseLocally(
+    timestampMs: number,
+    landmarks: readonly { x: number; y: number; z: number; visibility?: number }[],
+  ) {
+    const motionSpec = this.getCurrentAiMotionSpec()
+    const previousStepCount = this.aiState.stepCount
+    const nextState = { ...this.aiState, tracking: 'tracked', feedback: '동작을 따라 해볼까요?' }
+
+    if (!this.hasCoreBodyLandmarks(landmarks)) {
+      nextState.feedback = '뒤로 가볼까요'
+      nextState.tracking = 'tracking_low'
+      this.aiState = nextState
+      this.applyAiFeedback()
+      return
+    }
+
+    if (motionSpec.kind === 'march') {
+      this.evaluateLocalMarch(nextState, landmarks, timestampMs)
+    } else if (motionSpec.kind === 'side-step') {
+      this.evaluateLocalSideStep(nextState, landmarks, timestampMs)
+    } else if (
+      motionSpec.kind === 'diagonal-body-punch' ||
+      motionSpec.kind === 'diagonal-face-punch'
+    ) {
+      this.evaluateLocalPunch(nextState, landmarks, timestampMs, motionSpec.kind)
+    } else {
+      this.evaluateLocalSquat(nextState, landmarks, timestampMs)
+    }
+
+    nextState.stepCount = Math.min(nextState.stepCount, motionSpec.targetSteps)
+    nextState.accuracy = nextState.stepCount / motionSpec.targetSteps
+    this.aiState = nextState
+
+    if (this.aiState.stepCount !== previousStepCount || !this.aiError) {
+      this.applyAiFeedback()
+    }
+    this.advanceMotionIfCompleted()
+  }
+
+  private evaluateLocalMarch(
+    state: GymnasticsAiState,
+    landmarks: readonly { x: number; y: number }[],
+    timestampMs: number,
+  ) {
+    const leftLift = this.verticalLift(landmarks, 'LEFT_HIP', 'LEFT_KNEE')
+    const rightLift = this.verticalLift(landmarks, 'RIGHT_HIP', 'RIGHT_KNEE')
+    const leftKnee = this.getLandmark(landmarks, 'LEFT_KNEE')
+    const rightKnee = this.getLandmark(landmarks, 'RIGHT_KNEE')
+    if (!leftKnee && !rightKnee) {
+      state.feedback = '무릎도 보여요'
+      return
+    }
+    if (leftKnee && (state.baselineLeftKneeY == null || state.localPhase === 'ready')) {
+      state.baselineLeftKneeY =
+        state.baselineLeftKneeY == null ? leftKnee.y : Math.max(state.baselineLeftKneeY, leftKnee.y)
+    }
+    if (rightKnee && (state.baselineRightKneeY == null || state.localPhase === 'ready')) {
+      state.baselineRightKneeY =
+        state.baselineRightKneeY == null
+          ? rightKnee.y
+          : Math.max(state.baselineRightKneeY, rightKnee.y)
+    }
+
+    const leftBaselineLift =
+      leftKnee && state.baselineLeftKneeY != null ? state.baselineLeftKneeY - leftKnee.y : 0
+    const rightBaselineLift =
+      rightKnee && state.baselineRightKneeY != null ? state.baselineRightKneeY - rightKnee.y : 0
+    const leftScore = Math.max(leftLift, leftBaselineLift)
+    const rightScore = Math.max(rightLift, rightBaselineLift)
+    const side = leftScore > rightScore ? 'left' : 'right'
+    const lift = Math.max(leftScore, rightScore)
+
+    state.feedback = '번갈아 해요'
+
+    if (lift > 0.045 && state.localPhase === 'ready' && state.lastCountedSide !== side) {
+      this.countLocalRep(state, timestampMs, side, '참 잘했어요')
+      state.localPhase = 'active'
+      return
+    }
+
+    if (lift > 0.045 && state.lastCountedSide === side) {
+      state.feedback = '반대쪽도 해요'
+      return
+    }
+
+    if (lift > 0.025) {
+      state.feedback = '조금 더 높이'
+    }
+
+    if (lift < 0.018) {
+      state.localPhase = 'ready'
+      state.feedback = '다음 다리 해요'
+    }
+  }
+
+  private evaluateLocalSideStep(
+    state: GymnasticsAiState,
+    landmarks: readonly { x: number; y: number }[],
+    timestampMs: number,
+  ) {
+    const ankleSpan = this.horizontalDistance(landmarks, 'LEFT_ANKLE', 'RIGHT_ANKLE')
+    if (ankleSpan <= 0) {
+      state.feedback = '발도 보여요'
+      return
+    }
+    if (state.baselineAnkleSpan == null && ankleSpan > 0) {
+      state.baselineAnkleSpan = ankleSpan
+    } else if (state.localPhase === 'ready' && ankleSpan > 0 && state.baselineAnkleSpan != null) {
+      state.baselineAnkleSpan = Math.min(state.baselineAnkleSpan, ankleSpan)
+    }
+
+    const baseline = Math.max(state.baselineAnkleSpan ?? ankleSpan, 0.12)
+    const opened = ankleSpan > baseline * 1.18 && ankleSpan - baseline > 0.035
+
+    state.feedback = '크게 해볼까요'
+
+    if (opened && state.localPhase === 'ready') {
+      this.countLocalRep(state, timestampMs, null, '참 잘했어요')
+      state.localPhase = 'active'
+      return
+    }
+
+    if (state.localPhase === 'active') {
+      state.feedback = '다시 모아봐요'
+    }
+
+    if (ankleSpan < baseline * 1.08) {
+      state.localPhase = 'ready'
+      state.feedback = '다시 해볼까요'
+    }
+  }
+
+  private evaluateLocalPunch(
+    state: GymnasticsAiState,
+    landmarks: readonly { x: number; y: number; z?: number }[],
+    timestampMs: number,
+    kind: GymnasticsMotionKind,
+  ) {
+    const leftReach = this.forwardReach(landmarks, 'LEFT_SHOULDER', 'LEFT_WRIST', -1)
+    const rightReach = this.forwardReach(landmarks, 'RIGHT_SHOULDER', 'RIGHT_WRIST', 1)
+    const leftDepthReach = this.depthReach(landmarks, 'LEFT_WRIST', state.baselineLeftWristZ)
+    const rightDepthReach = this.depthReach(landmarks, 'RIGHT_WRIST', state.baselineRightWristZ)
+    const leftScore = Math.max(leftReach, leftDepthReach)
+    const rightScore = Math.max(rightReach, rightDepthReach)
+    const side = leftScore > rightScore ? 'left' : 'right'
+    const reach = Math.max(leftScore, rightScore)
+    const wristHeightOk =
+      kind === 'diagonal-body-punch' ||
+      this.wristNearFaceHeight(landmarks, side === 'left' ? 'LEFT_WRIST' : 'RIGHT_WRIST')
+
+    this.captureWristBaseline(state, landmarks)
+    state.feedback = kind === 'diagonal-face-punch' ? '주먹 올려요' : '팔 뻗어봐요'
+
+    if (!wristHeightOk) {
+      state.feedback = '조금 더 높이'
+      return
+    }
+
+    if (reach > 0.055 && state.localPhase === 'ready' && state.lastCountedSide !== side) {
+      this.countLocalRep(state, timestampMs, side, '참 잘했어요')
+      state.localPhase = 'active'
+      return
+    }
+
+    if (reach > 0.055 && state.lastCountedSide === side) {
+      state.feedback = '반대쪽도 해요'
+      return
+    }
+
+    if (reach > 0.025) {
+      state.feedback = '조금 더 뻗어요'
+    }
+
+    if (reach < 0.02) {
+      state.localPhase = 'ready'
+      state.feedback = '팔을 모아봐요'
+    }
+  }
+
+  private evaluateLocalSquat(
+    state: GymnasticsAiState,
+    landmarks: readonly { x: number; y: number }[],
+    timestampMs: number,
+  ) {
+    const hipY = this.midpointY(landmarks, 'LEFT_HIP', 'RIGHT_HIP')
+    const hasKnees =
+      this.getLandmark(landmarks, 'LEFT_KNEE') || this.getLandmark(landmarks, 'RIGHT_KNEE')
+    if (!hasKnees) {
+      state.feedback = '무릎도 보여요'
+      return
+    }
+    if (state.referenceHipY == null) {
+      state.referenceHipY = hipY
+    }
+
+    const hipDrop = hipY - state.referenceHipY
+    state.feedback = '앉아볼까요'
+
+    if (hipDrop > 0.08 && state.localPhase === 'ready') {
+      state.localPhase = 'active'
+      state.feedback = '일어나봐요'
+      return
+    }
+
+    if (hipDrop > 0.04 && state.localPhase === 'ready') {
+      state.feedback = '조금 더 앉아요'
+      return
+    }
+
+    if (state.localPhase === 'active' && hipDrop < 0.035) {
+      this.countLocalRep(state, timestampMs, null, '참 잘했어요')
+      state.localPhase = 'ready'
+    }
+  }
+
+  private countLocalRep(
+    state: GymnasticsAiState,
+    timestampMs: number,
+    side: string | null,
+    feedback: string,
+  ) {
+    if (timestampMs - state.lastLocalRepAtMs < 450) return
+    state.stepCount += 1
+    state.lastLocalRepAtMs = timestampMs
+    state.lastCountedSide = side
+    state.feedback = feedback
+    state.previousState = 'counted'
+  }
+
+  private drawPoseLandmarks(landmarks: readonly { x: number; y: number; visibility?: number }[]) {
+    this.cameraContext.save()
+    this.cameraContext.fillStyle = '#5ce1e6'
+    this.cameraContext.strokeStyle = 'rgba(255,255,255,0.7)'
+    this.cameraContext.lineWidth = 2
+
+    for (const landmark of landmarks) {
+      if ((landmark.visibility ?? 1) < 0.05) continue
+      this.cameraContext.beginPath()
+      this.cameraContext.arc(
+        (1 - landmark.x) * this.cameraCanvas.width,
+        landmark.y * this.cameraCanvas.height,
+        4,
+        0,
+        Math.PI * 2,
+      )
+      this.cameraContext.fill()
+    }
+
+    this.cameraContext.restore()
+    this.cameraTexture.refresh()
+  }
+
+  private verticalLift(
+    landmarks: readonly { x: number; y: number }[],
+    hipName: (typeof POSE_LANDMARK_NAMES)[number],
+    kneeName: (typeof POSE_LANDMARK_NAMES)[number],
+  ) {
+    const hip = this.getLandmark(landmarks, hipName)
+    const knee = this.getLandmark(landmarks, kneeName)
+    return hip && knee ? hip.y - knee.y : 0
+  }
+
+  private horizontalDistance(
+    landmarks: readonly { x: number; y: number }[],
+    leftName: (typeof POSE_LANDMARK_NAMES)[number],
+    rightName: (typeof POSE_LANDMARK_NAMES)[number],
+  ) {
+    const left = this.getLandmark(landmarks, leftName)
+    const right = this.getLandmark(landmarks, rightName)
+    return left && right ? Math.abs(left.x - right.x) : 0
+  }
+
+  private forwardReach(
+    landmarks: readonly { x: number; y: number }[],
+    shoulderName: (typeof POSE_LANDMARK_NAMES)[number],
+    wristName: (typeof POSE_LANDMARK_NAMES)[number],
+    direction: -1 | 1,
+  ) {
+    const shoulder = this.getLandmark(landmarks, shoulderName)
+    const wrist = this.getLandmark(landmarks, wristName)
+    return shoulder && wrist ? (wrist.x - shoulder.x) * direction : 0
+  }
+
+  private captureWristBaseline(
+    state: GymnasticsAiState,
+    landmarks: readonly { x: number; y: number; z?: number }[],
+  ) {
+    const leftWrist = this.getLandmark(landmarks, 'LEFT_WRIST')
+    const rightWrist = this.getLandmark(landmarks, 'RIGHT_WRIST')
+
+    if (
+      leftWrist?.z != null &&
+      (state.baselineLeftWristZ == null || state.localPhase === 'ready')
+    ) {
+      state.baselineLeftWristZ =
+        state.baselineLeftWristZ == null
+          ? leftWrist.z
+          : Math.max(state.baselineLeftWristZ, leftWrist.z)
+    }
+    if (
+      rightWrist?.z != null &&
+      (state.baselineRightWristZ == null || state.localPhase === 'ready')
+    ) {
+      state.baselineRightWristZ =
+        state.baselineRightWristZ == null
+          ? rightWrist.z
+          : Math.max(state.baselineRightWristZ, rightWrist.z)
+    }
+  }
+
+  private depthReach(
+    landmarks: readonly { x: number; y: number; z?: number }[],
+    wristName: (typeof POSE_LANDMARK_NAMES)[number],
+    baselineZ: number | null,
+  ) {
+    const wrist = this.getLandmark(landmarks, wristName)
+    if (wrist?.z == null || baselineZ == null) return 0
+    return Math.max(0, baselineZ - wrist.z)
+  }
+
+  private wristNearFaceHeight(
+    landmarks: readonly { x: number; y: number }[],
+    wristName: (typeof POSE_LANDMARK_NAMES)[number],
+  ) {
+    const wrist = this.getLandmark(landmarks, wristName)
+    const shoulderY = this.midpointY(landmarks, 'LEFT_SHOULDER', 'RIGHT_SHOULDER')
+    return wrist ? wrist.y < shoulderY + 0.16 : false
+  }
+
+  private midpointY(
+    landmarks: readonly { x: number; y: number }[],
+    leftName: (typeof POSE_LANDMARK_NAMES)[number],
+    rightName: (typeof POSE_LANDMARK_NAMES)[number],
+  ) {
+    const left = this.getLandmark(landmarks, leftName)
+    const right = this.getLandmark(landmarks, rightName)
+    if (!left && !right) return 0
+    if (!left) return right!.y
+    if (!right) return left.y
+    return (left.y + right.y) / 2
+  }
+
+  private getLandmark(
+    landmarks: readonly { x: number; y: number; z?: number; visibility?: number }[],
+    name: (typeof POSE_LANDMARK_NAMES)[number],
+  ) {
+    return landmarks[POSE_LANDMARK_NAMES.indexOf(name)]
+  }
+
+  private hasCoreBodyLandmarks(
+    landmarks: readonly { x: number; y: number; visibility?: number }[],
+  ) {
+    const requiredUpperBody: (typeof POSE_LANDMARK_NAMES)[number][] = [
+      'LEFT_SHOULDER',
+      'RIGHT_SHOULDER',
+      'LEFT_HIP',
+      'RIGHT_HIP',
+    ]
+    return requiredUpperBody.every(name => {
+      const landmark = landmarks[POSE_LANDMARK_NAMES.indexOf(name)]
+      return Boolean(landmark && (landmark.visibility ?? 1) >= 0.05)
+    })
+  }
+
+  private updateAiState(payload: GymnasticsAiResponse) {
+    this.aiState = {
+      ...this.aiState,
+      previousState: payload.state,
+      stepCount: payload.step_count,
+      lastCountedSide: payload.last_counted_side ?? null,
+      lastSeenSide: payload.last_seen_side ?? null,
+      leftArmed: payload.left_armed ?? this.aiState.leftArmed,
+      rightArmed: payload.right_armed ?? this.aiState.rightArmed,
+      referenceHipX: payload.reference_hip_x,
+      referenceHipY: payload.reference_hip_y,
+      referenceScale: payload.reference_scale,
+      displayedFeedbackCode: payload.displayed_feedback_code,
+      displayedFeedbackText: payload.displayed_feedback_text,
+      displayedFeedbackFrames: payload.displayed_feedback_frames,
+      candidateFeedbackCode: payload.candidate_feedback_code,
+      candidateFeedbackText: payload.candidate_feedback_text,
+      candidateFeedbackStreak: payload.candidate_feedback_streak,
+      representativeFeedbackTotals: payload.representative_feedback_totals,
+      representativeFeedbackCode: payload.representative_feedback_code,
+      representativeFeedbackText: payload.representative_feedback_text,
+      representativeFeedbackFrames: payload.representative_feedback_frames,
+      baselineLeftStepExtent:
+        payload.baseline_left_step_extent ?? this.aiState.baselineLeftStepExtent,
+      baselineRightStepExtent:
+        payload.baseline_right_step_extent ?? this.aiState.baselineRightStepExtent,
+      baselineAnkleSpan: payload.baseline_ankle_span ?? this.aiState.baselineAnkleSpan,
+      baselineLeftWristForward:
+        payload.baseline_left_wrist_forward ?? this.aiState.baselineLeftWristForward,
+      baselineRightWristForward:
+        payload.baseline_right_wrist_forward ?? this.aiState.baselineRightWristForward,
+      baselineStanceSpan: payload.baseline_stance_span ?? this.aiState.baselineStanceSpan,
+      accuracy: payload.accuracy,
+      tracking: payload.tracking,
+      feedback: payload.feedback,
+    }
+  }
+
+  private applyAiFeedback() {
+    const motionSpec = this.getCurrentAiMotionSpec()
+    const progressText = `${this.aiState.stepCount}/${motionSpec.targetSteps}`
+    const title = this.aiState.feedback || this.aiState.representativeFeedbackText || 'Good'
+    const detail = `Progress ${progressText}`
+
+    this.feedbackTitleText?.setText(title)
+    this.feedbackTipTexts[0]?.setText(detail)
+    this.motionCounterText?.setText(
+      `${this.modeLabel} ${this.motionIndex + 1}/${this.motions.length}`,
+    )
+    this.motionTitleText?.setText(`${this.motions[this.motionIndex].title} ${progressText}`)
+
+    this.fitTextToWidth(this.motionCounterText, this.motionCounterMaxWidth, this.headerFontSize, 14)
+    this.fitTextToWidth(this.motionTitleText, this.motionTitleMaxWidth, this.headerFontSize, 14)
+    this.fitTextToWidth(this.feedbackTitleText, this.feedbackTitleMaxWidth, 38, 22)
+    this.fitTextToWidth(this.feedbackTipTexts[0], this.feedbackTitleMaxWidth, 22, 14)
+    this.positionFeedbackStar()
+  }
+
+  private advanceMotionIfCompleted() {
+    const motionSpec = this.getCurrentAiMotionSpec()
+    if (this.aiState.stepCount < motionSpec.targetSteps || this.isMotionAdvancing) return
+
+    this.isMotionAdvancing = true
+    this.feedbackTitleText?.setText('Complete')
+    this.time.delayedCall(700, () => {
+      this.advanceToNextMotion(false)
+    })
+  }
+
+  private advanceToNextMotion(manual: boolean) {
+    if (manual && this.isMotionAdvancing) return
+
+    if (this.motionIndex < this.motions.length - 1) {
+      this.motionIndex += 1
+      this.aiState = createInitialAiState()
+      this.aiError = null
+      this.isMotionAdvancing = false
+      this.renderMotion()
+      return
+    }
+
+    this.isMotionAdvancing = false
+    fadeToScene(this, 'GymnasticsSelectScene')
+  }
+
+  private returnToPreviousMotion() {
+    if (this.isMotionAdvancing || this.motionIndex <= 0) return
+
+    this.motionIndex -= 1
+    this.aiState = createInitialAiState()
+    this.aiError = null
+    this.renderMotion()
+  }
+
+  private getCurrentAiMotionSpec() {
+    return this.aiSequence[this.motionIndex] ?? this.aiSequence[this.aiSequence.length - 1]
+  }
+
+  private toLandmarkPayload(
+    landmarks: readonly { x: number; y: number; z: number; visibility?: number }[],
+  ): LandmarkPayload[] {
+    return landmarks.map((landmark, index) => ({
+      name: POSE_LANDMARK_NAMES[index] ?? `LANDMARK_${index}`,
+      x: landmark.x,
+      y: landmark.y,
+      z: landmark.z,
+      visibility: landmark.visibility,
+    }))
   }
 
   private updateRecognitionStatus(isRecognized: boolean) {
@@ -628,21 +1415,25 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
   private cleanup() {
     this.timerEvent?.remove(false)
     this.timerEvent = undefined
-    this.mediaStream?.getTracks().forEach(track => track.stop())
-    this.mediaStream = null
-    this.videoElement?.remove()
-    this.videoElement = null
+    this.poseTracker?.stop()
+    this.poseTracker = null
+    this.requestInFlight = false
   }
 }
 
 export class GymnasticsTopScene extends GymnasticsPlaySceneBase {
   constructor() {
-    super('GymnasticsTopScene', TOP_MOTIONS, 'top \uCCB4\uC870')
+    super('GymnasticsTopScene', TOP_AI_MOTIONS, 'top \uCCB4\uC870', TOP_AI_SEQUENCE)
   }
 }
 
 export class GymnasticsDanielScene extends GymnasticsPlaySceneBase {
   constructor() {
-    super('GymnasticsDanielScene', DANIEL_MOTIONS, '\uB2E4\uB2C8\uC5D8 \uCCB4\uC870')
+    super(
+      'GymnasticsDanielScene',
+      DANIEL_MOTIONS,
+      '\uB2E4\uB2C8\uC5D8 \uCCB4\uC870',
+      DANIEL_AI_SEQUENCE,
+    )
   }
 }
