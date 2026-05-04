@@ -23,9 +23,8 @@ import lombok.NoArgsConstructor;
 /**
  * 태권도 동작 마스터.
  *
- * <p>(poomsae, routine_order) 와 (poomsae, name) 두 유니크 제약을 가진다. routine_order 제약은 DB 에서
- * DEFERRABLE INITIALLY DEFERRED 로 정의되어, 관리자 페이지에서 두 동작 순서를 swap 하는 PATCH 시나리오를 한
- * 트랜잭션 안에서 허용한다.
+ * <p>(poomsae, routine_order) 와 (poomsae, name) 두 유니크 제약을 가진다. routine_order 제약은 DB 에서 DEFERRABLE
+ * INITIALLY DEFERRED 로 정의되어, 관리자 페이지에서 두 동작 순서를 swap 하는 PATCH 시나리오를 한 트랜잭션 안에서 허용한다.
  */
 @Entity
 @Getter
@@ -97,8 +96,8 @@ public class TaekwondoMotion {
     /**
      * 메타데이터(텍스트) 와 routine_order 부분 갱신.
      *
-     * <p>routine_order 는 (poomsae, routine_order) UNIQUE 제약이 DEFERRABLE INITIALLY DEFERRED 로
-     * 설정되어 있어 같은 품새 안 두 동작 swap 도 한 트랜잭션 안에서 가능하다.
+     * <p>routine_order 는 (poomsae, routine_order) UNIQUE 제약이 DEFERRABLE INITIALLY DEFERRED 로 설정되어
+     * 있어 같은 품새 안 두 동작 swap 도 한 트랜잭션 안에서 가능하다.
      *
      * <p>미디어 URL 은 별도 메서드 ({@link #replaceThumbnail} 등) 로 관리한다.
      */

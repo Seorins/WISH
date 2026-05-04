@@ -28,18 +28,16 @@ import lombok.NoArgsConstructor;
 /**
  * 환자별 태권도 진행 상태 스냅샷 (1:1).
  *
- * <p>현재 띠와 누적 카운터를 들고 있다. 첫 태권도 세션 저장 시점에 lazy 로 INSERT 되며 ({@link #firstSession}),
- * 이후 매 세션 저장 트랜잭션 안에서 {@link #applySession} 으로 누적값이 갱신된다. 승급 판정/적용은 서비스 레이어가
- * {@link Belt#canPromoteWith(int)} 와 {@link #promote} 를 조합하여 진행한다.
+ * <p>현재 띠와 누적 카운터를 들고 있다. 첫 태권도 세션 저장 시점에 lazy 로 INSERT 되며 ({@link #firstSession}), 이후 매 세션 저장 트랜잭션
+ * 안에서 {@link #applySession} 으로 누적값이 갱신된다. 승급 판정/적용은 서비스 레이어가 {@link Belt#canPromoteWith(int)} 와
+ * {@link #promote} 를 조합하여 진행한다.
  */
 @Entity
 @Getter
 @Table(
         name = "taekwondo_progress",
         uniqueConstraints = {
-            @UniqueConstraint(
-                    name = "uk_taekwondo_progress_patient",
-                    columnNames = "patient_id")
+            @UniqueConstraint(name = "uk_taekwondo_progress_patient", columnNames = "patient_id")
         })
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class TaekwondoProgress {

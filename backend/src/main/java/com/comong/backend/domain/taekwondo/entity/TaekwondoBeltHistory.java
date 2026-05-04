@@ -26,8 +26,8 @@ import lombok.NoArgsConstructor;
 /**
  * 태권도 띠 승급 이벤트 로그 (환자별 1:N).
  *
- * <p>{@link #fromBelt} 가 {@code null} 이면 첫 시작 (NULL → WHITE) 적재. 그 외 케이스는 fromBelt → toBelt
- * 승급 사건을 의미한다. {@link #triggerSession} 은 승급을 유발한 세션을 가리킨다.
+ * <p>{@link #fromBelt} 가 {@code null} 이면 첫 시작 (NULL → WHITE) 적재. 그 외 케이스는 fromBelt → toBelt 승급 사건을
+ * 의미한다. {@link #triggerSession} 은 승급을 유발한 세션을 가리킨다.
  */
 @Entity
 @Getter

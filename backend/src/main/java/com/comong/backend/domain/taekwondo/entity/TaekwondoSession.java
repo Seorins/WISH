@@ -26,9 +26,8 @@ import lombok.NoArgsConstructor;
 /**
  * 태권도 게임 세션 결과.
  *
- * <p>체조 {@code ExerciseSession} 과 같은 형태이지만 {@link #monstersDefeated} 추가 — 누적 처치수가 띠 승급
- * 임계값과 비교된다. score 같은 합성 지표는 두지 않고, 정확도는 AI {@code final_score(0~100)} 를 FE 가 /100 변환해서
- * 보낸 0~1 값을 그대로 저장한다.
+ * <p>체조 {@code ExerciseSession} 과 같은 형태이지만 {@link #monstersDefeated} 추가 — 누적 처치수가 띠 승급 임계값과 비교된다.
+ * score 같은 합성 지표는 두지 않고, 정확도는 AI {@code final_score(0~100)} 를 FE 가 /100 변환해서 보낸 0~1 값을 그대로 저장한다.
  */
 @Entity
 @Getter
