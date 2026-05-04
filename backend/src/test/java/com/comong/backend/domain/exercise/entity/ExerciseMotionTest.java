@@ -92,4 +92,39 @@ class ExerciseMotionTest {
                 .isInstanceOf(NullPointerException.class)
                 .hasMessageContaining("description");
     }
+
+    @Test
+    void updateMetadata_updatesRoutineOrderAndTextFields() {
+        ExerciseMotion exerciseMotion =
+                ExerciseMotion.builder()
+                        .exerciseType(ExerciseType.TOP)
+                        .name("March")
+                        .routineOrder(1)
+                        .targetReps(8)
+                        .description("Walk in place.")
+                        .build();
+
+        exerciseMotion.updateMetadata("Side step", 2, 10, "Move side to side.");
+
+        assertThat(exerciseMotion.getName()).isEqualTo("Side step");
+        assertThat(exerciseMotion.getRoutineOrder()).isEqualTo(2);
+        assertThat(exerciseMotion.getTargetReps()).isEqualTo(10);
+        assertThat(exerciseMotion.getDescription()).isEqualTo("Move side to side.");
+    }
+
+    @Test
+    void updateMetadata_rejectsNonPositiveRoutineOrder() {
+        ExerciseMotion exerciseMotion =
+                ExerciseMotion.builder()
+                        .exerciseType(ExerciseType.TOP)
+                        .name("March")
+                        .routineOrder(1)
+                        .targetReps(8)
+                        .description("Walk in place.")
+                        .build();
+
+        assertThatThrownBy(() -> exerciseMotion.updateMetadata(null, 0, null, null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("routineOrder");
+    }
 }

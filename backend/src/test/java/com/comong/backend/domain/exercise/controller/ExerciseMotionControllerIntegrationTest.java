@@ -217,6 +217,39 @@ class ExerciseMotionControllerIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
+    void updateExerciseMotion_byAdminUpdatesRoutineOrder() throws Exception {
+        ExerciseMotion march =
+                exerciseMotionRepository.save(exerciseMotion(ExerciseType.TOP, "March", 1));
+        exerciseMotionRepository.save(exerciseMotion(ExerciseType.TOP, "Side step", 2));
+
+        mockMvc.perform(
+                        applyAdmin(
+                                updateMultipart(march.getId(), "{\"routineOrder\":3}", null, null)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.routineOrder").value(3));
+
+        ExerciseMotion updated = exerciseMotionRepository.findById(march.getId()).orElseThrow();
+        assertThat(updated.getRoutineOrder()).isEqualTo(3);
+    }
+
+    @Test
+    void updateExerciseMotion_rejectsDuplicatedRoutineOrderInSameExerciseType() throws Exception {
+        ExerciseMotion march =
+                exerciseMotionRepository.save(exerciseMotion(ExerciseType.TOP, "March", 1));
+        exerciseMotionRepository.save(exerciseMotion(ExerciseType.TOP, "Side step", 2));
+
+        mockMvc.perform(
+                        applyAdmin(
+                                updateMultipart(march.getId(), "{\"routineOrder\":2}", null, null)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("EX-002"));
+
+        ExerciseMotion unchanged = exerciseMotionRepository.findById(march.getId()).orElseThrow();
+        assertThat(unchanged.getRoutineOrder()).isEqualTo(1);
+    }
+
+    @Test
     void updateExerciseMotion_replacesThumbnailAndDeletesOldFile() throws Exception {
         // 1. 기존 썸네일 업로드 + 동작 생성
         String createJson =

@@ -84,10 +84,20 @@ public class ExerciseMotion {
         this.thumbnailUrl = thumbnailUrl;
     }
 
-    /** 메타데이터(텍스트) 만 부분 갱신. 미디어 URL 은 {@link #replaceThumbnail}/{@link #clearThumbnail} 등 별도 메서드. */
-    public void updateMetadata(String name, Integer targetReps, String description) {
+    /**
+     * 메타데이터(텍스트) 와 routine_order 부분 갱신.
+     *
+     * <p>routine_order 는 DB 에서 DEFERRABLE INITIALLY DEFERRED 유니크 제약으로 관리한다. 미디어 URL 은 {@link
+     * #replaceThumbnail}/{@link #clearThumbnail} 등 별도 메서드.
+     */
+    public void updateMetadata(
+            String name, Integer routineOrder, Integer targetReps, String description) {
         if (name != null) {
             this.name = name;
+        }
+        if (routineOrder != null) {
+            validatePositive(routineOrder, "routineOrder");
+            this.routineOrder = routineOrder;
         }
         if (targetReps != null) {
             validatePositive(targetReps, "targetReps");

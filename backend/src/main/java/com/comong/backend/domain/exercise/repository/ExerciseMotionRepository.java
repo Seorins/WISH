@@ -12,4 +12,7 @@ public interface ExerciseMotionRepository extends JpaRepository<ExerciseMotion, 
     List<ExerciseMotion> findAllByExerciseTypeOrderByRoutineOrderAsc(ExerciseType exerciseType);
 
     boolean existsByExerciseTypeAndRoutineOrder(ExerciseType exerciseType, int routineOrder);
+
+    boolean existsByExerciseTypeAndRoutineOrderAndIdNot(
+            ExerciseType exerciseType, int routineOrder, Long id);
 }

@@ -16,6 +16,7 @@ public record ExerciseMotionUpdateRequest(
                 @Size(max = 100)
                 @Pattern(regexp = ".*\\S.*", message = "공백만 입력할 수 없습니다.")
                 String name,
+        @Schema(description = "루틴 내 동작 순서", example = "1") @Positive Integer routineOrder,
         @Schema(description = "목표 반복 수", example = "8") @Positive Integer targetReps,
         @Schema(description = "동작 설명", example = "좌우 번갈아 제자리에서 걷는다.")
                 @Pattern(regexp = ".*\\S.*", message = "공백만 입력할 수 없습니다.")
