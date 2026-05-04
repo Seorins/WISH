@@ -18,6 +18,13 @@ services:
       - e103-platform-network
       - e103-dev-network
 
+  ai-dev:
+    image: ${AI_DEV_IMAGE:-imgunbread/e103-wish:ai-develop-latest}
+    container_name: e103-ai-dev
+    restart: unless-stopped
+    networks:
+      - e103-platform-network
+
   frontend-game-dev:
     image: ${FRONTEND_GAME_DEV_IMAGE:-imgunbread/e103-wish:frontend-game-develop-latest}
     container_name: e103-frontend-game-dev
