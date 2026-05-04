@@ -2,6 +2,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
+from app.services.gymnastics.constants import DEFAULT_STRETCH_HOLD_TARGET_MS
+
 
 class PoseLandmarkRequest(BaseModel):
     name: str = Field(..., description="Pose landmark name")
@@ -154,6 +156,63 @@ class MarchSummaryResponse(BaseModel):
     representativeFeedback: str | None = None
     tracking: str
     state: str
+
+
+class StretchHoldEvaluationRequestBase(BaseModel):
+    frame: PoseFrameRequest
+    previous_state: str = Field(default="idle", description="Previous hold evaluator state")
+    target_hold_ms: int = Field(
+        default=DEFAULT_STRETCH_HOLD_TARGET_MS,
+        ge=1,
+        description="Target hold duration in milliseconds",
+    )
+    hold_duration_ms: int = Field(
+        default=0,
+        ge=0,
+        description="Accumulated successful hold duration in milliseconds",
+    )
+    hold_last_timestamp_ms: int | None = Field(
+        default=None,
+        ge=0,
+        description="Timestamp of the last frame that counted toward hold time",
+    )
+    reference_hip_x: float | None = Field(default=None)
+    reference_hip_y: float | None = Field(default=None)
+    reference_scale: float | None = Field(default=None)
+    displayed_feedback_code: str | None = Field(default=None)
+    displayed_feedback_text: str | None = Field(default=None)
+    displayed_feedback_frames: int = Field(default=0, ge=0)
+    candidate_feedback_code: str | None = Field(default=None)
+    candidate_feedback_text: str | None = Field(default=None)
+    candidate_feedback_streak: int = Field(default=0, ge=0)
+    representative_feedback_totals: dict[str, int] = Field(default_factory=dict)
+    representative_feedback_code: str | None = Field(default=None)
+    representative_feedback_text: str | None = Field(default=None)
+    representative_feedback_frames: int = Field(default=0, ge=0)
+
+
+class StretchHoldEvaluationResponseBase(BaseModel):
+    motion_id: str
+    state: str
+    accuracy: float
+    feedback: str | None = None
+    tracking: str
+    hold_duration_ms: int = 0
+    hold_completed: bool = False
+    hold_last_timestamp_ms: int | None = None
+    reference_hip_x: float | None = None
+    reference_hip_y: float | None = None
+    reference_scale: float | None = None
+    displayed_feedback_code: str | None = None
+    displayed_feedback_text: str | None = None
+    displayed_feedback_frames: int = 0
+    candidate_feedback_code: str | None = None
+    candidate_feedback_text: str | None = None
+    candidate_feedback_streak: int = 0
+    representative_feedback_totals: dict[str, int] = Field(default_factory=dict)
+    representative_feedback_code: str | None = None
+    representative_feedback_text: str | None = None
+    representative_feedback_frames: int = 0
 
 
 class SideStepEvaluationRequest(BaseModel):
