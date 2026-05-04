@@ -38,14 +38,17 @@ export function createArtCameraPreview(
   }
 
   const objects: Phaser.GameObjects.GameObject[] = []
+  const cornerRadius = Math.max(10, Math.round(Math.min(width, height) * 0.06))
   const panel = scene.add.graphics().setDepth(depth)
-  panel.fillStyle(0xfff6e8, 0.92)
-  panel.lineStyle(4, 0x8f6c48, 1)
-  panel.fillRoundedRect(x - width / 2, y - height / 2, width, height, 8)
-  panel.strokeRoundedRect(x - width / 2, y - height / 2, width, height, 8)
+
+  // minimal frame: cream surface + a single thin warm-wood border
+  panel.fillStyle(0xfcf8f0, 0.94)
+  panel.fillRoundedRect(x - width / 2, y - height / 2, width, height, cornerRadius)
+  panel.lineStyle(1.5, 0xa8845a, 0.85)
+  panel.strokeRoundedRect(x - width / 2, y - height / 2, width, height, cornerRadius)
   objects.push(panel)
 
-  const inset = Math.max(8, Math.round(Math.min(width, height) * 0.035))
+  const inset = Math.max(4, Math.round(Math.min(width, height) * 0.025))
   const image = scene.add
     .image(x, y, texture.key)
     .setDisplaySize(width - inset * 2, height - inset * 2)
@@ -60,7 +63,7 @@ export function createArtCameraPreview(
       y - height / 2 + inset,
       width - inset * 2,
       height - inset * 2,
-      6,
+      Math.max(6, cornerRadius - 8),
     )
   image.setMask(maskShape.createGeometryMask())
   objects.push(maskShape)

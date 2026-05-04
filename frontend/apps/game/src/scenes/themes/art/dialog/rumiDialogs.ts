@@ -20,11 +20,12 @@ export interface RumiDialogLine {
 export interface ArtChoiceOption {
   mode: ArtContentMode
   label: string
+  description: string
 }
 
 export const artChoiceOptions: ArtChoiceOption[] = [
-  { mode: 'free-drawing', label: '자유 그림' },
-  { mode: 'coloring', label: '색칠하기' },
+  { mode: 'free-drawing', label: '자유 그림', description: '하얀 캔버스에 마음껏 그려봐!' },
+  { mode: 'coloring', label: '색칠하기', description: '준비된 그림에 예쁜 색을 입혀봐!' },
 ]
 
 export const rumiSelectDialogs: Record<RumiSelectDialogStage, RumiDialogLine[]> = {

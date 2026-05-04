@@ -47,6 +47,12 @@ public class LocalImageStorage implements ImageStorage {
     /** magic-bytes 검사 시 읽을 헤더 크기 — RIFF/WEBP 가 12 byte 라 가장 큼. */
     private static final int MAGIC_HEAD_SIZE = 12;
 
+    /**
+     * 이미지 자체 한도. multipart 글로벌 한도가 영상(100MB)을 위해 더 크게 잡혀 있어도, 이미지는 자체적으로 10MB 를 강제한다
+     * (S14P31E103-308).
+     */
+    private static final long MAX_IMAGE_BYTES = 10L * 1024 * 1024;
+
     private final StorageProperties properties;
 
     /** servlet context-path. {@code application.yaml} 의 {@code server.servlet.context-path} 값. */
@@ -128,6 +134,9 @@ public class LocalImageStorage implements ImageStorage {
     private ImageFormat validateImage(MultipartFile file) {
         if (file == null || file.isEmpty()) {
             throw new BusinessException(StorageErrorCode.INVALID_IMAGE);
+        }
+        if (file.getSize() > MAX_IMAGE_BYTES) {
+            throw new BusinessException(StorageErrorCode.PAYLOAD_TOO_LARGE);
         }
         String contentType = file.getContentType();
         if (contentType == null || !contentType.toLowerCase(Locale.ROOT).startsWith("image/")) {

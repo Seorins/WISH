@@ -11,28 +11,45 @@ import { PointerSmoother } from '@/game/motion/pointerSmoother'
 import { PointerTrackingGuard } from '@/game/motion/pointerTrackingGuard'
 import { createArtCameraPreview, type ArtCameraPreview } from '../ui/artCameraPreview'
 import { getArtBrushColorOverlayTextureKey } from '../ui/artBrushColorOverlayTexture'
-import { createArtConfirmDialog, type ArtConfirmDialog } from '../ui/artConfirmDialog'
+import {
+  createArtConfirmDialog,
+  type ArtConfirmDialog,
+  type ArtConfirmDialogButtonRole,
+} from '../ui/artConfirmDialog'
 
 const ART_ROOM_RETURN_SPAWN = { xRatio: 0.5, yRatio: 0.76 }
 const CANVAS_SOURCE_SIZE = { width: 1535, height: 1024 }
 const CANVAS_DRAW_AREA = { x: 120, y: 150, width: 1288, height: 620 }
 const DELETE_BUTTON_SIZE = { width: 344, height: 336 }
 const EXIT_CONFIRM_DEPTH = 60
+const BRUSH_CURSOR_DEPTH = EXIT_CONFIRM_DEPTH + 12
+const BRUSH_CURSOR_OVERLAY_DEPTH = BRUSH_CURSOR_DEPTH + 1
+const HAND_DIALOG_SELECT_HOLD_MS = 450
+const HAND_DRAW_MIN_DISTANCE_RATIO = 0.004
+const POINTER_DRAW_MIN_DISTANCE_RATIO = 0.003
+const HAND_POINTER_REJECT_MARGIN = 0.08
+const HAND_POINTER_CAMERA_BOUNDS = { left: 0.06, right: 0.94, top: 0.06, bottom: 0.78 } as const
 type DrawingTool = 'brush' | 'eraser'
 const DRAWING_TOOLS: DrawingTool[] = ['brush', 'eraser']
+// Source dimensions of palette.png. Swatch coordinates below are in this space.
+const PALETTE_SOURCE_WIDTH = 773
+const PALETTE_SOURCE_HEIGHT = 1547
+const PALETTE_ASPECT = PALETTE_SOURCE_WIDTH / PALETTE_SOURCE_HEIGHT
+
+// Coordinates are in palette image source-pixel space (773 × 1547, 2 cols × 6 rows).
 const PALETTE_SWATCHES = [
-  { color: 0xff2b2b, sourceX: 1470, sourceY: 262 },
-  { color: 0xff4d9a, sourceX: 1902, sourceY: 262 },
-  { color: 0xff6a1f, sourceX: 1467, sourceY: 588 },
-  { color: 0xffd12c, sourceX: 1903, sourceY: 589 },
-  { color: 0x7bdd1e, sourceX: 1476, sourceY: 905 },
-  { color: 0x138f2d, sourceX: 1890, sourceY: 895 },
-  { color: 0x36b7ff, sourceX: 1467, sourceY: 1253 },
-  { color: 0x3679ff, sourceX: 1895, sourceY: 1249 },
-  { color: 0x9a43d9, sourceX: 1483, sourceY: 1609 },
-  { color: 0xffb05a, sourceX: 1900, sourceY: 1598 },
-  { color: 0x8e5c32, sourceX: 1490, sourceY: 1968 },
-  { color: 0x2f2f2f, sourceX: 1873, sourceY: 2006 },
+  { color: 0xff2b2b, sourceX: 228, sourceY: 212 },
+  { color: 0xff4d9a, sourceX: 545, sourceY: 212 },
+  { color: 0xff6a1f, sourceX: 228, sourceY: 437 },
+  { color: 0xffd12c, sourceX: 545, sourceY: 437 },
+  { color: 0x7bdd1e, sourceX: 228, sourceY: 661 },
+  { color: 0x138f2d, sourceX: 545, sourceY: 661 },
+  { color: 0x36b7ff, sourceX: 228, sourceY: 885 },
+  { color: 0x3679ff, sourceX: 545, sourceY: 885 },
+  { color: 0x9a43d9, sourceX: 228, sourceY: 1110 },
+  { color: 0xffb05a, sourceX: 545, sourceY: 1110 },
+  { color: 0x8e5c32, sourceX: 228, sourceY: 1334 },
+  { color: 0x2f2f2f, sourceX: 545, sourceY: 1334 },
 ] as const
 
 type PalettePoint = { color: number; x: number; y: number }
@@ -79,9 +96,10 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
   private exitButton: Phaser.GameObjects.Image | null = null
   private palettePoints: PalettePoint[] = []
   private handTracker: HandTracker | null = null
-  private readonly handPointerSmoother = new PointerSmoother({ alpha: 0.38 })
+  private readonly handPointerSmoother = new PointerSmoother({ alpha: 0.24 })
+  private readonly handDrawingSmoother = new PointerSmoother({ alpha: 0.16 })
   private readonly handTrackingGuard = new PointerTrackingGuard<Phaser.Math.Vector2>({
-    holdDurationMs: 120,
+    holdDurationMs: 40,
   })
 
   private isDrawing = false
@@ -91,6 +109,7 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
   private isTransitioning = false
   private hasStartedDrawing = false
   private strokeCount = 0
+  private activeDrawingPointerId: number | null = null
   private lastDrawPoint: Phaser.Math.Vector2 | null = null
   private lastHandDrawPoint: Phaser.Math.Vector2 | null = null
   private currentTool: DrawingTool = 'brush'
@@ -104,6 +123,9 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
   private pendingHandAction: HandActionKind | null = null
   private pendingHandActionStartedAt = 0
   private activatedHandAction: HandActionKind | null = null
+  private pendingHandDialogButton: ArtConfirmDialogButtonRole | null = null
+  private pendingHandDialogButtonStartedAt = 0
+  private activatedHandDialogButton: ArtConfirmDialogButtonRole | null = null
   private isSavingDrawing = false
   private isExitConfirmOpen = false
   private exitConfirmDialog: ArtConfirmDialog | null = null
@@ -125,10 +147,15 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
       return
     }
 
+    if (this.activeDrawingPointerId !== null) {
+      return
+    }
+
     if (!Phaser.Geom.Rectangle.Contains(this.drawBounds, pointer.x, pointer.y)) {
       return
     }
 
+    this.activeDrawingPointerId = pointer.id
     this.isDrawing = true
     this.strokeCount += 1
     const point = this.clampToDrawBounds(pointer.x, pointer.y)
@@ -151,7 +178,16 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
       return
     }
 
+    if (this.activeDrawingPointerId !== pointer.id) {
+      return
+    }
+
     if (!this.isDrawing || !pointer.isDown) {
+      return
+    }
+
+    if (!Phaser.Geom.Rectangle.Contains(this.drawBounds, pointer.x, pointer.y)) {
+      this.stopDrawing()
       return
     }
 
@@ -162,15 +198,20 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
       return
     }
 
+    const movedDistance = Phaser.Math.Distance.BetweenPoints(this.lastDrawPoint, currentPoint)
+    if (movedDistance < this.getPointerDrawMinDistance()) {
+      return
+    }
+
     this.drawStroke(this.lastDrawPoint, currentPoint)
     this.lastDrawPoint = currentPoint
-
-    if (!Phaser.Geom.Rectangle.Contains(this.drawBounds, pointer.x, pointer.y)) {
-      this.stopDrawing()
-    }
   }
 
-  private readonly handlePointerUp = () => {
+  private readonly handlePointerUp = (pointer: Phaser.Input.Pointer) => {
+    if (this.activeDrawingPointerId !== pointer.id) {
+      return
+    }
+
     this.stopDrawing()
   }
 
@@ -227,13 +268,15 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
     this.pendingHandTool = null
     this.pendingHandToolStartedAt = 0
     this.lastHandToolSelectedAt = 0
+    this.clearPendingHandDialogButton()
 
     const background = this.add.image(vw / 2, vh / 2, 'art-room-background')
     const backgroundSource = background.texture.getSourceImage() as HTMLImageElement
     const backgroundScale = Math.max(vw / backgroundSource.width, vh / backgroundSource.height)
     background.setScale(backgroundScale).setDepth(0)
 
-    this.add.rectangle(vw / 2, vh / 2, vw, vh, 0xf4ead7, 0.08).setDepth(1)
+    // soft warm dim — keeps the room's mood but pushes focus onto the canvas
+    this.add.rectangle(vw / 2, vh / 2, vw, vh, 0x1a1208, 0.32).setDepth(1)
 
     this.createCanvas(vw, vh)
     if (this.applyInitialArtworkImage()) {
@@ -381,18 +424,18 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
   }
 
   private createPalette(vw: number, vh: number) {
-    const paletteHeight = Math.min(this.drawBounds.height * 0.88, vh * 0.41)
-    const paletteWidth = paletteHeight * (3429 / 2286)
+    const paletteHeight = Math.min(this.drawBounds.height * 0.78, vh * 0.72)
+    const paletteWidth = paletteHeight * PALETTE_ASPECT
     const toolIconSize = Math.max(68, Math.min(90, Math.round(vw * 0.044)))
     const toolHitSize = toolIconSize + 18
     const toolGap = Math.max(10, Math.round(toolHitSize * 0.14))
-    const minPanelCenterX = this.drawBounds.right + paletteWidth * 0.24
+    const minPanelCenterX = this.drawBounds.right + paletteWidth * 0.6
     const maxPanelCenterX = Math.max(
       minPanelCenterX,
-      vw - toolHitSize - toolGap - paletteWidth * 0.18 - 24,
+      vw - toolHitSize - toolGap - paletteWidth / 2 - 24,
     )
     const panelCenterX = Phaser.Math.Clamp(
-      this.drawBounds.right + paletteWidth * 0.35,
+      this.drawBounds.right + paletteWidth * 0.75,
       minPanelCenterX,
       maxPanelCenterX,
     )
@@ -404,11 +447,11 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
 
     const paletteLeft = palette.x - palette.displayWidth / 2
     const paletteBoundsTop = palette.y - palette.displayHeight / 2
-    const scaleX = palette.displayWidth / 3429
-    const scaleY = palette.displayHeight / 2286
-    const selectionRadius = Math.max(11, palette.displayWidth * 0.034)
-    const hitWidth = palette.displayWidth * 0.115
-    const hitHeight = palette.displayHeight * 0.06
+    const scaleX = palette.displayWidth / PALETTE_SOURCE_WIDTH
+    const scaleY = palette.displayHeight / PALETTE_SOURCE_HEIGHT
+    const selectionRadius = Math.max(18, palette.displayWidth * 0.085)
+    const hitWidth = palette.displayWidth * 0.34
+    const hitHeight = palette.displayHeight * 0.115
     const minSwatchSourceX = Math.min(...PALETTE_SWATCHES.map(swatch => swatch.sourceX))
     const maxSwatchSourceX = Math.max(...PALETTE_SWATCHES.map(swatch => swatch.sourceX))
     const visualPaddingX = hitWidth * 0.9
@@ -597,12 +640,12 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
 
   private createCameraPreview(vw: number, vh: number) {
     const panelCenterX = vw * 0.878
-    const paletteHeight = Math.min(this.drawBounds.height * 0.88, vh * 0.41)
+    const paletteHeight = Math.min(this.drawBounds.height * 0.78, vh * 0.72)
     const paletteBottom = this.drawBounds.top + 2 + paletteHeight
     const availableTop = paletteBottom + Math.max(10, vh * 0.012)
     const availableBottom = vh - Math.max(14, vh * 0.018)
     const availableHeight = Math.max(120, availableBottom - availableTop)
-    const panelWidth = Math.max(160, Math.min(vw * 0.21, 360, availableHeight * (4 / 3)))
+    const panelWidth = Math.max(180, Math.min(vw * 0.18, 300, availableHeight * (4 / 3)))
     const panelHeight = panelWidth * 0.75
     const panelY = Math.min(availableBottom - panelHeight / 2, availableTop + panelHeight / 2)
 
@@ -648,11 +691,11 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
 
   private createBrushCursor() {
     this.input.setDefaultCursor('none')
-    this.brushCursor = this.add.image(0, 0, 'art-ui-brush').setDepth(20)
+    this.brushCursor = this.add.image(0, 0, 'art-ui-brush').setDepth(BRUSH_CURSOR_DEPTH)
     this.brushCursor.setScrollFactor(0)
     this.brushColorOverlay = this.add
       .image(0, 0, getArtBrushColorOverlayTextureKey(this, this.currentColor))
-      .setDepth(21)
+      .setDepth(BRUSH_CURSOR_OVERLAY_DEPTH)
     this.brushColorOverlay.setScrollFactor(0)
     this.updateBrushCursorPosition(this.input.activePointer.x, this.input.activePointer.y)
     this.updateBrushCursorTexture()
@@ -771,6 +814,7 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
     this.stopHandDrawing()
     this.clearPendingHandAction()
     this.clearPendingHandTool()
+    this.clearPendingHandDialogButton()
     this.handPointerSmoother.reset()
     this.handTrackingGuard.reset()
     this.handTracker?.stop()
@@ -779,14 +823,7 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
 
   private updateHandDrawing(timestampMs: number) {
     const tracker = this.handTracker
-    if (
-      !tracker?.isStarted ||
-      this.isDrawing ||
-      this.isTransitioning ||
-      this.isSavingDrawing ||
-      this.isExitConfirmOpen ||
-      this.isSaveVisibilityConfirmOpen
-    ) {
+    if (!tracker?.isStarted || this.isDrawing || this.isTransitioning || this.isSavingDrawing) {
       return
     }
 
@@ -803,11 +840,25 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
       this.stopHandDrawing()
       this.clearPendingHandAction()
       this.clearPendingHandTool()
+      this.clearPendingHandDialogButton()
       return
     }
 
     const smoothedPoint = this.handPointerSmoother.smooth(tracking.point)
     this.updateBrushCursorPosition(smoothedPoint.x, smoothedPoint.y)
+
+    if (
+      this.tryActivateConfirmDialogButtonFromHand(
+        smoothedPoint,
+        result.timestampMs,
+        tracking.status !== 'missing',
+      )
+    ) {
+      this.stopHandDrawing()
+      this.clearPendingHandAction()
+      this.clearPendingHandTool()
+      return
+    }
 
     if (tracking.status !== 'tracked') {
       return
@@ -837,12 +888,22 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
       return
     }
 
-    if (!Phaser.Geom.Rectangle.Contains(this.drawBounds, smoothedPoint.x, smoothedPoint.y)) {
+    if (
+      !handState ||
+      !Phaser.Geom.Rectangle.Contains(this.drawBounds, handState.point.x, handState.point.y)
+    ) {
       this.stopHandDrawing()
+      this.handPointerSmoother.reset()
       return
     }
 
-    this.drawHandPoint(smoothedPoint)
+    if (!Phaser.Geom.Rectangle.Contains(this.drawBounds, smoothedPoint.x, smoothedPoint.y)) {
+      this.stopHandDrawing()
+      this.handPointerSmoother.reset()
+      return
+    }
+
+    this.drawHandPoint(handState.point)
   }
 
   private getHandPointerState(hand: TrackedHand): HandPointerState | null {
@@ -856,11 +917,16 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
       return null
     }
 
-    const pointerCoordinates = toPointerCoordinates(
+    const rawPointerCoordinates = toPointerCoordinates(
       pointerReference,
       { width: this.scale.width, height: this.scale.height },
-      { mirrorX: true },
+      { mirrorX: true, clamp: false },
     )
+    if (!this.isHandPointerInsideViewport(rawPointerCoordinates)) {
+      return null
+    }
+
+    const pointerCoordinates = this.toReachableHandPointerCoordinates(rawPointerCoordinates)
     const canvasCoordinates = toPointerCanvasCoordinates(
       pointerCoordinates,
       {
@@ -882,8 +948,44 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
     }
   }
 
+  private isHandPointerInsideViewport(point: { normalizedX: number; normalizedY: number }) {
+    return (
+      point.normalizedX >= -HAND_POINTER_REJECT_MARGIN &&
+      point.normalizedX <= 1 + HAND_POINTER_REJECT_MARGIN &&
+      point.normalizedY >= -HAND_POINTER_REJECT_MARGIN &&
+      point.normalizedY <= 1 + HAND_POINTER_REJECT_MARGIN
+    )
+  }
+
+  private toReachableHandPointerCoordinates(
+    point: ReturnType<typeof toPointerCoordinates>,
+  ): ReturnType<typeof toPointerCoordinates> {
+    const normalizedX = Phaser.Math.Clamp(
+      (point.normalizedX - HAND_POINTER_CAMERA_BOUNDS.left) /
+        (HAND_POINTER_CAMERA_BOUNDS.right - HAND_POINTER_CAMERA_BOUNDS.left),
+      0,
+      1,
+    )
+    const normalizedY = Phaser.Math.Clamp(
+      (point.normalizedY - HAND_POINTER_CAMERA_BOUNDS.top) /
+        (HAND_POINTER_CAMERA_BOUNDS.bottom - HAND_POINTER_CAMERA_BOUNDS.top),
+      0,
+      1,
+    )
+
+    return {
+      ...point,
+      normalizedX,
+      normalizedY,
+      x: normalizedX * this.scale.width,
+      y: normalizedY * this.scale.height,
+    }
+  }
+
   private drawHandPoint(point: Phaser.Math.Vector2) {
-    const currentPoint = this.clampToDrawBounds(point.x, point.y)
+    const rawPoint = this.clampToDrawBounds(point.x, point.y)
+    const filteredPoint = this.handDrawingSmoother.smooth(rawPoint)
+    const currentPoint = this.clampToDrawBounds(filteredPoint.x, filteredPoint.y)
 
     if (!this.isHandDrawing) {
       this.isHandDrawing = true
@@ -904,6 +1006,13 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
       return
     }
 
+    if (
+      Phaser.Math.Distance.BetweenPoints(this.lastHandDrawPoint, currentPoint) <
+      this.getHandDrawMinDistance()
+    ) {
+      return
+    }
+
     this.drawStroke(this.lastHandDrawPoint, currentPoint)
     this.lastHandDrawPoint = currentPoint
   }
@@ -911,6 +1020,60 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
   private stopHandDrawing() {
     this.isHandDrawing = false
     this.lastHandDrawPoint = null
+    this.handDrawingSmoother.reset()
+  }
+
+  private tryActivateConfirmDialogButtonFromHand(
+    point: Phaser.Math.Vector2,
+    timestampMs: number,
+    isSelectingGesture: boolean,
+  ) {
+    const dialog = this.getActiveConfirmDialog()
+    if (!dialog) {
+      this.clearPendingHandDialogButton()
+      return false
+    }
+
+    if (!isSelectingGesture) {
+      this.clearPendingHandDialogButton()
+      return true
+    }
+
+    const button = dialog.getButtonAt(point)
+    dialog.setButtonHover(button)
+    if (!button) {
+      this.clearPendingHandDialogButton()
+      return true
+    }
+
+    if (this.pendingHandDialogButton !== button) {
+      this.pendingHandDialogButton = button
+      this.pendingHandDialogButtonStartedAt = timestampMs
+      this.activatedHandDialogButton = null
+      return true
+    }
+
+    if (
+      this.activatedHandDialogButton === button ||
+      timestampMs - this.pendingHandDialogButtonStartedAt < HAND_DIALOG_SELECT_HOLD_MS
+    ) {
+      return true
+    }
+
+    this.activatedHandDialogButton = button
+    dialog.selectButton(button)
+    return true
+  }
+
+  private getActiveConfirmDialog() {
+    return this.saveVisibilityConfirmDialog ?? this.exitConfirmDialog
+  }
+
+  private clearPendingHandDialogButton() {
+    this.pendingHandDialogButton = null
+    this.pendingHandDialogButtonStartedAt = 0
+    this.activatedHandDialogButton = null
+    this.getActiveConfirmDialog()?.setButtonHover(null)
   }
 
   private tryActivateActionButtonFromHand(point: Phaser.Math.Vector2, timestampMs: number) {
@@ -949,15 +1112,26 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
   }
 
   private getHandActionAt(point: Phaser.Math.Vector2): HandActionKind | null {
-    if (this.saveButton?.getBounds().contains(point.x, point.y)) {
+    const padding = this.getHandActionHitPadding()
+
+    if (
+      this.saveButton &&
+      this.containsExpandedBounds(this.saveButton.getBounds(), point, padding)
+    ) {
       return 'save'
     }
 
-    if (this.resetButton?.getBounds().contains(point.x, point.y)) {
+    if (
+      this.resetButton &&
+      this.containsExpandedBounds(this.resetButton.getBounds(), point, padding)
+    ) {
       return 'reset'
     }
 
-    if (this.exitButton?.getBounds().contains(point.x, point.y)) {
+    if (
+      this.exitButton &&
+      this.containsExpandedBounds(this.exitButton.getBounds(), point, padding)
+    ) {
       return 'exit'
     }
 
@@ -1025,13 +1199,37 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
   }
 
   private getHandToolAt(point: Phaser.Math.Vector2): DrawingTool | null {
+    const padding = this.getHandToolHitPadding()
+
     for (const tool of DRAWING_TOOLS) {
-      if (this.toolButtonFrames[tool]?.getBounds().contains(point.x, point.y)) {
+      const bounds = this.toolButtonFrames[tool]?.getBounds()
+      if (bounds && this.containsExpandedBounds(bounds, point, padding)) {
         return tool
       }
     }
 
     return null
+  }
+
+  private getHandActionHitPadding() {
+    return Math.max(36, Math.round(Math.min(this.scale.width, this.scale.height) * 0.045))
+  }
+
+  private getHandToolHitPadding() {
+    return Math.max(24, Math.round(Math.min(this.scale.width, this.scale.height) * 0.03))
+  }
+
+  private containsExpandedBounds(
+    bounds: Phaser.Geom.Rectangle,
+    point: Phaser.Math.Vector2,
+    padding: number,
+  ) {
+    return (
+      point.x >= bounds.left - padding &&
+      point.x <= bounds.right + padding &&
+      point.y >= bounds.top - padding &&
+      point.y <= bounds.bottom + padding
+    )
   }
 
   private clearPendingHandTool() {
@@ -1147,6 +1345,22 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
     return Math.max(6, Math.round(this.drawBounds.width * 0.013))
   }
 
+  private getHandDrawMinDistance() {
+    return Phaser.Math.Clamp(
+      Math.round(this.drawBounds.width * HAND_DRAW_MIN_DISTANCE_RATIO),
+      4,
+      12,
+    )
+  }
+
+  private getPointerDrawMinDistance() {
+    return Phaser.Math.Clamp(
+      Math.round(this.drawBounds.width * POINTER_DRAW_MIN_DISTANCE_RATIO),
+      3,
+      10,
+    )
+  }
+
   private clampToDrawBounds(x: number, y: number) {
     return new Phaser.Math.Vector2(
       Phaser.Math.Clamp(x, this.drawBounds.left, this.drawBounds.right),
@@ -1156,6 +1370,7 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
 
   private stopDrawing() {
     this.isDrawing = false
+    this.activeDrawingPointerId = null
     this.lastDrawPoint = null
   }
 
@@ -1302,6 +1517,7 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
       return
     }
 
+    this.pauseHandInputForConfirmDialog()
     this.isExitConfirmOpen = true
     this.exitConfirmDialog = createArtConfirmDialog(this, {
       depth: EXIT_CONFIRM_DEPTH,
@@ -1332,6 +1548,7 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
       return
     }
 
+    this.pauseHandInputForConfirmDialog()
     this.isSaveVisibilityConfirmOpen = true
     this.saveVisibilityConfirmDialog = createArtConfirmDialog(this, {
       depth: EXIT_CONFIRM_DEPTH,
@@ -1360,16 +1577,29 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
     })
   }
 
+  private pauseHandInputForConfirmDialog() {
+    this.stopDrawing()
+    this.stopHandDrawing()
+    this.clearPendingHandAction()
+    this.clearPendingHandTool()
+    this.clearPendingHandDialogButton()
+    this.handPointerSmoother.reset()
+  }
+
   private hideExitConfirm() {
+    this.exitConfirmDialog?.setButtonHover(null)
     this.exitConfirmDialog?.destroy()
     this.exitConfirmDialog = null
     this.isExitConfirmOpen = false
+    this.clearPendingHandDialogButton()
   }
 
   private hideSaveVisibilityConfirm() {
+    this.saveVisibilityConfirmDialog?.setButtonHover(null)
     this.saveVisibilityConfirmDialog?.destroy()
     this.saveVisibilityConfirmDialog = null
     this.isSaveVisibilityConfirmOpen = false
+    this.clearPendingHandDialogButton()
   }
 
   private returnToArtRoom() {

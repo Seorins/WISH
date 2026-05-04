@@ -5,19 +5,27 @@ import static org.hamcrest.Matchers.startsWith;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockMultipartHttpServletRequestBuilder;
 
 import com.comong.backend.domain.exercise.entity.ExerciseMotion;
 import com.comong.backend.domain.exercise.entity.ExerciseSession;
@@ -29,12 +37,21 @@ import com.comong.backend.domain.exercise.repository.ExerciseSessionRepository;
 import com.comong.backend.domain.patient.entity.PatientProfile;
 import com.comong.backend.domain.patient.repository.PatientProfileRepository;
 import com.comong.backend.domain.user.repository.UserRepository;
+import com.comong.backend.global.storage.StorageProperties;
 import com.comong.backend.support.IntegrationTestSupport;
 
 import tools.jackson.databind.ObjectMapper;
 
 @AutoConfigureMockMvc
 class ExerciseMotionControllerIntegrationTest extends IntegrationTestSupport {
+
+    /** PNG signature 8 byte + 4 byte filler = 12 byte (LocalImageStorage MAGIC_HEAD_SIZE). */
+    private static final byte[] PNG_BYTES = {
+        (byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 0
+    };
+
+    /** MP4 ftyp box at offset 4: "ftyp" + 4 byte filler + 4 byte filler = 12 byte total. */
+    private static final byte[] MP4_BYTES = {0, 0, 0, 0x20, 'f', 't', 'y', 'p', 'i', 's', 'o', 'm'};
 
     @Autowired private MockMvc mockMvc;
     @Autowired private ObjectMapper objectMapper;
@@ -43,6 +60,10 @@ class ExerciseMotionControllerIntegrationTest extends IntegrationTestSupport {
     @Autowired private ExerciseSessionMotionRepository exerciseSessionMotionRepository;
     @Autowired private PatientProfileRepository patientProfileRepository;
     @Autowired private UserRepository userRepository;
+    @Autowired private StorageProperties storageProperties;
+
+    @Value("${server.servlet.context-path:}")
+    private String contextPath;
 
     @BeforeEach
     void cleanDb() {
@@ -99,15 +120,13 @@ class ExerciseMotionControllerIntegrationTest extends IntegrationTestSupport {
 
     @Test
     void createExerciseMotion_byAdminPersistsAndReturnsLocation() throws Exception {
+        String requestJson =
+                "{\"exerciseType\":\"TOP\",\"name\":\"March\",\"routineOrder\":1,"
+                        + "\"targetReps\":8,\"description\":\"Walk in place.\"}";
+
         mockMvc.perform(
-                        post("/exercise-motions")
-                                .with(user("admin").roles("ADMIN"))
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(
-                                        "{\"exerciseType\":\"TOP\",\"name\":\"March\",\"routineOrder\":1,"
-                                                + "\"targetReps\":8,\"description\":\"Walk in place.\","
-                                                + "\"demoVideoUrl\":\"https://example.com/march.mp4\","
-                                                + "\"thumbnailUrl\":\"https://example.com/march.png\"}"))
+                        applyAdmin(
+                                createMultipart(requestJson, /* thumb */ null, /* video */ null)))
                 .andExpect(status().isCreated())
                 .andExpect(header().string("Location", startsWith("/exercise-motions/")))
                 .andExpect(jsonPath("$.code").value("SUCCESS"))
@@ -115,20 +134,45 @@ class ExerciseMotionControllerIntegrationTest extends IntegrationTestSupport {
                 .andExpect(jsonPath("$.data.exerciseType").value("TOP"))
                 .andExpect(jsonPath("$.data.name").value("March"))
                 .andExpect(jsonPath("$.data.routineOrder").value(1))
-                .andExpect(jsonPath("$.data.targetReps").value(8));
+                .andExpect(jsonPath("$.data.targetReps").value(8))
+                .andExpect(jsonPath("$.data.thumbnailUrl").doesNotExist())
+                .andExpect(jsonPath("$.data.demoVideoUrl").doesNotExist());
 
         assertThat(exerciseMotionRepository.count()).isEqualTo(1);
     }
 
     @Test
+    void createExerciseMotion_acceptsThumbnailAndVideoAndStoresFiles() throws Exception {
+        String requestJson =
+                "{\"exerciseType\":\"TOP\",\"name\":\"March\",\"routineOrder\":2,"
+                        + "\"targetReps\":8,\"description\":\"Walk in place.\"}";
+        MockMultipartFile thumbnail =
+                new MockMultipartFile("thumbnail", "march.png", "image/png", PNG_BYTES);
+        MockMultipartFile demoVideo =
+                new MockMultipartFile("demoVideo", "march.mp4", "video/mp4", MP4_BYTES);
+
+        mockMvc.perform(applyAdmin(createMultipart(requestJson, thumbnail, demoVideo)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.thumbnailUrl").isString())
+                .andExpect(jsonPath("$.data.demoVideoUrl").isString());
+
+        ExerciseMotion saved =
+                exerciseMotionRepository
+                        .findAllByExerciseTypeOrderByRoutineOrderAsc(ExerciseType.TOP)
+                        .get(0);
+        assertThat(saved.getThumbnailUrl()).isNotNull();
+        assertThat(saved.getDemoVideoUrl()).isNotNull();
+        assertThat(Files.exists(localPath(saved.getThumbnailUrl()))).isTrue();
+        assertThat(Files.exists(localPath(saved.getDemoVideoUrl()))).isTrue();
+    }
+
+    @Test
     void createExerciseMotion_byUserIsForbidden() throws Exception {
-        mockMvc.perform(
-                        post("/exercise-motions")
-                                .with(user("user").roles("USER"))
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(
-                                        "{\"exerciseType\":\"TOP\",\"name\":\"March\",\"routineOrder\":1,"
-                                                + "\"targetReps\":8,\"description\":\"Walk in place.\"}"))
+        String requestJson =
+                "{\"exerciseType\":\"TOP\",\"name\":\"March\",\"routineOrder\":1,"
+                        + "\"targetReps\":8,\"description\":\"Walk in place.\"}";
+
+        mockMvc.perform(createMultipart(requestJson, null, null).with(user("user").roles("USER")))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("G-004"));
 
@@ -139,14 +183,11 @@ class ExerciseMotionControllerIntegrationTest extends IntegrationTestSupport {
     void createExerciseMotion_rejectsDuplicatedRoutineOrderInSameExerciseType() throws Exception {
         exerciseMotionRepository.save(exerciseMotion(ExerciseType.TOP, "March", 1));
 
-        mockMvc.perform(
-                        post("/exercise-motions")
-                                .with(user("admin").roles("ADMIN"))
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(
-                                        "{\"exerciseType\":\"TOP\",\"name\":\"Side step\","
-                                                + "\"routineOrder\":1,\"targetReps\":8,"
-                                                + "\"description\":\"Move side to side.\"}"))
+        String requestJson =
+                "{\"exerciseType\":\"TOP\",\"name\":\"Side step\",\"routineOrder\":1,"
+                        + "\"targetReps\":8,\"description\":\"Move side to side.\"}";
+
+        mockMvc.perform(applyAdmin(createMultipart(requestJson, null, null)))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("EX-002"));
     }
@@ -154,26 +195,13 @@ class ExerciseMotionControllerIntegrationTest extends IntegrationTestSupport {
     @Test
     void updateExerciseMotion_byAdminUpdatesAllowedFields() throws Exception {
         ExerciseMotion saved =
-                exerciseMotionRepository.save(
-                        ExerciseMotion.builder()
-                                .exerciseType(ExerciseType.TOP)
-                                .name("March")
-                                .routineOrder(1)
-                                .targetReps(8)
-                                .description("Walk in place.")
-                                .demoVideoUrl("https://example.com/old.mp4")
-                                .thumbnailUrl("https://example.com/old.png")
-                                .build());
+                exerciseMotionRepository.save(exerciseMotion(ExerciseType.TOP, "March", 1));
 
-        mockMvc.perform(
-                        patch("/exercise-motions/{id}", saved.getId())
-                                .with(user("admin").roles("ADMIN"))
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(
-                                        "{\"name\":\"March updated\",\"targetReps\":10,"
-                                                + "\"description\":\"Updated description.\","
-                                                + "\"demoVideoUrl\":\"https://example.com/new.mp4\","
-                                                + "\"thumbnailUrl\":\"https://example.com/new.png\"}"))
+        String requestJson =
+                "{\"name\":\"March updated\",\"targetReps\":10,"
+                        + "\"description\":\"Updated description.\"}";
+
+        mockMvc.perform(applyAdmin(updateMultipart(saved.getId(), requestJson, null, null)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("SUCCESS"))
                 .andExpect(jsonPath("$.data.id").value(saved.getId()))
@@ -181,15 +209,69 @@ class ExerciseMotionControllerIntegrationTest extends IntegrationTestSupport {
                 .andExpect(jsonPath("$.data.routineOrder").value(1))
                 .andExpect(jsonPath("$.data.name").value("March updated"))
                 .andExpect(jsonPath("$.data.targetReps").value(10))
-                .andExpect(jsonPath("$.data.description").value("Updated description."))
-                .andExpect(jsonPath("$.data.demoVideoUrl").value("https://example.com/new.mp4"))
-                .andExpect(jsonPath("$.data.thumbnailUrl").value("https://example.com/new.png"));
+                .andExpect(jsonPath("$.data.description").value("Updated description."));
 
         ExerciseMotion updated = exerciseMotionRepository.findById(saved.getId()).orElseThrow();
-        assertThat(updated.getExerciseType()).isEqualTo(ExerciseType.TOP);
-        assertThat(updated.getRoutineOrder()).isEqualTo(1);
         assertThat(updated.getName()).isEqualTo("March updated");
         assertThat(updated.getTargetReps()).isEqualTo(10);
+    }
+
+    @Test
+    void updateExerciseMotion_replacesThumbnailAndDeletesOldFile() throws Exception {
+        // 1. 기존 썸네일 업로드 + 동작 생성
+        String createJson =
+                "{\"exerciseType\":\"TOP\",\"name\":\"March\",\"routineOrder\":1,"
+                        + "\"targetReps\":8,\"description\":\"Walk in place.\"}";
+        MockMultipartFile firstThumb =
+                new MockMultipartFile("thumbnail", "first.png", "image/png", PNG_BYTES);
+        mockMvc.perform(applyAdmin(createMultipart(createJson, firstThumb, null)))
+                .andExpect(status().isCreated());
+        ExerciseMotion saved =
+                exerciseMotionRepository
+                        .findAllByExerciseTypeOrderByRoutineOrderAsc(ExerciseType.TOP)
+                        .get(0);
+        Path firstFile = localPath(saved.getThumbnailUrl());
+        assertThat(Files.exists(firstFile)).isTrue();
+
+        // 2. 다른 썸네일로 교체
+        MockMultipartFile secondThumb =
+                new MockMultipartFile("thumbnail", "second.png", "image/png", PNG_BYTES);
+        mockMvc.perform(applyAdmin(updateMultipart(saved.getId(), "{}", secondThumb, null)))
+                .andExpect(status().isOk());
+
+        ExerciseMotion updated = exerciseMotionRepository.findById(saved.getId()).orElseThrow();
+        assertThat(updated.getThumbnailUrl()).isNotEqualTo(saved.getThumbnailUrl());
+        assertThat(Files.exists(localPath(updated.getThumbnailUrl()))).isTrue();
+        // 이전 파일은 afterCommit 훅으로 삭제됨
+        assertThat(Files.exists(firstFile)).isFalse();
+    }
+
+    @Test
+    void updateExerciseMotion_clearThumbnailRemovesUrlAndFile() throws Exception {
+        String createJson =
+                "{\"exerciseType\":\"TOP\",\"name\":\"March\",\"routineOrder\":1,"
+                        + "\"targetReps\":8,\"description\":\"Walk in place.\"}";
+        MockMultipartFile thumb =
+                new MockMultipartFile("thumbnail", "march.png", "image/png", PNG_BYTES);
+        mockMvc.perform(applyAdmin(createMultipart(createJson, thumb, null)))
+                .andExpect(status().isCreated());
+        ExerciseMotion saved =
+                exerciseMotionRepository
+                        .findAllByExerciseTypeOrderByRoutineOrderAsc(ExerciseType.TOP)
+                        .get(0);
+        Path file = localPath(saved.getThumbnailUrl());
+        assertThat(Files.exists(file)).isTrue();
+
+        mockMvc.perform(
+                        applyAdmin(
+                                updateMultipart(
+                                        saved.getId(), "{\"clearThumbnail\":true}", null, null)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.thumbnailUrl").doesNotExist());
+
+        ExerciseMotion updated = exerciseMotionRepository.findById(saved.getId()).orElseThrow();
+        assertThat(updated.getThumbnailUrl()).isNull();
+        assertThat(Files.exists(file)).isFalse();
     }
 
     @Test
@@ -198,10 +280,8 @@ class ExerciseMotionControllerIntegrationTest extends IntegrationTestSupport {
                 exerciseMotionRepository.save(exerciseMotion(ExerciseType.TOP, "March", 1));
 
         mockMvc.perform(
-                        patch("/exercise-motions/{id}", saved.getId())
-                                .with(user("user").roles("USER"))
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content("{\"name\":\"March updated\"}"))
+                        updateMultipart(saved.getId(), "{\"name\":\"March updated\"}", null, null)
+                                .with(user("user").roles("USER")))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("G-004"));
 
@@ -212,10 +292,9 @@ class ExerciseMotionControllerIntegrationTest extends IntegrationTestSupport {
     @Test
     void updateExerciseMotion_rejectsUnknownMotion() throws Exception {
         mockMvc.perform(
-                        patch("/exercise-motions/{id}", 999_999L)
-                                .with(user("admin").roles("ADMIN"))
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content("{\"name\":\"March updated\"}"))
+                        applyAdmin(
+                                updateMultipart(
+                                        999_999L, "{\"name\":\"March updated\"}", null, null)))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("EX-001"));
     }
@@ -226,10 +305,12 @@ class ExerciseMotionControllerIntegrationTest extends IntegrationTestSupport {
                 exerciseMotionRepository.save(exerciseMotion(ExerciseType.TOP, "March", 1));
 
         mockMvc.perform(
-                        patch("/exercise-motions/{id}", saved.getId())
-                                .with(user("admin").roles("ADMIN"))
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content("{\"name\":\"   \",\"targetReps\":0}"))
+                        applyAdmin(
+                                updateMultipart(
+                                        saved.getId(),
+                                        "{\"name\":\"   \",\"targetReps\":0}",
+                                        null,
+                                        null)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("G-001"));
 
@@ -297,6 +378,38 @@ class ExerciseMotionControllerIntegrationTest extends IntegrationTestSupport {
                 .andExpect(jsonPath("$.code").value("EX-003"));
 
         assertThat(exerciseMotionRepository.existsById(motion.getId())).isTrue();
+
+        // 인증 위해 만든 token 미사용 변수 컴파일러 경고 회피
+        assertThat(token).isNotNull();
+    }
+
+    @Test
+    void deleteExerciseMotion_removesAssociatedFiles() throws Exception {
+        String createJson =
+                "{\"exerciseType\":\"TOP\",\"name\":\"March\",\"routineOrder\":1,"
+                        + "\"targetReps\":8,\"description\":\"Walk in place.\"}";
+        MockMultipartFile thumb =
+                new MockMultipartFile("thumbnail", "march.png", "image/png", PNG_BYTES);
+        MockMultipartFile video =
+                new MockMultipartFile("demoVideo", "march.mp4", "video/mp4", MP4_BYTES);
+        mockMvc.perform(applyAdmin(createMultipart(createJson, thumb, video)))
+                .andExpect(status().isCreated());
+        ExerciseMotion saved =
+                exerciseMotionRepository
+                        .findAllByExerciseTypeOrderByRoutineOrderAsc(ExerciseType.TOP)
+                        .get(0);
+        Path thumbPath = localPath(saved.getThumbnailUrl());
+        Path videoPath = localPath(saved.getDemoVideoUrl());
+        assertThat(Files.exists(thumbPath)).isTrue();
+        assertThat(Files.exists(videoPath)).isTrue();
+
+        mockMvc.perform(
+                        delete("/exercise-motions/{id}", saved.getId())
+                                .with(user("admin").roles("ADMIN")))
+                .andExpect(status().isNoContent());
+
+        assertThat(Files.exists(thumbPath)).isFalse();
+        assertThat(Files.exists(videoPath)).isFalse();
     }
 
     @Test
@@ -313,6 +426,64 @@ class ExerciseMotionControllerIntegrationTest extends IntegrationTestSupport {
         mockMvc.perform(get("/exercise-motions").header("Authorization", "Bearer " + token))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("G-001"));
+    }
+
+    /* ------------- Helpers ------------- */
+
+    private MockMultipartHttpServletRequestBuilder createMultipart(
+            String requestJson, MockMultipartFile thumbnail, MockMultipartFile demoVideo) {
+        MockMultipartHttpServletRequestBuilder builder =
+                multipart("/exercise-motions").file(jsonPart("request", requestJson));
+        if (thumbnail != null) {
+            builder.file(thumbnail);
+        }
+        if (demoVideo != null) {
+            builder.file(demoVideo);
+        }
+        return builder;
+    }
+
+    private MockMultipartHttpServletRequestBuilder updateMultipart(
+            Long id, String requestJson, MockMultipartFile thumbnail, MockMultipartFile demoVideo) {
+        MockMultipartHttpServletRequestBuilder builder =
+                multipart(HttpMethod.PATCH, "/exercise-motions/{id}", id)
+                        .file(jsonPart("request", requestJson));
+        if (thumbnail != null) {
+            builder.file(thumbnail);
+        }
+        if (demoVideo != null) {
+            builder.file(demoVideo);
+        }
+        return builder;
+    }
+
+    private MockMultipartFile jsonPart(String name, String json) {
+        return new MockMultipartFile(
+                name,
+                /* originalFilename */ null,
+                MediaType.APPLICATION_JSON_VALUE,
+                json.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private MockMultipartHttpServletRequestBuilder applyAdmin(
+            MockMultipartHttpServletRequestBuilder builder) {
+        builder.with(user("admin").roles("ADMIN"));
+        return builder;
+    }
+
+    /**
+     * URL 에서 local 디스크의 절대 경로를 복원한다 ({@code <upload-dir>/...} 또는 {@code <upload-dir>/videos/...}).
+     */
+    private Path localPath(String url) {
+        String publicPrefix = contextPath + storageProperties.publicUrlPrefix();
+        if (!url.startsWith(publicPrefix)) {
+            throw new IllegalStateException("Unexpected URL prefix: " + url);
+        }
+        String relative = url.substring(publicPrefix.length());
+        if (relative.startsWith("/")) {
+            relative = relative.substring(1);
+        }
+        return Path.of(storageProperties.uploadDir()).toAbsolutePath().resolve(relative);
     }
 
     private ExerciseMotion exerciseMotion(

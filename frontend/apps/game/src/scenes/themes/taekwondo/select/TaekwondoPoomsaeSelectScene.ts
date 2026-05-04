@@ -407,6 +407,17 @@ export class TaekwondoPoomsaeSelectScene extends Phaser.Scene {
 
   private startPoomsaePractice(option: PoomsaeOption) {
     this.isDragging = false
+
+    if (option.id === 'taegeuk-1') {
+      fadeToScene(this, 'TaekwondoPoomsaePracticeScene', {
+        duration: FADE_DURATION,
+        data: {
+          poomsaeId: option.id,
+          poomsaeName: option.name,
+        },
+      })
+      return
+    }
     this.showTemporaryNotice(`${option.name} 연습 화면은 곧 연결할게!`)
   }
 

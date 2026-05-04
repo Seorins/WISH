@@ -23,6 +23,12 @@ import {
   setCenteredDialogText,
   type SimpleDialogUi,
 } from '@/game/ui/simpleDialog'
+import {
+  CUTE_CARD_PALETTES,
+  drawCutePillButton,
+  drawCuteCardPanel,
+  type CuteCardPalette,
+} from '@/game/ui/cuteCard'
 import { addCoverBackground } from '@/game/world/background'
 import { createRatioRectangle, getRectangleEntryState } from '@/game/world/portal'
 import {
@@ -40,13 +46,29 @@ const MUSIC_RETURN_SPAWN = { xRatio: 0.235, yRatio: 0.44 }
 const GISUNG_ON_WINDOW = { xRatio: 0.5, bottomYRatio: 0.38, heightRatio: 0.22 }
 const GISUNG_INTERACTION_RADIUS_RATIO = 0.12
 const GISUNG_TALK_ICON_OFFSET_RATIO = 1.05
-const DIALOG_TEXT_BOX = { x: 900, y: 400, width: 1060, height: 180 }
+// frame asset is 2172 x 724 — values below are in that pixel space
+const DIALOG_TEXT_BOX = { x: 580, y: 180, width: 1500, height: 400 }
+const DIALOG_NAME_BOX = { x: 505, y: 107, width: 390, height: 150 }
 const CARD_DEPTH = 24
-const CARD_FONT_FAMILY = '"Malgun Gothic", "Noto Sans KR", sans-serif'
+const CARD_FONT_FAMILY =
+  '"Pretendard Variable", Pretendard, "Noto Sans KR", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", sans-serif'
 const CARD_FRAME_ASPECT_RATIO = 408 / 612
 const CONTENT_CONFIRM_VISIBLE_MS = 1300
+
+// Card layout constants (ratios of card height, card center is the origin).
+// Keeping these in one place makes it easy to keep elements visually aligned.
+const CARD_LAYOUT = {
+  tagTopOffset: 0.085, // tag center distance from card top
+  characterCenterY: -0.06, // negative = above card center
+  characterSize: 0.4, // square character
+  titleY: 0.21, // title baseline (origin 0.5)
+  descGap: 0.07, // gap from title to description
+  buttonCenterY: 0.4, // button center
+  buttonWidth: 0.55,
+  buttonHeight: 0.078,
+} as const
 const MUSIC_CONTENT_SCENE_KEYS: Record<MusicContentMode, string> = {
-  'rhythm-game': 'MusicRhythmScene',
+  'rhythm-game': 'MusicSongSelectScene',
   'free-play': 'MusicFreePlayScene',
 }
 
@@ -57,13 +79,14 @@ type MusicSelectSceneData = {
 type MusicCardView = {
   choice: MusicChoiceOption
   container: Phaser.GameObjects.Container
-  frame: Phaser.GameObjects.Image
+  panel: Phaser.GameObjects.Graphics
   selectButton: Phaser.GameObjects.Graphics
   selectLabel: Phaser.GameObjects.Text
   baseX: number
   baseY: number
   width: number
   height: number
+  palette: CuteCardPalette
 }
 
 type MusicDialogPhase = 'closed' | 'intro' | 'choice' | 'confirm'
@@ -157,7 +180,6 @@ export class MusicSelectScene extends Phaser.Scene {
     )
     loadInteractionIcons(this)
     this.load.image('gisung-dialog-frame', assetPath('images/npcs/gisung/dialog-frame.png'))
-    this.load.image('music-card-frame', assetPath('images/themes/music/ui/frame.png'))
     this.load.image('music-gisung-card-1', assetPath('images/themes/music/ui/gisung_card1.png'))
     this.load.image('music-gisung-card-2', assetPath('images/themes/music/ui/gisung_card2.png'))
     this.load.image('music-piano', assetPath('images/themes/music/ui/piano.png'))
@@ -292,10 +314,17 @@ export class MusicSelectScene extends Phaser.Scene {
     this.dialog = createSimpleDialogUi(this, {
       frameKey: 'gisung-dialog-frame',
       textBox: DIALOG_TEXT_BOX,
-      dialogWidthRatio: 0.78,
-      maxDialogWidth: 1080,
-      fontSize: 40,
-      lineSpacing: 4,
+      dialogWidthRatio: 0.7,
+      maxDialogWidth: 1000,
+      fontSize: 46,
+      lineSpacing: 6,
+      nameBox: DIALOG_NAME_BOX,
+      nameText: '기성',
+      nameFontColor: '#2a1f17',
+      nameFontSize: 48,
+      nameLetterSpacing: 6,
+      // only flatten the optical offset for single-line text — multi-line keeps default
+      opticalOffsets: { single: 0 },
     })
   }
 
@@ -305,7 +334,7 @@ export class MusicSelectScene extends Phaser.Scene {
     const gap = Phaser.Math.Clamp(vw * 0.04, 56, 86)
     const totalWidth = cardWidth * musicChoiceOptions.length + gap
     const firstX = vw / 2 - totalWidth / 2 + cardWidth / 2
-    const centerY = Phaser.Math.Clamp(vh * 0.55, 42 + cardHeight / 2, vh - cardHeight / 2 - 34)
+    const centerY = Phaser.Math.Clamp(vh * 0.48, 24 + cardHeight / 2, vh - cardHeight / 2 - 24)
 
     this.cards = musicChoiceOptions.map((choice, index) =>
       this.createChoiceCard(
@@ -335,61 +364,103 @@ export class MusicSelectScene extends Phaser.Scene {
     )
     container.input!.cursor = 'pointer'
 
-    const frame = this.add.image(0, 0, 'music-card-frame').setDisplaySize(width, height)
-    container.add(frame)
+    const palette =
+      choice.mode === 'rhythm-game' ? CUTE_CARD_PALETTES.rose : CUTE_CARD_PALETTES.sage
+    const tagText = choice.mode === 'rhythm-game' ? '리듬 놀이' : '자유 연주'
 
-    if (choice.mode === 'rhythm-game') {
-      this.createRhythmCardArt(container, width, height)
-    } else {
-      this.createFreePlayCardArt(container, width, height)
-    }
+    const panel = this.add.graphics()
+    container.add(panel)
 
-    const title = this.add
-      .text(0, -height * 0.335, choice.label, {
+    // ── top tag pill ──
+    const tagFontSize = Math.round(height * 0.028)
+    const tagLabel = this.add
+      .text(0, 0, tagText, {
         fontFamily: CARD_FONT_FAMILY,
-        fontSize: `${Math.round(height * 0.054)}px`,
+        fontSize: `${tagFontSize}px`,
         fontStyle: 'bold',
-        color: '#3f2c1d',
-        stroke: '#f4dfbd',
-        strokeThickness: Math.max(2, Math.round(height * 0.003)),
+        color: palette.accentHex,
+      })
+      .setOrigin(0.5)
+    const tagW = tagLabel.width + Math.round(height * 0.055)
+    const tagH = Math.round(height * 0.052)
+    const tagY = -height / 2 + Math.round(height * CARD_LAYOUT.tagTopOffset)
+    const tagBg = this.add.graphics()
+    tagBg.fillStyle(palette.accent, 0.22)
+    tagBg.fillRoundedRect(-tagW / 2, tagY - tagH / 2, tagW, tagH, tagH / 2)
+    tagBg.lineStyle(1.2, palette.accent, 0.55)
+    tagBg.strokeRoundedRect(-tagW / 2, tagY - tagH / 2, tagW, tagH, tagH / 2)
+    tagLabel.setPosition(0, tagY)
+
+    // ── decorative scene: instruments / notes ──
+    const decoNodes = this.createCardDecorations(choice.mode, width, height)
+
+    // ── hero: dog character image ──
+    const characterKey =
+      choice.mode === 'rhythm-game' ? 'music-gisung-card-1' : 'music-gisung-card-2'
+    const characterSize = height * CARD_LAYOUT.characterSize
+    const character = this.add
+      .image(0, height * CARD_LAYOUT.characterCenterY, characterKey)
+      .setDisplaySize(characterSize, characterSize)
+
+    // ── title ──
+    const titleY = height * CARD_LAYOUT.titleY
+    const title = this.add
+      .text(0, titleY, choice.label, {
+        fontFamily: CARD_FONT_FAMILY,
+        fontSize: `${Math.round(height * 0.056)}px`,
+        fontStyle: '700',
+        color: '#3b2a44',
         align: 'center',
       })
       .setOrigin(0.5)
+
+    // ── description ──
     const description = this.add
-      .text(0, -height * 0.27, choice.description, {
+      .text(0, titleY + Math.round(height * CARD_LAYOUT.descGap), choice.description, {
         fontFamily: CARD_FONT_FAMILY,
         fontSize: `${Math.round(height * 0.026)}px`,
         fontStyle: 'bold',
-        color: '#5f4630',
+        color: '#7a6e85',
         align: 'center',
         wordWrap: { width: width * 0.78, useAdvancedWrap: true },
       })
       .setOrigin(0.5)
 
+    // ── select button ──
     const selectButton = this.add.graphics()
     const selectLabel = this.add
-      .text(0, height * 0.365, '선택', {
+      .text(0, height * CARD_LAYOUT.buttonCenterY, '선택', {
         fontFamily: CARD_FONT_FAMILY,
         fontSize: `${Math.round(height * 0.034)}px`,
         fontStyle: 'bold',
-        color: '#fff0d0',
-        stroke: '#332012',
-        strokeThickness: Math.max(2, Math.round(height * 0.004)),
+        color: '#ffffff',
         align: 'center',
       })
       .setOrigin(0.5)
+      .setShadow(0, 1, `#${palette.shadow.toString(16).padStart(6, '0')}`, 2, false, true)
 
-    container.add([title, description, selectButton, selectLabel])
+    container.add([
+      tagBg,
+      tagLabel,
+      ...decoNodes,
+      character,
+      title,
+      description,
+      selectButton,
+      selectLabel,
+    ])
+
     const card: MusicCardView = {
       choice,
       container,
-      frame,
+      panel,
       selectButton,
       selectLabel,
       baseX: x,
       baseY: y,
       width,
       height,
+      palette,
     }
 
     container.on('pointerover', () => this.handleCardHover(choice.mode))
@@ -408,6 +479,69 @@ export class MusicSelectScene extends Phaser.Scene {
     )
 
     return card
+  }
+
+  private createCardDecorations(
+    mode: MusicContentMode,
+    width: number,
+    height: number,
+  ): Phaser.GameObjects.GameObject[] {
+    if (mode === 'rhythm-game') {
+      const positions = [
+        { xRatio: -0.27, yRatio: -0.18, size: 0.08 },
+        { xRatio: 0.26, yRatio: -0.22, size: 0.075 },
+        { xRatio: -0.05, yRatio: -0.06, size: 0.07 },
+      ]
+      return positions.map((p, i) => {
+        const note = this.add
+          .image(width * p.xRatio, height * p.yRatio, `music-note-${(i % 5) + 1}`)
+          .setDisplaySize(height * p.size, height * p.size)
+          .setAlpha(0.7)
+        this.tweens.add({
+          targets: note,
+          y: note.y + height * 0.025,
+          alpha: 0.45,
+          duration: 1800 + i * 220,
+          delay: i * 280,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.easeInOut',
+        })
+        return note
+      })
+    }
+
+    // free-play: piano + violin softly placed at the character's sides,
+    // kept small/desaturated so the dog stays the focal point
+    const piano = this.add
+      .image(-width * 0.32, -height * 0.06, 'music-piano')
+      .setDisplaySize(width * 0.2, width * 0.18)
+      .setAngle(-6)
+      .setAlpha(0.4)
+    const violin = this.add
+      .image(width * 0.32, -height * 0.04, 'music-violin')
+      .setDisplaySize(width * 0.12, height * 0.2)
+      .setAngle(8)
+      .setAlpha(0.4)
+    this.tweens.add({
+      targets: piano,
+      y: piano.y + height * 0.012,
+      angle: -3,
+      duration: 1600,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    })
+    this.tweens.add({
+      targets: violin,
+      y: violin.y - height * 0.012,
+      angle: 5,
+      duration: 1700,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    })
+    return [piano, violin]
   }
 
   private getCardAtPointer(pointer: Phaser.Input.Pointer) {
@@ -433,116 +567,6 @@ export class MusicSelectScene extends Phaser.Scene {
       )
     })
   }
-
-  private createRhythmCardArt(
-    container: Phaser.GameObjects.Container,
-    width: number,
-    height: number,
-  ) {
-    const beatLine = this.add.graphics()
-    beatLine.lineStyle(Math.max(3, Math.round(width * 0.014)), 0xa879d6, 0.52)
-    beatLine.lineBetween(-width * 0.31, height * 0.245, width * 0.31, height * 0.245)
-    beatLine.lineStyle(Math.max(2, Math.round(width * 0.008)), 0xffffff, 0.76)
-    beatLine.lineBetween(-width * 0.27, height * 0.245, width * 0.27, height * 0.245)
-
-    const notePositions = [
-      { xRatio: -0.23, yRatio: -0.16, endYRatio: 0.08 },
-      { xRatio: 0.22, yRatio: -0.22, endYRatio: 0.13 },
-      { xRatio: -0.04, yRatio: -0.06, endYRatio: 0.19 },
-    ]
-    const notes = notePositions.map((position, index) => {
-      const note = this.add
-        .image(width * position.xRatio, height * position.yRatio, `music-note-${(index % 5) + 1}`)
-        .setDisplaySize(height * 0.07, height * 0.07)
-        .setAlpha(0.82)
-      this.tweens.add({
-        targets: note,
-        y: height * position.endYRatio,
-        alpha: 0.2,
-        duration: 4300 + index * 320,
-        delay: index * 780,
-        repeat: -1,
-        ease: 'Sine.easeInOut',
-        onRepeat: () => note.setAlpha(0.82),
-      })
-      return note
-    })
-
-    const character = this.add
-      .image(0, height * 0.065, 'music-gisung-card-1')
-      .setDisplaySize(height * 0.35, height * 0.415)
-      .setAlpha(0.98)
-
-    this.tweens.add({
-      targets: beatLine,
-      alpha: 0.3,
-      duration: 520,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
-    })
-    this.tweens.add({
-      targets: character,
-      y: character.y - height * 0.012,
-      duration: 820,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
-    })
-
-    container.add([...notes, beatLine, character])
-  }
-
-  private createFreePlayCardArt(
-    container: Phaser.GameObjects.Container,
-    width: number,
-    height: number,
-  ) {
-    const piano = this.add
-      .image(-width * 0.24, -height * 0.015, 'music-piano')
-      .setDisplaySize(width * 0.27, width * 0.255)
-      .setAngle(-7)
-      .setAlpha(0.3)
-    const violin = this.add
-      .image(width * 0.23, height * 0.16, 'music-violin')
-      .setDisplaySize(width * 0.15, height * 0.27)
-      .setAngle(9)
-      .setAlpha(0.3)
-    const character = this.add
-      .image(0, height * 0.065, 'music-gisung-card-2')
-      .setDisplaySize(height * 0.34, height * 0.405)
-      .setAlpha(0.98)
-
-    this.tweens.add({
-      targets: piano,
-      y: piano.y + height * 0.01,
-      angle: -3,
-      duration: 1300,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
-    })
-    this.tweens.add({
-      targets: violin,
-      y: violin.y - height * 0.012,
-      angle: 5,
-      duration: 1400,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
-    })
-    this.tweens.add({
-      targets: character,
-      y: character.y - height * 0.01,
-      duration: 880,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
-    })
-
-    container.add([piano, violin, character])
-  }
-
   private updateGisungConversation() {
     if (this.isTransitioning) {
       return
@@ -666,39 +690,22 @@ export class MusicSelectScene extends Phaser.Scene {
     this.cards.forEach(card => {
       const isSelected = card.choice.mode === this.selectedMode
       const isHovered = card.choice.mode === this.hoveredMode
-      const alpha = this.isWaitingContentStart && !isSelected ? 0.7 : 1
+      const dimmed = this.isWaitingContentStart && !isSelected
+      const alpha = dimmed ? 0.55 : 1
+      const state = isSelected ? 'selected' : isHovered ? 'hover' : 'default'
       card.container.setScale(isSelected ? 1.035 : isHovered ? 1.02 : 1)
-      card.frame.setAlpha(alpha)
-      card.selectButton.setAlpha(alpha)
-      card.selectLabel.setAlpha(alpha)
-      this.drawSelectButton(card, isSelected ? 'selected' : isHovered ? 'hover' : 'default')
+      card.container.setAlpha(alpha)
+      drawCuteCardPanel(card.panel, card.width, card.height, card.palette, state, 28)
+      drawCutePillButton(
+        card.selectButton,
+        0,
+        card.height * CARD_LAYOUT.buttonCenterY,
+        card.width * CARD_LAYOUT.buttonWidth,
+        card.height * CARD_LAYOUT.buttonHeight,
+        card.palette,
+        state,
+      )
     })
-  }
-
-  private drawSelectButton(card: MusicCardView, state: 'default' | 'hover' | 'selected') {
-    const { selectButton, width, height } = card
-    const buttonWidth = width * 0.44
-    const buttonHeight = height * 0.072
-    const x = -buttonWidth / 2
-    const y = height * 0.365 - buttonHeight / 2
-    const fill = state === 'default' ? 0x8a572b : state === 'hover' ? 0x9d6734 : 0xb27335
-    const stroke = state === 'default' ? 0x3d2614 : 0x2f1c0d
-
-    selectButton.clear()
-    selectButton.fillStyle(0x2a190b, 0.22)
-    selectButton.fillRoundedRect(
-      x + width * 0.012,
-      y + height * 0.009,
-      buttonWidth,
-      buttonHeight,
-      8,
-    )
-    selectButton.fillStyle(fill, 0.98)
-    selectButton.fillRoundedRect(x, y, buttonWidth, buttonHeight, 8)
-    selectButton.fillStyle(0xf3bd72, 0.2)
-    selectButton.fillRoundedRect(x + 5, y + 4, buttonWidth - 10, buttonHeight * 0.38, 6)
-    selectButton.lineStyle(Math.max(2, Math.round(height * 0.004)), stroke, 0.96)
-    selectButton.strokeRoundedRect(x, y, buttonWidth, buttonHeight, 8)
   }
 
   private showCards() {

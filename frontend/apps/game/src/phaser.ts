@@ -7,16 +7,29 @@ import { ArtFreeDrawingScene } from './scenes/themes/art/free-drawing/ArtFreeDra
 import { ArtSelectScene } from './scenes/themes/art/select/ArtSelectScene'
 import { TaekwondoPoomsaeSelectScene } from './scenes/themes/taekwondo/select/TaekwondoPoomsaeSelectScene'
 import { TaekwondoSelectScene } from './scenes/themes/taekwondo/select/TaekwondoSelectScene'
+import { TaekwondoPoomsaePracticeScene } from './scenes/themes/taekwondo/play/TaekwondoPoomsaePracticeScene'
 import {
   GymnasticsDanielScene,
   GymnasticsTopScene,
 } from './scenes/themes/gymnastics/play/GymnasticsPlayScene'
 import { GymnasticsSelectScene } from './scenes/themes/gymnastics/select/GymnasticsSelectScene'
+import { MusicRhythmScene } from './scenes/themes/music/play/MusicRhythmScene'
 import { MusicSelectScene } from './scenes/themes/music/select/MusicSelectScene'
+import { MusicSongSelectScene } from './scenes/themes/music/select/MusicSongSelectScene'
 import { VillageScene } from './scenes/village/VillageScene'
 
+function configureTouchSurface(element: HTMLElement) {
+  element.style.setProperty('overscroll-behavior', 'none')
+  element.style.setProperty('touch-action', 'none')
+  element.style.setProperty('user-select', 'none')
+  element.style.setProperty('-webkit-user-select', 'none')
+  element.style.setProperty('-webkit-touch-callout', 'none')
+}
+
 export function createGame(parent: HTMLElement): Phaser.Game {
-  return new Phaser.Game({
+  configureTouchSurface(parent)
+
+  const game = new Phaser.Game({
     type: Phaser.AUTO,
     parent,
     width: window.innerWidth,
@@ -24,6 +37,18 @@ export function createGame(parent: HTMLElement): Phaser.Game {
     backgroundColor: '#000000',
     antialias: true,
     disableContextMenu: true,
+    input: {
+      mouse: {
+        preventDefaultDown: true,
+        preventDefaultMove: true,
+        preventDefaultUp: true,
+        preventDefaultWheel: true,
+      },
+      touch: {
+        capture: true,
+      },
+      windowEvents: true,
+    },
     physics: {
       default: 'arcade',
       arcade: { debug: false },
@@ -38,14 +63,21 @@ export function createGame(parent: HTMLElement): Phaser.Game {
       ArtColoringScene,
       TaekwondoSelectScene,
       TaekwondoPoomsaeSelectScene,
+      TaekwondoPoomsaePracticeScene,
       GymnasticsSelectScene,
       GymnasticsTopScene,
       GymnasticsDanielScene,
       MusicSelectScene,
+      MusicSongSelectScene,
+      MusicRhythmScene,
     ],
     scale: {
       mode: Phaser.Scale.RESIZE,
       autoCenter: Phaser.Scale.CENTER_BOTH,
     },
   })
+
+  configureTouchSurface(game.canvas)
+
+  return game
 }

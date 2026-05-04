@@ -9,3 +9,13 @@ __pycache__/
 .ruff_cache/
 *.pyc
 .claude/
+
+# AI 학습 작업용 임시 staging 폴더
+.staging/
+
+# Jupyter 체크포인트
+.ipynb_checkpoints/
+
+# 학습 데이터셋 원본 / 전처리 결과 (대용량, 재생성 가능)
+notebooks/**/data/
+notebooks/**/processed/

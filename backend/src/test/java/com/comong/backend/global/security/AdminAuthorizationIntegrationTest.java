@@ -1,9 +1,12 @@
 package com.comong.backend.global.security;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import java.nio.charset.StandardCharsets;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -11,7 +14,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockMultipartHttpServletRequestBuilder;
 
 import com.comong.backend.domain.exercise.repository.ExerciseMotionRepository;
 import com.comong.backend.domain.exercise.repository.ExerciseSessionMotionRepository;
@@ -80,10 +85,8 @@ class AdminAuthorizationIntegrationTest extends IntegrationTestSupport {
         String userToken = login("user1@example.com", "P@ssw0rd!");
 
         mockMvc.perform(
-                        post("/exercise-motions")
-                                .header("Authorization", "Bearer " + userToken)
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(motionCreateBody("TOP", 1, "제자리 걷기")))
+                        motionCreateMultipart("TOP", 1, "제자리 걷기")
+                                .header("Authorization", "Bearer " + userToken))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("G-004"));
     }
@@ -96,10 +99,8 @@ class AdminAuthorizationIntegrationTest extends IntegrationTestSupport {
 
         // 가입 직후 토큰은 USER 이므로 admin endpoint 거부.
         mockMvc.perform(
-                        post("/exercise-motions")
-                                .header("Authorization", "Bearer " + beforeToken)
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(motionCreateBody("TOP", 2, "사이드 스텝")))
+                        motionCreateMultipart("TOP", 2, "사이드 스텝")
+                                .header("Authorization", "Bearer " + beforeToken))
                 .andExpect(status().isForbidden());
 
         // 2. 운영 절차 시뮬레이션 — DB 직접 갱신으로 USER → ADMIN 승격.
@@ -115,10 +116,8 @@ class AdminAuthorizationIntegrationTest extends IntegrationTestSupport {
 
         // 4. 같은 사용자, 새 토큰으로 admin endpoint 통과.
         mockMvc.perform(
-                        post("/exercise-motions")
-                                .header("Authorization", "Bearer " + afterToken)
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(motionCreateBody("TOP", 3, "대각선 지르기")))
+                        motionCreateMultipart("TOP", 3, "대각선 지르기")
+                                .header("Authorization", "Bearer " + afterToken))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.code").value("SUCCESS"));
     }
@@ -144,9 +143,17 @@ class AdminAuthorizationIntegrationTest extends IntegrationTestSupport {
         return objectMapper.readTree(response).get("data").get("accessToken").asString();
     }
 
-    private String motionCreateBody(String exerciseType, int routineOrder, String name)
-            throws Exception {
-        return json(new MotionCreatePayload(exerciseType, name, routineOrder, 8, "테스트 동작"));
+    /** ExerciseMotion create 호출은 multipart 다 (S14P31E103-308). request part 만 채우고 미디어 part 는 생략. */
+    private MockMultipartHttpServletRequestBuilder motionCreateMultipart(
+            String exerciseType, int routineOrder, String name) throws Exception {
+        String body = json(new MotionCreatePayload(exerciseType, name, routineOrder, 8, "테스트 동작"));
+        return multipart("/exercise-motions")
+                .file(
+                        new MockMultipartFile(
+                                "request",
+                                /* originalFilename */ null,
+                                MediaType.APPLICATION_JSON_VALUE,
+                                body.getBytes(StandardCharsets.UTF_8)));
     }
 
     private String json(Object value) throws Exception {
