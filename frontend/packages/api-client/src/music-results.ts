@@ -26,7 +26,16 @@ export type MusicResult = {
   playedDurationMs: number
   playedAt: string
   isNewBest: boolean
-  previousBestScore: number
+  previousBestScore: number | null
+}
+
+export type MusicBestResult = {
+  chartId: string
+  bestScore: number
+  bestRank: string
+  bestAccuracy: number
+  playCount: number
+  lastPlayedAt: string
 }
 
 export async function saveMusicResult(request: MusicResultRequest) {
@@ -35,6 +44,6 @@ export async function saveMusicResult(request: MusicResultRequest) {
 }
 
 export async function getMyBestMusicResults() {
-  const response = await apiClient.get<ApiResponse<MusicResult[]>>('/music/results/me/best')
+  const response = await apiClient.get<ApiResponse<MusicBestResult[]>>('/music/results/me/best')
   return response.data
 }
