@@ -103,7 +103,16 @@ public class ExerciseMotionService {
             MultipartFile thumbnail,
             MultipartFile demoVideo) {
         ExerciseMotion motion = findOrThrow(id);
-        motion.updateMetadata(request.name(), request.targetReps(), request.description());
+        if (request.routineOrder() != null
+                && exerciseMotionRepository.existsByExerciseTypeAndRoutineOrderAndIdNot(
+                        motion.getExerciseType(), request.routineOrder(), motion.getId())) {
+            throw new BusinessException(ExerciseErrorCode.EXERCISE_MOTION_ROUTINE_ORDER_DUPLICATED);
+        }
+        motion.updateMetadata(
+                request.name(),
+                request.routineOrder(),
+                request.targetReps(),
+                request.description());
 
         applyThumbnailChange(motion, request, thumbnail);
         applyDemoVideoChange(motion, request, demoVideo);
