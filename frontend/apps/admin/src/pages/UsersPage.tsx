@@ -36,20 +36,20 @@ export function UsersPage() {
   const adminCount = users.filter(user => user.role === 'ADMIN').length
 
   return (
-    <AdminShell title="User Management" description="Review accounts and admin role status.">
+    <AdminShell title="유저 관리" description="계정과 관리자 권한 상태를 확인합니다.">
       <section style={styles.panel}>
         <div style={styles.toolbar}>
           <label style={styles.searchLabel}>
-            Search
+            검색
             <input
               value={keyword}
               onChange={event => setKeyword(event.target.value)}
-              placeholder="Email or nickname"
+              placeholder="이메일 또는 닉네임"
               style={styles.searchInput}
             />
           </label>
 
-          <div style={styles.segmented} role="group" aria-label="Role filter">
+          <div style={styles.segmented} role="group" aria-label="권한 필터">
             {ROLE_FILTERS.map(role => (
               <button
                 key={role}
@@ -67,15 +67,15 @@ export function UsersPage() {
         </div>
 
         <div style={styles.summary}>
-          <span style={styles.summaryItem}>Total {users.length}</span>
-          <span style={styles.summaryItem}>Admins {adminCount}</span>
-          <span style={styles.summaryItem}>Showing {filteredUsers.length}</span>
+          <span style={styles.summaryItem}>전체 {users.length}명</span>
+          <span style={styles.summaryItem}>관리자 {adminCount}명</span>
+          <span style={styles.summaryItem}>표시 {filteredUsers.length}명</span>
         </div>
       </section>
 
-      {usersQuery.isLoading && <div style={styles.loading}>Loading</div>}
+      {usersQuery.isLoading && <div style={styles.loading}>불러오는 중</div>}
       {usersQuery.isError && (
-        <div style={styles.errorBox}>Failed to load users: {extractMessage(usersQuery.error)}</div>
+        <div style={styles.errorBox}>유저 목록 조회 실패: {extractMessage(usersQuery.error)}</div>
       )}
 
       {usersQuery.data && (
@@ -84,17 +84,17 @@ export function UsersPage() {
             <thead>
               <tr>
                 <th style={styles.th}>ID</th>
-                <th style={styles.th}>Email</th>
-                <th style={styles.th}>Nickname</th>
-                <th style={styles.th}>Role</th>
-                <th style={styles.th}>Joined</th>
+                <th style={styles.th}>이메일</th>
+                <th style={styles.th}>닉네임</th>
+                <th style={styles.th}>권한</th>
+                <th style={styles.th}>가입일</th>
               </tr>
             </thead>
             <tbody>
               {filteredUsers.length === 0 && (
                 <tr>
                   <td colSpan={5} style={styles.emptyRow}>
-                    No users found.
+                    표시할 유저가 없습니다.
                   </td>
                 </tr>
               )}
@@ -110,7 +110,7 @@ export function UsersPage() {
                         ...(user.role === 'ADMIN' ? styles.adminBadge : styles.userBadge),
                       }}
                     >
-                      {user.role ?? 'USER'}
+                      {roleLabel(user.role ?? 'USER')}
                     </span>
                   </td>
                   <td style={styles.td}>{formatDate(user.createdAt)}</td>
@@ -125,9 +125,9 @@ export function UsersPage() {
 }
 
 function roleLabel(role: RoleFilter) {
-  if (role === 'ALL') return 'All'
-  if (role === 'ADMIN') return 'Admin'
-  return 'User'
+  if (role === 'ALL') return '전체'
+  if (role === 'ADMIN') return '관리자'
+  return '일반'
 }
 
 function formatDate(value?: string) {
@@ -150,7 +150,7 @@ function extractMessage(error: unknown): string {
     if (res?.data?.code) return res.data.code
   }
   if (error instanceof Error) return error.message
-  return 'Unknown error'
+  return '알 수 없는 오류'
 }
 
 const styles: Record<string, CSSProperties> = {

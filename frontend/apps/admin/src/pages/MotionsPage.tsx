@@ -108,7 +108,7 @@ export function MotionsPage() {
   }
 
   const onDelete = (motion: ExerciseMotion) => {
-    if (!window.confirm(`Delete "${motion.name}"? Motions used by sessions may be rejected.`)) {
+    if (!window.confirm(`"${motion.name}" 동작을 삭제할까요? 수행 기록이 있으면 거부됩니다.`)) {
       return
     }
     deleteMutation.mutate(motion.id)
@@ -155,14 +155,11 @@ export function MotionsPage() {
   }
 
   return (
-    <AdminShell
-      title="Exercise Motions"
-      description="Manage routine order, thumbnails, and demo videos."
-    >
+    <AdminShell title="체조 모션 관리" description="루틴 순서, 썸네일과 시범 영상을 관리합니다.">
       <section style={styles.panel}>
         <div style={styles.toolbar}>
           <label style={styles.typeLabel}>
-            Exercise type
+            체조 타입
             <select
               value={exerciseType}
               onChange={event => onExerciseTypeChange(event.target.value as ExerciseType)}
@@ -182,14 +179,14 @@ export function MotionsPage() {
               style={styles.secondaryButton}
               disabled={!hasOrderChanges || reorderMutation.isPending}
             >
-              Reset
+              되돌리기
             </button>
             <button
               onClick={onSaveOrder}
               style={styles.primaryButton}
               disabled={!hasOrderChanges || reorderMutation.isPending}
             >
-              {reorderMutation.isPending ? 'Saving' : 'Save Order'}
+              {reorderMutation.isPending ? '순서 저장 중' : '순서 저장'}
             </button>
             <button
               onClick={() => {
@@ -199,15 +196,15 @@ export function MotionsPage() {
               style={styles.addButton}
               disabled={creating}
             >
-              Add Motion
+              동작 추가
             </button>
           </div>
         </div>
 
         <div style={styles.summary}>
-          <span style={styles.summaryItem}>Total {orderedMotions.length}</span>
-          <span style={styles.summaryItem}>Thumbnails {thumbnailCount}</span>
-          {hasOrderChanges && <span style={styles.changedBadge}>Order changed</span>}
+          <span style={styles.summaryItem}>총 {orderedMotions.length}개</span>
+          <span style={styles.summaryItem}>썸네일 {thumbnailCount}개</span>
+          {hasOrderChanges && <span style={styles.changedBadge}>순서 변경됨</span>}
         </div>
       </section>
 
@@ -223,23 +220,21 @@ export function MotionsPage() {
       )}
 
       {createMutation.isError && (
-        <div style={styles.errorBox}>Create failed: {extractMessage(createMutation.error)}</div>
+        <div style={styles.errorBox}>추가 실패: {extractMessage(createMutation.error)}</div>
       )}
       {updateMutation.isError && (
-        <div style={styles.errorBox}>Update failed: {extractMessage(updateMutation.error)}</div>
+        <div style={styles.errorBox}>수정 실패: {extractMessage(updateMutation.error)}</div>
       )}
       {deleteMutation.isError && (
-        <div style={styles.errorBox}>Delete failed: {extractMessage(deleteMutation.error)}</div>
+        <div style={styles.errorBox}>삭제 실패: {extractMessage(deleteMutation.error)}</div>
       )}
       {reorderMutation.isError && (
-        <div style={styles.errorBox}>
-          Order save failed: {extractMessage(reorderMutation.error)}
-        </div>
+        <div style={styles.errorBox}>순서 저장 실패: {extractMessage(reorderMutation.error)}</div>
       )}
 
-      {motionsQuery.isLoading && <div style={styles.loading}>Loading</div>}
+      {motionsQuery.isLoading && <div style={styles.loading}>불러오는 중</div>}
       {motionsQuery.isError && (
-        <div style={styles.errorBox}>List failed: {extractMessage(motionsQuery.error)}</div>
+        <div style={styles.errorBox}>목록 조회 실패: {extractMessage(motionsQuery.error)}</div>
       )}
 
       {motionsQuery.data && (
@@ -247,21 +242,21 @@ export function MotionsPage() {
           <table style={styles.table}>
             <thead>
               <tr>
-                <th style={styles.th}>Move</th>
-                <th style={styles.th}>Thumbnail</th>
-                <th style={styles.th}>Order</th>
-                <th style={styles.th}>Name</th>
-                <th style={styles.th}>Target</th>
-                <th style={styles.th}>Description</th>
-                <th style={styles.th}>Media</th>
-                <th style={styles.th}>Actions</th>
+                <th style={styles.th}>이동</th>
+                <th style={styles.th}>썸네일</th>
+                <th style={styles.th}>순서</th>
+                <th style={styles.th}>이름</th>
+                <th style={styles.th}>목표</th>
+                <th style={styles.th}>설명</th>
+                <th style={styles.th}>미디어</th>
+                <th style={styles.th}>액션</th>
               </tr>
             </thead>
             <tbody>
               {orderedMotions.length === 0 && (
                 <tr>
                   <td colSpan={8} style={styles.emptyRow}>
-                    No motions.
+                    동작이 없습니다.
                   </td>
                 </tr>
               )}
@@ -293,7 +288,7 @@ export function MotionsPage() {
                   ) : (
                     <>
                       <td style={styles.dragCell}>
-                        <span style={styles.dragHandle} title="Drag to reorder">
+                        <span style={styles.dragHandle} title="드래그로 순서 변경">
                           ::
                         </span>
                         <div style={styles.orderControls}>
@@ -303,7 +298,7 @@ export function MotionsPage() {
                             style={styles.moveButton}
                             disabled={index === 0 || reorderMutation.isPending}
                           >
-                            Up
+                            위
                           </button>
                           <button
                             type="button"
@@ -313,7 +308,7 @@ export function MotionsPage() {
                               index === orderedMotions.length - 1 || reorderMutation.isPending
                             }
                           >
-                            Down
+                            아래
                           </button>
                         </div>
                       </td>
@@ -321,18 +316,18 @@ export function MotionsPage() {
                         {motion.thumbnailUrl ? (
                           <img
                             src={motion.thumbnailUrl}
-                            alt={`${motion.name} thumbnail`}
+                            alt={`${motion.name} 썸네일`}
                             style={styles.thumbnail}
                           />
                         ) : (
-                          <div style={styles.thumbnailPlaceholder}>None</div>
+                          <div style={styles.thumbnailPlaceholder}>없음</div>
                         )}
                       </td>
                       <td style={styles.td}>
                         <span style={styles.orderBadge}>{index + 1}</span>
                       </td>
                       <td style={styles.nameCell}>{motion.name}</td>
-                      <td style={styles.td}>{motion.targetReps} reps</td>
+                      <td style={styles.td}>{motion.targetReps}회</td>
                       <td style={styles.descriptionCell}>{motion.description}</td>
                       <td style={styles.td}>
                         {motion.demoVideoUrl ? (
@@ -342,10 +337,10 @@ export function MotionsPage() {
                             rel="noreferrer"
                             style={styles.link}
                           >
-                            Demo video
+                            시범 영상
                           </a>
                         ) : (
-                          <span style={styles.muted}>None</span>
+                          <span style={styles.muted}>없음</span>
                         )}
                       </td>
                       <td style={styles.actionCell}>
@@ -356,10 +351,10 @@ export function MotionsPage() {
                           }}
                           style={styles.editButton}
                         >
-                          Edit
+                          수정
                         </button>
                         <button onClick={() => onDelete(motion)} style={styles.deleteButton}>
-                          Delete
+                          삭제
                         </button>
                       </td>
                     </>
@@ -396,7 +391,7 @@ function extractMessage(error: unknown): string {
     if (res?.data?.code) return res.data.code
   }
   if (error instanceof Error) return error.message
-  return 'Unknown error'
+  return '알 수 없는 오류'
 }
 
 const styles: Record<string, CSSProperties> = {
