@@ -1,6 +1,9 @@
 package com.comong.backend.domain.user.controller;
 
+import java.util.List;
+
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -22,6 +25,13 @@ import lombok.RequiredArgsConstructor;
 public class UserController {
 
     private final UserService userService;
+
+    @Operation(summary = "사용자 목록 조회", description = "ADMIN 권한으로 전체 사용자 목록을 최신 가입순으로 조회한다.")
+    @PreAuthorize("hasRole('ADMIN')")
+    @GetMapping
+    public ResponseEntity<ApiResponse<List<UserResponse>>> listUsers() {
+        return ResponseEntity.ok(ApiResponse.success(userService.findAllUsers()));
+    }
 
     /**
      * 본인 정보 조회. 인증된 사용자가 자기 자신의 프로필을 읽는 유일한 엔드포인트.

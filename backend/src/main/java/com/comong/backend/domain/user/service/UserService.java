@@ -1,9 +1,11 @@
 package com.comong.backend.domain.user.service;
 
+import java.util.List;
 import java.util.Optional;
 
 import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -103,6 +105,12 @@ public class UserService {
                         .findById(id)
                         .orElseThrow(() -> new BusinessException(UserErrorCode.USER_NOT_FOUND));
         return UserResponse.from(user);
+    }
+
+    public List<UserResponse> findAllUsers() {
+        return userRepository.findAll(Sort.by(Sort.Direction.DESC, "createdAt")).stream()
+                .map(UserResponse::from)
+                .toList();
     }
 
     /**
