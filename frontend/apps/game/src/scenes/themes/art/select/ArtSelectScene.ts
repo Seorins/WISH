@@ -41,7 +41,7 @@ import {
 
 const ART_ROOM_SPAWN = { xRatio: 0.5, yRatio: 0.76 }
 const ART_EXIT_PORTAL = { xRatio: 0.44, yRatio: 0.86, widthRatio: 0.12, heightRatio: 0.12 }
-const ART_RETURN_SPAWN = { xRatio: 0.585, yRatio: 0.855 }
+const ART_RETURN_SPAWN = { xRatio: 0.37, yRatio: 0.58 }
 const RUMI_TALK_ICON = { xRatio: 0.37, yRatio: 0.42 }
 const RUMI_INTERACTION = { xRatio: 0.37, yRatio: 0.66, radiusRatio: 0.06 }
 const ALBUM_OBJECT = { xRatio: 0.755, yRatio: 0.73, sizeRatio: 0.086 }

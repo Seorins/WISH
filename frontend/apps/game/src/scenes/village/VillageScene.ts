@@ -30,7 +30,7 @@ import { villageDialogs } from './dialog/villageDialogs'
 const TALK_DISTANCE = 55
 const DIALOG_TEXT_BOX = { x: 830, y: 470, width: 780, height: 190 }
 const DEFAULT_PLAYER_SPAWN = { xRatio: 0.5, yRatio: 0.47 }
-const ART_PORTAL = { xRatio: 0.545, yRatio: 0.655, widthRatio: 0.08, heightRatio: 0.125 }
+const ART_PORTAL = { xRatio: 0.364, yRatio: 0.51, widthRatio: 0.02, heightRatio: 0.065 }
 const TAEKWONDO_PORTAL = { xRatio: 0.49, yRatio: 0.06, widthRatio: 0.09, heightRatio: 0.11 }
 const GYMNASTICS_PORTAL = { xRatio: 0.72, yRatio: 0.53, widthRatio: 0.04, heightRatio: 0.05 }
 const MUSIC_PORTAL = { xRatio: 0.205, yRatio: 0.315, widthRatio: 0.035, heightRatio: 0.07 }
