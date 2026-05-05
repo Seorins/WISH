@@ -130,13 +130,6 @@ class BaseHoldEvaluator(BaseEvaluator):
     ) -> HoldProgress:
         effective_target = target_hold_ms or self.hold_config.target_hold_ms
         clamped_hold_ms = max(previous_hold_duration_ms, 0)
-        has_inconsistent_hold_progress = (
-            previous_state != "complete"
-            and previous_hold_last_timestamp_ms is None
-            and clamped_hold_ms > 0
-        )
-        if has_inconsistent_hold_progress:
-            clamped_hold_ms = 0
 
         if not is_pose_valid:
             return HoldProgress(

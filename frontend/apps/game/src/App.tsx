@@ -2,6 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { createGame } from './phaser'
 import type Phaser from 'phaser'
 import DanielForwardPressDebugPage from './debug/DanielForwardPressDebugPage'
+import DanielForwardBendDebugPage from './debug/DanielForwardBendDebugPage'
+import DanielLeftSideBendDebugPage from './debug/DanielLeftSideBendDebugPage'
+import DanielRightSideBendDebugPage from './debug/DanielRightSideBendDebugPage'
 import DanielUpwardPressDebugPage from './debug/DanielUpwardPressDebugPage'
 import DiagonalBodyPunchDebugPage from './debug/DiagonalBodyPunchDebugPage'
 import DiagonalFacePunchDebugPage from './debug/DiagonalFacePunchDebugPage'
@@ -17,7 +20,10 @@ const DEBUG_DIAGONAL_BODY_PUNCH_MODE = 'diagonal-body-punch'
 const DEBUG_DIAGONAL_FACE_PUNCH_MODE = 'diagonal-face-punch'
 const DEBUG_SQUAT_MODE = 'squat'
 const DEBUG_DANIEL_FORWARD_PRESS_MODE = 'daniel-forward-press'
+const DEBUG_DANIEL_FORWARD_BEND_MODE = 'daniel-forward-bend'
 const DEBUG_DANIEL_UPWARD_PRESS_MODE = 'daniel-upward-press'
+const DEBUG_DANIEL_LEFT_SIDE_BEND_MODE = 'daniel-left-side-bend'
+const DEBUG_DANIEL_RIGHT_SIDE_BEND_MODE = 'daniel-right-side-bend'
 
 function App() {
   const params = new URLSearchParams(window.location.search)
@@ -34,7 +40,10 @@ function App() {
       debugMode === DEBUG_DIAGONAL_FACE_PUNCH_MODE ||
       debugMode === DEBUG_SQUAT_MODE ||
       debugMode === DEBUG_DANIEL_FORWARD_PRESS_MODE ||
-      debugMode === DEBUG_DANIEL_UPWARD_PRESS_MODE
+      debugMode === DEBUG_DANIEL_FORWARD_BEND_MODE ||
+      debugMode === DEBUG_DANIEL_UPWARD_PRESS_MODE ||
+      debugMode === DEBUG_DANIEL_LEFT_SIDE_BEND_MODE ||
+      debugMode === DEBUG_DANIEL_RIGHT_SIDE_BEND_MODE
     ) {
       return
     }
@@ -90,8 +99,20 @@ function App() {
     return <DanielForwardPressDebugPage />
   }
 
+  if (debugMode === DEBUG_DANIEL_FORWARD_BEND_MODE) {
+    return <DanielForwardBendDebugPage />
+  }
+
   if (debugMode === DEBUG_DANIEL_UPWARD_PRESS_MODE) {
     return <DanielUpwardPressDebugPage />
+  }
+
+  if (debugMode === DEBUG_DANIEL_LEFT_SIDE_BEND_MODE) {
+    return <DanielLeftSideBendDebugPage />
+  }
+
+  if (debugMode === DEBUG_DANIEL_RIGHT_SIDE_BEND_MODE) {
+    return <DanielRightSideBendDebugPage />
   }
 
   return (

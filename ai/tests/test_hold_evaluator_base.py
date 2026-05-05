@@ -89,6 +89,23 @@ def test_invalid_frame_preserves_accumulated_hold_and_returns_idle() -> None:
     assert progress.hold_completed is False
 
 
+def test_valid_frame_resumes_accumulated_hold_when_timestamp_was_cleared() -> None:
+    evaluator = DummyHoldEvaluator(HoldEvaluatorConfig(target_hold_ms=10_000, max_frame_gap_ms=250))
+
+    progress = evaluator._update_hold_progress(
+        previous_state="idle",
+        previous_hold_duration_ms=2_400,
+        previous_hold_last_timestamp_ms=None,
+        frame_timestamp_ms=1_200,
+        is_pose_valid=True,
+    )
+
+    assert progress.state == "holding"
+    assert progress.hold_duration_ms == 2_400
+    assert progress.hold_last_timestamp_ms == 1_200
+    assert progress.hold_completed is False
+
+
 def test_hold_reaches_complete_when_target_duration_is_met() -> None:
     evaluator = DummyHoldEvaluator(HoldEvaluatorConfig(target_hold_ms=1_000, max_frame_gap_ms=250))
 

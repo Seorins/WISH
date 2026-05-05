@@ -261,6 +261,60 @@ class DanielUpwardPressEvaluationResponse(StretchHoldEvaluationResponseBase):
     features: DanielUpwardPressFeaturesResponse
 
 
+class DanielLeftSideBendEvaluationRequest(StretchHoldEvaluationRequestBase):
+    pass
+
+
+class DanielLeftSideBendFeaturesResponse(BaseModel):
+    torso_tilt: float
+    wrist_height: float | None = None
+    left_elbow_angle: float | None = None
+    right_elbow_angle: float | None = None
+    pelvis_shift_x: float
+    pelvis_shift_y: float
+    pelvis_depth_shift: float
+
+
+class DanielLeftSideBendEvaluationResponse(StretchHoldEvaluationResponseBase):
+    features: DanielLeftSideBendFeaturesResponse
+
+
+class DanielRightSideBendEvaluationRequest(StretchHoldEvaluationRequestBase):
+    pass
+
+
+class DanielRightSideBendFeaturesResponse(BaseModel):
+    torso_tilt: float
+    wrist_height: float | None = None
+    left_elbow_angle: float | None = None
+    right_elbow_angle: float | None = None
+    pelvis_shift_x: float
+    pelvis_shift_y: float
+    pelvis_depth_shift: float
+
+
+class DanielRightSideBendEvaluationResponse(StretchHoldEvaluationResponseBase):
+    features: DanielRightSideBendFeaturesResponse
+
+
+class DanielForwardBendEvaluationRequest(StretchHoldEvaluationRequestBase):
+    pass
+
+
+class DanielForwardBendFeaturesResponse(BaseModel):
+    forward_bend_angle: float
+    wrist_drop: float | None = None
+    left_knee_angle: float | None = None
+    right_knee_angle: float | None = None
+    pelvis_shift_x: float
+    pelvis_shift_y: float
+    pelvis_depth_shift: float
+
+
+class DanielForwardBendEvaluationResponse(StretchHoldEvaluationResponseBase):
+    features: DanielForwardBendFeaturesResponse
+
+
 class SideStepEvaluationRequest(BaseModel):
     frame: PoseFrameRequest
     previous_state: str = Field(default="idle", description="Previous evaluator state")
