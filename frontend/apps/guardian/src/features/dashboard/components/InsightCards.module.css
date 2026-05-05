@@ -71,10 +71,10 @@
 
 .scoreBody {
   display: grid;
-  grid-template-columns: 116px 1fr auto;
+  grid-template-columns: 96px 1fr auto;
   align-items: center;
-  gap: var(--dash-space-4);
-  padding-top: 4px;
+  gap: var(--dash-space-3);
+  padding-top: 2px;
 }
 
 .scoreCopy {
@@ -119,7 +119,7 @@
 }
 
 .scoreStar {
-  font-size: 38px;
+  font-size: 32px;
   line-height: 1;
   filter: drop-shadow(0 4px 8px rgba(255, 213, 92, 0.45));
   align-self: center;
@@ -146,8 +146,8 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 3px;
-  padding: 12px 6px;
+  gap: 2px;
+  padding: 10px 6px;
   border-radius: var(--dash-radius-md);
   text-align: center;
 }
@@ -157,7 +157,7 @@
 }
 
 .romCellLavender {
-  background: var(--dash-color-primary-50);
+  background: var(--dash-color-lavender-soft);
 }
 
 .romCellPink {
