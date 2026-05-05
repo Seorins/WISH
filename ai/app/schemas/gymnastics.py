@@ -242,6 +242,25 @@ class DanielForwardPressEvaluationResponse(StretchHoldEvaluationResponseBase):
     features: DanielForwardPressFeaturesResponse
 
 
+class DanielUpwardPressEvaluationRequest(StretchHoldEvaluationRequestBase):
+    pass
+
+
+class DanielUpwardPressFeaturesResponse(BaseModel):
+    wrist_height: float | None = None
+    wrist_height_balance: float | None = None
+    left_elbow_angle: float | None = None
+    right_elbow_angle: float | None = None
+    torso_tilt: float
+    pelvis_shift_x: float
+    pelvis_shift_y: float
+    pelvis_depth_shift: float
+
+
+class DanielUpwardPressEvaluationResponse(StretchHoldEvaluationResponseBase):
+    features: DanielUpwardPressFeaturesResponse
+
+
 class SideStepEvaluationRequest(BaseModel):
     frame: PoseFrameRequest
     previous_state: str = Field(default="idle", description="Previous evaluator state")
