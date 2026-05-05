@@ -33,9 +33,8 @@ const DEFAULT_PLAYER_SPAWN = { xRatio: 0.5, yRatio: 0.47 }
 const ART_PORTAL = { xRatio: 0.364, yRatio: 0.51, widthRatio: 0.02, heightRatio: 0.065 }
 const TAEKWONDO_PORTAL = { xRatio: 0.49, yRatio: 0.06, widthRatio: 0.09, heightRatio: 0.11 }
 const GYMNASTICS_PORTAL = { xRatio: 0.72, yRatio: 0.53, widthRatio: 0.04, heightRatio: 0.05 }
-const MUSIC_PORTAL = { xRatio: 0.205, yRatio: 0.315, widthRatio: 0.035, heightRatio: 0.07 }
+const MUSIC_PORTAL = { xRatio: 0.231, yRatio: 0.15, widthRatio: 0.02, heightRatio: 0.065 }
 const LIGHTHOUSE_PORTAL = { xRatio: 0.688, yRatio: 0.595, widthRatio: 0.02, heightRatio: 0.065 }
-const SHOW_MUSIC_PORTAL_MARKER = false
 const MAP_TILE_ROWS = 3
 const MAP_TILE_COLUMNS = 3
 const MAP_TILE_KEYS = Array.from({ length: MAP_TILE_ROWS * MAP_TILE_COLUMNS }, (_, index) => {
@@ -141,20 +140,6 @@ export class VillageScene extends Phaser.Scene {
     this.gymnasticsPortal = createRatioRectangle(W, H, GYMNASTICS_PORTAL)
     this.musicPortal = createRatioRectangle(W, H, MUSIC_PORTAL)
     this.lighthousePortal = createRatioRectangle(W, H, LIGHTHOUSE_PORTAL)
-    if (SHOW_MUSIC_PORTAL_MARKER) {
-      this.add
-        .rectangle(
-          this.musicPortal.x,
-          this.musicPortal.y,
-          this.musicPortal.width,
-          this.musicPortal.height,
-          0x22d3ee,
-          0.28,
-        )
-        .setOrigin(0, 0)
-        .setStrokeStyle(5, 0xffffff, 0.95)
-        .setDepth(9)
-    }
 
     this.obstacles = this.physics.add.staticGroup()
     OBSTACLES.forEach(({ x, y, w, h }) => {
