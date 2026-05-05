@@ -6,9 +6,9 @@ import {
   TrendChartCard,
 } from '@/features/dashboard/components/InsightCards'
 import { MovementProgressCard } from '@/features/dashboard/components/MovementProgressCard'
+import { SessionRow } from '@/features/dashboard/components/SessionRow'
 import { Sidebar } from '@/features/dashboard/components/Sidebar'
 import '@/features/dashboard/tokens.css'
-import styles from './DashboardPage.module.css'
 
 export function DashboardPage() {
   return (
@@ -23,12 +23,7 @@ export function DashboardPage() {
           <ROMSummaryCard />
         </>
       }
-      bottomRow={
-        <div className={styles.bottomRow}>
-          <div className={styles.placeholderShort}>Recent Sessions</div>
-          <div className={styles.placeholderShort}>Next Session</div>
-        </div>
-      }
+      bottomRow={<SessionRow />}
     />
   )
 }
