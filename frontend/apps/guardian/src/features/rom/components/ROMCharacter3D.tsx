@@ -4,45 +4,59 @@ import { Html, useGLTF } from '@react-three/drei'
 import { Vector3, type Group } from 'three'
 import wishGlbUrl from '@/assets/wish.glb?url'
 import type { JointId } from '../data/mock'
-import sharedStyles from '@/features/dashboard/components/Character3D.module.css'
 import styles from './ROMCharacter3D.module.css'
 
 useGLTF.preload(wishGlbUrl)
 
-const MODEL_OFFSET_Y = -0.95
+/**
+ * 모델 위치(월드 좌표).
+ * Y: 작을수록(더 음수) 모델이 화면에서 아래로 내려감 → 머리 윗 여백 확보
+ * X: 캐릭터 좌우가 잘리지 않도록 가운데 정렬
+ */
+const MODEL_OFFSET_Y = -1.1
+const MODEL_OFFSET_X = 0
 
 /**
  * 관절별 줌 프리셋 — 캐릭터 그룹 로컬 Y(=마커 Y) 기준.
  * targetY: OrbitControls.target.y (월드)
  * distance: 카메라 거리 (작을수록 줌인)
  */
+/**
+ * 관절별 줌 프리셋
+ * - distance 작게 = 캐릭터 크게 보임 (카드 가장자리까지 채우게)
+ * - targetY는 해당 관절 ± 가시 영역의 중앙. 머리/발 잘림 안 되게 약간 보정.
+ */
 const JOINT_FOCUS: Record<JointId, { targetY: number; distance: number }> = {
-  shoulder: { targetY: 0.32, distance: 2.0 },
-  hip: { targetY: -0.12, distance: 2.05 },
-  knee: { targetY: -0.5, distance: 2.0 },
-  ankle: { targetY: -0.85, distance: 1.95 },
+  shoulder: { targetY: 0.5, distance: 1.85 },
+  hip: { targetY: -0.05, distance: 1.85 },
+  knee: { targetY: -0.5, distance: 1.85 },
+  ankle: { targetY: -0.9, distance: 1.55 },
 }
 
 /**
  * 관절별 좌/우 마커 위치 — 캐릭터 그룹 로컬 좌표.
- * (Character3D의 FALLBACK_JOINTS 어깨/엉덩이/무릎/발목 값과 동일)
+ * GLB 모델 실제 관절 위치에 맞춰 시각적으로 보정.
+ *  - 어깨: 어깨 캡(소매 시작점)
+ *  - 엉덩이: 고관절(반바지 시작점, 셔츠 밑단보다 아래)
+ *  - 무릎: 무릎 캡
+ *  - 발목: 복숭아뼈(양말 윗부분)
  */
 const JOINT_MARKERS: Record<JointId, [[number, number, number], [number, number, number]]> = {
   shoulder: [
-    [-0.18, 1.3, 0.06],
-    [0.18, 1.3, 0.06],
+    [-0.16, 1.34, 0.06],
+    [0.16, 1.34, 0.06],
   ],
   hip: [
-    [-0.1, 0.8, 0.06],
-    [0.1, 0.8, 0.06],
+    [-0.1, 0.78, 0.06],
+    [0.1, 0.78, 0.06],
   ],
   knee: [
-    [-0.1, 0.4, 0.06],
-    [0.1, 0.4, 0.06],
+    [-0.13, 0.5, 0.06],
+    [0.13, 0.5, 0.06],
   ],
   ankle: [
-    [-0.1, 0.05, 0.06],
-    [0.1, 0.05, 0.06],
+    [-0.13, 0.25, 0.06],
+    [0.13, 0.25, 0.06],
   ],
 }
 
@@ -50,7 +64,7 @@ function CharacterModel() {
   const groupRef = useRef<Group>(null)
   const { scene } = useGLTF(wishGlbUrl)
   return (
-    <group ref={groupRef} position={[0, MODEL_OFFSET_Y, 0]}>
+    <group ref={groupRef} position={[MODEL_OFFSET_X, MODEL_OFFSET_Y, 0]}>
       <primitive object={scene} />
     </group>
   )
@@ -59,11 +73,11 @@ function CharacterModel() {
 function FocusMarkers({ focusJoint }: { focusJoint: JointId }) {
   const positions = JOINT_MARKERS[focusJoint]
   return (
-    <group position={[0, MODEL_OFFSET_Y, 0]}>
+    <group position={[MODEL_OFFSET_X, MODEL_OFFSET_Y, 0]}>
       {positions.map((pos, i) => (
         <group key={`${focusJoint}-${i}`} position={pos}>
           <Html center zIndexRange={[40, 0]}>
-            <div className={`${sharedStyles.marker} ${styles.markerLarge}`} aria-hidden />
+            <div className={styles.romMarker} aria-hidden />
           </Html>
         </group>
       ))}

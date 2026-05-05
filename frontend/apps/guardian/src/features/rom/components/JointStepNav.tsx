@@ -33,6 +33,7 @@ export function JointStepNav({ activeId, onSelect }: Props) {
           )
         })}
       </ul>
+      <span className={styles.tailConnector} aria-hidden />
       <div className={styles.scrollHint} aria-hidden>
         <span className={styles.scrollArrow}>↓</span>
         <span className={styles.scrollText}>

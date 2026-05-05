@@ -1,8 +1,8 @@
 .nav {
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  padding: var(--dash-space-4) var(--dash-space-3);
+  gap: 0;
+  padding: 0;
 }
 
 .list {
@@ -27,8 +27,8 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 14px;
-  border-radius: var(--dash-radius-pill);
+  padding: 14px 18px 14px 12px;
+  border-radius: 16px;
   cursor: pointer;
   font: inherit;
   text-align: left;
@@ -38,14 +38,14 @@
     box-shadow 0.15s ease;
 }
 
-.item:hover {
+.item:hover:not(.itemActive) {
   background: var(--dash-color-surface-tint);
 }
 
 .itemActive {
-  background: var(--dash-color-primary-50);
-  border-color: var(--dash-color-primary-100);
-  box-shadow: 0 4px 14px rgba(124, 92, 255, 0.12);
+  background: var(--dash-color-surface);
+  border-color: var(--dash-color-primary);
+  box-shadow: 0 4px 14px rgba(124, 92, 255, 0.16);
 }
 
 .itemNum {
@@ -91,41 +91,57 @@
 }
 
 .itemMeta {
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 500;
   color: var(--dash-color-primary);
-  margin-top: 2px;
+  margin-top: 6px;
 }
 
 .connector {
   display: block;
   width: 0;
-  height: 28px;
-  margin-left: 27px;
-  border-left: 2px dotted var(--dash-color-border-strong);
+  height: 44px;
+  margin: 4px 0 4px 21px;
+  border-left: 1.5px dashed var(--dash-color-border-strong);
+  opacity: 0.55;
+}
+
+/* 마지막 발목 → 화살표 사이를 잇는 점선 (스크롤 힌트의 윗 영역) */
+.tailConnector {
+  display: block;
+  width: 0;
+  height: 36px;
+  margin: 4px 0 6px 21px;
+  border-left: 1.5px dashed var(--dash-color-border-strong);
+  opacity: 0.55;
 }
 
 .scrollHint {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
   gap: 6px;
-  padding-top: 4px;
+  padding-left: 4px;
   color: var(--dash-color-text-muted);
 }
 
 .scrollArrow {
-  font-size: 18px;
-  color: var(--dash-color-text-subtle);
+  font-size: 20px;
+  font-weight: 500;
+  color: var(--dash-color-primary);
+  width: 36px;
+  text-align: center;
+  margin-left: 4px;
+  line-height: 1;
   animation: bounce 1.6s ease-in-out infinite;
 }
 
 .scrollText {
   font-size: 11.5px;
   font-weight: 500;
-  text-align: center;
   line-height: 1.4;
   letter-spacing: -0.005em;
+  color: var(--dash-color-text-muted);
 }
 
 @keyframes bounce {

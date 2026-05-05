@@ -4,6 +4,7 @@
   flex-direction: column;
   min-height: 100vh;
   background: var(--dash-color-bg-page);
+  background-attachment: fixed;
   color: var(--dash-color-text);
   font-family:
     'Pretendard', 'Inter', 'Noto Sans KR', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -15,7 +16,7 @@
   z-index: 10;
   height: var(--dash-header-height);
   padding: var(--dash-space-4) var(--dash-space-7) 0;
-  background: var(--dash-color-bg-page);
+  background: transparent;
 }
 
 .main {
@@ -39,18 +40,21 @@
   position: relative;
   height: 100%;
   display: grid;
-  grid-template-columns: 200px 1fr;
-  grid-template-rows: auto 1fr;
-  gap: var(--dash-space-3);
-  padding: var(--dash-space-4) var(--dash-space-5);
-  background: var(--dash-color-surface);
+  grid-template-columns: 156px 1fr;
+  grid-template-rows: 1fr;
+  column-gap: var(--dash-space-2);
+  padding: var(--dash-space-3) var(--dash-space-3) var(--dash-space-3) var(--dash-space-4);
+  background: #f3f4fa;
   border-radius: var(--dash-radius-card);
   box-shadow: var(--dash-shadow-card);
   overflow: hidden;
 }
 
 .leftHead {
-  grid-column: 1 / -1;
+  position: absolute;
+  top: var(--dash-space-3);
+  left: var(--dash-space-4);
+  z-index: 5;
   display: flex;
   align-items: center;
 }
@@ -85,19 +89,24 @@
 
 .stepNavSlot {
   grid-column: 1 / 2;
-  grid-row: 2 / -1;
+  grid-row: 1;
   overflow-y: auto;
   min-height: 0;
+  /* backBtn(absolute) 자리만큼 위쪽 패딩 확보 */
+  padding-top: 52px;
 }
 
 .characterSlot {
   grid-column: 2 / -1;
-  grid-row: 2 / -1;
+  grid-row: 1;
   position: relative;
   display: flex;
   align-items: stretch;
   justify-content: stretch;
   min-height: 0;
+  /* 카드 padding을 상쇄해서 캐릭터가 카드 위/오른쪽/아래 가장자리까지 닿도록 */
+  margin: calc(var(--dash-space-3) * -1) calc(var(--dash-space-3) * -1)
+    calc(var(--dash-space-3) * -1) 0;
 }
 
 .rightCol {
