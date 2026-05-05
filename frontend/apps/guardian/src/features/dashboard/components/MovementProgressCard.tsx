@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { MOVEMENTS, type SessionView } from '../data/mock'
+import { MOVEMENTS } from '../data/mock'
+import { MOTION_CLIPS } from '../data/motionClips'
 import { Character3D } from './Character3D'
 import { ChevronDownIcon } from './icons'
 import { ScoreRing } from './ScoreRing'
@@ -8,8 +9,8 @@ import styles from './MovementProgressCard.module.css'
 const COLLAPSED_COUNT = 3
 
 export function MovementProgressCard() {
-  const [session, setSession] = useState<SessionView>('current')
   const [expanded, setExpanded] = useState(false)
+  const [activeMotionId, setActiveMotionId] = useState<string | null>(null)
 
   const scoreColor = (score: number) => {
     if (score >= 90) return { from: '#6ddec0', to: '#34c99c' }
@@ -20,33 +21,31 @@ export function MovementProgressCard() {
   const visible = expanded ? MOVEMENTS : MOVEMENTS.slice(0, COLLAPSED_COUNT)
   const canExpand = MOVEMENTS.length > COLLAPSED_COUNT
 
+  const activeClip = activeMotionId ? (MOTION_CLIPS[activeMotionId] ?? null) : null
+
+  const toggleMotion = (id: string) => {
+    setActiveMotionId(prev => (prev === id ? null : id))
+  }
+
   return (
     <article className={styles.card}>
       <div className={styles.sessionToggle}>
-        <div className={styles.toggleInner}>
-          <button
-            type="button"
-            className={`${styles.toggleBtn} ${session === 'current' ? styles.toggleBtnActive : ''}`}
-            onClick={() => setSession('current')}
-          >
-            현재 세션
-          </button>
-          <button
-            type="button"
-            className={`${styles.toggleBtn} ${session === 'previous' ? styles.toggleBtnActive : ''}`}
-            onClick={() => setSession('previous')}
-          >
-            이전 세션
-          </button>
-        </div>
+        <span className={styles.sessionLabel}>오늘 수행 동작</span>
       </div>
 
       <div className={styles.leftCol}>
         <div className={styles.list}>
           {visible.map(m => {
             const { from, to } = scoreColor(m.score)
+            const isActive = activeMotionId === m.id
             return (
-              <div key={m.id} className={styles.row}>
+              <button
+                key={m.id}
+                type="button"
+                className={`${styles.row} ${isActive ? styles.rowActive : ''}`}
+                onClick={() => toggleMotion(m.id)}
+                aria-pressed={isActive}
+              >
                 <div className={styles.thumb} aria-hidden>
                   <img src={m.thumbnail} alt="" />
                 </div>
@@ -59,7 +58,7 @@ export function MovementProgressCard() {
                   gradientFrom={from}
                   gradientTo={to}
                 />
-              </div>
+              </button>
             )
           })}
         </div>
@@ -82,7 +81,7 @@ export function MovementProgressCard() {
       <div className={styles.rightCol}>
         <div className={styles.ghost} aria-hidden />
         <div className={styles.stage}>
-          <Character3D />
+          <Character3D activeMotion={activeClip} />
         </div>
       </div>
     </article>

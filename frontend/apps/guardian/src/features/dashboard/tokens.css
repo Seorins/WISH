@@ -1,9 +1,10 @@
 :root {
-  --dash-color-bg: #fbfaff;
-  --dash-color-bg-page: linear-gradient(180deg, #fcfbff 0%, #f5f1fc 100%);
+  --dash-color-bg: #fafbff;
+  --dash-color-bg-page: linear-gradient(180deg, #fafbff 0%, #eef0f8 100%);
   --dash-color-surface: #ffffff;
-  --dash-color-surface-muted: #f8f7fb;
-  --dash-color-surface-tint: #f4f0ff;
+  --dash-color-surface-muted: #f6f7fb;
+  --dash-color-surface-tint: #f1f3f9;
+  --dash-color-rom-cell: #f3f5fa;
 
   --dash-color-text: #1f1b3a;
   --dash-color-text-strong: #15122a;
@@ -17,22 +18,22 @@
   --dash-color-primary-soft: #a892ff;
   --dash-color-primary-50: #f1edff;
   --dash-color-primary-100: #e3dcff;
-  --dash-color-lavender-soft: #f7f4ff;
+  --dash-color-lavender-soft: #faf8ff;
 
   --dash-color-success: #34c99c;
   --dash-color-success-soft: #d4f3e5;
   --dash-color-mint: #6ddec0;
-  --dash-color-mint-soft: #eaf9f2;
+  --dash-color-mint-soft: #f3fbf7;
   --dash-color-pink: #ffa8c5;
-  --dash-color-pink-soft: #fff0f5;
+  --dash-color-pink-soft: #fff7fa;
   --dash-color-cyan: #6ec9e0;
-  --dash-color-cyan-soft: #ebf6fa;
+  --dash-color-cyan-soft: #f3f9fc;
   --dash-color-yellow: #ffd55c;
   --dash-color-warning: #ffb547;
 
   --dash-gradient-primary: linear-gradient(135deg, #a892ff 0%, #7c5cff 100%);
   --dash-gradient-card: linear-gradient(180deg, #ffffff 0%, #faf7ff 100%);
-  --dash-gradient-card-tint: linear-gradient(160deg, #f6f1ff 0%, #ede5ff 60%, #f6f1ff 100%);
+  --dash-gradient-card-tint: linear-gradient(160deg, #f8f7fc 0%, #ebecf4 60%, #f8f7fc 100%);
   --dash-gradient-success: linear-gradient(135deg, #6ddec0 0%, #34c99c 100%);
 
   --dash-shadow-card: 0 10px 32px rgba(76, 56, 128, 0.07);

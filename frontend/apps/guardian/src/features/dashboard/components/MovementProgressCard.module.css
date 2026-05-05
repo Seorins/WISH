@@ -29,6 +29,18 @@
   box-shadow: var(--dash-shadow-soft);
 }
 
+.sessionLabel {
+  display: inline-block;
+  padding: 9px 22px;
+  border-radius: var(--dash-radius-pill);
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: var(--dash-shadow-soft);
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: -0.005em;
+  color: var(--dash-color-text-strong);
+}
+
 .toggleBtn {
   appearance: none;
   border: none;
@@ -76,6 +88,9 @@
 }
 
 .row {
+  appearance: none;
+  border: 1.5px solid transparent;
+  width: 100%;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -84,11 +99,26 @@
   border-radius: var(--dash-radius-card);
   box-shadow: var(--dash-shadow-card);
   cursor: pointer;
-  transition: box-shadow 0.15s ease;
+  font: inherit;
+  text-align: left;
+  transition:
+    box-shadow 0.15s ease,
+    border-color 0.15s ease,
+    background 0.15s ease;
 }
 
 .row:hover {
   box-shadow: var(--dash-shadow-card-hover);
+}
+
+.rowActive {
+  border-color: var(--dash-color-primary);
+  background: var(--dash-color-primary-50);
+  box-shadow: var(--dash-shadow-pill);
+}
+
+.rowActive:hover {
+  box-shadow: var(--dash-shadow-pill);
 }
 
 .thumb {

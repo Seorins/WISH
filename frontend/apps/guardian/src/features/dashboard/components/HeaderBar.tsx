@@ -1,34 +1,35 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import logoUrl from '@/assets/logo.png'
 import { PATIENT } from '../data/mock'
 import {
+  ActivityIcon,
   BellIcon,
+  ChatIcon,
   ChevronDownIcon,
   ClipboardIcon,
   ExerciseIcon,
-  GoalIcon,
-  HomeIcon,
-  SettingsIcon,
+  type HomeIcon,
 } from './icons'
 import styles from './HeaderBar.module.css'
 
-type TabId = 'dashboard' | 'reports' | 'exercises' | 'goals'
+type TabId = 'exercise' | 'chat' | 'activity' | 'reports'
 
 const TABS: ReadonlyArray<{ id: TabId; label: string; Icon: typeof HomeIcon }> = [
-  { id: 'dashboard', label: '대시보드', Icon: HomeIcon },
+  { id: 'exercise', label: '운동', Icon: ExerciseIcon },
+  { id: 'chat', label: '대화', Icon: ChatIcon },
+  { id: 'activity', label: '활동', Icon: ActivityIcon },
   { id: 'reports', label: '리포트', Icon: ClipboardIcon },
-  { id: 'exercises', label: '운동', Icon: ExerciseIcon },
-  { id: 'goals', label: '목표', Icon: GoalIcon },
 ]
 
 export function HeaderBar() {
-  const [active, setActive] = useState<TabId>('dashboard')
+  const [active, setActive] = useState<TabId>('exercise')
 
   return (
     <header className={styles.header}>
-      <div className={styles.brand}>
+      <Link to="/" className={styles.brand} aria-label="대시보드로 이동">
         <img src={logoUrl} alt="WISH" className={styles.brandLogo} />
-      </div>
+      </Link>
 
       <nav className={styles.tabs}>
         {TABS.map(({ id, label, Icon }) => {
@@ -48,15 +49,10 @@ export function HeaderBar() {
       </nav>
 
       <div className={styles.right}>
-        <div className={styles.iconGroup}>
-          <button type="button" className={styles.iconBtn} aria-label="설정">
-            <SettingsIcon width={20} height={20} />
-          </button>
-          <button type="button" className={styles.iconBtn} aria-label="알림">
-            <BellIcon width={20} height={20} />
-            <span className={styles.bellDot} />
-          </button>
-        </div>
+        <button type="button" className={styles.iconBtn} aria-label="알림">
+          <BellIcon width={20} height={20} />
+          <span className={styles.bellDot} />
+        </button>
         <button type="button" className={styles.profile}>
           <span className={styles.avatar}>
             <img src={PATIENT.avatarUrl} alt="" />

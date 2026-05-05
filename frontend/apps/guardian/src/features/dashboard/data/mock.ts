@@ -49,21 +49,52 @@ export const MOVEMENTS: Movement[] = [
   { id: 'sit-stand', name: '앉았다 일어서기', score: 88, thumbnail: top5Url },
 ]
 
-export const RECENT_SESSIONS: Session[] = [
-  { id: 's1', date: '2025-05-03', weekday: '금', shortDate: '5월 3일', score: 78 },
-  { id: 's2', date: '2025-05-05', weekday: '일', shortDate: '5월 5일', score: 82 },
-  { id: 's3', date: '2025-05-08', weekday: '수', shortDate: '5월 8일', score: 75 },
-  { id: 's4', date: '2025-05-10', weekday: '금', shortDate: '5월 10일', score: 80 },
-  { id: 's5', date: '2025-05-12', weekday: '일', shortDate: '5월 12일', score: 83 },
-  {
-    id: 's6',
-    date: '2025-05-17',
-    weekday: '오늘',
-    shortDate: '5월 17일',
-    score: 87,
-    isToday: true,
-  },
+/** 최근 세션 6회 — 오늘 기준으로 거꾸로 며칠 전인지 + 점수 */
+const SESSION_HISTORY: ReadonlyArray<{ daysAgo: number; score: number }> = [
+  { daysAgo: 14, score: 65 },
+  { daysAgo: 10, score: 72 },
+  { daysAgo: 7, score: 78 },
+  { daysAgo: 4, score: 75 },
+  { daysAgo: 2, score: 83 },
+  { daysAgo: 0, score: 87 },
 ]
+
+const WEEKDAY_KO = ['일', '월', '화', '수', '목', '금', '토'] as const
+
+function dateMinusDays(days: number): Date {
+  const d = new Date()
+  d.setHours(0, 0, 0, 0)
+  d.setDate(d.getDate() - days)
+  return d
+}
+
+function shortDateLabel(d: Date): string {
+  return `${d.getMonth() + 1}월 ${d.getDate()}일`
+}
+
+function isoDate(d: Date): string {
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${d.getFullYear()}-${m}-${day}`
+}
+
+export const RECENT_SESSIONS: Session[] = SESSION_HISTORY.map((h, i) => {
+  const d = dateMinusDays(h.daysAgo)
+  const isToday = h.daysAgo === 0
+  return {
+    id: `s${i + 1}`,
+    date: isoDate(d),
+    weekday: isToday ? '오늘' : WEEKDAY_KO[d.getDay()],
+    shortDate: shortDateLabel(d),
+    score: h.score,
+    isToday,
+  }
+})
+
+export const TREND: TrendPoint[] = SESSION_HISTORY.map(h => ({
+  date: shortDateLabel(dateMinusDays(h.daysAgo)),
+  score: h.score,
+}))
 
 export const RANGE_OF_MOTION: RangeOfMotion[] = [
   { joint: '어깨', percent: 92, rating: '좋음', tone: 'mint' },
@@ -72,18 +103,11 @@ export const RANGE_OF_MOTION: RangeOfMotion[] = [
   { joint: '발목', percent: 90, rating: '우수', tone: 'cyan' },
 ]
 
-export const TREND: TrendPoint[] = [
-  { date: '4월 12일', score: 42 },
-  { date: '4월 19일', score: 55 },
-  { date: '4월 26일', score: 60 },
-  { date: '5월 3일', score: 52 },
-  { date: '5월 10일', score: 75 },
-  { date: '5월 17일', score: 82 },
-]
-
+const latest = SESSION_HISTORY[SESSION_HISTORY.length - 1]
+const previous = SESSION_HISTORY[SESSION_HISTORY.length - 2]
 export const OVERALL_SCORE = {
-  current: 87,
-  delta: 6,
+  current: latest.score,
+  delta: latest.score - previous.score,
   title: '아주 잘했어요!',
   subtitle: '지난 번보다\n더 잘하고 있어요.',
 }

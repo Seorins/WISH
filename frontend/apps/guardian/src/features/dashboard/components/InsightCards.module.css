@@ -152,20 +152,12 @@
   text-align: center;
 }
 
-.romCellMint {
-  background: var(--dash-color-mint-soft);
-}
-
-.romCellLavender {
-  background: var(--dash-color-lavender-soft);
-}
-
-.romCellPink {
-  background: var(--dash-color-pink-soft);
-}
-
+.romCellMint,
+.romCellLavender,
+.romCellPink,
 .romCellCyan {
-  background: var(--dash-color-cyan-soft);
+  background: var(--dash-color-rom-cell);
+  border: 1px solid var(--dash-color-border);
 }
 
 .romEmoji {
