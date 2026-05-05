@@ -36,6 +36,17 @@ const GYMNASTICS_PORTAL = { xRatio: 0.72, yRatio: 0.53, widthRatio: 0.04, height
 const MUSIC_PORTAL = { xRatio: 0.205, yRatio: 0.315, widthRatio: 0.035, heightRatio: 0.07 }
 const LIGHTHOUSE_PORTAL = { xRatio: 0.875, yRatio: 0.455, widthRatio: 0.06, heightRatio: 0.075 }
 const SHOW_MUSIC_PORTAL_MARKER = false
+const MAP_TILE_ROWS = 3
+const MAP_TILE_COLUMNS = 3
+const MAP_TILE_KEYS = Array.from({ length: MAP_TILE_ROWS * MAP_TILE_COLUMNS }, (_, index) => {
+  const tileNumber = index.toString().padStart(2, '0')
+  return {
+    key: `village-map-tile-${tileNumber}`,
+    path: `images/village/background/tile_${tileNumber}.webp`,
+    row: Math.floor(index / MAP_TILE_COLUMNS),
+    column: index % MAP_TILE_COLUMNS,
+  }
+})
 
 type ObstacleRect = { x: number; y: number; w: number; h: number }
 type VillageSceneData = {
@@ -73,7 +84,9 @@ export class VillageScene extends Phaser.Scene {
   }
 
   preload() {
-    this.load.image('map', assetPath('images/village/background/map.png'))
+    MAP_TILE_KEYS.forEach(tile => {
+      this.load.image(tile.key, assetPath(tile.path))
+    })
     this.load.image('sehyun_talk', assetPath('images/npcs/sehyun/dialog-frame.png'))
     this.load.image('profile', assetPath('images/common/profile.png'))
     this.load.image('menu', assetPath('images/ui/buttons/menu.png'))
@@ -96,18 +109,26 @@ export class VillageScene extends Phaser.Scene {
     this.target = null
     this.portalCooldownUntil = this.time.now + (data.portalCooldownMs ?? 0)
 
-    const mapImg = this.textures.get('map').getSourceImage() as HTMLImageElement
-    const rawW = mapImg.width
-    const rawH = mapImg.height
+    const firstTile = this.textures.get(MAP_TILE_KEYS[0].key).getSourceImage() as HTMLImageElement
+    const rawTileW = firstTile.width
+    const rawTileH = firstTile.height
+    const rawW = rawTileW * MAP_TILE_COLUMNS
+    const rawH = rawTileH * MAP_TILE_ROWS
     const mapScale = Math.max(vw / rawW, vh / rawH) * 3
 
     const W = rawW * mapScale
     const H = rawH * mapScale
 
-    this.add
-      .image(W / 2, H / 2, 'map')
-      .setScale(mapScale)
-      .setDepth(0)
+    MAP_TILE_KEYS.forEach(tile => {
+      this.add
+        .image(
+          (tile.column + 0.5) * rawTileW * mapScale,
+          (tile.row + 0.5) * rawTileH * mapScale,
+          tile.key,
+        )
+        .setScale(mapScale)
+        .setDepth(0)
+    })
 
     this.physics.world.setBounds(0, 0, W, H)
     this.cameras.main.setBounds(0, 0, W, H)
