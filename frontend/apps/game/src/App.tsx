@@ -5,6 +5,7 @@ import DanielForwardPressDebugPage from './debug/DanielForwardPressDebugPage'
 import DanielForwardBendDebugPage from './debug/DanielForwardBendDebugPage'
 import DanielLeftSideBendDebugPage from './debug/DanielLeftSideBendDebugPage'
 import DanielRightSideBendDebugPage from './debug/DanielRightSideBendDebugPage'
+import DanielStretchDebugPage from './debug/DanielStretchDebugPage'
 import DanielUpwardPressDebugPage from './debug/DanielUpwardPressDebugPage'
 import DiagonalBodyPunchDebugPage from './debug/DiagonalBodyPunchDebugPage'
 import DiagonalFacePunchDebugPage from './debug/DiagonalFacePunchDebugPage'
@@ -24,6 +25,7 @@ const DEBUG_DANIEL_FORWARD_BEND_MODE = 'daniel-forward-bend'
 const DEBUG_DANIEL_UPWARD_PRESS_MODE = 'daniel-upward-press'
 const DEBUG_DANIEL_LEFT_SIDE_BEND_MODE = 'daniel-left-side-bend'
 const DEBUG_DANIEL_RIGHT_SIDE_BEND_MODE = 'daniel-right-side-bend'
+const DEBUG_DANIEL_STRETCH_MODE = 'daniel-stretch'
 
 function App() {
   const params = new URLSearchParams(window.location.search)
@@ -43,7 +45,8 @@ function App() {
       debugMode === DEBUG_DANIEL_FORWARD_BEND_MODE ||
       debugMode === DEBUG_DANIEL_UPWARD_PRESS_MODE ||
       debugMode === DEBUG_DANIEL_LEFT_SIDE_BEND_MODE ||
-      debugMode === DEBUG_DANIEL_RIGHT_SIDE_BEND_MODE
+      debugMode === DEBUG_DANIEL_RIGHT_SIDE_BEND_MODE ||
+      debugMode === DEBUG_DANIEL_STRETCH_MODE
     ) {
       return
     }
@@ -113,6 +116,10 @@ function App() {
 
   if (debugMode === DEBUG_DANIEL_RIGHT_SIDE_BEND_MODE) {
     return <DanielRightSideBendDebugPage />
+  }
+
+  if (debugMode === DEBUG_DANIEL_STRETCH_MODE) {
+    return <DanielStretchDebugPage />
   }
 
   return (
