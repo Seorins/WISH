@@ -1,5 +1,5 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
-import { HomePage } from './pages/HomePage'
+import { DashboardPage } from './pages/DashboardPage'
 import { LoginPage } from './pages/LoginPage'
 import { SignupPage } from './pages/SignupPage'
 import { RequireAuth } from './routes/RequireAuth'
@@ -15,7 +15,7 @@ function App() {
           path="/"
           element={
             <RequireAuth>
-              <HomePage />
+              <DashboardPage />
             </RequireAuth>
           }
         />

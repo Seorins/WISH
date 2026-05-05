@@ -1,0 +1,204 @@
+.card {
+  background: var(--dash-color-surface);
+  border-radius: var(--dash-radius-card);
+  box-shadow: var(--dash-shadow-card);
+  padding: var(--dash-space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--dash-space-3);
+}
+
+.cardHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--dash-space-3);
+}
+
+.cardTitle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--dash-color-text-strong);
+  letter-spacing: -0.005em;
+}
+
+.cardTitleIcon {
+  width: 14px;
+  height: 14px;
+  color: var(--dash-color-text-subtle);
+}
+
+.cardAction {
+  appearance: none;
+  border: 1px solid var(--dash-color-border);
+  background: var(--dash-color-surface);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 12px;
+  border-radius: var(--dash-radius-pill);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--dash-color-text-muted);
+  transition:
+    color 0.15s,
+    background 0.15s;
+}
+
+.cardAction:hover {
+  color: var(--dash-color-text);
+  background: var(--dash-color-surface-tint);
+}
+
+.cardActionChev {
+  width: 12px;
+  height: 12px;
+}
+
+/* ===== Overall Score ===== */
+
+.scoreBody {
+  display: grid;
+  grid-template-columns: 116px 1fr auto;
+  align-items: center;
+  gap: var(--dash-space-4);
+  padding-top: 4px;
+}
+
+.scoreCopy {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.scoreTitle {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--dash-color-text-strong);
+  letter-spacing: -0.01em;
+  line-height: 1.1;
+}
+
+.scoreSubtitle {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--dash-color-text-muted);
+  line-height: 1.45;
+  white-space: pre-line;
+}
+
+.scoreDelta {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  align-self: flex-start;
+  padding: 4px 10px 4px 8px;
+  border-radius: var(--dash-radius-pill);
+  background: var(--dash-color-success-soft);
+  color: var(--dash-color-success);
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.scoreDeltaIcon {
+  width: 12px;
+  height: 12px;
+}
+
+.scoreStar {
+  font-size: 38px;
+  line-height: 1;
+  filter: drop-shadow(0 4px 8px rgba(255, 213, 92, 0.45));
+  align-self: center;
+}
+
+/* ===== Trend Chart ===== */
+
+.trendBody {
+  height: 160px;
+  margin: -4px -8px 0 -8px;
+}
+
+/* ===== ROM Summary ===== */
+
+.romGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.romCell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 14px 6px 12px;
+  border-radius: var(--dash-radius-md);
+  text-align: center;
+}
+
+.romCellMint {
+  background: var(--dash-color-mint-soft);
+}
+
+.romCellLavender {
+  background: var(--dash-color-primary-50);
+}
+
+.romCellPink {
+  background: var(--dash-color-pink-soft);
+}
+
+.romCellCyan {
+  background: var(--dash-color-cyan-soft);
+}
+
+.romEmoji {
+  font-size: 24px;
+  line-height: 1;
+  margin-bottom: 2px;
+}
+
+.romJoint {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--dash-color-text-muted);
+  letter-spacing: 0.01em;
+}
+
+.romPercent {
+  font-size: 19px;
+  font-weight: 800;
+  color: var(--dash-color-text-strong);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+.romRating {
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
+.romRatingMint {
+  color: var(--dash-color-success);
+}
+
+.romRatingLavender {
+  color: var(--dash-color-primary);
+}
+
+.romRatingPink {
+  color: #ed5f8c;
+}
+
+.romRatingCyan {
+  color: #2c9bbd;
+}
