@@ -90,19 +90,19 @@ public class TaekwondoProgress {
     }
 
     /**
-     * 다음 단계 띠로 승급. {@link Belt#next()} 가 비어 있으면 {@link IllegalStateException}.
+     * 다음 단계 띠로 승급. 호출 전 누적 처치수가 다음 띠 임계값을 만족하는지 자체 재검증한다 (Race Condition 방어: 호출자 권한 검사 이후 다른 트랜잭션이
+     * 동일 progress 를 갱신하더라도 현재 상태로 재판정).
      *
      * @return 승급 직전의 이전 띠 (BeltHistory.fromBelt 적재용)
+     * @throws IllegalStateException 다음 띠가 없거나 임계값 미달 시
      */
     public Belt promote() {
+        if (!this.currentBelt.canPromoteWith(this.totalMonstersDefeated)) {
+            throw new IllegalStateException(
+                    "cannot promote: totalMonstersDefeated does not satisfy next belt requirement");
+        }
         Belt previousBelt = this.currentBelt;
-        Belt nextBelt =
-                this.currentBelt
-                        .next()
-                        .orElseThrow(
-                                () ->
-                                        new IllegalStateException(
-                                                "current belt is the highest, cannot promote"));
+        Belt nextBelt = this.currentBelt.next().orElseThrow();
         this.currentBelt = nextBelt;
         this.lastPromotedAt = LocalDateTime.now();
         return previousBelt;

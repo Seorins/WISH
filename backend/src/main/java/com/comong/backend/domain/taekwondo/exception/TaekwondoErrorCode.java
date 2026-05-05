@@ -16,7 +16,9 @@ public enum TaekwondoErrorCode implements ErrorCode {
     TAEKWONDO_MOTION_IN_USE(HttpStatus.CONFLICT, "TK-003", "수행 기록에서 사용 중인 태권도 동작은 삭제할 수 없습니다."),
     TAEKWONDO_SESSION_MOTION_POOMSAE_MISMATCH(
             HttpStatus.BAD_REQUEST, "TK-004", "세션 품새와 동작 품새가 일치하지 않습니다."),
-    TAEKWONDO_SESSION_NOT_FOUND(HttpStatus.NOT_FOUND, "TK-005", "태권도 세션을 찾을 수 없습니다.");
+    TAEKWONDO_SESSION_NOT_FOUND(HttpStatus.NOT_FOUND, "TK-005", "태권도 세션을 찾을 수 없습니다."),
+    TAEKWONDO_PROGRESS_NOT_FOUND(
+            HttpStatus.NOT_FOUND, "TK-006", "태권도 진행 상태가 없습니다. 첫 세션을 진행하면 생성됩니다.");
 
     private final HttpStatus status;
     private final String code;
