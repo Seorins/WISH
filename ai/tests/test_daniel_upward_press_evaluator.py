@@ -115,7 +115,7 @@ def test_daniel_upward_press_does_not_hold_when_hand_heights_are_unbalanced() ->
     assert unbalanced_result.candidate_feedback_code == "MATCH_HAND_HEIGHTS"
 
 
-def test_daniel_upward_press_resets_inconsistent_hold_progress_without_timestamp() -> None:
+def test_daniel_upward_press_resumes_hold_progress_without_timestamp() -> None:
     evaluator = DanielUpwardPressEvaluator()
 
     baseline_result = evaluator.evaluate(
@@ -139,7 +139,7 @@ def test_daniel_upward_press_resets_inconsistent_hold_progress_without_timestamp
     )
 
     assert recovered_result.state == "holding"
-    assert recovered_result.hold_duration_ms == 0
+    assert recovered_result.hold_duration_ms == 120
     assert recovered_result.hold_last_timestamp_ms == 100
 
 
