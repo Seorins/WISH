@@ -30,7 +30,7 @@ import {
 const TAEKWONDO_SPRITE_FRAME = { width: 384, height: 512 }
 const ROOM_SPAWN = { xRatio: 0.5, yRatio: 0.78 }
 const EXIT_PORTAL = { xRatio: 0.45, yRatio: 0.8, widthRatio: 0.11, heightRatio: 0.26 }
-const RETURN_SPAWN = { xRatio: 0.49, yRatio: 0.2 }
+const RETURN_SPAWN = { xRatio: 0.445, yRatio: 0.15 }
 const SEOKJAE = { xRatio: 0.52, yRatio: 0.58, scaleRatio: 0.34 }
 const SEOKJAE_INTERACTION = { radiusRatio: 0.08 }
 const SEOKJAE_TALK_ICON_OFFSET = { yRatio: 0.15 }
