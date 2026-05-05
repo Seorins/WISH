@@ -189,3 +189,20 @@ export function SparkleIcon(props: IconProps) {
     </svg>
   )
 }
+
+export function ChatIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M4.5 5.5h15a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H10l-4 3.5v-3.5H4.5a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1z" />
+      <path d="M8.5 11h.01M12 11h.01M15.5 11h.01" />
+    </svg>
+  )
+}
+
+export function ActivityIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M3.5 12h3.5l2-6 4 12 2-6h5" />
+    </svg>
+  )
+}
