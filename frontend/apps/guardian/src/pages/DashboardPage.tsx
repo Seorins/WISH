@@ -1,3 +1,4 @@
+import { Character3D } from '@/features/dashboard/components/Character3D'
 import { DashboardLayout } from '@/features/dashboard/components/DashboardLayout'
 import { HeaderBar } from '@/features/dashboard/components/HeaderBar'
 import { Sidebar } from '@/features/dashboard/components/Sidebar'
@@ -9,7 +10,11 @@ export function DashboardPage() {
     <DashboardLayout
       sidebar={<Sidebar />}
       header={<HeaderBar />}
-      movementCard={<div className={styles.placeholderTall}>Movement Progress</div>}
+      movementCard={
+        <div className={styles.placeholderTall} style={{ padding: 0, border: 'none' }}>
+          <Character3D />
+        </div>
+      }
       insightPanel={
         <>
           <div className={styles.placeholder} style={{ minHeight: 168 }}>
