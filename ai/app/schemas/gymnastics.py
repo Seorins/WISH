@@ -29,8 +29,8 @@ class PoseFrameRequest(BaseModel):
 
 class NormalizedLandmarkResponse(BaseModel):
     name: str
-    x: float
-    y: float
+    x: float | None = None
+    y: float | None = None
     z: float | None = None
     confidence: float | None = None
 
@@ -132,6 +132,7 @@ class MarchEvaluationResponse(BaseModel):
     representative_feedback_code: str | None = None
     representative_feedback_text: str | None = None
     representative_feedback_frames: int = 0
+    normalized_pose: NormalizedPoseResponse | None = None
     features: MarchFeaturesResponse
 
 
@@ -251,6 +252,7 @@ class StretchHoldEvaluationResponseBase(BaseModel):
     representative_feedback_code: str | None = None
     representative_feedback_text: str | None = None
     representative_feedback_frames: int = 0
+    normalized_pose: NormalizedPoseResponse | None = None
 
 
 class DanielForwardPressEvaluationRequest(StretchHoldEvaluationRequestBase):
@@ -430,6 +432,7 @@ class SideStepEvaluationResponse(BaseModel):
     baseline_left_step_extent: float | None = None
     baseline_right_step_extent: float | None = None
     baseline_ankle_span: float | None = None
+    normalized_pose: NormalizedPoseResponse | None = None
     features: SideStepFeaturesResponse
 
 
@@ -501,6 +504,7 @@ class DiagonalBodyPunchEvaluationResponse(BaseModel):
     baseline_left_wrist_forward: float | None = None
     baseline_right_wrist_forward: float | None = None
     baseline_stance_span: float | None = None
+    normalized_pose: NormalizedPoseResponse | None = None
     features: DiagonalBodyPunchFeaturesResponse
 
 
@@ -574,6 +578,7 @@ class DiagonalFacePunchEvaluationResponse(BaseModel):
     baseline_left_wrist_forward: float | None = None
     baseline_right_wrist_forward: float | None = None
     baseline_stance_span: float | None = None
+    normalized_pose: NormalizedPoseResponse | None = None
     features: DiagonalFacePunchFeaturesResponse
 
 
@@ -627,4 +632,5 @@ class SquatEvaluationResponse(BaseModel):
     representative_feedback_code: str | None = None
     representative_feedback_text: str | None = None
     representative_feedback_frames: int = 0
+    normalized_pose: NormalizedPoseResponse | None = None
     features: SquatFeaturesResponse

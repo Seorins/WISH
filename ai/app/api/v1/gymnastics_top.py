@@ -8,6 +8,7 @@ from app.api.v1.gymnastics_shared import (
     normalizer,
     side_step_evaluator,
     squat_evaluator,
+    to_motion_replay_pose_response,
 )
 from app.schemas.gymnastics import (
     DiagonalBodyPunchEvaluationRequest,
@@ -96,6 +97,7 @@ def evaluate_march(payload: MarchEvaluationRequest) -> MarchEvaluationResponse:
         representative_feedback_code=result.representative_feedback_code,
         representative_feedback_text=result.representative_feedback_text,
         representative_feedback_frames=result.representative_feedback_frames,
+        normalized_pose=to_motion_replay_pose_response(normalized),
         features=MarchFeaturesResponse(
             left_knee_lift=features.left_knee_lift,
             right_knee_lift=features.right_knee_lift,
@@ -184,6 +186,7 @@ def evaluate_side_step(payload: SideStepEvaluationRequest) -> SideStepEvaluation
         baseline_left_step_extent=result.baseline_left_step_extent,
         baseline_right_step_extent=result.baseline_right_step_extent,
         baseline_ankle_span=result.baseline_ankle_span,
+        normalized_pose=to_motion_replay_pose_response(normalized),
         features=SideStepFeaturesResponse(
             left_step_extent=features.left_step_extent,
             right_step_extent=features.right_step_extent,
@@ -271,6 +274,7 @@ def evaluate_diagonal_body_punch(
         baseline_left_wrist_forward=result.baseline_left_wrist_forward,
         baseline_right_wrist_forward=result.baseline_right_wrist_forward,
         baseline_stance_span=result.baseline_stance_span,
+        normalized_pose=to_motion_replay_pose_response(normalized),
         features=DiagonalBodyPunchFeaturesResponse(
             left_wrist_forward=features.left_wrist_forward,
             right_wrist_forward=features.right_wrist_forward,
@@ -362,6 +366,7 @@ def evaluate_diagonal_face_punch(
         baseline_left_wrist_forward=result.baseline_left_wrist_forward,
         baseline_right_wrist_forward=result.baseline_right_wrist_forward,
         baseline_stance_span=result.baseline_stance_span,
+        normalized_pose=to_motion_replay_pose_response(normalized),
         features=DiagonalFacePunchFeaturesResponse(
             left_wrist_forward=features.left_wrist_forward,
             right_wrist_forward=features.right_wrist_forward,
@@ -436,6 +441,7 @@ def evaluate_squat(payload: SquatEvaluationRequest) -> SquatEvaluationResponse:
         representative_feedback_code=result.representative_feedback_code,
         representative_feedback_text=result.representative_feedback_text,
         representative_feedback_frames=result.representative_feedback_frames,
+        normalized_pose=to_motion_replay_pose_response(normalized),
         features=SquatFeaturesResponse(
             hip_drop=features.hip_drop,
             left_knee_angle=features.left_knee_angle,

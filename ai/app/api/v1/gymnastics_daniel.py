@@ -8,6 +8,7 @@ from app.api.v1.gymnastics_shared import (
     daniel_upward_press_evaluator,
     logger,
     normalizer,
+    to_motion_replay_pose_response,
 )
 from app.schemas.gymnastics import (
     DanielForwardBendEvaluationRequest,
@@ -27,6 +28,7 @@ from app.schemas.gymnastics import (
     DanielUpwardPressEvaluationRequest,
     DanielUpwardPressEvaluationResponse,
     DanielUpwardPressFeaturesResponse,
+    NormalizedPoseResponse,
 )
 from app.services.gymnastics.constants import (
     DANIEL_FORWARD_BEND_MOTION_NAME,
@@ -123,6 +125,7 @@ def evaluate_daniel_forward_press(
         representative_feedback_frames=result.representative_feedback_frames,
         baseline_left_wrist_forward=result.baseline_left_wrist_forward,
         baseline_right_wrist_forward=result.baseline_right_wrist_forward,
+        normalized_pose=to_motion_replay_pose_response(normalized),
         features=DanielForwardPressFeaturesResponse(
             wrist_forward=features.wrist_forward,
             wrist_extension=features.wrist_extension,
@@ -207,6 +210,7 @@ def evaluate_daniel_forward_bend(
         representative_feedback_code=result.representative_feedback_code,
         representative_feedback_text=result.representative_feedback_text,
         representative_feedback_frames=result.representative_feedback_frames,
+        normalized_pose=to_motion_replay_pose_response(normalized),
         features=DanielForwardBendFeaturesResponse(
             forward_bend_angle=features.forward_bend_angle,
             wrist_drop=features.wrist_drop,
@@ -285,6 +289,7 @@ def evaluate_daniel_upward_press(
         representative_feedback_code=result.representative_feedback_code,
         representative_feedback_text=result.representative_feedback_text,
         representative_feedback_frames=result.representative_feedback_frames,
+        normalized_pose=to_motion_replay_pose_response(normalized),
         features=DanielUpwardPressFeaturesResponse(
             wrist_height=features.wrist_height,
             wrist_height_balance=features.wrist_height_balance,
@@ -364,6 +369,7 @@ def evaluate_daniel_left_side_bend(
         representative_feedback_code=result.representative_feedback_code,
         representative_feedback_text=result.representative_feedback_text,
         representative_feedback_frames=result.representative_feedback_frames,
+        normalized_pose=to_motion_replay_pose_response(normalized),
         features=DanielLeftSideBendFeaturesResponse(
             torso_tilt=features.torso_tilt,
             wrist_height=features.wrist_height,
@@ -442,6 +448,7 @@ def evaluate_daniel_right_side_bend(
         representative_feedback_code=result.representative_feedback_code,
         representative_feedback_text=result.representative_feedback_text,
         representative_feedback_frames=result.representative_feedback_frames,
+        normalized_pose=to_motion_replay_pose_response(normalized),
         features=DanielRightSideBendFeaturesResponse(
             torso_tilt=features.torso_tilt,
             wrist_height=features.wrist_height,
@@ -486,6 +493,7 @@ _DANIEL_STRETCH_EVALUATION_SPECS = {
 def _to_integrated_daniel_response(
     *,
     motion_name: str,
+    normalized_pose: NormalizedPoseResponse | None,
     result: (
         DanielForwardPressEvaluationResponse
         | DanielUpwardPressEvaluationResponse
@@ -522,6 +530,7 @@ def _to_integrated_daniel_response(
         representative_feedback_frames=result.representative_feedback_frames,
         baseline_left_wrist_forward=baseline_left,
         baseline_right_wrist_forward=baseline_right,
+        normalized_pose=normalized_pose,
         features=result.features.model_dump(),
     )
 
@@ -536,4 +545,8 @@ def evaluate_daniel_stretch(payload: DanielStretchEvaluationRequest) -> DanielSt
     motion_name, request_model, handler = spec
     specific_payload = request_model.model_validate(payload.model_dump())
     result = handler(specific_payload)
-    return _to_integrated_daniel_response(motion_name=motion_name, result=result)
+    return _to_integrated_daniel_response(
+        motion_name=motion_name,
+        normalized_pose=result.normalized_pose,
+        result=result,
+    )
