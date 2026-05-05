@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException
 
 from app.api.v1.gymnastics_shared import (
+    build_feedback_tts_response,
     diagonal_body_punch_evaluator,
     diagonal_face_punch_evaluator,
     logger,
@@ -97,6 +98,12 @@ def evaluate_march(payload: MarchEvaluationRequest) -> MarchEvaluationResponse:
         representative_feedback_code=result.representative_feedback_code,
         representative_feedback_text=result.representative_feedback_text,
         representative_feedback_frames=result.representative_feedback_frames,
+        tts=build_feedback_tts_response(
+            previous_displayed_code=payload.displayed_feedback_code,
+            previous_displayed_text=payload.displayed_feedback_text,
+            displayed_code=result.displayed_feedback_code,
+            displayed_text=result.displayed_feedback_text,
+        ),
         normalized_pose=to_motion_replay_pose_response(normalized),
         features=MarchFeaturesResponse(
             left_knee_lift=features.left_knee_lift,
@@ -186,6 +193,12 @@ def evaluate_side_step(payload: SideStepEvaluationRequest) -> SideStepEvaluation
         baseline_left_step_extent=result.baseline_left_step_extent,
         baseline_right_step_extent=result.baseline_right_step_extent,
         baseline_ankle_span=result.baseline_ankle_span,
+        tts=build_feedback_tts_response(
+            previous_displayed_code=payload.displayed_feedback_code,
+            previous_displayed_text=payload.displayed_feedback_text,
+            displayed_code=result.displayed_feedback_code,
+            displayed_text=result.displayed_feedback_text,
+        ),
         normalized_pose=to_motion_replay_pose_response(normalized),
         features=SideStepFeaturesResponse(
             left_step_extent=features.left_step_extent,
@@ -274,6 +287,12 @@ def evaluate_diagonal_body_punch(
         baseline_left_wrist_forward=result.baseline_left_wrist_forward,
         baseline_right_wrist_forward=result.baseline_right_wrist_forward,
         baseline_stance_span=result.baseline_stance_span,
+        tts=build_feedback_tts_response(
+            previous_displayed_code=payload.displayed_feedback_code,
+            previous_displayed_text=payload.displayed_feedback_text,
+            displayed_code=result.displayed_feedback_code,
+            displayed_text=result.displayed_feedback_text,
+        ),
         normalized_pose=to_motion_replay_pose_response(normalized),
         features=DiagonalBodyPunchFeaturesResponse(
             left_wrist_forward=features.left_wrist_forward,
@@ -366,6 +385,12 @@ def evaluate_diagonal_face_punch(
         baseline_left_wrist_forward=result.baseline_left_wrist_forward,
         baseline_right_wrist_forward=result.baseline_right_wrist_forward,
         baseline_stance_span=result.baseline_stance_span,
+        tts=build_feedback_tts_response(
+            previous_displayed_code=payload.displayed_feedback_code,
+            previous_displayed_text=payload.displayed_feedback_text,
+            displayed_code=result.displayed_feedback_code,
+            displayed_text=result.displayed_feedback_text,
+        ),
         normalized_pose=to_motion_replay_pose_response(normalized),
         features=DiagonalFacePunchFeaturesResponse(
             left_wrist_forward=features.left_wrist_forward,
@@ -441,6 +466,12 @@ def evaluate_squat(payload: SquatEvaluationRequest) -> SquatEvaluationResponse:
         representative_feedback_code=result.representative_feedback_code,
         representative_feedback_text=result.representative_feedback_text,
         representative_feedback_frames=result.representative_feedback_frames,
+        tts=build_feedback_tts_response(
+            previous_displayed_code=payload.displayed_feedback_code,
+            previous_displayed_text=payload.displayed_feedback_text,
+            displayed_code=result.displayed_feedback_code,
+            displayed_text=result.displayed_feedback_text,
+        ),
         normalized_pose=to_motion_replay_pose_response(normalized),
         features=SquatFeaturesResponse(
             hip_drop=features.hip_drop,

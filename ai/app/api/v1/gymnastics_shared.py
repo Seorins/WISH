@@ -1,10 +1,12 @@
 import logging
 
 from app.schemas.gymnastics import (
+    FeedbackTtsResponse,
     HipCenterResponse,
     NormalizedLandmarkResponse,
     NormalizedPoseResponse,
 )
+from app.services.gymnastics.feedback.common import TRACKING_LOW
 from app.services.gymnastics.constants import MOTION_REPLAY_LANDMARK_NAMES
 from app.services.gymnastics.evaluators.daniel_forward_bend import DanielForwardBendEvaluator
 from app.services.gymnastics.evaluators.daniel_forward_press import DanielForwardPressEvaluator
@@ -88,4 +90,29 @@ def to_motion_replay_pose_response(frame: NormalizedPoseFrame) -> NormalizedPose
         scale_reference=frame.scale_reference,
         hip_center=HipCenterResponse(x=frame.hip_center.x, y=frame.hip_center.y),
         landmarks=landmarks,
+    )
+
+
+def build_feedback_tts_response(
+    *,
+    previous_displayed_code: str | None,
+    previous_displayed_text: str | None,
+    displayed_code: str | None,
+    displayed_text: str | None,
+) -> FeedbackTtsResponse:
+    has_changed = (
+        displayed_code != previous_displayed_code
+        or displayed_text != previous_displayed_text
+    )
+    # TTS is only emitted when the visible feedback actually changes and the
+    # current feedback has both a stable code and readable text.
+    if not has_changed or displayed_code is None or displayed_text is None:
+        return FeedbackTtsResponse()
+
+    priority = "tracking" if displayed_code == TRACKING_LOW.code else "posture"
+    return FeedbackTtsResponse(
+        should_play=True,
+        key=displayed_code,
+        text=displayed_text,
+        priority=priority,
     )

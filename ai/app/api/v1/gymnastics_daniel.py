@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException
 
 from app.api.v1.gymnastics_shared import (
+    build_feedback_tts_response,
     daniel_forward_bend_evaluator,
     daniel_forward_press_evaluator,
     daniel_left_side_bend_evaluator,
@@ -125,6 +126,12 @@ def evaluate_daniel_forward_press(
         representative_feedback_frames=result.representative_feedback_frames,
         baseline_left_wrist_forward=result.baseline_left_wrist_forward,
         baseline_right_wrist_forward=result.baseline_right_wrist_forward,
+        tts=build_feedback_tts_response(
+            previous_displayed_code=payload.displayed_feedback_code,
+            previous_displayed_text=payload.displayed_feedback_text,
+            displayed_code=result.displayed_feedback_code,
+            displayed_text=result.displayed_feedback_text,
+        ),
         normalized_pose=to_motion_replay_pose_response(normalized),
         features=DanielForwardPressFeaturesResponse(
             wrist_forward=features.wrist_forward,
@@ -210,6 +217,12 @@ def evaluate_daniel_forward_bend(
         representative_feedback_code=result.representative_feedback_code,
         representative_feedback_text=result.representative_feedback_text,
         representative_feedback_frames=result.representative_feedback_frames,
+        tts=build_feedback_tts_response(
+            previous_displayed_code=payload.displayed_feedback_code,
+            previous_displayed_text=payload.displayed_feedback_text,
+            displayed_code=result.displayed_feedback_code,
+            displayed_text=result.displayed_feedback_text,
+        ),
         normalized_pose=to_motion_replay_pose_response(normalized),
         features=DanielForwardBendFeaturesResponse(
             forward_bend_angle=features.forward_bend_angle,
@@ -289,6 +302,12 @@ def evaluate_daniel_upward_press(
         representative_feedback_code=result.representative_feedback_code,
         representative_feedback_text=result.representative_feedback_text,
         representative_feedback_frames=result.representative_feedback_frames,
+        tts=build_feedback_tts_response(
+            previous_displayed_code=payload.displayed_feedback_code,
+            previous_displayed_text=payload.displayed_feedback_text,
+            displayed_code=result.displayed_feedback_code,
+            displayed_text=result.displayed_feedback_text,
+        ),
         normalized_pose=to_motion_replay_pose_response(normalized),
         features=DanielUpwardPressFeaturesResponse(
             wrist_height=features.wrist_height,
@@ -369,6 +388,12 @@ def evaluate_daniel_left_side_bend(
         representative_feedback_code=result.representative_feedback_code,
         representative_feedback_text=result.representative_feedback_text,
         representative_feedback_frames=result.representative_feedback_frames,
+        tts=build_feedback_tts_response(
+            previous_displayed_code=payload.displayed_feedback_code,
+            previous_displayed_text=payload.displayed_feedback_text,
+            displayed_code=result.displayed_feedback_code,
+            displayed_text=result.displayed_feedback_text,
+        ),
         normalized_pose=to_motion_replay_pose_response(normalized),
         features=DanielLeftSideBendFeaturesResponse(
             torso_tilt=features.torso_tilt,
@@ -448,6 +473,12 @@ def evaluate_daniel_right_side_bend(
         representative_feedback_code=result.representative_feedback_code,
         representative_feedback_text=result.representative_feedback_text,
         representative_feedback_frames=result.representative_feedback_frames,
+        tts=build_feedback_tts_response(
+            previous_displayed_code=payload.displayed_feedback_code,
+            previous_displayed_text=payload.displayed_feedback_text,
+            displayed_code=result.displayed_feedback_code,
+            displayed_text=result.displayed_feedback_text,
+        ),
         normalized_pose=to_motion_replay_pose_response(normalized),
         features=DanielRightSideBendFeaturesResponse(
             torso_tilt=features.torso_tilt,
@@ -528,6 +559,7 @@ def _to_integrated_daniel_response(
         representative_feedback_code=result.representative_feedback_code,
         representative_feedback_text=result.representative_feedback_text,
         representative_feedback_frames=result.representative_feedback_frames,
+        tts=result.tts,
         baseline_left_wrist_forward=baseline_left,
         baseline_right_wrist_forward=baseline_right,
         normalized_pose=normalized_pose,
