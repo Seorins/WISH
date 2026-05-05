@@ -1,4 +1,7 @@
 from app.services.gymnastics.evaluators.daniel_upward_press import DanielUpwardPressEvaluator
+from app.services.gymnastics.features.daniel_upward_press_features import (
+    extract_daniel_upward_press_features,
+)
 from app.services.gymnastics.types import HipCenter, NormalizedLandmark, NormalizedPoseFrame
 
 
@@ -110,6 +113,48 @@ def test_daniel_upward_press_does_not_hold_when_hand_heights_are_unbalanced() ->
 
     assert unbalanced_result.state == "idle"
     assert unbalanced_result.candidate_feedback_code == "MATCH_HAND_HEIGHTS"
+
+
+def test_daniel_upward_press_resets_inconsistent_hold_progress_without_timestamp() -> None:
+    evaluator = DanielUpwardPressEvaluator()
+
+    baseline_result = evaluator.evaluate(
+        frame=build_upward_press_frame(timestamp_ms=0, pose="neutral"),
+        previous_state="idle",
+        step_count=0,
+        target_steps=1,
+        target_hold_ms=200,
+    )
+    recovered_result = evaluator.evaluate(
+        frame=build_upward_press_frame(timestamp_ms=100, pose="upward"),
+        previous_state="holding",
+        step_count=0,
+        target_steps=1,
+        reference_hip_x=baseline_result.reference_hip_x,
+        reference_hip_y=baseline_result.reference_hip_y,
+        reference_scale=baseline_result.reference_scale,
+        target_hold_ms=200,
+        hold_duration_ms=120,
+        hold_last_timestamp_ms=None,
+    )
+
+    assert recovered_result.state == "holding"
+    assert recovered_result.hold_duration_ms == 0
+    assert recovered_result.hold_last_timestamp_ms == 100
+
+
+def test_daniel_upward_press_accuracy_skips_missing_height_balance() -> None:
+    evaluator = DanielUpwardPressEvaluator()
+
+    features = extract_daniel_upward_press_features(
+        build_upward_press_frame(timestamp_ms=0, pose="upward"),
+    )
+    features.wrist_height_balance = None
+
+    accuracy = evaluator._compute_accuracy(features, mean_elbow_angle=160.0)
+
+    assert 0.0 <= accuracy <= 1.0
+    assert accuracy > 0.0
 
 
 def build_upward_press_frame(

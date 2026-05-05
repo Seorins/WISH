@@ -200,12 +200,6 @@ class DanielUpwardPressEvaluator(BaseHoldEvaluator):
         mean_elbow_angle: float | None,
     ) -> float:
         wrist_height_value = features.wrist_height or 0.0
-        wrist_balance_value = (
-            features.wrist_height_balance
-            if features.wrist_height_balance is not None
-            else self.config.height_balance_threshold
-        )
-
         scores: list[tuple[float, float]] = [
             (
                 min(
@@ -216,19 +210,24 @@ class DanielUpwardPressEvaluator(BaseHoldEvaluator):
             ),
             (
                 max(
-                    1.0 - wrist_balance_value / max(self.config.height_balance_threshold, 1e-6),
-                    0.0,
-                ),
-                0.20,
-            ),
-            (
-                max(
                     1.0 - features.torso_tilt / max(self.config.torso_tilt_max, 1.0),
                     0.0,
                 ),
                 0.15,
             ),
         ]
+        if features.wrist_height_balance is not None:
+            scores.append(
+                (
+                    max(
+                        1.0
+                        - features.wrist_height_balance
+                        / max(self.config.height_balance_threshold, 1e-6),
+                        0.0,
+                    ),
+                    0.20,
+                )
+            )
         if mean_elbow_angle is not None:
             scores.append(
                 (
