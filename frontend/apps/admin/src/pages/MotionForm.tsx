@@ -10,10 +10,10 @@ const MAX_VIDEO_BYTES = 100 * 1024 * 1024
 
 const motionSchema = z.object({
   exerciseType: z.enum(['TOP', 'DANIEL']),
-  name: z.string().min(1, 'Enter a name').max(100),
-  routineOrder: z.coerce.number().int().positive('Use a positive integer'),
-  targetReps: z.coerce.number().int().positive('Use a positive integer'),
-  description: z.string().min(1, 'Enter a description'),
+  name: z.string().min(1, '이름을 입력하세요').max(100),
+  routineOrder: z.coerce.number().int().positive('1 이상의 정수를 입력하세요'),
+  targetReps: z.coerce.number().int().positive('1 이상의 정수를 입력하세요'),
+  description: z.string().min(1, '설명을 입력하세요'),
 })
 
 type MotionMetadataValues = z.infer<typeof motionSchema>
@@ -70,7 +70,7 @@ export function MotionForm({
   const handleThumbnailChange = (file: File | undefined) => {
     setFileError(null)
     if (file && file.size > MAX_THUMBNAIL_BYTES) {
-      setFileError('Thumbnail must be 10MB or smaller')
+      setFileError('썸네일은 10MB 이하의 이미지여야 합니다')
       return
     }
     setThumbnail(file)
@@ -90,7 +90,7 @@ export function MotionForm({
   const handleDemoVideoChange = (file: File | undefined) => {
     setFileError(null)
     if (file && file.size > MAX_VIDEO_BYTES) {
-      setFileError('Demo video must be 100MB or smaller')
+      setFileError('영상은 100MB 이하여야 합니다')
       return
     }
     setDemoVideo(file)
@@ -113,25 +113,25 @@ export function MotionForm({
 
   return (
     <form onSubmit={handleSubmit(submit)} style={styles.form}>
-      <h3 style={styles.heading}>{initial ? 'Edit Motion' : 'Add Motion'}</h3>
+      <h3 style={styles.heading}>{initial ? '동작 수정' : '동작 추가'}</h3>
       <div style={styles.grid}>
         {initial ? (
           <>
             <input type="hidden" {...register('exerciseType')} />
             <input type="hidden" {...register('routineOrder')} />
             <div style={styles.label}>
-              <span>Exercise type</span>
+              <span>체조 타입</span>
               <span style={styles.readonlyValue}>{initial.exerciseType}</span>
             </div>
             <div style={styles.label}>
-              <span>Order</span>
+              <span>순서</span>
               <span style={styles.readonlyValue}>{initial.routineOrder}</span>
             </div>
           </>
         ) : (
           <>
             <label style={styles.label}>
-              Exercise type
+              체조 타입
               <select {...register('exerciseType')} style={styles.input} disabled={submitting}>
                 <option value="TOP">TOP</option>
                 <option value="DANIEL">DANIEL</option>
@@ -139,7 +139,7 @@ export function MotionForm({
             </label>
 
             <label style={styles.label}>
-              Order
+              순서
               <input
                 type="number"
                 min={1}
@@ -155,7 +155,7 @@ export function MotionForm({
         )}
 
         <label style={styles.label}>
-          Name
+          이름
           <input {...register('name')} style={styles.input} disabled={submitting} />
           {formState.errors.name && (
             <span style={styles.error}>{formState.errors.name.message}</span>
@@ -163,7 +163,7 @@ export function MotionForm({
         </label>
 
         <label style={styles.label}>
-          Target reps
+          목표 횟수
           <input
             type="number"
             min={1}
@@ -177,7 +177,7 @@ export function MotionForm({
         </label>
 
         <label style={{ ...styles.label, gridColumn: 'span 2' }}>
-          Description
+          설명
           <textarea
             rows={2}
             {...register('description')}
@@ -190,13 +190,13 @@ export function MotionForm({
         </label>
 
         <div style={styles.label}>
-          <span>Thumbnail (optional, image under 10MB)</span>
+          <span>썸네일 (선택, 10MB 이하 이미지)</span>
           {visibleThumbnailUrl && (
-            <img src={visibleThumbnailUrl} alt="Motion thumbnail" style={styles.thumbnailPreview} />
+            <img src={visibleThumbnailUrl} alt="동작 썸네일" style={styles.thumbnailPreview} />
           )}
           {initial?.thumbnailUrl && !thumbnail && (
             <span style={styles.mediaHint}>
-              Current:{' '}
+              현재:{' '}
               <a href={initial.thumbnailUrl} target="_blank" rel="noreferrer">
                 {extractFilename(initial.thumbnailUrl)}
               </a>
@@ -217,16 +217,16 @@ export function MotionForm({
                 onChange={e => setClearThumbnail(e.target.checked)}
                 disabled={submitting || Boolean(thumbnail)}
               />
-              Remove existing thumbnail
+              기존 썸네일 제거
             </label>
           )}
         </div>
 
         <div style={styles.label}>
-          <span>Demo video (optional, video under 100MB)</span>
+          <span>시범 영상 (선택, 100MB 이하 영상)</span>
           {initial?.demoVideoUrl && !demoVideo && (
             <span style={styles.mediaHint}>
-              Current:{' '}
+              현재:{' '}
               <a href={initial.demoVideoUrl} target="_blank" rel="noreferrer">
                 {extractFilename(initial.demoVideoUrl)}
               </a>
@@ -247,7 +247,7 @@ export function MotionForm({
                 onChange={e => setClearDemoVideo(e.target.checked)}
                 disabled={submitting || Boolean(demoVideo)}
               />
-              Remove existing video
+              기존 영상 제거
             </label>
           )}
         </div>
@@ -257,10 +257,10 @@ export function MotionForm({
 
       <div style={styles.actions}>
         <button type="button" onClick={onCancel} style={styles.cancel} disabled={submitting}>
-          Cancel
+          취소
         </button>
         <button type="submit" style={styles.submit} disabled={submitting || Boolean(fileError)}>
-          {submitting ? 'Saving' : 'Save'}
+          {submitting ? '저장 중' : '저장'}
         </button>
       </div>
     </form>

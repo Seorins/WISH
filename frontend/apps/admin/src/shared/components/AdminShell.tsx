@@ -25,16 +25,16 @@ export function AdminShell({ title, description, actions, children }: Props) {
           <span style={styles.brandMark}>W</span>
           <div>
             <strong style={styles.brandTitle}>WISH Admin</strong>
-            <span style={styles.brandSub}>Operation Console</span>
+            <span style={styles.brandSub}>운영 콘솔</span>
           </div>
         </div>
 
         <nav style={styles.nav}>
-          <NavLink to="/motions" style={({ isActive }) => navLinkStyle(isActive)}>
-            Motions
-          </NavLink>
           <NavLink to="/users" style={({ isActive }) => navLinkStyle(isActive)}>
-            Users
+            유저 관리
+          </NavLink>
+          <NavLink to="/motions" style={({ isActive }) => navLinkStyle(isActive)}>
+            모션 관리
           </NavLink>
         </nav>
       </aside>
@@ -49,7 +49,7 @@ export function AdminShell({ title, description, actions, children }: Props) {
             {actions}
             <span style={styles.userBadge}>{email}</span>
             <button onClick={onLogout} style={styles.logout}>
-              Logout
+              로그아웃
             </button>
           </div>
         </header>
