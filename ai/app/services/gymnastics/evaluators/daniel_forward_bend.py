@@ -117,15 +117,18 @@ class DanielForwardBendEvaluator(BaseHoldEvaluator):
             reference_hip_y=next_reference_hip_y,
             reference_scale=next_reference_scale,
         )
+        motion_tracking = self._resolve_motion_tracking(frame)
         knee_angle = lowest_knee_angle(features.left_knee_angle, features.right_knee_angle)
-        knee_condition_satisfied = knee_angle is not None and knee_angle >= self.config.knee_bend_min_angle
-        can_keep_holding_without_knee_angle = previous_state == "holding" and knee_angle is None
+        # In a forward bend, wrists often occlude knees/ankles. When knee landmarks
+        # disappear temporarily, treat the knee check as "unknown" instead of
+        # failing the whole pose. If knee angles are available, they still gate hold.
+        knee_condition_satisfied = knee_angle is None or knee_angle >= self.config.knee_bend_min_angle
         is_pose_valid = (
-            frame.tracking == "tracking_ok"
+            motion_tracking == "tracking_ok"
             and features.forward_bend_angle >= self.config.forward_bend_threshold
             and features.wrist_drop is not None
             and features.wrist_drop >= self.config.wrist_drop_threshold
-            and (knee_condition_satisfied or can_keep_holding_without_knee_angle)
+            and knee_condition_satisfied
         )
         hold_progress = self._update_hold_progress(
             previous_state=previous_state,
@@ -154,7 +157,7 @@ class DanielForwardBendEvaluator(BaseHoldEvaluator):
         next_feedback_state = self._stabilize_feedback(
             features=features,
             state=hold_progress.state,
-            tracking=frame.tracking,
+            tracking=motion_tracking,
             previous_feedback_state=previous_feedback_state,
         )
         next_representative_state = self._update_representative_feedback(
@@ -168,7 +171,7 @@ class DanielForwardBendEvaluator(BaseHoldEvaluator):
             step_count=0,
             accuracy=self._compute_accuracy(features, knee_angle),
             feedback=next_feedback_state.displayed_text,
-            tracking=frame.tracking,
+            tracking=motion_tracking,
             reference_hip_x=next_reference_hip_x,
             reference_hip_y=next_reference_hip_y,
             reference_scale=next_reference_scale,
@@ -256,3 +259,16 @@ class DanielForwardBendEvaluator(BaseHoldEvaluator):
             displayed_text=feedback_state.displayed_text,
             state=previous_representative_state,
         )
+
+    def _resolve_motion_tracking(self, frame: NormalizedPoseFrame) -> str:
+        required_points = (
+            "LEFT_SHOULDER",
+            "RIGHT_SHOULDER",
+            "LEFT_HIP",
+            "RIGHT_HIP",
+            "LEFT_WRIST",
+            "RIGHT_WRIST",
+        )
+        if all(point in frame.landmarks for point in required_points):
+            return "tracking_ok"
+        return "tracking_low"
