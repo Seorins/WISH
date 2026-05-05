@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { DashboardPage } from './pages/DashboardPage'
 import { LoginPage } from './pages/LoginPage'
+import { ROMDetailPage } from './pages/ROMDetailPage'
 import { SignupPage } from './pages/SignupPage'
 import { RequireAuth } from './routes/RequireAuth'
 
@@ -16,6 +17,14 @@ function App() {
           element={
             <RequireAuth>
               <DashboardPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/rom"
+          element={
+            <RequireAuth>
+              <ROMDetailPage />
             </RequireAuth>
           }
         />

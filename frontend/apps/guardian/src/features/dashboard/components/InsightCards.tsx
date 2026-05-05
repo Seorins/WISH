@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, XAxis, YAxis } from 'recharts'
 import {
   OVERALL_SCORE,
@@ -211,13 +212,14 @@ const ROM_TONE_CLASS: Record<RangeOfMotion['tone'], { cell: string; rating: stri
 }
 
 export function ROMSummaryCard() {
+  const navigate = useNavigate()
   return (
     <article className={styles.card}>
       <header className={styles.cardHead}>
         <CardTitle tip="동작 중 각 관절이 도달한 최대 각도를 정상 가동 범위(ROM) 기준으로 환산한 비율입니다. 80% 이상 좋음, 90% 이상이면 우수예요.">
           관절 가동 범위
         </CardTitle>
-        <button type="button" className={styles.cardAction}>
+        <button type="button" className={styles.cardAction} onClick={() => navigate('/rom')}>
           상세 보기
         </button>
       </header>

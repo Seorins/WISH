@@ -9,7 +9,7 @@ import styles from './MovementProgressCard.module.css'
 const COLLAPSED_COUNT = 3
 
 export function MovementProgressCard() {
-  const [expanded, setExpanded] = useState(false)
+  const [expanded, setExpanded] = useState(true)
   const [activeMotionId, setActiveMotionId] = useState<string | null>(null)
 
   const scoreColor = (score: number) => {
@@ -33,7 +33,7 @@ export function MovementProgressCard() {
         <span className={styles.sessionLabel}>오늘 수행 동작</span>
       </div>
 
-      <div className={styles.leftCol}>
+      <div className={`${styles.leftCol} ${!expanded ? styles.leftColCollapsed : ''}`}>
         <div className={styles.list}>
           {visible.map(m => {
             const { from, to } = scoreColor(m.score)
