@@ -49,15 +49,31 @@ export const MOVEMENTS: Movement[] = [
   { id: 'sit-stand', name: '앉았다 일어서기', score: 88, thumbnail: top5Url },
 ]
 
-/** 최근 세션 6회 — 오늘 기준으로 거꾸로 며칠 전인지 + 점수 */
-const SESSION_HISTORY: ReadonlyArray<{ daysAgo: number; score: number }> = [
-  { daysAgo: 14, score: 65 },
-  { daysAgo: 10, score: 72 },
-  { daysAgo: 7, score: 78 },
-  { daysAgo: 4, score: 75 },
-  { daysAgo: 2, score: 83 },
-  { daysAgo: 0, score: 87 },
-]
+/** 세션 이력 — 오늘 기준으로 거꾸로 며칠 전인지 + 점수 (오래된 순 → 최신 순) */
+const SESSION_HISTORY: ReadonlyArray<{ daysAgo: number; score: number }> = (() => {
+  // 최근 6회는 RecentSessions 행과 동일하게 고정 표시
+  const recent = [
+    { daysAgo: 14, score: 65 },
+    { daysAgo: 10, score: 72 },
+    { daysAgo: 7, score: 78 },
+    { daysAgo: 4, score: 75 },
+    { daysAgo: 2, score: 83 },
+    { daysAgo: 0, score: 87 },
+  ]
+  // 더 긴 범위(최근 12·30회) 표시용 과거 세션 — 약 2일 간격
+  const older: { daysAgo: number; score: number }[] = []
+  for (let i = 0; i < 24; i++) {
+    const daysAgo = 16 + i * 2 // 16, 18, ..., 62
+    const progress = (23 - i) / 23 // 최신에 가까울수록 1
+    const base = 50 + progress * 14 // 50 → 64
+    const noise = ((i * 7) % 9) - 4
+    older.push({
+      daysAgo,
+      score: Math.max(40, Math.min(72, Math.round(base + noise))),
+    })
+  }
+  return [...older.reverse(), ...recent]
+})()
 
 const WEEKDAY_KO = ['일', '월', '화', '수', '목', '금', '토'] as const
 
@@ -78,7 +94,7 @@ function isoDate(d: Date): string {
   return `${d.getFullYear()}-${m}-${day}`
 }
 
-export const RECENT_SESSIONS: Session[] = SESSION_HISTORY.map((h, i) => {
+export const RECENT_SESSIONS: Session[] = SESSION_HISTORY.slice(-6).map((h, i) => {
   const d = dateMinusDays(h.daysAgo)
   const isToday = h.daysAgo === 0
   return {
@@ -95,6 +111,13 @@ export const TREND: TrendPoint[] = SESSION_HISTORY.map(h => ({
   date: shortDateLabel(dateMinusDays(h.daysAgo)),
   score: h.score,
 }))
+
+export type TrendRangeId = 6 | 12 | 30
+export const TREND_RANGE_OPTIONS: ReadonlyArray<{ id: TrendRangeId; label: string }> = [
+  { id: 6, label: '최근 6회' },
+  { id: 12, label: '최근 12회' },
+  { id: 30, label: '최근 30회' },
+]
 
 export const RANGE_OF_MOTION: RangeOfMotion[] = [
   { joint: '어깨', percent: 92, rating: '좋음', tone: 'mint' },

@@ -1,14 +1,29 @@
+import { useEffect, useRef, useState } from 'react'
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, XAxis, YAxis } from 'recharts'
-import { OVERALL_SCORE, RANGE_OF_MOTION, TREND, type RangeOfMotion } from '../data/mock'
+import {
+  OVERALL_SCORE,
+  RANGE_OF_MOTION,
+  TREND,
+  TREND_RANGE_OPTIONS,
+  type RangeOfMotion,
+  type TrendRangeId,
+} from '../data/mock'
 import { ArrowUpIcon, ChevronDownIcon, InfoIcon } from './icons'
 import { ScoreRing } from './ScoreRing'
 import styles from './InsightCards.module.css'
 
-function CardTitle({ children }: { children: React.ReactNode }) {
+function CardTitle({ children, tip }: { children: React.ReactNode; tip?: string }) {
   return (
     <h3 className={styles.cardTitle}>
       {children}
-      <InfoIcon className={styles.cardTitleIcon} />
+      <span className={styles.infoTip} tabIndex={0} role="button" aria-label="설명 보기">
+        <InfoIcon className={styles.cardTitleIcon} />
+        {tip && (
+          <span className={styles.tooltip} role="tooltip">
+            {tip}
+          </span>
+        )}
+      </span>
     </h3>
   )
 }
@@ -17,7 +32,9 @@ export function OverallScoreCard() {
   return (
     <article className={styles.card}>
       <header className={styles.cardHead}>
-        <CardTitle>전체 동작 점수</CardTitle>
+        <CardTitle tip="오늘 수행한 모든 동작의 가중 평균 점수입니다. 자세 정확도, 관절 각도 도달률, 박자 일치도를 합산해 100점 만점으로 환산했어요.">
+          전체 동작 점수
+        </CardTitle>
       </header>
       <div className={styles.scoreBody}>
         <ScoreRing
@@ -57,19 +74,74 @@ function buildYDomain(values: number[]): { domain: [number, number]; ticks: numb
 }
 
 export function TrendChartCard() {
-  const { domain, ticks } = buildYDomain(TREND.map(t => t.score))
+  const [rangeId, setRangeId] = useState<TrendRangeId>(6)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!menuOpen) return
+    const onClick = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false)
+      }
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMenuOpen(false)
+    }
+    document.addEventListener('click', onClick)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('click', onClick)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [menuOpen])
+
+  const currentRange = TREND_RANGE_OPTIONS.find(r => r.id === rangeId) ?? TREND_RANGE_OPTIONS[0]
+  const data = TREND.slice(-rangeId)
+  const { domain, ticks } = buildYDomain(data.map(t => t.score))
+
   return (
     <article className={`${styles.card} ${styles.cardFlex}`}>
       <header className={styles.cardHead}>
-        <CardTitle>동작 추세</CardTitle>
-        <button type="button" className={styles.cardAction}>
-          최근 6회
-          <ChevronDownIcon className={styles.cardActionChev} />
-        </button>
+        <CardTitle tip="최근 세션들의 전체 동작 점수를 시간 순으로 보여줍니다. 선이 우상향일수록 꾸준히 좋아지고 있다는 뜻이에요.">
+          동작 추세
+        </CardTitle>
+        <div className={styles.rangeWrap} ref={menuRef}>
+          <button
+            type="button"
+            className={styles.cardAction}
+            onClick={() => setMenuOpen(o => !o)}
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+          >
+            {currentRange.label}
+            <ChevronDownIcon
+              className={`${styles.cardActionChev} ${menuOpen ? styles.cardActionChevOpen : ''}`}
+            />
+          </button>
+          {menuOpen && (
+            <div className={styles.rangeMenu} role="menu">
+              {TREND_RANGE_OPTIONS.map(opt => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  role="menuitem"
+                  className={`${styles.rangeItem} ${opt.id === rangeId ? styles.rangeItemActive : ''}`}
+                  onClick={() => {
+                    setRangeId(opt.id)
+                    setMenuOpen(false)
+                  }}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </header>
       <div className={styles.trendBody}>
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={TREND} margin={{ top: 8, right: 12, left: -8, bottom: 4 }}>
+          <AreaChart data={data} margin={{ top: 8, right: 12, left: -8, bottom: 4 }}>
             <defs>
               <linearGradient id="trend-line" x1="0" y1="0" x2="1" y2="0">
                 <stop offset="0%" stopColor="#a892ff" />
@@ -87,6 +159,7 @@ export function TrendChartCard() {
               tickLine={false}
               axisLine={false}
               padding={{ left: 8, right: 8 }}
+              interval={data.length > 12 ? Math.ceil(data.length / 6) - 1 : 0}
             />
             <YAxis
               ticks={ticks}
@@ -104,13 +177,17 @@ export function TrendChartCard() {
               fill="url(#trend-area)"
               dot={(props: { cx?: number; cy?: number; index?: number; key?: string | number }) => {
                 const { cx = 0, cy = 0, index = 0, key } = props
-                const isLast = index === TREND.length - 1
+                const isLast = index === data.length - 1
+                const showDot = data.length <= 12 || isLast
+                if (!showDot) {
+                  return <circle key={key ?? `trend-dot-${index}`} cx={cx} cy={cy} r={0} />
+                }
                 return (
                   <circle
                     key={key ?? `trend-dot-${index}`}
                     cx={cx}
                     cy={cy}
-                    r={isLast ? 5.5 : 3.5}
+                    r={isLast ? 5.5 : 3}
                     fill={isLast ? '#7c5cff' : '#fff'}
                     stroke={isLast ? '#fff' : '#7c5cff'}
                     strokeWidth={isLast ? 2.5 : 2}
@@ -137,7 +214,9 @@ export function ROMSummaryCard() {
   return (
     <article className={styles.card}>
       <header className={styles.cardHead}>
-        <CardTitle>관절 가동 범위</CardTitle>
+        <CardTitle tip="동작 중 각 관절이 도달한 최대 각도를 정상 가동 범위(ROM) 기준으로 환산한 비율입니다. 80% 이상 좋음, 90% 이상이면 우수예요.">
+          관절 가동 범위
+        </CardTitle>
         <button type="button" className={styles.cardAction}>
           상세 보기
         </button>
