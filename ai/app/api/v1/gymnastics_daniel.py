@@ -28,6 +28,7 @@ from app.schemas.gymnastics import (
     DanielUpwardPressEvaluationRequest,
     DanielUpwardPressEvaluationResponse,
     DanielUpwardPressFeaturesResponse,
+    NormalizedPoseResponse,
 )
 from app.services.gymnastics.constants import (
     DANIEL_FORWARD_BEND_MOTION_NAME,
@@ -492,7 +493,7 @@ _DANIEL_STRETCH_EVALUATION_SPECS = {
 def _to_integrated_daniel_response(
     *,
     motion_name: str,
-    normalized_pose,
+    normalized_pose: NormalizedPoseResponse | None,
     result: (
         DanielForwardPressEvaluationResponse
         | DanielUpwardPressEvaluationResponse
