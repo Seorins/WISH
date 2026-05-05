@@ -1,8 +1,7 @@
-import { Suspense, useRef, useState } from 'react'
+import { Suspense, useRef, useState, type ComponentRef } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
 import { Html, OrbitControls, useGLTF } from '@react-three/drei'
 import type { Group } from 'three'
-import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import wishGlbUrl from '@/assets/wish.glb?url'
 import { JOINT_MARKERS } from '../data/mock'
 import { MinusIcon, PersonDimIcon, PersonIcon, PlusIcon, RefreshIcon } from './icons'
@@ -43,7 +42,7 @@ function JointMarkers() {
 }
 
 export function Character3D() {
-  const controlsRef = useRef<OrbitControlsImpl>(null)
+  const controlsRef = useRef<ComponentRef<typeof OrbitControls>>(null)
   const [zoom, setZoom] = useState(0)
   const [view, setView] = useState<ViewMode>('live')
 
