@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { HeaderBar } from '@/features/dashboard/components/HeaderBar'
 import { ChevronLeftIcon } from '@/features/dashboard/components/icons'
 import { JointStepNav } from '@/features/rom/components/JointStepNav'
+import { ROMAnalysisPanel } from '@/features/rom/components/ROMAnalysisPanel'
 import { JOINT_ROM_DETAILS, type JointId } from '@/features/rom/data/mock'
 import '@/features/dashboard/tokens.css'
 import styles from './ROMDetailPage.module.css'
@@ -47,8 +48,7 @@ export function ROMDetailPage() {
               className={styles.panel}
             >
               <div className={styles.panelInner}>
-                <h2 className={styles.panelTitle}>{joint.name} 관절 가동 범위</h2>
-                <p className={styles.panelPlaceholder}>분석 패널 (구성 중)</p>
+                <ROMAnalysisPanel joint={joint} />
               </div>
             </article>
           ))}

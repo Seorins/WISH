@@ -131,9 +131,6 @@
 }
 
 .panel {
-  border-radius: var(--dash-radius-card);
-  background: var(--dash-color-surface);
-  box-shadow: var(--dash-shadow-card);
   scroll-margin-top: calc(var(--dash-header-height) + var(--dash-space-4));
   min-height: calc(100vh - var(--dash-header-height) - var(--dash-space-7) * 2);
   display: flex;
@@ -143,20 +140,6 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: var(--dash-space-3);
-  padding: var(--dash-space-5) var(--dash-space-5);
-}
-
-.panelTitle {
-  margin: 0;
-  font-size: 17px;
-  font-weight: 700;
-  color: var(--dash-color-text-strong);
-  letter-spacing: -0.01em;
-}
-
-.panelPlaceholder {
-  margin: 0;
-  color: var(--dash-color-text-muted);
-  font-size: 13px;
+  gap: var(--dash-space-4);
+  min-width: 0;
 }
