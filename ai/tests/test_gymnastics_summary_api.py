@@ -62,6 +62,34 @@ def test_march_summary_rejects_end_before_start() -> None:
     assert response.json()["detail"] == "ended_at must be greater than or equal to started_at"
 
 
+def test_integrated_daniel_stretch_summary_returns_motion_specific_payload() -> None:
+    response = client.post(
+        "/api/v1/gymnastics/daniel/summary",
+        json={
+            "motion_id": "daniel_upward_press",
+            "started_at": "2026-04-30T10:00:05+09:00",
+            "ended_at": "2026-04-30T10:00:17.400000+09:00",
+            "accuracy": 0.91,
+            "hold_completed": True,
+            "representative_feedback": REPRESENTATIVE_FEEDBACK,
+            "tracking": "tracking_ok",
+            "state": "complete",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "motionId": "daniel_upward_press",
+        "motionName": DANIEL_UPWARD_PRESS_MOTION_NAME,
+        "durationSec": 12.4,
+        "accuracy": 0.91,
+        "holdCompleted": True,
+        "representativeFeedback": REPRESENTATIVE_FEEDBACK,
+        "tracking": "tracking_ok",
+        "state": "complete",
+    }
+
+
 def test_march_summary_supports_mixed_timezones() -> None:
     response = client.post(
         "/api/v1/gymnastics/march/summary",
