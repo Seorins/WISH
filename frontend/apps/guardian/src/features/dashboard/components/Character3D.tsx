@@ -1,13 +1,26 @@
 import { Suspense, useCallback, useEffect, useRef, useState, type ComponentRef } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
-import { Html, OrbitControls, useGLTF } from '@react-three/drei'
+import { Html, OrbitControls, useAnimations, useGLTF } from '@react-three/drei'
 import { Quaternion, Vector3, type Bone, type Group } from 'three'
+import squatGlbUrl from '@/assets/squat.glb?url'
+import walkingGlbUrl from '@/assets/walking.glb?url'
 import wishGlbUrl from '@/assets/wish.glb?url'
 import type { LandmarkName, MotionClip, MotionFrame } from '../data/motionClips'
 import { MinusIcon, PersonIcon, PlusIcon, RefreshIcon } from './icons'
 import styles from './Character3D.module.css'
 
 useGLTF.preload(wishGlbUrl)
+useGLTF.preload(walkingGlbUrl)
+useGLTF.preload(squatGlbUrl)
+
+/**
+ * 동작 id → GLB 클립 이름 매핑.
+ * 별도 GLB(walking/squat)에서 클립만 추출해 wish.glb 캐릭터에 적용 (재질 일관성 유지).
+ */
+const MOTION_CLIP_NAME: Record<string, string> = {
+  march: 'Armature|walking_man|baselayer',
+  'sit-stand': 'Armature|air_squat|baselayer',
+}
 
 const BASE_SCALE = 1.0
 const MODEL_OFFSET_Y = -0.95
@@ -36,6 +49,22 @@ const KP_TO_JOINT_ID: Record<LandmarkName, string> = {
   RIGHT_KNEE: 'knee-r',
   LEFT_ANKLE: 'ankle-l',
   RIGHT_ANKLE: 'ankle-r',
+}
+
+/** 마커 id → 추적할 Mixamo 본 이름 (클립 재생 중 마커가 본 따라가도록) */
+const JOINT_ID_TO_BONE: Record<string, string> = {
+  'shoulder-l': 'LeftArm',
+  'shoulder-r': 'RightArm',
+  'elbow-l': 'LeftForeArm',
+  'elbow-r': 'RightForeArm',
+  'wrist-l': 'LeftHand',
+  'wrist-r': 'RightHand',
+  'hip-l': 'LeftUpLeg',
+  'hip-r': 'RightUpLeg',
+  'knee-l': 'LeftLeg',
+  'knee-r': 'RightLeg',
+  'ankle-l': 'LeftFoot',
+  'ankle-r': 'RightFoot',
 }
 
 /**
@@ -136,20 +165,27 @@ function CharacterModel({
   joints,
   onStaticJoints,
   activeMotion,
+  activeClipName,
   onMotionFrame,
 }: {
   targetScale: number
   joints: Joint[]
   onStaticJoints: (joints: Joint[]) => void
   activeMotion: MotionClip | null
+  activeClipName: string | null
   onMotionFrame: (joints: Joint[]) => void
 }) {
   const { scene } = useGLTF(wishGlbUrl)
+  const { animations: walkingClips } = useGLTF(walkingGlbUrl)
+  const { animations: squatClips } = useGLTF(squatGlbUrl)
+  const allClips = [...walkingClips, ...squatClips]
+  const { actions } = useAnimations(allClips, scene)
   const groupRef = useRef<Group>(null)
   const playStartMs = useRef<number>(0)
   const lastFrameIdx = useRef<number>(-1)
   const bonesRef = useRef<Map<string, Bone>>(new Map())
   const restQuatsRef = useRef<Map<string, Quaternion>>(new Map())
+  const markerRefs = useRef<Map<string, Group>>(new Map())
 
   // 매 프레임 재사용할 임시 객체들
   const tmpKpP = useRef(new Vector3())
@@ -210,13 +246,39 @@ function CharacterModel({
     }
   }, [activeMotion])
 
+  // GLB에 베이크된 클립 재생 / 정지
+  useEffect(() => {
+    Object.values(actions).forEach(a => a?.stop())
+    if (activeClipName) {
+      actions[activeClipName]?.reset().play()
+    }
+  }, [activeClipName, actions])
+
   useFrame(() => {
     const g = groupRef.current
     if (g) {
       const next = g.scale.x + (targetScale - g.scale.x) * 0.15
       g.scale.set(next, next, next)
     }
-    if (!activeMotion || !g) return
+    if (!g) return
+
+    // GLB 클립 재생 중에는 본 worldPosition을 따라 마커 group transform을 매 frame 동기화
+    if (activeClipName) {
+      const tmpV = tmpBonePos.current
+      for (const j of joints) {
+        const boneName = JOINT_ID_TO_BONE[j.id]
+        if (!boneName) continue
+        const bone = bonesRef.current.get(boneName)
+        const ref = markerRefs.current.get(j.id)
+        if (!bone || !ref) continue
+        bone.getWorldPosition(tmpV)
+        g.worldToLocal(tmpV)
+        ref.position.copy(tmpV)
+      }
+      return
+    }
+
+    if (!activeMotion) return
 
     const elapsed = (performance.now() - playStartMs.current) % activeMotion.durationMs
     const idx = Math.floor((elapsed / 1000) * activeMotion.fps) % activeMotion.frames.length
@@ -275,9 +337,18 @@ function CharacterModel({
     <group ref={groupRef} position={[0, MODEL_OFFSET_Y, 0]} scale={BASE_SCALE}>
       <primitive object={scene} />
       {joints.map(j => (
-        <Html key={j.id} position={j.position} center zIndexRange={[40, 0]}>
-          <div className={styles.marker} aria-hidden />
-        </Html>
+        <group
+          key={j.id}
+          ref={el => {
+            if (el) markerRefs.current.set(j.id, el)
+            else markerRefs.current.delete(j.id)
+          }}
+          position={j.position}
+        >
+          <Html center zIndexRange={[40, 0]}>
+            <div className={styles.marker} aria-hidden />
+          </Html>
+        </group>
       ))}
     </group>
   )
@@ -293,6 +364,9 @@ export function Character3D({ activeMotion = null }: Character3DProps) {
   const [joints, setJoints] = useState<Joint[]>(FALLBACK_JOINTS)
   const staticJointsRef = useRef<Joint[]>(FALLBACK_JOINTS)
   const activeMotionRef = useRef(activeMotion)
+
+  const motionId = activeMotion?.id
+  const activeClipName = (motionId && MOTION_CLIP_NAME[motionId]) ?? null
 
   useEffect(() => {
     activeMotionRef.current = activeMotion
@@ -329,6 +403,7 @@ export function Character3D({ activeMotion = null }: Character3DProps) {
               joints={joints}
               onStaticJoints={handleStaticJoints}
               activeMotion={activeMotion}
+              activeClipName={activeClipName}
               onMotionFrame={handleMotionFrame}
             />
           </Suspense>
