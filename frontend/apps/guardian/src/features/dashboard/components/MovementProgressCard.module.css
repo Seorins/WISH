@@ -3,12 +3,13 @@
   background: var(--dash-gradient-card-tint);
   border-radius: var(--dash-radius-card);
   box-shadow: var(--dash-shadow-card);
-  padding: var(--dash-space-7);
+  padding: var(--dash-space-6);
   display: grid;
-  grid-template-columns: minmax(280px, 320px) minmax(0, 1fr);
+  grid-template-columns: minmax(260px, 300px) minmax(0, 1fr);
   grid-template-rows: auto 1fr auto;
-  gap: var(--dash-space-5) var(--dash-space-6);
-  min-height: 540px;
+  gap: var(--dash-space-4) var(--dash-space-6);
+  height: 100%;
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -16,7 +17,7 @@
   grid-column: 1 / -1;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 
 .title {
@@ -24,11 +25,11 @@
   align-items: center;
   gap: 8px;
   margin: 0;
-  font-size: 30px;
+  font-size: 26px;
   font-weight: 700;
   letter-spacing: -0.02em;
   color: var(--dash-color-text-strong);
-  line-height: 1.1;
+  line-height: 1.15;
 }
 
 .titleSparkle {
@@ -40,70 +41,33 @@
 
 .tagline {
   margin: 0;
-  font-size: 13.5px;
+  font-size: 12.5px;
   font-weight: 500;
   color: var(--dash-color-text-muted);
-  line-height: 1.5;
+  line-height: 1.45;
   max-width: 320px;
 }
 
 .leftCol {
   display: flex;
   flex-direction: column;
-  gap: var(--dash-space-4);
+  gap: var(--dash-space-3);
   min-width: 0;
-}
-
-.chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.chip {
-  appearance: none;
-  border: 1px solid transparent;
-  background: rgba(255, 255, 255, 0.55);
-  padding: 7px 14px;
-  border-radius: var(--dash-radius-pill);
-  cursor: pointer;
-  font: inherit;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--dash-color-text-muted);
-  transition:
-    background 0.15s,
-    color 0.15s,
-    box-shadow 0.15s;
-}
-
-.chip:hover {
-  background: #fff;
-  color: var(--dash-color-text-strong);
-}
-
-.chipActive {
-  background: var(--dash-gradient-primary);
-  color: #fff;
-  box-shadow: var(--dash-shadow-pill);
-}
-
-.chipActive:hover {
-  background: var(--dash-gradient-primary);
-  color: #fff;
 }
 
 .list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
+  flex: 1;
+  min-height: 0;
 }
 
 .row {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 14px 10px 10px;
+  gap: 10px;
+  padding: 8px 12px 8px 8px;
   background: var(--dash-color-surface);
   border-radius: var(--dash-radius-md);
   box-shadow: var(--dash-shadow-soft);
@@ -116,20 +80,26 @@
 }
 
 .thumb {
-  width: 50px;
-  height: 50px;
+  width: 44px;
+  height: 44px;
   border-radius: 12px;
   background: var(--dash-color-primary-50);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 28px;
   flex-shrink: 0;
+  overflow: hidden;
+}
+
+.thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .rowName {
   flex: 1;
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--dash-color-text-strong);
   letter-spacing: -0.005em;
@@ -142,11 +112,11 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px;
+  padding: 10px 14px;
   border-radius: var(--dash-radius-md);
   cursor: pointer;
   font: inherit;
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 600;
   color: var(--dash-color-text);
   transition: background 0.15s;
@@ -166,11 +136,11 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  min-height: 360px;
+  min-height: 0;
   min-width: 0;
 }
 
-.rightCol .ghost {
+.ghost {
   position: absolute;
   inset: 0;
   pointer-events: none;
@@ -181,7 +151,7 @@
   );
 }
 
-.rightCol .stage {
+.stage {
   position: relative;
   flex: 1;
   min-height: 0;
@@ -191,7 +161,7 @@
   grid-column: 1 / -1;
   display: flex;
   justify-content: center;
-  margin-top: var(--dash-space-3);
+  margin-top: 4px;
 }
 
 .toggleInner {
@@ -206,9 +176,9 @@
   appearance: none;
   border: none;
   background: transparent;
-  padding: 9px 22px;
+  padding: 7px 18px;
   font: inherit;
-  font-size: 13.5px;
+  font-size: 12.5px;
   font-weight: 600;
   color: var(--dash-color-text-muted);
   border-radius: var(--dash-radius-pill);

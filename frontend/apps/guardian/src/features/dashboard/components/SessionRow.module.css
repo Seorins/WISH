@@ -1,7 +1,5 @@
 .row {
-  display: grid;
-  grid-template-columns: minmax(0, 1.85fr) minmax(0, 1fr);
-  gap: var(--dash-space-6);
+  display: block;
 }
 
 /* ===== Recent Sessions ===== */

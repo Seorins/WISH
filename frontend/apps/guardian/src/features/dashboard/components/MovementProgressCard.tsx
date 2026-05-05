@@ -1,26 +1,12 @@
-import { useMemo, useState } from 'react'
-import { MOVEMENTS, type MovementCategory, type SessionView } from '../data/mock'
+import { useState } from 'react'
+import { MOVEMENTS, type SessionView } from '../data/mock'
 import { Character3D } from './Character3D'
 import { ChevronRightIcon, SparkleIcon } from './icons'
 import { ScoreRing } from './ScoreRing'
 import styles from './MovementProgressCard.module.css'
 
-const CATEGORIES: ReadonlyArray<{ id: MovementCategory; label: string }> = [
-  { id: 'all', label: 'All Movements' },
-  { id: 'upper', label: 'Upper Body' },
-  { id: 'lower', label: 'Lower Body' },
-  { id: 'balance', label: 'Balance' },
-  { id: 'flexibility', label: 'Flexibility' },
-]
-
 export function MovementProgressCard() {
-  const [category, setCategory] = useState<MovementCategory>('all')
   const [session, setSession] = useState<SessionView>('current')
-
-  const filtered = useMemo(
-    () => (category === 'all' ? MOVEMENTS : MOVEMENTS.filter(m => m.category === category)),
-    [category],
-  )
 
   const scoreColor = (score: number) => {
     if (score >= 90) return { from: '#6ddec0', to: '#34c99c' }
@@ -32,51 +18,27 @@ export function MovementProgressCard() {
     <article className={styles.card}>
       <header className={styles.headRow}>
         <h2 className={styles.title}>
-          Movement
-          <br />
-          Progress
+          동작 진행도
           <SparkleIcon className={styles.titleSparkle} />
         </h2>
-        <p className={styles.tagline}>
-          Track, understand, and celebrate
-          <br />
-          every step of your progress.
-        </p>
+        <p className={styles.tagline}>매 진전을 추적하고, 이해하며, 함께 축하해요.</p>
       </header>
 
       <div className={styles.leftCol}>
-        <div className={styles.chips} role="tablist">
-          {CATEGORIES.map(({ id, label }) => {
-            const isActive = id === category
-            return (
-              <button
-                key={id}
-                type="button"
-                role="tab"
-                aria-selected={isActive}
-                className={`${styles.chip} ${isActive ? styles.chipActive : ''}`}
-                onClick={() => setCategory(id)}
-              >
-                {label}
-              </button>
-            )
-          })}
-        </div>
-
         <div className={styles.list}>
-          {filtered.map(m => {
+          {MOVEMENTS.map(m => {
             const { from, to } = scoreColor(m.score)
             return (
               <div key={m.id} className={styles.row}>
                 <div className={styles.thumb} aria-hidden>
-                  {m.thumbnail}
+                  <img src={m.thumbnail} alt="" />
                 </div>
                 <span className={styles.rowName}>{m.name}</span>
                 <ScoreRing
                   value={m.score}
-                  size={50}
+                  size={46}
                   strokeWidth={5}
-                  fontSize={15}
+                  fontSize={14}
                   gradientFrom={from}
                   gradientTo={to}
                 />
@@ -86,7 +48,7 @@ export function MovementProgressCard() {
         </div>
 
         <button type="button" className={styles.viewAll}>
-          View All Movements
+          전체 동작 보기
           <ChevronRightIcon className={styles.viewAllChev} />
         </button>
       </div>
@@ -105,14 +67,14 @@ export function MovementProgressCard() {
             className={`${styles.toggleBtn} ${session === 'current' ? styles.toggleBtnActive : ''}`}
             onClick={() => setSession('current')}
           >
-            Current Session
+            현재 세션
           </button>
           <button
             type="button"
             className={`${styles.toggleBtn} ${session === 'previous' ? styles.toggleBtnActive : ''}`}
             onClick={() => setSession('previous')}
           >
-            Previous Session
+            이전 세션
           </button>
         </div>
       </div>

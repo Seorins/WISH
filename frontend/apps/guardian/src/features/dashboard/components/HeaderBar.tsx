@@ -6,10 +6,10 @@ import styles from './HeaderBar.module.css'
 type TabId = 'dashboard' | 'reports' | 'exercises' | 'goals'
 
 const TABS: ReadonlyArray<{ id: TabId; label: string; Icon: typeof HomeIcon }> = [
-  { id: 'dashboard', label: 'Dashboard', Icon: HomeIcon },
-  { id: 'reports', label: 'Reports', Icon: ClipboardIcon },
-  { id: 'exercises', label: 'Exercises', Icon: ExerciseIcon },
-  { id: 'goals', label: 'Goals', Icon: GoalIcon },
+  { id: 'dashboard', label: '대시보드', Icon: HomeIcon },
+  { id: 'reports', label: '리포트', Icon: ClipboardIcon },
+  { id: 'exercises', label: '운동', Icon: ExerciseIcon },
+  { id: 'goals', label: '목표', Icon: GoalIcon },
 ]
 
 export function HeaderBar() {
@@ -21,7 +21,7 @@ export function HeaderBar() {
         <div className={styles.brandMark} aria-hidden />
         <div className={styles.brandText}>
           <span className={styles.brandName}>WISH</span>
-          <span className={styles.brandTag}>Movement Analysis</span>
+          <span className={styles.brandTag}>동작 분석</span>
         </div>
       </div>
 
@@ -48,10 +48,12 @@ export function HeaderBar() {
           <span className={styles.bellDot} />
         </button>
         <button type="button" className={styles.profile}>
-          <span className={styles.avatar}>{PATIENT.avatarEmoji}</span>
+          <span className={styles.avatar}>
+            <img src={PATIENT.avatarUrl} alt="" />
+          </span>
           <span className={styles.profileText}>
             <span className={styles.profileName}>{PATIENT.name}</span>
-            <span className={styles.profileMeta}>Age {PATIENT.age}</span>
+            <span className={styles.profileMeta}>{PATIENT.age}세</span>
           </span>
           <ChevronDownIcon className={styles.chev} />
         </button>

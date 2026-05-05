@@ -17,7 +17,7 @@ export function OverallScoreCard() {
   return (
     <article className={styles.card}>
       <header className={styles.cardHead}>
-        <CardTitle>Overall Movement Score</CardTitle>
+        <CardTitle>전체 동작 점수</CardTitle>
       </header>
       <div className={styles.scoreBody}>
         <ScoreRing
@@ -33,7 +33,7 @@ export function OverallScoreCard() {
           <span className={styles.scoreSubtitle}>{OVERALL_SCORE.subtitle}</span>
           <span className={styles.scoreDelta}>
             <ArrowUpIcon className={styles.scoreDeltaIcon} />
-            {OVERALL_SCORE.delta} pts
+            {OVERALL_SCORE.delta}점
           </span>
         </div>
         <span className={styles.scoreStar} aria-hidden>
@@ -46,11 +46,11 @@ export function OverallScoreCard() {
 
 export function TrendChartCard() {
   return (
-    <article className={styles.card}>
+    <article className={`${styles.card} ${styles.cardFlex}`}>
       <header className={styles.cardHead}>
-        <CardTitle>Movement Trend</CardTitle>
+        <CardTitle>동작 추세</CardTitle>
         <button type="button" className={styles.cardAction}>
-          Last 6 Sessions
+          최근 6회
           <ChevronDownIcon className={styles.cardActionChev} />
         </button>
       </header>
@@ -105,9 +105,9 @@ export function ROMSummaryCard() {
   return (
     <article className={styles.card}>
       <header className={styles.cardHead}>
-        <CardTitle>Range of Motion Summary</CardTitle>
+        <CardTitle>관절 가동 범위</CardTitle>
         <button type="button" className={styles.cardAction}>
-          Details
+          상세 보기
         </button>
       </header>
       <div className={styles.romGrid}>
@@ -115,9 +115,6 @@ export function ROMSummaryCard() {
           const tone = ROM_TONE_CLASS[item.tone]
           return (
             <div key={item.joint} className={`${styles.romCell} ${tone.cell}`}>
-              <span className={styles.romEmoji} aria-hidden>
-                {item.emoji}
-              </span>
               <span className={styles.romJoint}>{item.joint}</span>
               <span className={styles.romPercent}>{item.percent}%</span>
               <span className={`${styles.romRating} ${tone.rating}`}>{item.rating}</span>

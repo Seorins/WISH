@@ -5,11 +5,11 @@ import styles from './Sidebar.module.css'
 type NavId = 'overview' | 'sessions' | 'history' | 'exercises' | 'goals'
 
 const NAV_ITEMS: ReadonlyArray<{ id: NavId; label: string; Icon: typeof HomeIcon }> = [
-  { id: 'overview', label: 'Overview', Icon: HomeIcon },
-  { id: 'sessions', label: 'Sessions', Icon: ClipboardIcon },
-  { id: 'history', label: 'History', Icon: HistoryIcon },
-  { id: 'exercises', label: 'Exercises', Icon: ExerciseIcon },
-  { id: 'goals', label: 'Goals', Icon: GoalIcon },
+  { id: 'overview', label: '개요', Icon: HomeIcon },
+  { id: 'sessions', label: '세션', Icon: ClipboardIcon },
+  { id: 'history', label: '기록', Icon: HistoryIcon },
+  { id: 'exercises', label: '운동', Icon: ExerciseIcon },
+  { id: 'goals', label: '목표', Icon: GoalIcon },
 ]
 
 export function Sidebar() {
@@ -41,7 +41,7 @@ export function Sidebar() {
           <span className={styles.iconWrap}>
             <SettingsIcon />
           </span>
-          Settings
+          설정
         </button>
       </div>
     </aside>
