@@ -13,7 +13,7 @@ useGLTF.preload(wishGlbUrl)
  * Y: 작을수록(더 음수) 모델이 화면에서 아래로 내려감 → 머리 윗 여백 확보
  * X: 캐릭터 좌우가 잘리지 않도록 가운데 정렬
  */
-const MODEL_OFFSET_Y = -1.1
+const MODEL_OFFSET_Y = -1.05
 const MODEL_OFFSET_X = 0
 
 /**

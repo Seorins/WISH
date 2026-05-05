@@ -10,13 +10,32 @@
     'Pretendard', 'Inter', 'Noto Sans KR', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
+/* ROM 페이지에서만 body 가로 스크롤 차단 + 세로 스크롤바 시각 숨김 + 부위 단위 snap */
+:global(body.rom-no-scrollbar) {
+  overflow-x: hidden;
+  scrollbar-width: none;
+  scroll-snap-type: y mandatory;
+}
+
+:global(html:has(body.rom-no-scrollbar)) {
+  scroll-snap-type: y mandatory;
+}
+
+:global(body.rom-no-scrollbar)::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
 .headerSlot {
   position: sticky;
   top: 0;
   z-index: 10;
   height: var(--dash-header-height);
   padding: var(--dash-space-4) var(--dash-space-7) 0;
-  background: transparent;
+  background: rgba(250, 251, 255, 0.72);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
 }
 
 .main {
@@ -117,8 +136,11 @@
 }
 
 .panel {
-  scroll-margin-top: calc(var(--dash-header-height) + var(--dash-space-4));
-  min-height: calc(100vh - var(--dash-header-height) - var(--dash-space-7) * 2);
+  scroll-margin-top: calc(var(--dash-header-height) + var(--dash-space-3));
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  /* leftCol과 동일한 height — 좌/우 끝선 일치 */
+  min-height: calc(100vh - var(--dash-header-height) - var(--dash-space-3) - var(--dash-space-5));
   display: flex;
 }
 

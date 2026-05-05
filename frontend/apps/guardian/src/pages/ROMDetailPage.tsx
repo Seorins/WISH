@@ -14,6 +14,14 @@ export function ROMDetailPage() {
   const isProgrammaticScrollRef = useRef(false)
   const programmaticScrollTimerRef = useRef<number | null>(null)
 
+  // ROM 상세 페이지에서만 가로 스크롤 차단 + 세로 스크롤바 시각 숨김
+  useEffect(() => {
+    document.body.classList.add('rom-no-scrollbar')
+    return () => {
+      document.body.classList.remove('rom-no-scrollbar')
+    }
+  }, [])
+
   useEffect(() => {
     const panels = JOINT_ROM_DETAILS.map(j =>
       document.getElementById(`joint-panel-${j.id}`),
