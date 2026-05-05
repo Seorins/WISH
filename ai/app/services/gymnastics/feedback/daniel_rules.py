@@ -30,6 +30,8 @@ def select_daniel_forward_press_feedback_candidate(
     arm_straight_threshold: float,
     torso_tilt_max: float,
 ) -> FeedbackCandidate | None:
+    mean_elbow_angle = average_elbow_angle(left_elbow_angle, right_elbow_angle)
+
     if state == "complete":
         return None
 
@@ -42,7 +44,7 @@ def select_daniel_forward_press_feedback_candidate(
     if wrist_forward < forward_threshold:
         return PRESS_HANDS_FORWARD
 
-    if average_elbow_angle(left_elbow_angle, right_elbow_angle) < arm_straight_threshold:
+    if mean_elbow_angle is not None and mean_elbow_angle < arm_straight_threshold:
         return STRAIGHTEN_ARMS
 
     if state == "holding":
@@ -65,6 +67,8 @@ def select_daniel_upward_press_feedback_candidate(
     arm_straight_threshold: float,
     torso_tilt_max: float,
 ) -> FeedbackCandidate | None:
+    mean_elbow_angle = average_elbow_angle(left_elbow_angle, right_elbow_angle)
+
     if state == "complete":
         return None
 
@@ -77,7 +81,7 @@ def select_daniel_upward_press_feedback_candidate(
     if wrist_height < height_threshold:
         return LIFT_HANDS_HIGHER
 
-    if average_elbow_angle(left_elbow_angle, right_elbow_angle) < arm_straight_threshold:
+    if mean_elbow_angle is not None and mean_elbow_angle < arm_straight_threshold:
         return STRAIGHTEN_ARMS
 
     if wrist_height_balance > height_balance_threshold:
@@ -102,6 +106,8 @@ def select_daniel_side_bend_feedback_candidate(
     wrist_height_threshold: float,
     arm_straight_threshold: float,
 ) -> FeedbackCandidate | None:
+    mean_elbow_angle = average_elbow_angle(left_elbow_angle, right_elbow_angle)
+
     if state == "complete":
         return None
 
@@ -114,7 +120,7 @@ def select_daniel_side_bend_feedback_candidate(
     if wrist_height < wrist_height_threshold:
         return KEEP_HANDS_OVERHEAD
 
-    if average_elbow_angle(left_elbow_angle, right_elbow_angle) < arm_straight_threshold:
+    if mean_elbow_angle is not None and mean_elbow_angle < arm_straight_threshold:
         return STRAIGHTEN_ARMS
 
     if state == "holding":

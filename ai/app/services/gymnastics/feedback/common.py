@@ -109,9 +109,9 @@ STRAIGHTEN_ARMS = FeedbackCandidate(
 )
 
 
-def average_elbow_angle(left_elbow_angle: float | None, right_elbow_angle: float | None) -> float:
+def average_elbow_angle(left_elbow_angle: float | None, right_elbow_angle: float | None) -> float | None:
     valid_angles = [angle for angle in (left_elbow_angle, right_elbow_angle) if angle is not None]
-    return sum(valid_angles) / len(valid_angles) if valid_angles else 0.0
+    return sum(valid_angles) / len(valid_angles) if valid_angles else None
 
 
 def lowest_knee_angle(left_knee_angle: float | None, right_knee_angle: float | None) -> float | None:
