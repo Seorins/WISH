@@ -10,7 +10,6 @@ import {
   ClipboardIcon,
   ExerciseIcon,
   type HomeIcon,
-  SettingsIcon,
 } from './icons'
 import styles from './HeaderBar.module.css'
 
@@ -50,15 +49,10 @@ export function HeaderBar() {
       </nav>
 
       <div className={styles.right}>
-        <div className={styles.iconGroup}>
-          <button type="button" className={styles.iconBtn} aria-label="설정">
-            <SettingsIcon width={20} height={20} />
-          </button>
-          <button type="button" className={styles.iconBtn} aria-label="알림">
-            <BellIcon width={20} height={20} />
-            <span className={styles.bellDot} />
-          </button>
-        </div>
+        <button type="button" className={styles.iconBtn} aria-label="알림">
+          <BellIcon width={20} height={20} />
+          <span className={styles.bellDot} />
+        </button>
         <button type="button" className={styles.profile}>
           <span className={styles.avatar}>
             <img src={PATIENT.avatarUrl} alt="" />

@@ -97,7 +97,7 @@ export function TrendChartCard() {
               width={28}
             />
             <Area
-              type="monotone"
+              type="linear"
               dataKey="score"
               stroke="url(#trend-line)"
               strokeWidth={2.5}
