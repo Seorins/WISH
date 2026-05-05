@@ -1,6 +1,9 @@
 from dataclasses import dataclass
 
 from app.services.gymnastics.constants import (
+    DEFAULT_DANIEL_FEEDBACK_CLEAR_FRAMES,
+    DEFAULT_DANIEL_FEEDBACK_DISPLAY_FRAMES,
+    DEFAULT_DANIEL_FEEDBACK_STREAK_THRESHOLD,
     DEFAULT_DANIEL_FORWARD_PRESS_ARM_STRAIGHT_THRESHOLD,
     DEFAULT_DANIEL_FORWARD_PRESS_FORWARD_THRESHOLD,
     DEFAULT_DANIEL_FORWARD_PRESS_HEIGHT_ERROR_MAX,
@@ -8,9 +11,6 @@ from app.services.gymnastics.constants import (
     DEFAULT_DANIEL_FORWARD_PRESS_WRIST_BELOW_SHOULDER_MIN,
     DEFAULT_DANIEL_FORWARD_PRESS_WRIST_GAP_MAX,
     DEFAULT_DANIEL_FORWARD_PRESS_WRIST_EXTENSION_THRESHOLD,
-    DEFAULT_FEEDBACK_CLEAR_FRAMES,
-    DEFAULT_FEEDBACK_DISPLAY_FRAMES,
-    DEFAULT_FEEDBACK_STREAK_THRESHOLD,
     DEFAULT_HOLD_MAX_FRAME_GAP_MS,
     DEFAULT_STRETCH_HOLD_TARGET_MS,
 )
@@ -27,7 +27,7 @@ from app.services.gymnastics.feedback import (
     FeedbackStabilizerState,
     RepresentativeFeedbackState,
     select_daniel_forward_press_feedback_candidate,
-    stabilize_feedback,
+    stabilize_daniel_feedback,
     update_representative_feedback,
 )
 from app.services.gymnastics.feedback.common import average_elbow_angle
@@ -45,9 +45,9 @@ class DanielForwardPressEvaluatorConfig:
     wrist_below_shoulder_min: float = DEFAULT_DANIEL_FORWARD_PRESS_WRIST_BELOW_SHOULDER_MIN
     arm_straight_threshold: float = DEFAULT_DANIEL_FORWARD_PRESS_ARM_STRAIGHT_THRESHOLD
     torso_tilt_max: float = DEFAULT_DANIEL_FORWARD_PRESS_TORSO_TILT_MAX
-    feedback_streak_threshold: int = DEFAULT_FEEDBACK_STREAK_THRESHOLD
-    feedback_display_frames: int = DEFAULT_FEEDBACK_DISPLAY_FRAMES
-    feedback_clear_frames: int = DEFAULT_FEEDBACK_CLEAR_FRAMES
+    feedback_streak_threshold: int = DEFAULT_DANIEL_FEEDBACK_STREAK_THRESHOLD
+    feedback_display_frames: int = DEFAULT_DANIEL_FEEDBACK_DISPLAY_FRAMES
+    feedback_clear_frames: int = DEFAULT_DANIEL_FEEDBACK_CLEAR_FRAMES
 
 
 class DanielForwardPressEvaluator(BaseHoldEvaluator):
@@ -296,12 +296,14 @@ class DanielForwardPressEvaluator(BaseHoldEvaluator):
                 arm_straight_threshold=self.config.arm_straight_threshold,
                 torso_tilt_max=self.config.torso_tilt_max,
             )
-        return stabilize_feedback(
+        return stabilize_daniel_feedback(
             candidate=candidate,
+            motion_state=state,
             state=previous_feedback_state,
             streak_threshold=self.config.feedback_streak_threshold,
             display_frames=self.config.feedback_display_frames,
             clear_frames=self.config.feedback_clear_frames,
+            suppress_candidate=suppress_candidate,
         )
 
     def _update_representative_feedback(
