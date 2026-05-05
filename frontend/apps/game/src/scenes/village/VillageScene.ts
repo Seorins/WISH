@@ -34,7 +34,7 @@ const ART_PORTAL = { xRatio: 0.545, yRatio: 0.655, widthRatio: 0.08, heightRatio
 const TAEKWONDO_PORTAL = { xRatio: 0.49, yRatio: 0.06, widthRatio: 0.09, heightRatio: 0.11 }
 const GYMNASTICS_PORTAL = { xRatio: 0.72, yRatio: 0.53, widthRatio: 0.04, heightRatio: 0.05 }
 const MUSIC_PORTAL = { xRatio: 0.205, yRatio: 0.315, widthRatio: 0.035, heightRatio: 0.07 }
-const LIGHTHOUSE_PORTAL = { xRatio: 0.835, yRatio: 0.455, widthRatio: 0.045, heightRatio: 0.07 }
+const LIGHTHOUSE_PORTAL = { xRatio: 0.875, yRatio: 0.455, widthRatio: 0.06, heightRatio: 0.075 }
 const SHOW_MUSIC_PORTAL_MARKER = false
 
 type ObstacleRect = { x: number; y: number; w: number; h: number }
