@@ -130,7 +130,7 @@ const sideStep = buildClip('side-step', '사이드 스텝', (_p, phase) => {
   }
 })
 
-/** 몸통 가로 지르기: 한 손이 반대편 어깨로 교차 */
+/** 몸통 가로 지르기: 한 손이 반대편 어깨로 교차하며 반대편 발이 옆으로 스텝 */
 const torsoCross = buildClip('torso-cross', '몸통 가로 지르기', (_p, phase) => {
   const reachL = Math.max(0, Math.sin(phase))
   const reachR = Math.max(0, Math.sin(phase + Math.PI))
@@ -139,10 +139,15 @@ const torsoCross = buildClip('torso-cross', '몸통 가로 지르기', (_p, phas
     LEFT_WRIST: [0.95 * reachL, -0.55 * reachL, -0.25 * reachL],
     RIGHT_ELBOW: [-0.4 * reachR, -0.2 * reachR, -0.15 * reachR],
     RIGHT_WRIST: [-0.95 * reachR, -0.55 * reachR, -0.25 * reachR],
+    // 같은 쪽 발이 팔 뻗는 방향 반대로 step-out (왼팔→오른쪽이면 왼발은 왼쪽으로)
+    LEFT_KNEE: [-0.18 * reachL, -0.12 * reachL, 0],
+    LEFT_ANKLE: [-0.26 * reachL, -0.18 * reachL, 0],
+    RIGHT_KNEE: [0.18 * reachR, -0.12 * reachR, 0],
+    RIGHT_ANKLE: [0.26 * reachR, -0.18 * reachR, 0],
   }
 })
 
-/** 얼굴 가로 지르기: 손이 반대편 얼굴 옆까지 올라옴 */
+/** 얼굴 가로 지르기: 손이 반대편 얼굴 옆까지 올라오며 반대편 발이 옆으로 스텝 */
 const faceCross = buildClip('face-cross', '얼굴 가로 지르기', (_p, phase) => {
   const reachL = Math.max(0, Math.sin(phase))
   const reachR = Math.max(0, Math.sin(phase + Math.PI))
@@ -151,6 +156,10 @@ const faceCross = buildClip('face-cross', '얼굴 가로 지르기', (_p, phase)
     LEFT_WRIST: [0.85 * reachL, -1.1 * reachL, -0.3 * reachL],
     RIGHT_ELBOW: [-0.55 * reachR, -0.55 * reachR, -0.18 * reachR],
     RIGHT_WRIST: [-0.85 * reachR, -1.1 * reachR, -0.3 * reachR],
+    RIGHT_KNEE: [0.18 * reachL, -0.12 * reachL, 0],
+    RIGHT_ANKLE: [0.26 * reachL, -0.18 * reachL, 0],
+    LEFT_KNEE: [-0.18 * reachR, -0.12 * reachR, 0],
+    LEFT_ANKLE: [-0.26 * reachR, -0.18 * reachR, 0],
   }
 })
 
