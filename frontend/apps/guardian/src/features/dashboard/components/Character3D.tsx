@@ -36,6 +36,13 @@ const HIP_LOCAL_Y = 0.85
  */
 const ENABLE_BONE_RETARGETING = false
 
+/**
+ * sin 기반 더미 마커 motion playback on/off.
+ * 클립이 없는 동작(사이드 스텝/몸통 가로 지르기/얼굴 가로 지르기)에서 마커가 sin 패턴으로
+ * 움직이는 게 어색해서 비활성. 해당 동작들도 추후 GLB 클립 추가될 예정이라 그때까진 정적 유지.
+ */
+const ENABLE_SIN_MARKER_MOTION = false
+
 const KP_TO_JOINT_ID: Record<LandmarkName, string> = {
   LEFT_SHOULDER: 'shoulder-l',
   RIGHT_SHOULDER: 'shoulder-r',
@@ -254,6 +261,17 @@ function CharacterModel({
     }
   }, [activeClipName, actions])
 
+  // 클립 정지 시 useFrame에서 ref로 mutate된 마커 group transform을 다시 props 좌표로 복원.
+  // (React 입장에선 position prop이 같아 자동 갱신 안 되므로 명시적 reset 필요)
+  useEffect(() => {
+    if (activeClipName) return
+    for (const j of joints) {
+      const ref = markerRefs.current.get(j.id)
+      if (!ref) continue
+      ref.position.set(j.position[0], j.position[1], j.position[2])
+    }
+  }, [activeClipName, joints])
+
   useFrame(() => {
     const g = groupRef.current
     if (g) {
@@ -279,6 +297,7 @@ function CharacterModel({
     }
 
     if (!activeMotion) return
+    if (!ENABLE_SIN_MARKER_MOTION) return
 
     const elapsed = (performance.now() - playStartMs.current) % activeMotion.durationMs
     const idx = Math.floor((elapsed / 1000) * activeMotion.fps) % activeMotion.frames.length
