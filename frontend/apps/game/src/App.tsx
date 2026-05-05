@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createGame } from './phaser'
 import type Phaser from 'phaser'
+import DanielForwardPressDebugPage from './debug/DanielForwardPressDebugPage'
 import DiagonalBodyPunchDebugPage from './debug/DiagonalBodyPunchDebugPage'
 import DiagonalFacePunchDebugPage from './debug/DiagonalFacePunchDebugPage'
 import MarchDebugPage from './debug/MarchDebugPage'
@@ -14,6 +15,7 @@ const DEBUG_SIDE_STEP_MODE = 'side-step'
 const DEBUG_DIAGONAL_BODY_PUNCH_MODE = 'diagonal-body-punch'
 const DEBUG_DIAGONAL_FACE_PUNCH_MODE = 'diagonal-face-punch'
 const DEBUG_SQUAT_MODE = 'squat'
+const DEBUG_DANIEL_FORWARD_PRESS_MODE = 'daniel-forward-press'
 
 function App() {
   const params = new URLSearchParams(window.location.search)
@@ -28,7 +30,8 @@ function App() {
       debugMode === DEBUG_SIDE_STEP_MODE ||
       debugMode === DEBUG_DIAGONAL_BODY_PUNCH_MODE ||
       debugMode === DEBUG_DIAGONAL_FACE_PUNCH_MODE ||
-      debugMode === DEBUG_SQUAT_MODE
+      debugMode === DEBUG_SQUAT_MODE ||
+      debugMode === DEBUG_DANIEL_FORWARD_PRESS_MODE
     ) {
       return
     }
@@ -78,6 +81,10 @@ function App() {
 
   if (debugMode === DEBUG_SQUAT_MODE) {
     return <SquatDebugPage />
+  }
+
+  if (debugMode === DEBUG_DANIEL_FORWARD_PRESS_MODE) {
+    return <DanielForwardPressDebugPage />
   }
 
   return (
