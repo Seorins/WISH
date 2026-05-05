@@ -6,7 +6,6 @@ from app.schemas.gymnastics import (
     DanielForwardPressEvaluationRequest,
     DanielForwardPressEvaluationResponse,
     DanielForwardPressFeaturesResponse,
-    DanielStretchEvaluationRequest,
     MarchEvaluationRequest,
 )
 from app.services.gymnastics.types import HipCenter, NormalizedLandmark, NormalizedPoseFrame
@@ -37,7 +36,14 @@ def _build_normalized_frame() -> NormalizedPoseFrame:
     )
 
 
-def test_motion_replay_pose_response_returns_only_twelve_landmarks() -> None:
+def _build_normalized_frame_missing_knees() -> NormalizedPoseFrame:
+    frame = _build_normalized_frame()
+    del frame.landmarks["LEFT_KNEE"]
+    del frame.landmarks["RIGHT_KNEE"]
+    return frame
+
+
+def test_motion_replay_pose_response_returns_twelve_landmarks_in_fixed_order() -> None:
     response = to_motion_replay_pose_response(_build_normalized_frame())
 
     landmark_names = [landmark.name for landmark in response.landmarks]
@@ -57,6 +63,25 @@ def test_motion_replay_pose_response_returns_only_twelve_landmarks() -> None:
         "LEFT_ANKLE",
         "RIGHT_ANKLE",
     ]
+
+
+def test_motion_replay_pose_response_fills_missing_landmarks_with_nulls() -> None:
+    response = to_motion_replay_pose_response(_build_normalized_frame_missing_knees())
+
+    left_knee = response.landmarks[8]
+    right_knee = response.landmarks[9]
+
+    assert len(response.landmarks) == 12
+    assert left_knee.name == "LEFT_KNEE"
+    assert left_knee.x is None
+    assert left_knee.y is None
+    assert left_knee.z is None
+    assert left_knee.confidence == 0.0
+    assert right_knee.name == "RIGHT_KNEE"
+    assert right_knee.x is None
+    assert right_knee.y is None
+    assert right_knee.z is None
+    assert right_knee.confidence == 0.0
 
 
 def test_evaluate_march_includes_normalized_pose(monkeypatch) -> None:
@@ -221,7 +246,7 @@ def test_integrated_daniel_evaluate_keeps_normalized_pose() -> None:
     )
 
     response = gymnastics_daniel._to_integrated_daniel_response(
-        motion_name="손 깍지 끼고 앞으로 밀기",
+        motion_name="Daniel Forward Press",
         normalized_pose=result.normalized_pose,
         result=result,
     )

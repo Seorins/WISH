@@ -60,7 +60,18 @@ def to_motion_replay_pose_response(frame: NormalizedPoseFrame) -> NormalizedPose
     for landmark_name in MOTION_REPLAY_LANDMARK_NAMES:
         landmark = frame.landmarks.get(landmark_name)
         if landmark is None:
+            # Motion replay consumes a fixed 12-joint layout.
+            landmarks.append(
+                NormalizedLandmarkResponse(
+                    name=landmark_name,
+                    x=None,
+                    y=None,
+                    z=None,
+                    confidence=0.0,
+                )
+            )
             continue
+
         landmarks.append(
             NormalizedLandmarkResponse(
                 name=landmark.name,

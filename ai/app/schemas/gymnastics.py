@@ -29,8 +29,8 @@ class PoseFrameRequest(BaseModel):
 
 class NormalizedLandmarkResponse(BaseModel):
     name: str
-    x: float
-    y: float
+    x: float | None = None
+    y: float | None = None
     z: float | None = None
     confidence: float | None = None
 
