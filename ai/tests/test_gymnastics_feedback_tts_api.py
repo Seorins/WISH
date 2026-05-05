@@ -10,27 +10,83 @@ def test_build_feedback_tts_response_returns_tracking_priority_for_tracking_feed
         previous_displayed_code=None,
         previous_displayed_text=None,
         displayed_code="TRACKING_LOW",
-        displayed_text="전신이 화면에 보이게 서요",
+        displayed_text="Show your full body in the frame.",
     )
 
     assert tts.should_play is True
     assert tts.key == "TRACKING_LOW"
-    assert tts.text == "전신이 화면에 보이게 서요"
+    assert tts.text == "Show your full body in the frame."
     assert tts.priority == "tracking"
 
 
 def test_build_feedback_tts_response_returns_false_when_feedback_is_unchanged() -> None:
     tts = build_feedback_tts_response(
         previous_displayed_code="LIFT_LEG_BIGGER",
-        previous_displayed_text="다리를 더 높게 들어요",
+        previous_displayed_text="Lift your leg higher.",
         displayed_code="LIFT_LEG_BIGGER",
-        displayed_text="다리를 더 높게 들어요",
+        displayed_text="Lift your leg higher.",
     )
 
     assert tts.should_play is False
     assert tts.key is None
     assert tts.text is None
     assert tts.priority is None
+
+
+def test_build_feedback_tts_response_returns_false_when_displayed_code_is_missing() -> None:
+    tts = build_feedback_tts_response(
+        previous_displayed_code=None,
+        previous_displayed_text=None,
+        displayed_code=None,
+        displayed_text="Lift your leg higher.",
+    )
+
+    assert tts.should_play is False
+    assert tts.key is None
+    assert tts.text is None
+    assert tts.priority is None
+
+
+def test_build_feedback_tts_response_returns_false_when_displayed_text_is_missing() -> None:
+    tts = build_feedback_tts_response(
+        previous_displayed_code=None,
+        previous_displayed_text=None,
+        displayed_code="LIFT_LEG_BIGGER",
+        displayed_text=None,
+    )
+
+    assert tts.should_play is False
+    assert tts.key is None
+    assert tts.text is None
+    assert tts.priority is None
+
+
+def test_build_feedback_tts_response_returns_true_when_code_changes_but_text_stays_same() -> None:
+    tts = build_feedback_tts_response(
+        previous_displayed_code="OLD_CODE",
+        previous_displayed_text="Keep your posture.",
+        displayed_code="NEW_CODE",
+        displayed_text="Keep your posture.",
+    )
+
+    assert tts.should_play is True
+    assert tts.key == "NEW_CODE"
+    assert tts.text == "Keep your posture."
+    assert tts.priority == "posture"
+
+
+def test_build_feedback_tts_response_returns_true_when_text_changes_but_code_stays_same() -> None:
+    tts = build_feedback_tts_response(
+        previous_displayed_code="POSTURE_HINT",
+        previous_displayed_text="Old hint.",
+        displayed_code="POSTURE_HINT",
+        displayed_text="New hint.",
+    )
+
+    assert tts.should_play is True
+    assert tts.key == "POSTURE_HINT"
+    assert tts.text == "New hint."
+    assert tts.priority == "posture"
 
 
 def test_evaluate_march_includes_tts_metadata(monkeypatch) -> None:
@@ -44,7 +100,7 @@ def test_evaluate_march_includes_tts_metadata(monkeypatch) -> None:
             state="idle",
             step_count=0,
             accuracy=0.8,
-            feedback="다리를 더 높게 들어요",
+            feedback="Lift your leg higher.",
             tracking="tracking_ok",
             last_counted_side=None,
             last_seen_side=None,
@@ -54,14 +110,14 @@ def test_evaluate_march_includes_tts_metadata(monkeypatch) -> None:
             reference_hip_y=0.62,
             reference_scale=0.18,
             displayed_feedback_code="LIFT_LEG_BIGGER",
-            displayed_feedback_text="다리를 더 높게 들어요",
+            displayed_feedback_text="Lift your leg higher.",
             displayed_feedback_frames=12,
             candidate_feedback_code="LIFT_LEG_BIGGER",
-            candidate_feedback_text="다리를 더 높게 들어요",
+            candidate_feedback_text="Lift your leg higher.",
             candidate_feedback_streak=2,
             representative_feedback_totals={"LIFT_LEG_BIGGER": 12},
             representative_feedback_code="LIFT_LEG_BIGGER",
-            representative_feedback_text="다리를 더 높게 들어요",
+            representative_feedback_text="Lift your leg higher.",
             representative_feedback_frames=12,
         ),
     )
@@ -94,7 +150,7 @@ def test_evaluate_march_includes_tts_metadata(monkeypatch) -> None:
 
     assert response.tts.should_play is True
     assert response.tts.key == "LIFT_LEG_BIGGER"
-    assert response.tts.text == "다리를 더 높게 들어요"
+    assert response.tts.text == "Lift your leg higher."
     assert response.tts.priority == "posture"
 
 
@@ -108,7 +164,7 @@ def test_evaluate_daniel_forward_press_does_not_repeat_unchanged_tts(monkeypatch
             motion_id="daniel_forward_press",
             state="idle",
             accuracy=0.88,
-            feedback="손을 더 앞으로 밀어요",
+            feedback="Press your hands forward.",
             tracking="tracking_ok",
             hold_duration_ms=1200,
             hold_completed=False,
@@ -117,14 +173,14 @@ def test_evaluate_daniel_forward_press_does_not_repeat_unchanged_tts(monkeypatch
             reference_hip_y=0.62,
             reference_scale=0.18,
             displayed_feedback_code="PRESS_HANDS_FORWARD",
-            displayed_feedback_text="손을 더 앞으로 밀어요",
+            displayed_feedback_text="Press your hands forward.",
             displayed_feedback_frames=8,
             candidate_feedback_code="PRESS_HANDS_FORWARD",
-            candidate_feedback_text="손을 더 앞으로 밀어요",
+            candidate_feedback_text="Press your hands forward.",
             candidate_feedback_streak=2,
             representative_feedback_totals={"PRESS_HANDS_FORWARD": 8},
             representative_feedback_code="PRESS_HANDS_FORWARD",
-            representative_feedback_text="손을 더 앞으로 밀어요",
+            representative_feedback_text="Press your hands forward.",
             representative_feedback_frames=8,
             baseline_left_wrist_forward=0.1,
             baseline_right_wrist_forward=0.1,
@@ -158,7 +214,7 @@ def test_evaluate_daniel_forward_press_does_not_repeat_unchanged_tts(monkeypatch
                 "landmarks": [{"name": "LEFT_SHOULDER", "x": 0.5, "y": 0.3, "z": 0.0}],
             },
             displayed_feedback_code="PRESS_HANDS_FORWARD",
-            displayed_feedback_text="손을 더 앞으로 밀어요",
+            displayed_feedback_text="Press your hands forward.",
             displayed_feedback_frames=8,
         )
     )

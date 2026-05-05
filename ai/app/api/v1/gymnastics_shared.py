@@ -104,6 +104,8 @@ def build_feedback_tts_response(
         displayed_code != previous_displayed_code
         or displayed_text != previous_displayed_text
     )
+    # TTS is only emitted when the visible feedback actually changes and the
+    # current feedback has both a stable code and readable text.
     if not has_changed or displayed_code is None or displayed_text is None:
         return FeedbackTtsResponse()
 
