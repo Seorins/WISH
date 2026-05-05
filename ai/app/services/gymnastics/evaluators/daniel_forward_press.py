@@ -3,7 +3,11 @@ from dataclasses import dataclass
 from app.services.gymnastics.constants import (
     DEFAULT_DANIEL_FORWARD_PRESS_ARM_STRAIGHT_THRESHOLD,
     DEFAULT_DANIEL_FORWARD_PRESS_FORWARD_THRESHOLD,
+    DEFAULT_DANIEL_FORWARD_PRESS_HEIGHT_ERROR_MAX,
     DEFAULT_DANIEL_FORWARD_PRESS_TORSO_TILT_MAX,
+    DEFAULT_DANIEL_FORWARD_PRESS_WRIST_BELOW_SHOULDER_MIN,
+    DEFAULT_DANIEL_FORWARD_PRESS_WRIST_GAP_MAX,
+    DEFAULT_DANIEL_FORWARD_PRESS_WRIST_EXTENSION_THRESHOLD,
     DEFAULT_FEEDBACK_CLEAR_FRAMES,
     DEFAULT_FEEDBACK_DISPLAY_FRAMES,
     DEFAULT_FEEDBACK_STREAK_THRESHOLD,
@@ -35,6 +39,10 @@ class DanielForwardPressEvaluatorConfig:
     target_hold_ms: int = DEFAULT_STRETCH_HOLD_TARGET_MS
     max_frame_gap_ms: int = DEFAULT_HOLD_MAX_FRAME_GAP_MS
     forward_threshold: float = DEFAULT_DANIEL_FORWARD_PRESS_FORWARD_THRESHOLD
+    wrist_extension_threshold: float = DEFAULT_DANIEL_FORWARD_PRESS_WRIST_EXTENSION_THRESHOLD
+    wrist_gap_max: float = DEFAULT_DANIEL_FORWARD_PRESS_WRIST_GAP_MAX
+    wrist_height_error_max: float = DEFAULT_DANIEL_FORWARD_PRESS_HEIGHT_ERROR_MAX
+    wrist_below_shoulder_min: float = DEFAULT_DANIEL_FORWARD_PRESS_WRIST_BELOW_SHOULDER_MIN
     arm_straight_threshold: float = DEFAULT_DANIEL_FORWARD_PRESS_ARM_STRAIGHT_THRESHOLD
     torso_tilt_max: float = DEFAULT_DANIEL_FORWARD_PRESS_TORSO_TILT_MAX
     feedback_streak_threshold: int = DEFAULT_FEEDBACK_STREAK_THRESHOLD
@@ -137,8 +145,10 @@ class DanielForwardPressEvaluator(BaseHoldEvaluator):
             frame.tracking == "tracking_ok"
             and not captured_baseline_this_frame
             and features.wrist_forward >= self.config.forward_threshold
-            and mean_elbow_angle is not None
-            and mean_elbow_angle >= self.config.arm_straight_threshold
+            and features.wrist_extension >= self.config.wrist_extension_threshold
+            and features.wrist_gap <= self.config.wrist_gap_max
+            and features.wrist_height_error <= self.config.wrist_height_error_max
+            and features.wrist_shoulder_offset >= self.config.wrist_below_shoulder_min
             and features.torso_tilt <= self.config.torso_tilt_max
         )
         hold_progress = self._update_hold_progress(
@@ -217,11 +227,26 @@ class DanielForwardPressEvaluator(BaseHoldEvaluator):
             (mean_elbow_angle or 0.0) / max(self.config.arm_straight_threshold, 1.0),
             1.0,
         )
+        wrist_gap_score = max(
+            1.0 - features.wrist_gap / max(self.config.wrist_gap_max, 1e-6),
+            0.0,
+        )
+        wrist_height_score = max(
+            1.0
+            - features.wrist_height_error / max(self.config.wrist_height_error_max, 1e-6),
+            0.0,
+        )
         torso_score = max(
             1.0 - features.torso_tilt / max(self.config.torso_tilt_max, 1.0),
             0.0,
         )
-        accuracy = forward_score * 0.45 + arm_score * 0.35 + torso_score * 0.20
+        accuracy = (
+            forward_score * 0.35
+            + arm_score * 0.25
+            + wrist_gap_score * 0.20
+            + wrist_height_score * 0.10
+            + torso_score * 0.10
+        )
         return round(max(min(accuracy, 1.0), 0.0), 2)
 
     def _stabilize_feedback(
@@ -239,10 +264,12 @@ class DanielForwardPressEvaluator(BaseHoldEvaluator):
                 state=state,
                 tracking=tracking,
                 wrist_forward=features.wrist_forward,
+                wrist_extension=features.wrist_extension,
                 left_elbow_angle=features.left_elbow_angle,
                 right_elbow_angle=features.right_elbow_angle,
                 torso_tilt=features.torso_tilt,
                 forward_threshold=self.config.forward_threshold,
+                wrist_extension_threshold=self.config.wrist_extension_threshold,
                 arm_straight_threshold=self.config.arm_straight_threshold,
                 torso_tilt_max=self.config.torso_tilt_max,
             )

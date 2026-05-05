@@ -36,8 +36,12 @@ type DanielForwardPressApiResponse = {
   baseline_right_wrist_forward: number | null
   features: {
     wrist_forward: number
+    wrist_extension: number
     left_wrist_forward: number
     right_wrist_forward: number
+    wrist_gap: number
+    wrist_height_error: number
+    wrist_shoulder_offset: number
     left_elbow_angle: number | null
     right_elbow_angle: number | null
     torso_tilt: number
@@ -309,8 +313,8 @@ function DanielForwardPressDebugPage() {
           </div>
 
           <div style={guideStyle}>
-            Start를 누른 뒤 0.5초 정도 가만히 서서 baseline을 잡고, 그 다음 손 깍지를 끼고 앞으로
-            밀어 hold를 유지하세요.
+            Start를 누른 뒤 0.5초 정도 차렷 자세로 가만히 서서 baseline을 잡고, 손을 깍지 낀 뒤 가슴
+            앞에서 앞으로 밀면 hold를 확인할 수 있습니다.
           </div>
 
           <div style={previewStyle}>
@@ -329,7 +333,7 @@ function DanielForwardPressDebugPage() {
           <p style={{ marginTop: 0, marginBottom: '16px', color: '#677489', fontSize: '14px' }}>
             Check these first: <strong>state</strong>, <strong>holdDurationMs</strong>,{' '}
             <strong>feedback</strong>, <strong>wristForward</strong>,{' '}
-            <strong>leftWristForward</strong>, <strong>rightWristForward</strong>
+            <strong>wristExtension</strong>, <strong>wristGap</strong>
           </p>
           <InfoRow label="Status" value={status} />
           <InfoRow label="Error" value={error ?? '-'} />
@@ -339,6 +343,8 @@ function DanielForwardPressDebugPage() {
           <InfoRow label="holdCompleted" value={String(result?.hold_completed ?? false)} />
           <InfoRow label="feedback" value={result?.feedback ?? '-'} />
           <InfoRow label="wristForward" value={formatNumber(result?.features.wrist_forward)} />
+          <InfoRow label="wristExtension" value={formatNumber(result?.features.wrist_extension)} />
+          <InfoRow label="wristGap" value={formatNumber(result?.features.wrist_gap)} />
           <InfoRow
             label="leftWristForward"
             value={formatNumber(result?.features.left_wrist_forward)}
@@ -380,6 +386,14 @@ function DanielForwardPressDebugPage() {
               <InfoRow
                 label="rightElbowAngle"
                 value={formatNullableNumber(result?.features.right_elbow_angle)}
+              />
+              <InfoRow
+                label="wristHeightError"
+                value={formatNumber(result?.features.wrist_height_error)}
+              />
+              <InfoRow
+                label="wristShoulderOffset"
+                value={formatNumber(result?.features.wrist_shoulder_offset)}
               />
               <InfoRow label="torsoTilt" value={formatNumber(result?.features.torso_tilt)} />
               <InfoRow label="pelvisShiftX" value={formatNumber(result?.features.pelvis_shift_x)} />

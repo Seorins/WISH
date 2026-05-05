@@ -207,8 +207,12 @@ def evaluate_daniel_forward_press(
         baseline_right_wrist_forward=result.baseline_right_wrist_forward,
         features=DanielForwardPressFeaturesResponse(
             wrist_forward=features.wrist_forward,
+            wrist_extension=features.wrist_extension,
             left_wrist_forward=features.left_wrist_forward,
             right_wrist_forward=features.right_wrist_forward,
+            wrist_gap=features.wrist_gap,
+            wrist_height_error=features.wrist_height_error,
+            wrist_shoulder_offset=features.wrist_shoulder_offset,
             left_elbow_angle=features.left_elbow_angle,
             right_elbow_angle=features.right_elbow_angle,
             torso_tilt=features.torso_tilt,

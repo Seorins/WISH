@@ -222,8 +222,12 @@ class DanielForwardPressEvaluationRequest(StretchHoldEvaluationRequestBase):
 
 class DanielForwardPressFeaturesResponse(BaseModel):
     wrist_forward: float
+    wrist_extension: float
     left_wrist_forward: float
     right_wrist_forward: float
+    wrist_gap: float
+    wrist_height_error: float
+    wrist_shoulder_offset: float
     left_elbow_angle: float | None = None
     right_elbow_angle: float | None = None
     torso_tilt: float
