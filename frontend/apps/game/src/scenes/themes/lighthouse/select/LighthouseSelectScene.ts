@@ -44,9 +44,9 @@ import {
   type WaveMeterCard,
 } from '../dialog/lighthouseEmotionDialogue'
 
-const LIGHTHOUSE_ROOM_SPAWN = { xRatio: 0.62, yRatio: 0.76 }
+const LIGHTHOUSE_ROOM_SPAWN = { xRatio: 0.3, yRatio: 0.76 }
 const LIGHTHOUSE_EXIT_PORTAL = { xRatio: 0.28, yRatio: 0.86, widthRatio: 0.18, heightRatio: 0.14 }
-const LIGHTHOUSE_RETURN_SPAWN = { xRatio: 0.9, yRatio: 0.46 }
+const LIGHTHOUSE_RETURN_SPAWN = { xRatio: 0.7, yRatio: 0.68 }
 const YOUNGCHEOL_POSITION = { xRatio: 0.28, yRatio: 0.66, heightRatio: 0.18 }
 const YOUNGCHEOL_TALK_ICON_OFFSET_RATIO = 0.205
 const YOUNGCHEOL_INTERACTION = { xRatio: 0.28, yRatio: 0.64, radiusRatio: 0.06 }
