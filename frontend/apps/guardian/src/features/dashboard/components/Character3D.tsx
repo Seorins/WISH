@@ -1,13 +1,14 @@
 import { Suspense, useRef, useState, type ComponentRef } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
-import { Html, OrbitControls, useGLTF } from '@react-three/drei'
+import { OrbitControls, useGLTF } from '@react-three/drei'
 import type { Group } from 'three'
 import wishGlbUrl from '@/assets/wish.glb?url'
-import { JOINT_MARKERS } from '../data/mock'
 import { MinusIcon, PersonDimIcon, PersonIcon, PlusIcon, RefreshIcon } from './icons'
 import styles from './Character3D.module.css'
 
 useGLTF.preload(wishGlbUrl)
+
+const BASE_SCALE = 1.6
 
 type ViewMode = 'live' | 'silhouette'
 
@@ -23,21 +24,9 @@ function CharacterModel({ targetScale }: { targetScale: number }) {
   })
 
   return (
-    <group ref={groupRef} position={[0, -1.1, 0]}>
+    <group ref={groupRef} position={[0, -1.5, 0]} scale={BASE_SCALE}>
       <primitive object={scene} />
     </group>
-  )
-}
-
-function JointMarkers() {
-  return (
-    <>
-      {JOINT_MARKERS.map(m => (
-        <Html key={m.id} position={m.position} center distanceFactor={3.4} zIndexRange={[40, 0]}>
-          <div className={styles.marker} aria-hidden />
-        </Html>
-      ))}
-    </>
   )
 }
 
@@ -46,7 +35,7 @@ export function Character3D() {
   const [zoom, setZoom] = useState(0)
   const [view, setView] = useState<ViewMode>('live')
 
-  const targetScale = 1 + zoom * 0.15
+  const targetScale = BASE_SCALE * (1 + zoom * 0.15)
 
   const handleReset = () => {
     setZoom(0)
@@ -63,20 +52,19 @@ export function Character3D() {
           transition: 'opacity 0.3s ease, filter 0.3s ease',
         }}
       >
-        <Canvas camera={{ position: [0, 0.4, 3.4], fov: 35 }} gl={{ alpha: true, antialias: true }}>
+        <Canvas camera={{ position: [0, 0.2, 2.8], fov: 32 }} gl={{ alpha: true, antialias: true }}>
           <ambientLight intensity={0.85} />
           <directionalLight position={[2, 4, 3]} intensity={0.9} />
           <directionalLight position={[-3, 2, -2]} intensity={0.35} color="#c8b6ff" />
           <Suspense fallback={null}>
             <CharacterModel targetScale={targetScale} />
-            <JointMarkers />
           </Suspense>
           <OrbitControls
             ref={controlsRef}
             enablePan={false}
             enableZoom
-            minDistance={2.4}
-            maxDistance={5.2}
+            minDistance={1.8}
+            maxDistance={4.5}
             minPolarAngle={Math.PI / 3}
             maxPolarAngle={(2 * Math.PI) / 3}
           />
