@@ -1,6 +1,14 @@
+import pytest
 from fastapi.testclient import TestClient
 
 from app.main import create_app
+from app.services.gymnastics.constants import (
+    DANIEL_FORWARD_BEND_MOTION_NAME,
+    DANIEL_FORWARD_PRESS_MOTION_NAME,
+    DANIEL_LEFT_SIDE_BEND_MOTION_NAME,
+    DANIEL_RIGHT_SIDE_BEND_MOTION_NAME,
+    DANIEL_UPWARD_PRESS_MOTION_NAME,
+)
 
 
 client = TestClient(create_app())
@@ -72,3 +80,62 @@ def test_march_summary_supports_mixed_timezones() -> None:
     body = response.json()
     assert body["durationSec"] == 12.4
     assert body["motionId"] == "top_march"
+
+
+@pytest.mark.parametrize(
+    ("endpoint", "motion_id", "motion_name"),
+    [
+        ("/api/v1/gymnastics/daniel-forward-press/summary", "daniel_forward_press", DANIEL_FORWARD_PRESS_MOTION_NAME),
+        ("/api/v1/gymnastics/daniel-upward-press/summary", "daniel_upward_press", DANIEL_UPWARD_PRESS_MOTION_NAME),
+        ("/api/v1/gymnastics/daniel-left-side-bend/summary", "daniel_side_bend_left", DANIEL_LEFT_SIDE_BEND_MOTION_NAME),
+        ("/api/v1/gymnastics/daniel-right-side-bend/summary", "daniel_side_bend_right", DANIEL_RIGHT_SIDE_BEND_MOTION_NAME),
+        ("/api/v1/gymnastics/daniel-forward-bend/summary", "daniel_forward_bend", DANIEL_FORWARD_BEND_MOTION_NAME),
+    ],
+)
+def test_daniel_stretch_summary_returns_hold_payload_shape(
+    endpoint: str,
+    motion_id: str,
+    motion_name: str,
+) -> None:
+    response = client.post(
+        endpoint,
+        json={
+            "started_at": "2026-04-30T10:00:05+09:00",
+            "ended_at": "2026-04-30T10:00:17.400000+09:00",
+            "accuracy": 0.91,
+            "hold_completed": True,
+            "representative_feedback": REPRESENTATIVE_FEEDBACK,
+            "tracking": "tracking_ok",
+            "state": "complete",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "motionId": motion_id,
+        "motionName": motion_name,
+        "durationSec": 12.4,
+        "accuracy": 0.91,
+        "holdCompleted": True,
+        "representativeFeedback": REPRESENTATIVE_FEEDBACK,
+        "tracking": "tracking_ok",
+        "state": "complete",
+    }
+
+
+def test_daniel_stretch_summary_rejects_end_before_start() -> None:
+    response = client.post(
+        "/api/v1/gymnastics/daniel-forward-press/summary",
+        json={
+            "started_at": "2026-04-30T10:00:17+09:00",
+            "ended_at": "2026-04-30T10:00:05+09:00",
+            "accuracy": 0.87,
+            "hold_completed": False,
+            "representative_feedback": REPRESENTATIVE_FEEDBACK,
+            "tracking": "tracking_ok",
+            "state": "idle",
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "ended_at must be greater than or equal to started_at"

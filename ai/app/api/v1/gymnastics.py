@@ -39,6 +39,15 @@ from app.schemas.gymnastics import (
     SquatEvaluationRequest,
     SquatEvaluationResponse,
     SquatFeaturesResponse,
+    StretchMotionSummaryRequest,
+    StretchMotionSummaryResponse,
+)
+from app.services.gymnastics.constants import (
+    DANIEL_FORWARD_BEND_MOTION_NAME,
+    DANIEL_FORWARD_PRESS_MOTION_NAME,
+    DANIEL_LEFT_SIDE_BEND_MOTION_NAME,
+    DANIEL_RIGHT_SIDE_BEND_MOTION_NAME,
+    DANIEL_UPWARD_PRESS_MOTION_NAME,
 )
 from app.services.gymnastics.evaluators.daniel_forward_bend import DanielForwardBendEvaluator
 from app.services.gymnastics.evaluators.daniel_forward_press import DanielForwardPressEvaluator
@@ -71,7 +80,10 @@ from app.services.gymnastics.features.march_features import extract_march_featur
 from app.services.gymnastics.features.side_step_features import extract_side_step_features
 from app.services.gymnastics.features.squat_features import extract_squat_features
 from app.services.gymnastics.normalization.pose_normalizer import PoseNormalizer
-from app.services.gymnastics.summary import build_march_motion_summary
+from app.services.gymnastics.summary import (
+    build_march_motion_summary,
+    build_stretch_motion_summary,
+)
 from app.services.gymnastics.types import NormalizedPoseFrame
 
 router = APIRouter(prefix="/gymnastics", tags=["gymnastics"])
@@ -935,6 +947,104 @@ def summarize_march(payload: MarchSummaryRequest) -> MarchSummaryResponse:
         durationSec=summary.duration_sec,
         stepCount=summary.step_count,
         accuracy=summary.accuracy,
+        representativeFeedback=summary.representative_feedback,
+        tracking=summary.tracking,
+        state=summary.state,
+    )
+
+
+@router.post("/daniel-forward-press/summary", response_model=StretchMotionSummaryResponse)
+def summarize_daniel_forward_press(
+    payload: StretchMotionSummaryRequest,
+) -> StretchMotionSummaryResponse:
+    return _summarize_stretch_motion(
+        payload=payload,
+        motion_id="daniel_forward_press",
+        motion_name=DANIEL_FORWARD_PRESS_MOTION_NAME,
+    )
+
+
+@router.post("/daniel-upward-press/summary", response_model=StretchMotionSummaryResponse)
+def summarize_daniel_upward_press(
+    payload: StretchMotionSummaryRequest,
+) -> StretchMotionSummaryResponse:
+    return _summarize_stretch_motion(
+        payload=payload,
+        motion_id="daniel_upward_press",
+        motion_name=DANIEL_UPWARD_PRESS_MOTION_NAME,
+    )
+
+
+@router.post("/daniel-left-side-bend/summary", response_model=StretchMotionSummaryResponse)
+def summarize_daniel_left_side_bend(
+    payload: StretchMotionSummaryRequest,
+) -> StretchMotionSummaryResponse:
+    return _summarize_stretch_motion(
+        payload=payload,
+        motion_id="daniel_side_bend_left",
+        motion_name=DANIEL_LEFT_SIDE_BEND_MOTION_NAME,
+    )
+
+
+@router.post("/daniel-right-side-bend/summary", response_model=StretchMotionSummaryResponse)
+def summarize_daniel_right_side_bend(
+    payload: StretchMotionSummaryRequest,
+) -> StretchMotionSummaryResponse:
+    return _summarize_stretch_motion(
+        payload=payload,
+        motion_id="daniel_side_bend_right",
+        motion_name=DANIEL_RIGHT_SIDE_BEND_MOTION_NAME,
+    )
+
+
+@router.post("/daniel-forward-bend/summary", response_model=StretchMotionSummaryResponse)
+def summarize_daniel_forward_bend(
+    payload: StretchMotionSummaryRequest,
+) -> StretchMotionSummaryResponse:
+    return _summarize_stretch_motion(
+        payload=payload,
+        motion_id="daniel_forward_bend",
+        motion_name=DANIEL_FORWARD_BEND_MOTION_NAME,
+    )
+
+
+def _summarize_stretch_motion(
+    *,
+    payload: StretchMotionSummaryRequest,
+    motion_id: str,
+    motion_name: str,
+) -> StretchMotionSummaryResponse:
+    try:
+        summary = build_stretch_motion_summary(
+            motion_id=motion_id,
+            motion_name=motion_name,
+            started_at=payload.started_at,
+            ended_at=payload.ended_at,
+            accuracy=payload.accuracy,
+            hold_completed=payload.hold_completed,
+            representative_feedback=payload.representative_feedback,
+            tracking=payload.tracking,
+            state=payload.state,
+        )
+    except ValueError as exc:
+        logger.warning(
+            "Invalid stretch summary request: motion_id=%s started_at=%s ended_at=%s detail=%s",
+            motion_id,
+            payload.started_at,
+            payload.ended_at,
+            exc,
+        )
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception:
+        logger.exception("Unexpected error while building stretch summary: motion_id=%s", motion_id)
+        raise
+
+    return StretchMotionSummaryResponse(
+        motionId=summary.motion_id,
+        motionName=summary.motion_name,
+        durationSec=summary.duration_sec,
+        accuracy=summary.accuracy,
+        holdCompleted=summary.hold_completed,
         representativeFeedback=summary.representative_feedback,
         tracking=summary.tracking,
         state=summary.state,
