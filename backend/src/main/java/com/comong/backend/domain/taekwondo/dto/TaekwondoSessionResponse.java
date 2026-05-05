@@ -15,10 +15,18 @@ public record TaekwondoSessionResponse(
         int completedMotionCount,
         int monstersDefeated,
         LocalDateTime createdAt,
-        List<TaekwondoSessionMotionResponse> motions) {
+        List<TaekwondoSessionMotionResponse> motions,
+        BeltPromotionResponse beltPromotion) {
 
     public static TaekwondoSessionResponse of(
             TaekwondoSession session, List<TaekwondoSessionMotionResponse> motions) {
+        return of(session, motions, null);
+    }
+
+    public static TaekwondoSessionResponse of(
+            TaekwondoSession session,
+            List<TaekwondoSessionMotionResponse> motions,
+            BeltPromotionResponse beltPromotion) {
         return new TaekwondoSessionResponse(
                 session.getId(),
                 session.getPatientProfile().getId(),
@@ -28,6 +36,7 @@ public record TaekwondoSessionResponse(
                 session.getCompletedMotionCount(),
                 session.getMonstersDefeated(),
                 session.getCreatedAt(),
-                motions);
+                motions,
+                beltPromotion);
     }
 }

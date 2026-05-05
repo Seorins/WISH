@@ -20,7 +20,9 @@ import com.comong.backend.domain.taekwondo.entity.Poomsae;
 import com.comong.backend.domain.taekwondo.entity.TaekwondoMotion;
 import com.comong.backend.domain.taekwondo.entity.TaekwondoSession;
 import com.comong.backend.domain.taekwondo.entity.TaekwondoSessionMotion;
+import com.comong.backend.domain.taekwondo.repository.TaekwondoBeltHistoryRepository;
 import com.comong.backend.domain.taekwondo.repository.TaekwondoMotionRepository;
+import com.comong.backend.domain.taekwondo.repository.TaekwondoProgressRepository;
 import com.comong.backend.domain.taekwondo.repository.TaekwondoSessionMotionRepository;
 import com.comong.backend.domain.taekwondo.repository.TaekwondoSessionRepository;
 import com.comong.backend.domain.user.repository.UserRepository;
@@ -37,6 +39,8 @@ class TaekwondoSessionControllerIntegrationTest extends IntegrationTestSupport {
     @Autowired private TaekwondoMotionRepository taekwondoMotionRepository;
     @Autowired private TaekwondoSessionRepository taekwondoSessionRepository;
     @Autowired private TaekwondoSessionMotionRepository taekwondoSessionMotionRepository;
+    @Autowired private TaekwondoProgressRepository taekwondoProgressRepository;
+    @Autowired private TaekwondoBeltHistoryRepository taekwondoBeltHistoryRepository;
     @Autowired private PatientProfileRepository patientProfileRepository;
     @Autowired private UserRepository userRepository;
 
@@ -51,6 +55,8 @@ class TaekwondoSessionControllerIntegrationTest extends IntegrationTestSupport {
     }
 
     private void cleanAll() {
+        taekwondoBeltHistoryRepository.deleteAll();
+        taekwondoProgressRepository.deleteAll();
         taekwondoSessionMotionRepository.deleteAll();
         taekwondoSessionRepository.deleteAll();
         taekwondoMotionRepository.deleteAll();
@@ -372,6 +378,71 @@ class TaekwondoSessionControllerIntegrationTest extends IntegrationTestSupport {
         mockMvc.perform(get("/taekwondo-sessions/{id}", 1L))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("G-003"));
+    }
+
+    @Test
+    void createTaekwondoSession_promotesBeltWhenThresholdReached() throws Exception {
+        TestUser user = setupUserWithProfile("promote@example.com", "promote-user");
+        TaekwondoMotion ready = taekwondoMotionRepository.save(taekwondoMotion("기본준비", 1));
+
+        mockMvc.perform(
+                        post("/taekwondo-sessions")
+                                .header("Authorization", "Bearer " + user.token())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(
+                                        saveRequestWithMonsters(
+                                                user.patientProfileId(), ready.getId(), 30)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.beltPromotion.fromBelt").value("WHITE"))
+                .andExpect(jsonPath("$.data.beltPromotion.toBelt").value("YELLOW"));
+
+        assertThat(taekwondoProgressRepository.count()).isEqualTo(1);
+        // firstEntry (NULL→WHITE) + promotion (WHITE→YELLOW) = 2건
+        assertThat(taekwondoBeltHistoryRepository.count()).isEqualTo(2);
+    }
+
+    @Test
+    void createTaekwondoSession_supportsMultiBeltJumpInSingleSession() throws Exception {
+        TestUser user = setupUserWithProfile("jump@example.com", "jump-user");
+        TaekwondoMotion ready = taekwondoMotionRepository.save(taekwondoMotion("기본준비", 1));
+
+        mockMvc.perform(
+                        post("/taekwondo-sessions")
+                                .header("Authorization", "Bearer " + user.token())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(
+                                        saveRequestWithMonsters(
+                                                user.patientProfileId(), ready.getId(), 70)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.beltPromotion.fromBelt").value("WHITE"))
+                .andExpect(jsonPath("$.data.beltPromotion.toBelt").value("ORANGE"));
+
+        // firstEntry + promotion(WHITE→YELLOW) + promotion(YELLOW→ORANGE) = 3건
+        assertThat(taekwondoBeltHistoryRepository.count()).isEqualTo(3);
+    }
+
+    private String saveRequestWithMonsters(
+            Long patientProfileId, Long taekwondoMotionId, int monstersDefeated) {
+        return """
+                {
+                  "patientProfileId": %d,
+                  "poomsae": "TAEGEUK_1",
+                  "durationSec": 120,
+                  "averageAccuracy": 0.85,
+                  "monstersDefeated": %d,
+                  "motions": [
+                    {
+                      "taekwondoMotionId": %d,
+                      "durationSec": 8,
+                      "accuracy": 0.9,
+                      "completedReps": 1,
+                      "feedback": "좋아요"
+                    }
+                  ]
+                }
+                """
+                .formatted(patientProfileId, monstersDefeated, taekwondoMotionId);
     }
 
     private TaekwondoMotion taekwondoMotion(String name, int routineOrder) {

@@ -19,4 +19,10 @@ public interface TaekwondoSessionRepository extends JpaRepository<TaekwondoSessi
                     + "join fetch p.user "
                     + "where s.id = :id")
     Optional<TaekwondoSession> findByIdWithPatientProfileAndUser(@Param("id") Long id);
+
+    @Query(
+            "select avg(s.averageAccuracy) from TaekwondoSession s "
+                    + "where s.patientProfile.id = :patientProfileId")
+    Optional<Double> averageAccuracyByPatientProfileId(
+            @Param("patientProfileId") Long patientProfileId);
 }
