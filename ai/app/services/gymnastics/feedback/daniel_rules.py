@@ -3,7 +3,6 @@ from app.services.gymnastics.feedback.common import (
     DO_NOT_BEND_KNEES,
     FeedbackCandidate,
     KEEP_HANDS_OVERHEAD,
-    KEEP_HOLDING,
     LEAN_LEFT_MORE,
     LEAN_RIGHT_MORE,
     LIFT_HANDS_HIGHER,
@@ -23,10 +22,12 @@ def select_daniel_forward_press_feedback_candidate(
     state: str,
     tracking: str,
     wrist_forward: float,
+    wrist_extension: float,
     left_elbow_angle: float | None,
     right_elbow_angle: float | None,
     torso_tilt: float,
     forward_threshold: float,
+    wrist_extension_threshold: float,
     arm_straight_threshold: float,
     torso_tilt_max: float,
 ) -> FeedbackCandidate | None:
@@ -38,17 +39,17 @@ def select_daniel_forward_press_feedback_candidate(
     if tracking != "tracking_ok":
         return TRACKING_LOW
 
+    if state == "holding":
+        return None
+
     if torso_tilt > torso_tilt_max:
         return STRAIGHTEN_BACK
 
-    if wrist_forward < forward_threshold:
+    if wrist_forward < forward_threshold or wrist_extension < wrist_extension_threshold:
         return PRESS_HANDS_FORWARD
 
     if mean_elbow_angle is not None and mean_elbow_angle < arm_straight_threshold:
         return STRAIGHTEN_ARMS
-
-    if state == "holding":
-        return KEEP_HOLDING
 
     return None
 
@@ -75,6 +76,9 @@ def select_daniel_upward_press_feedback_candidate(
     if tracking != "tracking_ok":
         return TRACKING_LOW
 
+    if state == "holding":
+        return None
+
     if torso_tilt > torso_tilt_max:
         return STRAIGHTEN_BACK
 
@@ -86,9 +90,6 @@ def select_daniel_upward_press_feedback_candidate(
 
     if wrist_height_balance > height_balance_threshold:
         return MATCH_HAND_HEIGHTS
-
-    if state == "holding":
-        return KEEP_HOLDING
 
     return None
 
@@ -114,6 +115,9 @@ def select_daniel_side_bend_feedback_candidate(
     if tracking != "tracking_ok":
         return TRACKING_LOW
 
+    if state == "holding":
+        return None
+
     if torso_tilt < target_tilt_threshold:
         return LEAN_LEFT_MORE if direction == "left" else LEAN_RIGHT_MORE
 
@@ -122,9 +126,6 @@ def select_daniel_side_bend_feedback_candidate(
 
     if mean_elbow_angle is not None and mean_elbow_angle < arm_straight_threshold:
         return STRAIGHTEN_ARMS
-
-    if state == "holding":
-        return KEEP_HOLDING
 
     return None
 
@@ -147,6 +148,9 @@ def select_daniel_forward_bend_feedback_candidate(
     if tracking != "tracking_ok":
         return TRACKING_LOW
 
+    if state == "holding":
+        return None
+
     if forward_bend_angle < forward_bend_threshold:
         return BEND_FORWARD_MORE
 
@@ -156,8 +160,5 @@ def select_daniel_forward_bend_feedback_candidate(
     knee_angle = lowest_knee_angle(left_knee_angle, right_knee_angle)
     if knee_angle is not None and knee_angle < knee_bend_min_angle:
         return DO_NOT_BEND_KNEES
-
-    if state == "holding":
-        return KEEP_HOLDING
 
     return None
