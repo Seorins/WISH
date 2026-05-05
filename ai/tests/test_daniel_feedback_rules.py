@@ -7,6 +7,7 @@ from app.services.gymnastics.feedback.rules import (
     MATCH_HAND_HEIGHTS,
     PRESS_HANDS_FORWARD,
     STRAIGHTEN_ARMS,
+    STRAIGHTEN_BACK,
     TRACKING_LOW,
     select_daniel_forward_bend_feedback_candidate,
     select_daniel_forward_press_feedback_candidate,
@@ -47,6 +48,22 @@ def test_forward_press_uses_generic_arm_feedback() -> None:
     assert candidate == STRAIGHTEN_ARMS
 
 
+def test_forward_press_does_not_treat_missing_elbows_as_zero_angle() -> None:
+    candidate = select_daniel_forward_press_feedback_candidate(
+        state="holding",
+        tracking="tracking_ok",
+        wrist_forward=0.7,
+        left_elbow_angle=None,
+        right_elbow_angle=None,
+        torso_tilt=2.0,
+        forward_threshold=0.5,
+        arm_straight_threshold=150.0,
+        torso_tilt_max=10.0,
+    )
+
+    assert candidate == KEEP_HOLDING
+
+
 def test_upward_press_checks_height_before_balance() -> None:
     candidate = select_daniel_upward_press_feedback_candidate(
         state="holding",
@@ -81,6 +98,24 @@ def test_upward_press_can_request_matching_heights() -> None:
     )
 
     assert candidate == MATCH_HAND_HEIGHTS
+
+
+def test_upward_press_prefers_straight_back_when_multiple_conditions_fail() -> None:
+    candidate = select_daniel_upward_press_feedback_candidate(
+        state="holding",
+        tracking="tracking_ok",
+        wrist_height=0.3,
+        wrist_height_balance=0.4,
+        left_elbow_angle=120.0,
+        right_elbow_angle=122.0,
+        torso_tilt=15.0,
+        height_threshold=0.5,
+        height_balance_threshold=0.2,
+        arm_straight_threshold=150.0,
+        torso_tilt_max=10.0,
+    )
+
+    assert candidate == STRAIGHTEN_BACK
 
 
 def test_side_bend_uses_direction_specific_feedback() -> None:
@@ -157,6 +192,38 @@ def test_holding_state_returns_keep_holding_when_pose_is_good() -> None:
         left_elbow_angle=170.0,
         right_elbow_angle=172.0,
         torso_tilt=2.0,
+        forward_threshold=0.5,
+        arm_straight_threshold=150.0,
+        torso_tilt_max=10.0,
+    )
+
+    assert candidate == KEEP_HOLDING
+
+
+def test_complete_state_returns_no_feedback() -> None:
+    candidate = select_daniel_forward_bend_feedback_candidate(
+        state="complete",
+        tracking="tracking_ok",
+        forward_bend_angle=10.0,
+        wrist_drop=0.1,
+        left_knee_angle=60.0,
+        right_knee_angle=60.0,
+        forward_bend_threshold=40.0,
+        wrist_drop_threshold=0.5,
+        knee_bend_min_angle=90.0,
+    )
+
+    assert candidate is None
+
+
+def test_forward_press_threshold_boundary_is_treated_as_success() -> None:
+    candidate = select_daniel_forward_press_feedback_candidate(
+        state="holding",
+        tracking="tracking_ok",
+        wrist_forward=0.5,
+        left_elbow_angle=150.0,
+        right_elbow_angle=150.0,
+        torso_tilt=10.0,
         forward_threshold=0.5,
         arm_straight_threshold=150.0,
         torso_tilt_max=10.0,
