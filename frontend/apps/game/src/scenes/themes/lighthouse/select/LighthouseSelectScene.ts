@@ -25,6 +25,24 @@ import {
 } from '@/game/ui/simpleDialog'
 import { addCoverBackground } from '@/game/world/background'
 import { createRatioRectangle, isPointInRectangle } from '@/game/world/portal'
+import {
+  createEmotionCheckinAnalysis,
+  type EmotionCheckinAnalysis,
+  type SelectedChoiceEvent,
+} from '../dialog/emotionAnalytics'
+import {
+  getLighthouseEmotionScene,
+  getChoiceDisplayText,
+  getQuestionDisplayText,
+  getVisibleChoices,
+  globalRestTodayChoice,
+  LIGHTHOUSE_EMOTION_START_SCENE_ID,
+  LIGHTHOUSE_MAX_QUESTION_SCENES,
+  waveMeterCards,
+  type LighthouseEmotionChoice,
+  type LighthouseEmotionScene,
+  type WaveMeterCard,
+} from '../dialog/lighthouseEmotionDialogue'
 
 const LIGHTHOUSE_ROOM_SPAWN = { xRatio: 0.62, yRatio: 0.76 }
 const LIGHTHOUSE_EXIT_PORTAL = { xRatio: 0.28, yRatio: 0.86, widthRatio: 0.18, heightRatio: 0.14 }
@@ -37,51 +55,42 @@ const DIALOG_NAME_BOX = { x: 455, y: 125, width: 390, height: 90 }
 const SYSTEM_PROMPT_DEPTH = 28
 const CHOICE_BUTTON_DEPTH = 29
 const CHILD_REPLY_DELAY_MS = 520
-const CHILD_CHOICE_PROMPT = '선택: 등대지기에게 건넬 말을 골라주세요.'
-const SYSTEM_PROMPT_PANEL = {
-  widthRatio: 0.68,
-  maxWidth: 980,
-  height: 78,
-  bottomMargin: 42,
-  radius: 10,
-  paddingX: 28,
-}
+const CHILD_CHOICE_PROMPT = '선택: 지금 마음에 가까운 말'
+const WAVE_METER_PROMPT = '마음 파도계\n지난 며칠 동안 마음의 파도는?'
+const WAVE_METER_LAST_SHOWN_KEY = 'lighthouseWaveMeterLastShownDate'
 const CHOICE_BUTTON = {
-  gap: 12,
-  widthRatio: 0.46,
+  gap: 10,
+  widthRatio: 0.48,
   maxWidth: 620,
   height: 58,
   radius: 8,
   paddingX: 64,
   bottomGap: 14,
 }
-
-const youngcheolLines = [
-  '어서 오게. 바다는 늘 천천히 보아야 잘 보인다네.',
-  '등대 불빛처럼 마음도 한 번씩 쉬어 가면 좋지.',
-  '길을 잃은 것 같을 땐, 가장 밝은 쪽을 천천히 따라가 보게.',
-]
-
-const youngcheolReplyLines = [
-  '안녕, 나는 등대지기 영철이야. 오늘은 네가 건네는 말로 등대를 밝혀볼까?',
-  '바다는 조금 어둡지만 괜찮아. 따뜻한 말 한마디가 길을 비춰줄 수 있거든.',
-  '말하고 싶은 문장을 골라줘. 네 목소리가 등대 불빛처럼 전해질 거야.',
-]
-
-const getYoungcheolReplyLine = () =>
-  Phaser.Utils.Array.GetRandom(
-    youngcheolReplyLines.length > 0 ? youngcheolReplyLines : youngcheolLines,
-  )
+const REST_BUTTON = {
+  widthRatio: 0.44,
+  minWidthRatioOfMain: 0.9,
+  height: 58,
+}
+const SYSTEM_PROMPT_PANEL = {
+  widthRatio: 0.62,
+  maxWidth: 860,
+  height: 70,
+  bottomMargin: 42,
+  radius: 10,
+  paddingX: 28,
+}
 
 type LighthouseUiMode = 'NPC_DIALOGUE' | 'PLAYER_CHOICE' | 'SYSTEM_PROMPT'
 
-type LighthouseDialogPhase = 'closed' | 'intro' | 'choosing' | 'selected' | 'reply'
-
-type ChildSpeechChoice = {
-  id: string
-  label: string
-  reply: string
-}
+type LighthouseDialogPhase =
+  | 'closed'
+  | 'scene-lines'
+  | 'choosing'
+  | 'selected'
+  | 'reply'
+  | 'summary'
+  | 'wave-meter'
 
 type ChoiceButtonVisualState = 'normal' | 'hover' | 'focused' | 'pressed' | 'disabled'
 
@@ -91,7 +100,8 @@ type ChoiceButton = {
   marker: Phaser.GameObjects.Text
   label: Phaser.GameObjects.Text
   baseY: number
-  choice: ChildSpeechChoice
+  choice: LighthouseEmotionChoice
+  isRestButton: boolean
   disabled: boolean
   state: ChoiceButtonVisualState
   index: number
@@ -104,25 +114,8 @@ type SystemPromptUi = {
   text: Phaser.GameObjects.Text
   width: number
   height: number
+  baseY: number
 }
-
-const childSpeechChoices: ChildSpeechChoice[] = [
-  {
-    id: 'hello',
-    label: '안녕하세요, 등대지기님!',
-    reply: '반갑구나. 네 인사가 등대 안을 환하게 만들어줬어.',
-  },
-  {
-    id: 'help',
-    label: '제가 도와드릴게요.',
-    reply: '정말 든든하네. 함께라면 멀리 있는 배도 금방 찾을 수 있겠어.',
-  },
-  {
-    id: 'light',
-    label: '불빛을 켜 주세요.',
-    reply: '좋아. 네 말에 맞춰 등대 불빛을 더 밝게 켜볼게.',
-  },
-]
 
 type LighthouseSelectSceneData = {
   spawn?: RatioPoint
@@ -139,7 +132,6 @@ export class LighthouseSelectScene extends Phaser.Scene {
   private dialogDismissed = false
   private uiMode: LighthouseUiMode = 'NPC_DIALOGUE'
   private dialogPhase: LighthouseDialogPhase = 'closed'
-  private selectedChildLine = ''
   private talkIcon!: Phaser.GameObjects.Image
   private youngcheolAnchor = new Phaser.Math.Vector2()
   private youngcheolInteractionRadius = 0
@@ -149,6 +141,15 @@ export class LighthouseSelectScene extends Phaser.Scene {
   private focusedChoiceIndex = 0
   private replyTimer?: Phaser.Time.TimerEvent
   private gamepadChoiceInputAvailableAt = 0
+  private currentScene: LighthouseEmotionScene | null = null
+  private activeChoices: LighthouseEmotionChoice[] = []
+  private pendingChoice: LighthouseEmotionChoice | null = null
+  private selectedChoiceEvents: SelectedChoiceEvent[] = []
+  private selectedChoiceSceneCount = 0
+  private sessionId = ''
+  private selectedWaveMeterCard: WaveMeterCard | undefined
+  private analysis: EmotionCheckinAnalysis | null = null
+  private caregiverDebugText: Phaser.GameObjects.Text | null = null
 
   constructor() {
     super({ key: 'LighthouseSelectScene' })
@@ -178,9 +179,9 @@ export class LighthouseSelectScene extends Phaser.Scene {
     this.dialogDismissed = false
     this.uiMode = 'NPC_DIALOGUE'
     this.dialogPhase = 'closed'
-    this.selectedChildLine = ''
     this.focusedChoiceIndex = 0
     this.target = null
+    this.resetEmotionCheckinSession()
 
     const background = addCoverBackground(this, 'lighthouse-background')
     const backgroundLeft = background.x - background.displayWidth / 2
@@ -215,6 +216,7 @@ export class LighthouseSelectScene extends Phaser.Scene {
     ensurePlayerWalkAnimations(this)
     this.createDialogUi()
     this.createSystemPromptUi()
+    this.createCaregiverDebugUi()
 
     const spawn = data.spawn ?? LIGHTHOUSE_ROOM_SPAWN
     this.player = createPlayer(this, vw * spawn.xRatio, vh * spawn.yRatio)
@@ -278,12 +280,8 @@ export class LighthouseSelectScene extends Phaser.Scene {
       }
 
       const clickedDialog = this.dialog.frame.getBounds().contains(pointer.x, pointer.y)
-
-      if (clickedDialog) {
-        this.advanceDialog()
-      } else {
-        this.closeDialog(true)
-      }
+      if (clickedDialog) this.advanceDialog()
+      else this.closeDialog(true)
       return
     }
 
@@ -293,31 +291,20 @@ export class LighthouseSelectScene extends Phaser.Scene {
 
   private readonly handleEnterDown = () => {
     if (!this.isDialogVisible) return
-
-    if (this.uiMode === 'PLAYER_CHOICE') {
-      this.selectFocusedChoice()
-      return
-    }
-
-    this.advanceDialog()
+    if (this.uiMode === 'PLAYER_CHOICE') this.selectFocusedChoice()
+    else this.advanceDialog()
   }
 
   private readonly handleSpaceDown = () => {
-    if (this.isDialogVisible && this.uiMode === 'PLAYER_CHOICE') {
-      this.selectFocusedChoice()
-    }
+    if (this.isDialogVisible && this.uiMode === 'PLAYER_CHOICE') this.selectFocusedChoice()
   }
 
   private readonly handleChoiceUp = () => {
-    if (this.isDialogVisible && this.uiMode === 'PLAYER_CHOICE') {
-      this.moveChoiceFocus(-1)
-    }
+    if (this.isDialogVisible && this.uiMode === 'PLAYER_CHOICE') this.moveChoiceFocus(-1)
   }
 
   private readonly handleChoiceDown = () => {
-    if (this.isDialogVisible && this.uiMode === 'PLAYER_CHOICE') {
-      this.moveChoiceFocus(1)
-    }
+    if (this.isDialogVisible && this.uiMode === 'PLAYER_CHOICE') this.moveChoiceFocus(1)
   }
 
   private readonly handleEscDown = () => {
@@ -408,7 +395,6 @@ export class LighthouseSelectScene extends Phaser.Scene {
 
     const enqueue = (x: number, y: number) => {
       if (x < 0 || x >= width || y < 0 || y >= height) return
-
       const index = y * width + x
       if (visited[index]) return
       visited[index] = 1
@@ -429,7 +415,6 @@ export class LighthouseSelectScene extends Phaser.Scene {
       enqueue(x, 0)
       enqueue(x, height - 1)
     }
-
     for (let y = 0; y < height; y += 1) {
       enqueue(0, y)
       enqueue(width - 1, y)
@@ -438,10 +423,8 @@ export class LighthouseSelectScene extends Phaser.Scene {
     while (head < queue.length) {
       const index = queue[head]
       head += 1
-
       const x = index % width
       const y = Math.floor(index / width)
-
       enqueue(x + 1, y)
       enqueue(x - 1, y)
       enqueue(x, y + 1)
@@ -456,7 +439,7 @@ export class LighthouseSelectScene extends Phaser.Scene {
       dialogWidthRatio: 0.78,
       maxDialogWidth: 1120,
       fontColor: '#3b2a1f',
-      fontSize: 42,
+      fontSize: 40,
       lineSpacing: 6,
       frameBottomMargin: -22,
       nameBox: DIALOG_NAME_BOX,
@@ -472,13 +455,13 @@ export class LighthouseSelectScene extends Phaser.Scene {
     const panelWidth = Math.min(vw * SYSTEM_PROMPT_PANEL.widthRatio, SYSTEM_PROMPT_PANEL.maxWidth)
     const panelHeight = SYSTEM_PROMPT_PANEL.height
     const x = vw / 2
-    const y = vh - SYSTEM_PROMPT_PANEL.bottomMargin - panelHeight / 2
+    const y = vh * 0.24
 
     const panel = this.add.graphics().setDepth(SYSTEM_PROMPT_DEPTH).setScrollFactor(0).setAlpha(0)
     const text = this.add
       .text(x, y, CHILD_CHOICE_PROMPT, {
         fontFamily: '"Pretendard", "Noto Sans KR", "Malgun Gothic", sans-serif',
-        fontSize: `${Math.max(20, Math.round(Math.min(vw, vh) * 0.031))}px`,
+        fontSize: `${Math.max(18, Math.round(Math.min(vw, vh) * 0.028))}px`,
         fontStyle: 'bold',
         color: '#4a3320',
         align: 'center',
@@ -492,15 +475,31 @@ export class LighthouseSelectScene extends Phaser.Scene {
       .setScrollFactor(0)
       .setAlpha(0)
 
-    this.systemPrompt = { panel, text, width: panelWidth, height: panelHeight }
+    this.systemPrompt = { panel, text, width: panelWidth, height: panelHeight, baseY: y }
     this.drawSystemPromptPanel()
   }
 
+  private createCaregiverDebugUi() {
+    const debugEnabled = import.meta.env.VITE_LIGHTHOUSE_CAREGIVER_DEBUG === 'true'
+    this.caregiverDebugText = this.add
+      .text(24, 24, '', {
+        fontFamily: '"Pretendard", "Noto Sans KR", "Malgun Gothic", sans-serif',
+        fontSize: '16px',
+        color: '#fff8ec',
+        backgroundColor: '#3c291d',
+        padding: { x: 12, y: 10 },
+        wordWrap: { width: Math.min(this.scale.width - 48, 640), useAdvancedWrap: true },
+      })
+      .setDepth(60)
+      .setScrollFactor(0)
+      .setVisible(debugEnabled)
+  }
+
   private drawSystemPromptPanel() {
-    const { width: vw, height: vh } = this.scale
+    const { width: vw } = this.scale
     const panel = this.systemPrompt
     const left = vw / 2 - panel.width / 2
-    const top = vh - SYSTEM_PROMPT_PANEL.bottomMargin - panel.height
+    const top = panel.baseY - panel.height / 2
 
     panel.panel.clear()
     panel.panel.fillStyle(0x2b1b10, 0.28)
@@ -537,49 +536,86 @@ export class LighthouseSelectScene extends Phaser.Scene {
       return
     }
 
-    if (!this.isDialogVisible && !this.dialogDismissed) {
-      this.startYoungcheolConversation()
-    }
+    if (!this.isDialogVisible && !this.dialogDismissed) this.startYoungcheolConversation()
   }
 
   private startYoungcheolConversation() {
-    this.clearReplyTimer()
-    this.uiMode = 'NPC_DIALOGUE'
-    this.dialogPhase = 'intro'
-    this.selectedChildLine = ''
+    this.resetEmotionCheckinSession()
     this.isDialogVisible = true
     setInteractionIconActive(this.talkIcon, true)
+    fadeSimpleDialog(this, this.dialog, 1, 220)
+    this.loadEmotionScene(LIGHTHOUSE_EMOTION_START_SCENE_ID)
+  }
+
+  private loadEmotionScene(sceneId: string) {
+    const scene = getLighthouseEmotionScene(sceneId)
+    if (!scene) {
+      this.closeDialog(true)
+      return
+    }
+
+    this.clearReplyTimer()
+    this.currentScene = scene
+    this.pendingChoice = null
+    this.uiMode = 'NPC_DIALOGUE'
+    this.dialogPhase = 'scene-lines'
     this.hideChoiceButtons()
     this.hideSystemPrompt()
-    setCenteredDialogText(this.dialog, Phaser.Utils.Array.GetRandom(youngcheolLines))
-    fadeSimpleDialog(this, this.dialog, 1, 220)
+    setCenteredDialogText(this.dialog, scene.npcLines.join('\n'))
+
+    if (scene.mode === 'NPC_DIALOGUE' && scene.onComplete?.action === 'GENERATE_EMOTION_SUMMARY') {
+      this.analysis = createEmotionCheckinAnalysis(
+        this.sessionId,
+        this.selectedChoiceEvents,
+        this.selectedWaveMeterCard,
+      )
+      this.updateCaregiverDebug()
+    }
   }
 
   private advanceDialog() {
     if (!this.isDialogVisible) return
 
-    if (this.dialogPhase === 'intro') {
-      this.showPlayerChoice()
+    if (this.dialogPhase === 'scene-lines') {
+      if (!this.currentScene) return
+      if (this.currentScene.mode === 'PLAYER_CHOICE') {
+        this.showPlayerChoice(
+          getVisibleChoices(this.currentScene),
+          getQuestionDisplayText(this.currentScene),
+        )
+        return
+      }
+
+      if (this.currentScene.onComplete?.action === 'GENERATE_EMOTION_SUMMARY') {
+        this.maybeShowWaveMeterOrSummary()
+        return
+      }
+
+      this.closeDialog(true)
       return
     }
 
-    if (this.dialogPhase === 'choosing') return
-
+    if (this.dialogPhase === 'choosing' || this.dialogPhase === 'wave-meter') return
     if (this.dialogPhase === 'selected') {
       this.showYoungcheolReply()
       return
     }
-
-    this.closeDialog(true)
+    if (this.dialogPhase === 'reply') {
+      this.continueAfterReply()
+      return
+    }
+    if (this.dialogPhase === 'summary') this.closeDialog(true)
   }
 
-  private showPlayerChoice() {
+  private showPlayerChoice(choices: LighthouseEmotionChoice[], prompt: string) {
     this.clearReplyTimer()
     this.uiMode = 'PLAYER_CHOICE'
-    this.dialogPhase = 'choosing'
+    this.dialogPhase = prompt === WAVE_METER_PROMPT ? 'wave-meter' : 'choosing'
+    this.activeChoices =
+      this.dialogPhase === 'choosing' ? [...choices, globalRestTodayChoice] : choices
     this.focusedChoiceIndex = 0
     fadeSimpleDialog(this, this.dialog, 0, 120)
-    this.showSystemPrompt(CHILD_CHOICE_PROMPT)
+    this.showSystemPrompt(prompt)
     this.showChoiceButtons()
   }
 
@@ -587,37 +623,64 @@ export class LighthouseSelectScene extends Phaser.Scene {
     this.hideChoiceButtons()
 
     const { width: vw, height: vh } = this.scale
-    const buttonWidth = Math.min(vw * CHOICE_BUTTON.widthRatio, CHOICE_BUTTON.maxWidth)
-    const buttonHeight = CHOICE_BUTTON.height
+    const isWaveMeter = this.dialogPhase === 'wave-meter'
+    const buttonWidth = isWaveMeter
+      ? Math.min(vw * 0.25, 280)
+      : Math.min(vw * CHOICE_BUTTON.widthRatio, CHOICE_BUTTON.maxWidth)
+    const buttonHeight = isWaveMeter ? 54 : CHOICE_BUTTON.height
+    const restButtonWidth = Math.max(
+      Math.min(vw * REST_BUTTON.widthRatio, buttonWidth),
+      buttonWidth * REST_BUTTON.minWidthRatioOfMain,
+    )
+    const visibleMainCount = this.activeChoices.filter(
+      choice => choice.id !== globalRestTodayChoice.id,
+    ).length
     const totalHeight =
-      childSpeechChoices.length * buttonHeight +
-      Math.max(0, childSpeechChoices.length - 1) * CHOICE_BUTTON.gap
-    const promptTop = vh - SYSTEM_PROMPT_PANEL.bottomMargin - SYSTEM_PROMPT_PANEL.height
+      visibleMainCount * buttonHeight +
+      Math.max(0, visibleMainCount - 1) * CHOICE_BUTTON.gap +
+      (this.hasRestButton() ? REST_BUTTON.height + 18 : 0)
     const startX = vw / 2
-    const startY = promptTop - CHOICE_BUTTON.bottomGap - totalHeight + buttonHeight / 2
-    const fontSize = Math.max(18, Math.round(Math.min(vw, vh) * 0.024))
+    const promptBottom = this.systemPrompt.baseY + this.systemPrompt.height / 2
+    const startY = Math.min(
+      promptBottom + 26 + buttonHeight / 2,
+      vh - SYSTEM_PROMPT_PANEL.bottomMargin - totalHeight + buttonHeight / 2,
+    )
+    const fontSize = Math.max(16, Math.round(Math.min(vw, vh) * 0.022))
 
-    childSpeechChoices.forEach((choice, index) => {
+    this.activeChoices.forEach((choice, index) => {
       const button = this.choiceButtons[index] ?? this.createChoiceButton(choice, index)
+      const isRestButton = choice.id === globalRestTodayChoice.id
+      const mainIndex = this.activeChoices
+        .slice(0, index)
+        .filter(option => option.id !== globalRestTodayChoice.id).length
+      const resolvedHeight = isRestButton ? REST_BUTTON.height : buttonHeight
+      const resolvedWidth = isRestButton ? restButtonWidth : buttonWidth
+      const y = isRestButton
+        ? startY + visibleMainCount * (buttonHeight + CHOICE_BUTTON.gap) + 8
+        : startY + mainIndex * (buttonHeight + CHOICE_BUTTON.gap)
 
       button.choice = choice
       button.index = index
-      button.width = buttonWidth
-      button.height = buttonHeight
-      button.baseY = startY + index * (buttonHeight + CHOICE_BUTTON.gap)
+      button.isRestButton = isRestButton
+      button.width = resolvedWidth
+      button.height = resolvedHeight
+      button.baseY = y
       button.disabled = false
-      button.container.setPosition(startX, button.baseY)
-      button.container.setSize(buttonWidth, buttonHeight)
+      button.container.setPosition(startX, y)
+      button.container.setSize(resolvedWidth, resolvedHeight)
       button.container.input!.hitArea = new Phaser.Geom.Rectangle(
-        -buttonWidth / 2,
-        -buttonHeight / 2,
-        buttonWidth,
-        buttonHeight,
+        -resolvedWidth / 2,
+        -resolvedHeight / 2,
+        resolvedWidth,
+        resolvedHeight,
       )
-      button.label.setText(choice.label)
+      button.label.setText(getChoiceDisplayText(choice))
       button.label.setStyle({
-        fontSize: `${fontSize}px`,
-        wordWrap: { width: buttonWidth - CHOICE_BUTTON.paddingX * 2, useAdvancedWrap: true },
+        fontSize: `${isRestButton ? Math.max(14, fontSize - 3) : fontSize}px`,
+        wordWrap: {
+          width: resolvedWidth - CHOICE_BUTTON.paddingX * 2,
+          useAdvancedWrap: true,
+        },
       })
       button.container.setVisible(true).setAlpha(0)
       this.setChoiceButtonState(button, index === this.focusedChoiceIndex ? 'focused' : 'normal')
@@ -626,25 +689,25 @@ export class LighthouseSelectScene extends Phaser.Scene {
         alpha: 1,
         y: button.baseY - 4,
         duration: 180,
-        delay: index * 45,
+        delay: index * 35,
         ease: 'Sine.easeOut',
       })
     })
   }
 
-  private createChoiceButton(choice: ChildSpeechChoice, index: number) {
+  private createChoiceButton(choice: LighthouseEmotionChoice, index: number) {
     const background = this.add.graphics()
     const marker = this.add
       .text(0, 0, '▶', {
         fontFamily: '"Pretendard", "Noto Sans KR", "Malgun Gothic", sans-serif',
-        fontSize: '24px',
+        fontSize: '20px',
         fontStyle: 'bold',
         color: '#6b401c',
       })
       .setOrigin(0.5)
       .setVisible(false)
     const label = this.add
-      .text(0, 0, choice.label, {
+      .text(0, 0, getChoiceDisplayText(choice), {
         fontFamily: '"Pretendard", "Noto Sans KR", "Malgun Gothic", sans-serif',
         fontSize: '24px',
         color: '#4b341f',
@@ -691,6 +754,7 @@ export class LighthouseSelectScene extends Phaser.Scene {
       label,
       baseY: 0,
       choice,
+      isRestButton: false,
       disabled: false,
       state: 'normal' as ChoiceButtonVisualState,
       index,
@@ -717,7 +781,7 @@ export class LighthouseSelectScene extends Phaser.Scene {
     button.container.y = button.baseY + yOffset
     button.container.setAlpha(isDisabled ? 0.55 : 1)
     button.marker.setVisible(isFocused && !isDisabled)
-    button.marker.setPosition(left + 28, 0)
+    button.marker.setPosition(left + 23, 0)
     button.label.setPosition(left + CHOICE_BUTTON.paddingX, 0)
     button.label.setColor(isDisabled ? '#8d806c' : isFocused ? '#24180f' : '#4b341f')
 
@@ -731,7 +795,7 @@ export class LighthouseSelectScene extends Phaser.Scene {
       CHOICE_BUTTON.radius,
     )
     button.background.fillStyle(fillColor, 1)
-    button.background.lineStyle(4, strokeColor, 1)
+    button.background.lineStyle(button.isRestButton ? 3 : 4, strokeColor, 1)
     button.background.fillRoundedRect(left, top, button.width, button.height, CHOICE_BUTTON.radius)
     button.background.strokeRoundedRect(
       left,
@@ -753,7 +817,6 @@ export class LighthouseSelectScene extends Phaser.Scene {
   private refreshChoiceButtonStates(hoverState?: ChoiceButtonVisualState) {
     this.choiceButtons.forEach((button, index) => {
       if (!button.container.visible) return
-
       const state = button.disabled
         ? 'disabled'
         : index === this.focusedChoiceIndex
@@ -764,10 +827,12 @@ export class LighthouseSelectScene extends Phaser.Scene {
   }
 
   private moveChoiceFocus(direction: 1 | -1) {
-    if (this.choiceButtons.length === 0) return
-
-    const optionCount = childSpeechChoices.length
-    this.focusedChoiceIndex = Phaser.Math.Wrap(this.focusedChoiceIndex + direction, 0, optionCount)
+    if (this.activeChoices.length === 0) return
+    this.focusedChoiceIndex = Phaser.Math.Wrap(
+      this.focusedChoiceIndex + direction,
+      0,
+      this.activeChoices.length,
+    )
     this.refreshChoiceButtonStates()
   }
 
@@ -777,7 +842,13 @@ export class LighthouseSelectScene extends Phaser.Scene {
 
   private pressChoiceButton(index: number) {
     const button = this.choiceButtons[index]
-    if (!button || button.disabled || this.dialogPhase !== 'choosing') return
+    if (
+      !button ||
+      button.disabled ||
+      (this.dialogPhase !== 'choosing' && this.dialogPhase !== 'wave-meter')
+    ) {
+      return
+    }
 
     this.focusedChoiceIndex = index
     this.setChoiceButtonState(button, 'pressed')
@@ -805,13 +876,37 @@ export class LighthouseSelectScene extends Phaser.Scene {
     this.systemPrompt.text.setAlpha(0).setVisible(false)
   }
 
-  private handleChoiceSelected(choice: ChildSpeechChoice) {
-    if (!this.isDialogVisible || this.dialogPhase !== 'choosing') return
+  private handleChoiceSelected(choice: LighthouseEmotionChoice) {
+    if (
+      !this.isDialogVisible ||
+      (this.dialogPhase !== 'choosing' && this.dialogPhase !== 'wave-meter')
+    ) {
+      return
+    }
 
+    const wasWaveMeter = this.dialogPhase === 'wave-meter'
     this.clearReplyTimer()
     this.uiMode = 'SYSTEM_PROMPT'
     this.dialogPhase = 'selected'
-    this.selectedChildLine = choice.label
+    this.pendingChoice = choice
+
+    if (wasWaveMeter) {
+      this.selectedWaveMeterCard = waveMeterCards.find(card => card.id === choice.id)
+      this.markWaveMeterShownToday()
+    } else if (this.currentScene) {
+      this.selectedChoiceSceneCount += choice.id === globalRestTodayChoice.id ? 0 : 1
+      this.selectedChoiceEvents.push({
+        sessionId: this.sessionId,
+        sceneId: this.currentScene.id,
+        choiceId: choice.id,
+        timestamp: Date.now(),
+        emotionWeights: choice.emotionWeights,
+        intensity: choice.intensity,
+        concernFlags: choice.concernFlags ?? [],
+        protectiveFactors: choice.protectiveFactors ?? [],
+      })
+    }
+
     this.disableChoiceButtons()
     this.hideSystemPrompt()
     this.hideChoiceButtons()
@@ -824,22 +919,97 @@ export class LighthouseSelectScene extends Phaser.Scene {
   }
 
   private showYoungcheolReply() {
-    if (!this.isDialogVisible || this.dialogPhase !== 'selected') return
+    if (!this.isDialogVisible || this.dialogPhase !== 'selected' || !this.pendingChoice) return
 
     this.clearReplyTimer()
-    const choice = childSpeechChoices.find(option => option.label === this.selectedChildLine)
     this.uiMode = 'NPC_DIALOGUE'
     this.dialogPhase = 'reply'
     this.hideSystemPrompt()
-    setCenteredDialogText(this.dialog, choice?.reply ?? getYoungcheolReplyLine())
+    setCenteredDialogText(this.dialog, this.pendingChoice.npcResponse.join('\n'))
+  }
+
+  private continueAfterReply() {
+    const nextSceneId = this.pendingChoice?.followUpPromptId ?? null
+    if (!nextSceneId || this.selectedChoiceSceneCount >= LIGHTHOUSE_MAX_QUESTION_SCENES) {
+      this.maybeShowWaveMeterOrSummary()
+      return
+    }
+
+    this.loadEmotionScene(nextSceneId)
+  }
+
+  private maybeShowWaveMeterOrSummary() {
+    if (this.shouldShowWaveMeter()) {
+      this.showWaveMeter()
+      return
+    }
+
+    this.showChildFacingSummary()
+  }
+
+  private showWaveMeter() {
+    this.currentScene = null
+    this.pendingChoice = null
+    this.showPlayerChoice(waveMeterCards.map(createWaveMeterChoice), WAVE_METER_PROMPT)
+  }
+
+  private shouldShowWaveMeter() {
+    const enabled = import.meta.env.VITE_LIGHTHOUSE_ENABLE_WAVE_METER === 'true'
+    const gatedMode =
+      import.meta.env.VITE_LIGHTHOUSE_CAREGIVER_DEBUG === 'true' ||
+      import.meta.env.VITE_LIGHTHOUSE_RESEARCH_MODE === 'true'
+    return enabled && gatedMode && !this.wasWaveMeterShownToday()
+  }
+
+  private wasWaveMeterShownToday() {
+    try {
+      return window.localStorage.getItem(WAVE_METER_LAST_SHOWN_KEY) === getTodayKey()
+    } catch {
+      return true
+    }
+  }
+
+  private markWaveMeterShownToday() {
+    try {
+      window.localStorage.setItem(WAVE_METER_LAST_SHOWN_KEY, getTodayKey())
+    } catch {
+      // Ignore storage failures; the meter is optional and stores no child data.
+    }
+  }
+
+  private showChildFacingSummary() {
+    this.analysis = createEmotionCheckinAnalysis(
+      this.sessionId,
+      this.selectedChoiceEvents,
+      this.selectedWaveMeterCard,
+    )
+    this.updateCaregiverDebug()
+    this.uiMode = 'NPC_DIALOGUE'
+    this.dialogPhase = 'summary'
+    this.hideChoiceButtons()
+    this.hideSystemPrompt()
+    fadeSimpleDialog(this, this.dialog, 1, 120)
+    setCenteredDialogText(this.dialog, this.analysis.summary.childFacingReflection)
+  }
+
+  private updateCaregiverDebug() {
+    if (!this.caregiverDebugText || !this.analysis) return
+
+    this.caregiverDebugText.setText(
+      [
+        '보호자/전문가용 debug view',
+        '표시 내용은 진단이 아니라 관찰된 선택 경향입니다.',
+        `distressSignalLevel: ${this.analysis.summary.distressSignalLevel}`,
+        `topEmotions: ${this.analysis.summary.topEmotions.join(', ') || 'none'}`,
+        this.analysis.summary.caregiverFacingNote,
+      ].join('\n'),
+    )
   }
 
   private disableChoiceButtons() {
     this.choiceButtons.forEach(button => {
       button.disabled = true
-      if (button.container.visible) {
-        this.setChoiceButtonState(button, 'disabled')
-      }
+      if (button.container.visible) this.setChoiceButtonState(button, 'disabled')
     })
   }
 
@@ -847,6 +1017,10 @@ export class LighthouseSelectScene extends Phaser.Scene {
     this.choiceButtons.forEach(button => {
       button.container.setVisible(false).setAlpha(0)
     })
+  }
+
+  private hasRestButton() {
+    return this.activeChoices.some(choice => choice.id === globalRestTodayChoice.id)
   }
 
   private getChoiceButtonBounds(button: ChoiceButton) {
@@ -902,7 +1076,9 @@ export class LighthouseSelectScene extends Phaser.Scene {
     this.dialogDismissed = markDismissed
     this.uiMode = 'NPC_DIALOGUE'
     this.dialogPhase = 'closed'
-    this.selectedChildLine = ''
+    this.currentScene = null
+    this.activeChoices = []
+    this.pendingChoice = null
     setInteractionIconActive(this.talkIcon, false)
     this.hideChoiceButtons()
     this.hideSystemPrompt()
@@ -912,6 +1088,18 @@ export class LighthouseSelectScene extends Phaser.Scene {
   private clearReplyTimer() {
     this.replyTimer?.remove(false)
     this.replyTimer = undefined
+  }
+
+  private resetEmotionCheckinSession() {
+    this.sessionId = `lighthouse-emotion-${Date.now()}-${Math.random().toString(36).slice(2)}`
+    this.currentScene = null
+    this.activeChoices = []
+    this.pendingChoice = null
+    this.selectedChoiceEvents = []
+    this.selectedChoiceSceneCount = 0
+    this.selectedWaveMeterCard = undefined
+    this.analysis = null
+    this.caregiverDebugText?.setText('')
   }
 
   private returnToVillage() {
@@ -931,4 +1119,33 @@ export class LighthouseSelectScene extends Phaser.Scene {
       },
     })
   }
+}
+
+function createWaveMeterChoice(card: WaveMeterCard): LighthouseEmotionChoice {
+  return {
+    id: card.id,
+    text: card.text,
+    iconKey: card.iconKey,
+    emotionWeights:
+      card.distressSignalLevelHint === 'support_recommended'
+        ? { anxietyFear: 2 }
+        : card.distressSignalLevelHint === 'watch'
+          ? { anxietyFear: 1 }
+          : { hopeJoy: 1 },
+    intensity: card.distressSignalLevelHint === 'support_recommended' ? 2 : 0,
+    concernFlags:
+      card.distressSignalLevelHint === 'low' ? [] : [`wave_meter_${card.distressSignalLevelHint}`],
+    protectiveFactors: ['wave_meter_answered'],
+    npcResponse:
+      card.distressSignalLevelHint === 'support_recommended'
+        ? ['오늘 파도가 높게 느껴졌구나.']
+        : card.distressSignalLevelHint === 'watch'
+          ? ['오늘 파도가 조금 흔들렸구나.']
+          : ['오늘 파도가 잔잔했구나.'],
+    followUpPromptId: null,
+  }
+}
+
+function getTodayKey() {
+  return new Date().toISOString().slice(0, 10)
 }
