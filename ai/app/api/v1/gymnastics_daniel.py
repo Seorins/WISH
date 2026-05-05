@@ -22,9 +22,18 @@ from app.schemas.gymnastics import (
     DanielRightSideBendEvaluationRequest,
     DanielRightSideBendEvaluationResponse,
     DanielRightSideBendFeaturesResponse,
+    DanielStretchEvaluationRequest,
+    DanielStretchEvaluationResponse,
     DanielUpwardPressEvaluationRequest,
     DanielUpwardPressEvaluationResponse,
     DanielUpwardPressFeaturesResponse,
+)
+from app.services.gymnastics.constants import (
+    DANIEL_FORWARD_BEND_MOTION_NAME,
+    DANIEL_FORWARD_PRESS_MOTION_NAME,
+    DANIEL_LEFT_SIDE_BEND_MOTION_NAME,
+    DANIEL_RIGHT_SIDE_BEND_MOTION_NAME,
+    DANIEL_UPWARD_PRESS_MOTION_NAME,
 )
 from app.services.gymnastics.features.daniel_forward_bend_features import (
     extract_daniel_forward_bend_features,
@@ -443,3 +452,83 @@ def evaluate_daniel_right_side_bend(
             pelvis_depth_shift=features.pelvis_depth_shift,
         ),
     )
+
+
+_DANIEL_STRETCH_EVALUATION_SPECS = {
+    "daniel_forward_press": (
+        DANIEL_FORWARD_PRESS_MOTION_NAME,
+        DanielForwardPressEvaluationRequest,
+        evaluate_daniel_forward_press,
+    ),
+    "daniel_upward_press": (
+        DANIEL_UPWARD_PRESS_MOTION_NAME,
+        DanielUpwardPressEvaluationRequest,
+        evaluate_daniel_upward_press,
+    ),
+    "daniel_side_bend_left": (
+        DANIEL_LEFT_SIDE_BEND_MOTION_NAME,
+        DanielLeftSideBendEvaluationRequest,
+        evaluate_daniel_left_side_bend,
+    ),
+    "daniel_side_bend_right": (
+        DANIEL_RIGHT_SIDE_BEND_MOTION_NAME,
+        DanielRightSideBendEvaluationRequest,
+        evaluate_daniel_right_side_bend,
+    ),
+    "daniel_forward_bend": (
+        DANIEL_FORWARD_BEND_MOTION_NAME,
+        DanielForwardBendEvaluationRequest,
+        evaluate_daniel_forward_bend,
+    ),
+}
+
+
+def _to_integrated_daniel_response(
+    *,
+    motion_name: str,
+    result: (
+        DanielForwardPressEvaluationResponse
+        | DanielUpwardPressEvaluationResponse
+        | DanielLeftSideBendEvaluationResponse
+        | DanielRightSideBendEvaluationResponse
+        | DanielForwardBendEvaluationResponse
+    ),
+) -> DanielStretchEvaluationResponse:
+    baseline_left = getattr(result, "baseline_left_wrist_forward", None)
+    baseline_right = getattr(result, "baseline_right_wrist_forward", None)
+
+    return DanielStretchEvaluationResponse(
+        motion_id=result.motion_id,
+        motion_name=motion_name,
+        state=result.state,
+        accuracy=result.accuracy,
+        feedback=result.feedback,
+        tracking=result.tracking,
+        hold_duration_ms=result.hold_duration_ms,
+        hold_completed=result.hold_completed,
+        hold_last_timestamp_ms=result.hold_last_timestamp_ms,
+        reference_hip_x=result.reference_hip_x,
+        reference_hip_y=result.reference_hip_y,
+        reference_scale=result.reference_scale,
+        displayed_feedback_code=result.displayed_feedback_code,
+        displayed_feedback_text=result.displayed_feedback_text,
+        displayed_feedback_frames=result.displayed_feedback_frames,
+        candidate_feedback_code=result.candidate_feedback_code,
+        candidate_feedback_text=result.candidate_feedback_text,
+        candidate_feedback_streak=result.candidate_feedback_streak,
+        representative_feedback_totals=result.representative_feedback_totals or {},
+        representative_feedback_code=result.representative_feedback_code,
+        representative_feedback_text=result.representative_feedback_text,
+        representative_feedback_frames=result.representative_feedback_frames,
+        baseline_left_wrist_forward=baseline_left,
+        baseline_right_wrist_forward=baseline_right,
+        features=result.features.model_dump(),
+    )
+
+
+@router.post("/daniel/evaluate", response_model=DanielStretchEvaluationResponse)
+def evaluate_daniel_stretch(payload: DanielStretchEvaluationRequest) -> DanielStretchEvaluationResponse:
+    motion_name, request_model, handler = _DANIEL_STRETCH_EVALUATION_SPECS[payload.motion_id]
+    specific_payload = request_model.model_validate(payload.model_dump())
+    result = handler(specific_payload)
+    return _to_integrated_daniel_response(motion_name=motion_name, result=result)

@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException
 
 from app.api.v1.gymnastics_shared import logger
 from app.schemas.gymnastics import (
+    DanielStretchSummaryRequest,
     MarchSummaryRequest,
     MarchSummaryResponse,
     StretchMotionSummaryRequest,
@@ -120,6 +121,10 @@ _DANIEL_STRETCH_SUMMARY_SPECS = (
     ("daniel-forward-bend", "daniel_forward_bend", DANIEL_FORWARD_BEND_MOTION_NAME),
 )
 
+_DANIEL_STRETCH_MOTION_NAMES = {
+    motion_id: motion_name for _, motion_id, motion_name in _DANIEL_STRETCH_SUMMARY_SPECS
+}
+
 for route_segment, motion_id, motion_name in _DANIEL_STRETCH_SUMMARY_SPECS:
     endpoint = _build_stretch_summary_endpoint(motion_id=motion_id, motion_name=motion_name)
     endpoint.__name__ = f"summarize_{route_segment.replace('-', '_')}"
@@ -128,4 +133,13 @@ for route_segment, motion_id, motion_name in _DANIEL_STRETCH_SUMMARY_SPECS:
         endpoint,
         methods=["POST"],
         response_model=StretchMotionSummaryResponse,
+    )
+
+
+@router.post("/daniel/summary", response_model=StretchMotionSummaryResponse)
+def summarize_daniel_stretch(payload: DanielStretchSummaryRequest) -> StretchMotionSummaryResponse:
+    return _summarize_stretch_motion(
+        payload=payload,
+        motion_id=payload.motion_id,
+        motion_name=_DANIEL_STRETCH_MOTION_NAMES[payload.motion_id],
     )
