@@ -119,16 +119,17 @@ class DanielForwardBendEvaluator(BaseHoldEvaluator):
         )
         motion_tracking = self._resolve_motion_tracking(frame)
         knee_angle = lowest_knee_angle(features.left_knee_angle, features.right_knee_angle)
-        # In a forward bend, wrists often occlude knees/ankles. When knee landmarks
-        # disappear temporarily, treat the knee check as "unknown" instead of
-        # failing the whole pose. If knee angles are available, they still gate hold.
-        knee_condition_satisfied = knee_angle is None or knee_angle >= self.config.knee_bend_min_angle
+        # Entering hold should still require a visible knee angle so we do not
+        # accidentally accept a bent-knee posture as valid. Once the user is
+        # already holding the pose, temporary knee occlusion is tolerated.
+        knee_condition_satisfied = knee_angle is not None and knee_angle >= self.config.knee_bend_min_angle
+        can_keep_holding_without_knee_angle = previous_state == "holding" and knee_angle is None
         is_pose_valid = (
             motion_tracking == "tracking_ok"
             and features.forward_bend_angle >= self.config.forward_bend_threshold
             and features.wrist_drop is not None
             and features.wrist_drop >= self.config.wrist_drop_threshold
-            and knee_condition_satisfied
+            and (knee_condition_satisfied or can_keep_holding_without_knee_angle)
         )
         hold_progress = self._update_hold_progress(
             previous_state=previous_state,

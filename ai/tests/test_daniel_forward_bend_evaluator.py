@@ -169,7 +169,7 @@ def test_daniel_forward_bend_keeps_holding_when_knee_angle_is_temporarily_missin
     assert recovered_result.hold_duration_ms == 100
 
 
-def test_daniel_forward_bend_can_enter_holding_when_knees_are_occluded() -> None:
+def test_daniel_forward_bend_stays_idle_when_knees_are_occluded_before_hold() -> None:
     evaluator = DanielForwardBendEvaluator()
 
     baseline_result = evaluator.evaluate(
@@ -192,7 +192,7 @@ def test_daniel_forward_bend_can_enter_holding_when_knees_are_occluded() -> None
         hold_last_timestamp_ms=baseline_result.hold_last_timestamp_ms,
     )
 
-    assert holding_result.state == "holding"
+    assert holding_result.state == "idle"
     assert holding_result.tracking == "tracking_ok"
 
 
