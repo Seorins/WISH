@@ -1,12 +1,14 @@
 import { DashboardLayout } from '@/features/dashboard/components/DashboardLayout'
+import { HeaderBar } from '@/features/dashboard/components/HeaderBar'
+import { Sidebar } from '@/features/dashboard/components/Sidebar'
 import '@/features/dashboard/tokens.css'
 import styles from './DashboardPage.module.css'
 
 export function DashboardPage() {
   return (
     <DashboardLayout
-      sidebar={<div className={styles.placeholderSidebar}>Sidebar</div>}
-      header={<div className={styles.placeholderHeader}>Header</div>}
+      sidebar={<Sidebar />}
+      header={<HeaderBar />}
       movementCard={<div className={styles.placeholderTall}>Movement Progress</div>}
       insightPanel={
         <>
