@@ -206,3 +206,13 @@ export function ActivityIcon(props: IconProps) {
     </svg>
   )
 }
+
+export function LogoutIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M15 4h3.5A1.5 1.5 0 0 1 20 5.5v13a1.5 1.5 0 0 1-1.5 1.5H15" />
+      <path d="M10 8l-4 4 4 4" />
+      <path d="M6 12h11" />
+    </svg>
+  )
+}

@@ -129,6 +129,10 @@
   border: 2px solid var(--dash-color-surface);
 }
 
+.profileWrap {
+  position: relative;
+}
+
 .profile {
   display: flex;
   align-items: center;
@@ -143,6 +147,62 @@
 
 .profile:hover {
   box-shadow: var(--dash-shadow-soft);
+}
+
+.menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  padding: 6px;
+  border-radius: var(--dash-radius-pill);
+  background: var(--dash-color-surface);
+  border: 1px solid var(--dash-color-border);
+  box-shadow: 0 12px 32px rgba(60, 50, 120, 0.14);
+  z-index: 20;
+  animation: menuIn 0.12s ease-out;
+}
+
+@keyframes menuIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.menuItem {
+  appearance: none;
+  border: none;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: var(--dash-radius-pill);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--dash-color-text);
+  cursor: pointer;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
+}
+
+.menuItem:hover {
+  background: var(--dash-color-primary-50);
+  color: var(--dash-color-primary);
+}
+
+.menuItemIcon {
+  width: 16px;
+  height: 16px;
 }
 
 .avatar {
@@ -185,4 +245,9 @@
   width: 16px;
   height: 16px;
   margin-left: 2px;
+  transition: transform 0.15s ease;
+}
+
+.chevOpen {
+  transform: rotate(180deg);
 }
