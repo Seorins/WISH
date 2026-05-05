@@ -158,6 +158,30 @@ class MarchSummaryResponse(BaseModel):
     state: str
 
 
+class StretchMotionSummaryRequest(BaseModel):
+    started_at: datetime = Field(..., description="Motion start time in ISO 8601 format")
+    ended_at: datetime = Field(..., description="Motion end time in ISO 8601 format")
+    accuracy: float = Field(..., ge=0.0, le=1.0, description="Final accuracy score")
+    hold_completed: bool = Field(..., description="Whether the user reached the target hold time")
+    representative_feedback: str | None = Field(
+        default=None,
+        description="Representative corrective feedback for this motion",
+    )
+    tracking: str = Field(..., description="Final tracking quality status")
+    state: str = Field(..., description="Final evaluator state")
+
+
+class StretchMotionSummaryResponse(BaseModel):
+    motionId: str
+    motionName: str
+    durationSec: float
+    accuracy: float
+    holdCompleted: bool
+    representativeFeedback: str | None = None
+    tracking: str
+    state: str
+
+
 class StretchHoldEvaluationRequestBase(BaseModel):
     frame: PoseFrameRequest
     previous_state: str = Field(default="idle", description="Previous hold evaluator state")
