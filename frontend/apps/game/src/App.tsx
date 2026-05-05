@@ -3,6 +3,7 @@ import { createGame } from './phaser'
 import type Phaser from 'phaser'
 import DanielForwardPressDebugPage from './debug/DanielForwardPressDebugPage'
 import DanielLeftSideBendDebugPage from './debug/DanielLeftSideBendDebugPage'
+import DanielRightSideBendDebugPage from './debug/DanielRightSideBendDebugPage'
 import DanielUpwardPressDebugPage from './debug/DanielUpwardPressDebugPage'
 import DiagonalBodyPunchDebugPage from './debug/DiagonalBodyPunchDebugPage'
 import DiagonalFacePunchDebugPage from './debug/DiagonalFacePunchDebugPage'
@@ -20,6 +21,7 @@ const DEBUG_SQUAT_MODE = 'squat'
 const DEBUG_DANIEL_FORWARD_PRESS_MODE = 'daniel-forward-press'
 const DEBUG_DANIEL_UPWARD_PRESS_MODE = 'daniel-upward-press'
 const DEBUG_DANIEL_LEFT_SIDE_BEND_MODE = 'daniel-left-side-bend'
+const DEBUG_DANIEL_RIGHT_SIDE_BEND_MODE = 'daniel-right-side-bend'
 
 function App() {
   const params = new URLSearchParams(window.location.search)
@@ -37,7 +39,8 @@ function App() {
       debugMode === DEBUG_SQUAT_MODE ||
       debugMode === DEBUG_DANIEL_FORWARD_PRESS_MODE ||
       debugMode === DEBUG_DANIEL_UPWARD_PRESS_MODE ||
-      debugMode === DEBUG_DANIEL_LEFT_SIDE_BEND_MODE
+      debugMode === DEBUG_DANIEL_LEFT_SIDE_BEND_MODE ||
+      debugMode === DEBUG_DANIEL_RIGHT_SIDE_BEND_MODE
     ) {
       return
     }
@@ -99,6 +102,10 @@ function App() {
 
   if (debugMode === DEBUG_DANIEL_LEFT_SIDE_BEND_MODE) {
     return <DanielLeftSideBendDebugPage />
+  }
+
+  if (debugMode === DEBUG_DANIEL_RIGHT_SIDE_BEND_MODE) {
+    return <DanielRightSideBendDebugPage />
   }
 
   return (
