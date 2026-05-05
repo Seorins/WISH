@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -182,6 +183,19 @@ class StretchMotionSummaryResponse(BaseModel):
     state: str
 
 
+DanielStretchMotionId = Literal[
+    "daniel_forward_press",
+    "daniel_upward_press",
+    "daniel_side_bend_left",
+    "daniel_side_bend_right",
+    "daniel_forward_bend",
+]
+
+
+class DanielStretchSummaryRequest(StretchMotionSummaryRequest):
+    motion_id: DanielStretchMotionId = Field(..., description="Daniel stretch motion identifier")
+
+
 class StretchHoldEvaluationRequestBase(BaseModel):
     frame: PoseFrameRequest
     previous_state: str = Field(default="idle", description="Previous hold evaluator state")
@@ -337,6 +351,19 @@ class DanielForwardBendFeaturesResponse(BaseModel):
 
 class DanielForwardBendEvaluationResponse(StretchHoldEvaluationResponseBase):
     features: DanielForwardBendFeaturesResponse
+
+
+class DanielStretchEvaluationRequest(StretchHoldEvaluationRequestBase):
+    motion_id: DanielStretchMotionId = Field(..., description="Daniel stretch motion identifier")
+    baseline_left_wrist_forward: float | None = Field(default=None)
+    baseline_right_wrist_forward: float | None = Field(default=None)
+
+
+class DanielStretchEvaluationResponse(StretchHoldEvaluationResponseBase):
+    motion_name: str
+    baseline_left_wrist_forward: float | None = None
+    baseline_right_wrist_forward: float | None = None
+    features: dict[str, float | int | None]
 
 
 class SideStepEvaluationRequest(BaseModel):
