@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { HeaderBar } from '@/features/dashboard/components/HeaderBar'
 import { ChevronLeftIcon } from '@/features/dashboard/components/icons'
@@ -10,6 +10,67 @@ import styles from './ROMDetailPage.module.css'
 
 export function ROMDetailPage() {
   const [activeId, setActiveId] = useState<JointId>('shoulder')
+  const isProgrammaticScrollRef = useRef(false)
+  const programmaticScrollTimerRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    const panels = JOINT_ROM_DETAILS.map(j =>
+      document.getElementById(`joint-panel-${j.id}`),
+    ).filter((el): el is HTMLElement => Boolean(el))
+    if (panels.length === 0) return
+
+    let rafId = 0
+    const updateActive = () => {
+      if (isProgrammaticScrollRef.current) return
+      // 뷰포트 중앙선과 가장 가까운 패널을 활성으로
+      const center = window.innerHeight * 0.45
+      let bestId: JointId | null = null
+      let bestDistance = Infinity
+      for (const panel of panels) {
+        const rect = panel.getBoundingClientRect()
+        const panelCenter = rect.top + rect.height / 2
+        const distance = Math.abs(panelCenter - center)
+        if (distance < bestDistance) {
+          bestDistance = distance
+          bestId = panel.getAttribute('data-joint-id') as JointId | null
+        }
+      }
+      if (bestId) {
+        setActiveId(prev => (prev === bestId ? prev : bestId))
+      }
+    }
+
+    const onScroll = () => {
+      if (rafId) return
+      rafId = window.requestAnimationFrame(() => {
+        rafId = 0
+        updateActive()
+      })
+    }
+
+    updateActive()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    window.addEventListener('resize', onScroll)
+    return () => {
+      window.removeEventListener('scroll', onScroll)
+      window.removeEventListener('resize', onScroll)
+      if (rafId) window.cancelAnimationFrame(rafId)
+    }
+  }, [])
+
+  const handleSelect = useCallback((id: JointId) => {
+    setActiveId(id)
+    const target = document.getElementById(`joint-panel-${id}`)
+    if (!target) return
+    isProgrammaticScrollRef.current = true
+    target.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    if (programmaticScrollTimerRef.current !== null) {
+      window.clearTimeout(programmaticScrollTimerRef.current)
+    }
+    programmaticScrollTimerRef.current = window.setTimeout(() => {
+      isProgrammaticScrollRef.current = false
+    }, 700)
+  }, [])
 
   return (
     <div className={styles.shell}>
@@ -27,7 +88,7 @@ export function ROMDetailPage() {
               </Link>
             </header>
             <div className={styles.stepNavSlot}>
-              <JointStepNav activeId={activeId} onSelect={setActiveId} />
+              <JointStepNav activeId={activeId} onSelect={handleSelect} />
             </div>
             <div className={styles.characterSlot}>
               <div className={styles.characterPlaceholder} aria-hidden>
