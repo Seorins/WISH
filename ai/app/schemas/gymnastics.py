@@ -48,6 +48,13 @@ class NormalizedPoseResponse(BaseModel):
     landmarks: list[NormalizedLandmarkResponse]
 
 
+class FeedbackTtsResponse(BaseModel):
+    should_play: bool = False
+    key: str | None = None
+    text: str | None = None
+    priority: Literal["tracking", "posture"] | None = None
+
+
 class MarchEvaluationRequest(BaseModel):
     frame: PoseFrameRequest
     previous_state: str = Field(default="idle", description="Previous evaluator state")
@@ -132,6 +139,7 @@ class MarchEvaluationResponse(BaseModel):
     representative_feedback_code: str | None = None
     representative_feedback_text: str | None = None
     representative_feedback_frames: int = 0
+    tts: FeedbackTtsResponse = Field(default_factory=FeedbackTtsResponse)
     normalized_pose: NormalizedPoseResponse | None = None
     features: MarchFeaturesResponse
 
@@ -252,6 +260,7 @@ class StretchHoldEvaluationResponseBase(BaseModel):
     representative_feedback_code: str | None = None
     representative_feedback_text: str | None = None
     representative_feedback_frames: int = 0
+    tts: FeedbackTtsResponse = Field(default_factory=FeedbackTtsResponse)
     normalized_pose: NormalizedPoseResponse | None = None
 
 
@@ -432,6 +441,7 @@ class SideStepEvaluationResponse(BaseModel):
     baseline_left_step_extent: float | None = None
     baseline_right_step_extent: float | None = None
     baseline_ankle_span: float | None = None
+    tts: FeedbackTtsResponse = Field(default_factory=FeedbackTtsResponse)
     normalized_pose: NormalizedPoseResponse | None = None
     features: SideStepFeaturesResponse
 
@@ -504,6 +514,7 @@ class DiagonalBodyPunchEvaluationResponse(BaseModel):
     baseline_left_wrist_forward: float | None = None
     baseline_right_wrist_forward: float | None = None
     baseline_stance_span: float | None = None
+    tts: FeedbackTtsResponse = Field(default_factory=FeedbackTtsResponse)
     normalized_pose: NormalizedPoseResponse | None = None
     features: DiagonalBodyPunchFeaturesResponse
 
@@ -578,6 +589,7 @@ class DiagonalFacePunchEvaluationResponse(BaseModel):
     baseline_left_wrist_forward: float | None = None
     baseline_right_wrist_forward: float | None = None
     baseline_stance_span: float | None = None
+    tts: FeedbackTtsResponse = Field(default_factory=FeedbackTtsResponse)
     normalized_pose: NormalizedPoseResponse | None = None
     features: DiagonalFacePunchFeaturesResponse
 
@@ -632,5 +644,6 @@ class SquatEvaluationResponse(BaseModel):
     representative_feedback_code: str | None = None
     representative_feedback_text: str | None = None
     representative_feedback_frames: int = 0
+    tts: FeedbackTtsResponse = Field(default_factory=FeedbackTtsResponse)
     normalized_pose: NormalizedPoseResponse | None = None
     features: SquatFeaturesResponse
