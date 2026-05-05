@@ -1,7 +1,7 @@
 import { Suspense, useCallback, useEffect, useRef, useState, type ComponentRef } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
 import { Html, OrbitControls, useGLTF } from '@react-three/drei'
-import { Vector3, type Group, type Object3D } from 'three'
+import { Vector3, type Group } from 'three'
 import wishGlbUrl from '@/assets/wish.glb?url'
 import { MinusIcon, PersonIcon, PlusIcon, RefreshIcon } from './icons'
 import styles from './Character3D.module.css'
@@ -13,19 +13,20 @@ const MODEL_OFFSET_Y = -0.95
 
 type Joint = { id: string; position: [number, number, number] }
 
+// 좌표는 모델 group 기준 (local). 본 추출 실패 시 fallback.
 const FALLBACK_JOINTS: Joint[] = [
-  { id: 'shoulder-l', position: [-0.18, 0.35, 0.06] },
-  { id: 'shoulder-r', position: [0.18, 0.35, 0.06] },
-  { id: 'elbow-l', position: [-0.22, 0.05, 0.05] },
-  { id: 'elbow-r', position: [0.22, 0.05, 0.05] },
-  { id: 'wrist-l', position: [-0.24, -0.25, 0.05] },
-  { id: 'wrist-r', position: [0.24, -0.25, 0.05] },
-  { id: 'hip-l', position: [-0.1, -0.15, 0.06] },
-  { id: 'hip-r', position: [0.1, -0.15, 0.06] },
-  { id: 'knee-l', position: [-0.1, -0.55, 0.06] },
-  { id: 'knee-r', position: [0.1, -0.55, 0.06] },
-  { id: 'ankle-l', position: [-0.1, -0.9, 0.06] },
-  { id: 'ankle-r', position: [0.1, -0.9, 0.06] },
+  { id: 'shoulder-l', position: [-0.18, 1.3, 0.06] },
+  { id: 'shoulder-r', position: [0.18, 1.3, 0.06] },
+  { id: 'elbow-l', position: [-0.22, 1.0, 0.05] },
+  { id: 'elbow-r', position: [0.22, 1.0, 0.05] },
+  { id: 'wrist-l', position: [-0.24, 0.7, 0.05] },
+  { id: 'wrist-r', position: [0.24, 0.7, 0.05] },
+  { id: 'hip-l', position: [-0.1, 0.8, 0.06] },
+  { id: 'hip-r', position: [0.1, 0.8, 0.06] },
+  { id: 'knee-l', position: [-0.1, 0.4, 0.06] },
+  { id: 'knee-r', position: [0.1, 0.4, 0.06] },
+  { id: 'ankle-l', position: [-0.1, 0.05, 0.06] },
+  { id: 'ankle-r', position: [0.1, 0.05, 0.06] },
 ]
 
 function classifyBone(rawName: string): string | null {
@@ -35,7 +36,6 @@ function classifyBone(rawName: string): string | null {
   const side = isLeft ? 'l' : isRight ? 'r' : null
   if (!side) return null
 
-  // Mixamo-style mapping. Order matters — check most specific suffixes first.
   if (n.includes('forearm')) return `elbow-${side}`
   if (n.includes('upleg') || n.includes('thigh')) return `hip-${side}`
   if (n.endsWith('toebase') || n.includes('toe')) return null
@@ -47,29 +47,16 @@ function classifyBone(rawName: string): string | null {
   if (n.includes('knee') || n.includes('shin') || n.includes('calf')) return `knee-${side}`
   if (n.includes('elbow')) return `elbow-${side}`
   if (n.includes('wrist')) return `wrist-${side}`
-  if (/(?<!hip\W*)hip\b/.test(n)) return `hip-${side}`
   return null
-}
-
-function extractJoints(scene: Object3D): Joint[] {
-  scene.updateMatrixWorld(true)
-  const found = new Map<string, [number, number, number]>()
-  scene.traverse(obj => {
-    if (!obj.name) return
-    const id = classifyBone(obj.name)
-    if (!id || found.has(id)) return
-    const wp = new Vector3()
-    obj.getWorldPosition(wp)
-    found.set(id, [wp.x, wp.y, wp.z])
-  })
-  return Array.from(found, ([id, position]) => ({ id, position }))
 }
 
 function CharacterModel({
   targetScale,
+  joints,
   onJoints,
 }: {
   targetScale: number
+  joints: Joint[]
   onJoints: (joints: Joint[]) => void
 }) {
   const { scene } = useGLTF(wishGlbUrl)
@@ -79,7 +66,19 @@ function CharacterModel({
     const group = groupRef.current
     if (!group) return
     group.updateMatrixWorld(true)
-    onJoints(extractJoints(group))
+    const found = new Map<string, [number, number, number]>()
+    const tmp = new Vector3()
+    scene.traverse(obj => {
+      if (!obj.name) return
+      const id = classifyBone(obj.name)
+      if (!id || found.has(id)) return
+      obj.getWorldPosition(tmp)
+      group.worldToLocal(tmp)
+      found.set(id, [tmp.x, tmp.y, tmp.z])
+    })
+    if (found.size > 0) {
+      onJoints(Array.from(found, ([id, position]) => ({ id, position })))
+    }
   }, [scene, onJoints])
 
   useFrame(() => {
@@ -92,19 +91,12 @@ function CharacterModel({
   return (
     <group ref={groupRef} position={[0, MODEL_OFFSET_Y, 0]} scale={BASE_SCALE}>
       <primitive object={scene} />
-    </group>
-  )
-}
-
-function JointMarkers({ joints }: { joints: Joint[] }) {
-  return (
-    <>
       {joints.map(j => (
         <Html key={j.id} position={j.position} center zIndexRange={[40, 0]}>
           <div className={styles.marker} aria-hidden />
         </Html>
       ))}
-    </>
+    </group>
   )
 }
 
@@ -132,8 +124,7 @@ export function Character3D() {
           <directionalLight position={[2, 4, 3]} intensity={0.9} />
           <directionalLight position={[-3, 2, -2]} intensity={0.35} color="#c8b6ff" />
           <Suspense fallback={null}>
-            <CharacterModel targetScale={targetScale} onJoints={handleJoints} />
-            <JointMarkers joints={joints} />
+            <CharacterModel targetScale={targetScale} joints={joints} onJoints={handleJoints} />
           </Suspense>
           <OrbitControls
             ref={controlsRef}
