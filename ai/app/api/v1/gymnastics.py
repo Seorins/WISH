@@ -267,7 +267,10 @@ def evaluate_daniel_upward_press(
         )
     except ValueError as exc:
         logger.warning("Invalid daniel-upward-press evaluation request: %s", exc)
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid daniel-upward-press evaluation request",
+        ) from exc
     except Exception:
         logger.exception("Unexpected error while evaluating daniel-upward-press motion")
         raise HTTPException(status_code=500, detail="Failed to evaluate daniel-upward-press motion")

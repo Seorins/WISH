@@ -206,28 +206,42 @@ class DanielUpwardPressEvaluator(BaseHoldEvaluator):
             else self.config.height_balance_threshold
         )
 
-        height_score = min(
-            wrist_height_value / max(self.config.height_threshold, 1e-6),
-            1.0,
-        )
-        arm_score = min(
-            (mean_elbow_angle or 0.0) / max(self.config.arm_straight_threshold, 1.0),
-            1.0,
-        )
-        balance_score = max(
-            1.0 - wrist_balance_value / max(self.config.height_balance_threshold, 1e-6),
-            0.0,
-        )
-        torso_score = max(
-            1.0 - features.torso_tilt / max(self.config.torso_tilt_max, 1.0),
-            0.0,
-        )
-        accuracy = (
-            height_score * 0.40
-            + arm_score * 0.25
-            + balance_score * 0.20
-            + torso_score * 0.15
-        )
+        scores: list[tuple[float, float]] = [
+            (
+                min(
+                    wrist_height_value / max(self.config.height_threshold, 1e-6),
+                    1.0,
+                ),
+                0.40,
+            ),
+            (
+                max(
+                    1.0 - wrist_balance_value / max(self.config.height_balance_threshold, 1e-6),
+                    0.0,
+                ),
+                0.20,
+            ),
+            (
+                max(
+                    1.0 - features.torso_tilt / max(self.config.torso_tilt_max, 1.0),
+                    0.0,
+                ),
+                0.15,
+            ),
+        ]
+        if mean_elbow_angle is not None:
+            scores.append(
+                (
+                    min(
+                        mean_elbow_angle / max(self.config.arm_straight_threshold, 1.0),
+                        1.0,
+                    ),
+                    0.25,
+                )
+            )
+
+        total_weight = sum(weight for _, weight in scores) or 1.0
+        accuracy = sum(score * weight for score, weight in scores) / total_weight
         return round(max(min(accuracy, 1.0), 0.0), 2)
 
     def _stabilize_feedback(
