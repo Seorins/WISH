@@ -3,6 +3,9 @@ from dataclasses import dataclass
 from app.services.gymnastics.feedback.common import FeedbackCandidate, TRACKING_LOW
 
 
+DANIEL_STABILIZER_ALLOWED_STATES = frozenset({"idle", "holding", "complete"})
+
+
 @dataclass(slots=True)
 class FeedbackStabilizerState:
     displayed_code: str | None
@@ -81,6 +84,12 @@ def stabilize_daniel_feedback(
     clear_frames: int,
     suppress_candidate: bool = False,
 ) -> FeedbackStabilizerState:
+    if motion_state not in DANIEL_STABILIZER_ALLOWED_STATES:
+        raise ValueError(
+            f"Unsupported daniel feedback motion_state: {motion_state!r}. "
+            f"Expected one of {sorted(DANIEL_STABILIZER_ALLOWED_STATES)}."
+        )
+
     if suppress_candidate:
         return clear_feedback_state()
 

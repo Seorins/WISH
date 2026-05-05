@@ -282,6 +282,9 @@ class DanielForwardPressEvaluator(BaseHoldEvaluator):
         suppress_candidate: bool,
     ) -> FeedbackStabilizerState:
         candidate = None
+        # Baseline을 캡처하는 프레임에서는 아직 "기준 자세를 잡는 중"이라
+        # 교정 피드백을 띄우지 않는다. 그렇지 않으면 시작 직후 자세가 틀린 것처럼
+        # 보이는 피드백이 잠깐 뜰 수 있다.
         if not suppress_candidate:
             candidate = select_daniel_forward_press_feedback_candidate(
                 state=state,
