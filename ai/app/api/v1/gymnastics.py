@@ -6,6 +6,9 @@ from app.schemas.gymnastics import (
     DanielForwardPressEvaluationRequest,
     DanielForwardPressEvaluationResponse,
     DanielForwardPressFeaturesResponse,
+    DanielLeftSideBendEvaluationRequest,
+    DanielLeftSideBendEvaluationResponse,
+    DanielLeftSideBendFeaturesResponse,
     DanielUpwardPressEvaluationRequest,
     DanielUpwardPressEvaluationResponse,
     DanielUpwardPressFeaturesResponse,
@@ -32,6 +35,7 @@ from app.schemas.gymnastics import (
     SquatFeaturesResponse,
 )
 from app.services.gymnastics.evaluators.daniel_forward_press import DanielForwardPressEvaluator
+from app.services.gymnastics.evaluators.daniel_left_side_bend import DanielLeftSideBendEvaluator
 from app.services.gymnastics.evaluators.daniel_upward_press import DanielUpwardPressEvaluator
 from app.services.gymnastics.evaluators.march import MarchEvaluator
 from app.services.gymnastics.evaluators.side_step import SideStepEvaluator
@@ -40,6 +44,9 @@ from app.services.gymnastics.evaluators.diagonal_face_punch import DiagonalFaceP
 from app.services.gymnastics.evaluators.squat import SquatEvaluator
 from app.services.gymnastics.features.daniel_forward_press_features import (
     extract_daniel_forward_press_features,
+)
+from app.services.gymnastics.features.daniel_left_side_bend_features import (
+    extract_daniel_left_side_bend_features,
 )
 from app.services.gymnastics.features.daniel_upward_press_features import (
     extract_daniel_upward_press_features,
@@ -60,6 +67,7 @@ normalizer = PoseNormalizer()
 march_evaluator = MarchEvaluator()
 daniel_forward_press_evaluator = DanielForwardPressEvaluator()
 daniel_upward_press_evaluator = DanielUpwardPressEvaluator()
+daniel_left_side_bend_evaluator = DanielLeftSideBendEvaluator()
 side_step_evaluator = SideStepEvaluator()
 diagonal_body_punch_evaluator = DiagonalBodyPunchEvaluator()
 diagonal_face_punch_evaluator = DiagonalFacePunchEvaluator()
@@ -303,6 +311,84 @@ def evaluate_daniel_upward_press(
             left_elbow_angle=features.left_elbow_angle,
             right_elbow_angle=features.right_elbow_angle,
             torso_tilt=features.torso_tilt,
+            pelvis_shift_x=features.pelvis_shift_x,
+            pelvis_shift_y=features.pelvis_shift_y,
+            pelvis_depth_shift=features.pelvis_depth_shift,
+        ),
+    )
+
+
+@router.post("/daniel-left-side-bend/evaluate", response_model=DanielLeftSideBendEvaluationResponse)
+def evaluate_daniel_left_side_bend(
+    payload: DanielLeftSideBendEvaluationRequest,
+) -> DanielLeftSideBendEvaluationResponse:
+    try:
+        normalized = normalizer.normalize(payload.frame)
+        result = daniel_left_side_bend_evaluator.evaluate(
+            frame=normalized,
+            previous_state=payload.previous_state,
+            step_count=0,
+            target_steps=1,
+            reference_hip_x=payload.reference_hip_x,
+            reference_hip_y=payload.reference_hip_y,
+            reference_scale=payload.reference_scale,
+            displayed_feedback_code=payload.displayed_feedback_code,
+            displayed_feedback_text=payload.displayed_feedback_text,
+            displayed_feedback_frames=payload.displayed_feedback_frames,
+            candidate_feedback_code=payload.candidate_feedback_code,
+            candidate_feedback_text=payload.candidate_feedback_text,
+            candidate_feedback_streak=payload.candidate_feedback_streak,
+            representative_feedback_totals=payload.representative_feedback_totals,
+            representative_feedback_code=payload.representative_feedback_code,
+            representative_feedback_text=payload.representative_feedback_text,
+            representative_feedback_frames=payload.representative_feedback_frames,
+            target_hold_ms=payload.target_hold_ms,
+            hold_duration_ms=payload.hold_duration_ms,
+            hold_last_timestamp_ms=payload.hold_last_timestamp_ms,
+        )
+        features = extract_daniel_left_side_bend_features(
+            normalized,
+            reference_hip_x=result.reference_hip_x,
+            reference_hip_y=result.reference_hip_y,
+            reference_scale=result.reference_scale,
+        )
+    except ValueError as exc:
+        logger.warning("Invalid daniel-left-side-bend evaluation request: %s", exc)
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid daniel-left-side-bend evaluation request",
+        ) from exc
+    except Exception:
+        logger.exception("Unexpected error while evaluating daniel-left-side-bend motion")
+        raise HTTPException(status_code=500, detail="Failed to evaluate daniel-left-side-bend motion")
+
+    return DanielLeftSideBendEvaluationResponse(
+        motion_id=result.motion_id,
+        state=result.state,
+        accuracy=result.accuracy,
+        feedback=result.feedback,
+        tracking=result.tracking,
+        hold_duration_ms=result.hold_duration_ms,
+        hold_completed=result.hold_completed,
+        hold_last_timestamp_ms=result.hold_last_timestamp_ms,
+        reference_hip_x=result.reference_hip_x,
+        reference_hip_y=result.reference_hip_y,
+        reference_scale=result.reference_scale,
+        displayed_feedback_code=result.displayed_feedback_code,
+        displayed_feedback_text=result.displayed_feedback_text,
+        displayed_feedback_frames=result.displayed_feedback_frames,
+        candidate_feedback_code=result.candidate_feedback_code,
+        candidate_feedback_text=result.candidate_feedback_text,
+        candidate_feedback_streak=result.candidate_feedback_streak,
+        representative_feedback_totals=result.representative_feedback_totals or {},
+        representative_feedback_code=result.representative_feedback_code,
+        representative_feedback_text=result.representative_feedback_text,
+        representative_feedback_frames=result.representative_feedback_frames,
+        features=DanielLeftSideBendFeaturesResponse(
+            torso_tilt=features.torso_tilt,
+            wrist_height=features.wrist_height,
+            left_elbow_angle=features.left_elbow_angle,
+            right_elbow_angle=features.right_elbow_angle,
             pelvis_shift_x=features.pelvis_shift_x,
             pelvis_shift_y=features.pelvis_shift_y,
             pelvis_depth_shift=features.pelvis_depth_shift,
