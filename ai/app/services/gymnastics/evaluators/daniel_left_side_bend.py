@@ -121,13 +121,14 @@ class DanielLeftSideBendEvaluator(BaseHoldEvaluator):
             features.left_elbow_angle,
             features.right_elbow_angle,
         )
+        arm_condition_satisfied = mean_elbow_angle is not None and mean_elbow_angle >= self.config.arm_straight_threshold
+        can_keep_holding_without_arm_angle = previous_state == "holding" and mean_elbow_angle is None
         is_pose_valid = (
             frame.tracking == "tracking_ok"
             and features.torso_tilt >= self.config.tilt_threshold
             and features.wrist_height is not None
             and features.wrist_height >= self.config.wrist_height_threshold
-            and mean_elbow_angle is not None
-            and mean_elbow_angle >= self.config.arm_straight_threshold
+            and (arm_condition_satisfied or can_keep_holding_without_arm_angle)
         )
         hold_progress = self._update_hold_progress(
             previous_state=previous_state,

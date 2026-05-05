@@ -106,6 +106,46 @@ def test_daniel_left_side_bend_sets_keep_hands_overhead_candidate_when_hands_are
     assert low_hand_result.candidate_feedback_code == "KEEP_HANDS_OVERHEAD"
 
 
+def test_daniel_left_side_bend_keeps_holding_when_elbow_angle_is_temporarily_missing() -> None:
+    evaluator = DanielLeftSideBendEvaluator()
+
+    baseline_result = evaluator.evaluate(
+        frame=build_left_side_bend_frame(timestamp_ms=0, pose="neutral"),
+        previous_state="idle",
+        step_count=0,
+        target_steps=1,
+        target_hold_ms=300,
+    )
+    holding_result = evaluator.evaluate(
+        frame=build_left_side_bend_frame(timestamp_ms=100, pose="left_bend"),
+        previous_state=baseline_result.state,
+        step_count=0,
+        target_steps=1,
+        reference_hip_x=baseline_result.reference_hip_x,
+        reference_hip_y=baseline_result.reference_hip_y,
+        reference_scale=baseline_result.reference_scale,
+        target_hold_ms=300,
+        hold_duration_ms=baseline_result.hold_duration_ms,
+        hold_last_timestamp_ms=baseline_result.hold_last_timestamp_ms,
+    )
+    recovered_result = evaluator.evaluate(
+        frame=build_left_side_bend_frame(timestamp_ms=200, pose="left_bend_missing_elbows"),
+        previous_state=holding_result.state,
+        step_count=0,
+        target_steps=1,
+        reference_hip_x=holding_result.reference_hip_x,
+        reference_hip_y=holding_result.reference_hip_y,
+        reference_scale=holding_result.reference_scale,
+        target_hold_ms=300,
+        hold_duration_ms=holding_result.hold_duration_ms,
+        hold_last_timestamp_ms=holding_result.hold_last_timestamp_ms,
+    )
+
+    assert holding_result.state == "holding"
+    assert recovered_result.state == "holding"
+    assert recovered_result.hold_duration_ms == 100
+
+
 def build_left_side_bend_frame(
     *,
     timestamp_ms: int,
@@ -146,6 +186,13 @@ def build_left_side_bend_frame(
             "RIGHT_ELBOW": landmark("RIGHT_ELBOW", 0.08, -1.40, 0.02),
             "LEFT_WRIST": landmark("LEFT_WRIST", -0.58, -1.48, 0.03),
             "RIGHT_WRIST": landmark("RIGHT_WRIST", 0.18, -1.52, 0.03),
+        }
+    elif pose == "left_bend_missing_elbows":
+        landmarks = {
+            "LEFT_SHOULDER": landmark("LEFT_SHOULDER", -0.92, -1.06, 0.0),
+            "RIGHT_SHOULDER": landmark("RIGHT_SHOULDER", -0.02, -1.16, 0.0),
+            "LEFT_WRIST": landmark("LEFT_WRIST", -0.58, -1.92, 0.03),
+            "RIGHT_WRIST": landmark("RIGHT_WRIST", 0.18, -1.96, 0.03),
         }
     else:
         raise ValueError(f"Unsupported pose fixture: {pose}")
