@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { MOVEMENTS, type SessionView } from '../data/mock'
+import { MOVEMENTS } from '../data/mock'
 import { MOTION_CLIPS } from '../data/motionClips'
 import { Character3D } from './Character3D'
 import { ChevronDownIcon } from './icons'
@@ -9,7 +9,6 @@ import styles from './MovementProgressCard.module.css'
 const COLLAPSED_COUNT = 3
 
 export function MovementProgressCard() {
-  const [session, setSession] = useState<SessionView>('current')
   const [expanded, setExpanded] = useState(false)
   const [activeMotionId, setActiveMotionId] = useState<string | null>(null)
 
@@ -31,22 +30,7 @@ export function MovementProgressCard() {
   return (
     <article className={styles.card}>
       <div className={styles.sessionToggle}>
-        <div className={styles.toggleInner}>
-          <button
-            type="button"
-            className={`${styles.toggleBtn} ${session === 'current' ? styles.toggleBtnActive : ''}`}
-            onClick={() => setSession('current')}
-          >
-            현재 세션
-          </button>
-          <button
-            type="button"
-            className={`${styles.toggleBtn} ${session === 'previous' ? styles.toggleBtnActive : ''}`}
-            onClick={() => setSession('previous')}
-          >
-            이전 세션
-          </button>
-        </div>
+        <span className={styles.sessionLabel}>오늘 수행 동작</span>
       </div>
 
       <div className={styles.leftCol}>
