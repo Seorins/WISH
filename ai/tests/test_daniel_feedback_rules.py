@@ -51,6 +51,24 @@ def test_forward_press_uses_generic_arm_feedback_in_idle() -> None:
     assert candidate == STRAIGHTEN_ARMS
 
 
+def test_forward_press_requests_more_push_when_only_wrist_extension_is_short() -> None:
+    candidate = select_daniel_forward_press_feedback_candidate(
+        state="idle",
+        tracking="tracking_ok",
+        wrist_forward=0.7,
+        wrist_extension=0.04,
+        left_elbow_angle=170.0,
+        right_elbow_angle=168.0,
+        torso_tilt=2.0,
+        forward_threshold=0.5,
+        wrist_extension_threshold=0.05,
+        arm_straight_threshold=150.0,
+        torso_tilt_max=10.0,
+    )
+
+    assert candidate == PRESS_HANDS_FORWARD
+
+
 def test_forward_press_does_not_treat_missing_elbows_as_zero_angle() -> None:
     candidate = select_daniel_forward_press_feedback_candidate(
         state="idle",

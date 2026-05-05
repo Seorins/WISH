@@ -35,13 +35,13 @@ type DanielForwardPressApiResponse = {
   baseline_left_wrist_forward: number | null
   baseline_right_wrist_forward: number | null
   features: {
-    wrist_forward: number
-    wrist_extension: number
-    left_wrist_forward: number
-    right_wrist_forward: number
-    wrist_gap: number
-    wrist_height_error: number
-    wrist_shoulder_offset: number
+    wrist_forward: number | null
+    wrist_extension: number | null
+    left_wrist_forward: number | null
+    right_wrist_forward: number | null
+    wrist_gap: number | null
+    wrist_height_error: number | null
+    wrist_shoulder_offset: number | null
     left_elbow_angle: number | null
     right_elbow_angle: number | null
     torso_tilt: number

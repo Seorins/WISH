@@ -148,6 +148,23 @@ def test_daniel_forward_press_does_not_hold_when_hands_cover_face() -> None:
     assert face_cover_result.state == "idle"
 
 
+def test_daniel_forward_press_recaptures_both_baselines_when_only_one_is_missing() -> None:
+    evaluator = DanielForwardPressEvaluator()
+
+    result = evaluator.evaluate(
+        frame=build_forward_press_frame(timestamp_ms=100, pose="neutral"),
+        previous_state="idle",
+        step_count=0,
+        target_steps=1,
+        baseline_left_wrist_forward=None,
+        baseline_right_wrist_forward=0.123,
+    )
+
+    assert result.state == "idle"
+    assert result.baseline_left_wrist_forward is not None
+    assert result.baseline_right_wrist_forward is not None
+
+
 def build_forward_press_frame(
     *,
     timestamp_ms: int,

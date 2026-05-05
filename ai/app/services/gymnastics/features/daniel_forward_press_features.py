@@ -15,20 +15,18 @@ from app.services.gymnastics.constants import (
 )
 from app.services.gymnastics.types import NormalizedLandmark, NormalizedPoseFrame
 
-UNAVAILABLE_FEATURE_VALUE = 999.0
-
 
 @dataclass(slots=True)
 class DanielForwardPressFeatureSet:
-    wrist_forward: float
-    wrist_extension: float
-    left_wrist_forward: float
-    right_wrist_forward: float
-    wrist_gap: float
-    wrist_height_error: float
-    wrist_shoulder_offset: float
-    raw_left_wrist_forward: float
-    raw_right_wrist_forward: float
+    wrist_forward: float | None
+    wrist_extension: float | None
+    left_wrist_forward: float | None
+    right_wrist_forward: float | None
+    wrist_gap: float | None
+    wrist_height_error: float | None
+    wrist_shoulder_offset: float | None
+    raw_left_wrist_forward: float | None
+    raw_right_wrist_forward: float | None
     left_elbow_angle: float | None
     right_elbow_angle: float | None
     torso_tilt: float
@@ -64,9 +62,21 @@ def extract_daniel_forward_press_features(
         else baseline_right_wrist_forward
     )
 
-    left_wrist_forward = abs(raw_left_wrist_forward - effective_left_baseline)
-    right_wrist_forward = abs(raw_right_wrist_forward - effective_right_baseline)
-    wrist_forward = min(left_wrist_forward, right_wrist_forward)
+    left_wrist_forward = (
+        abs(raw_left_wrist_forward - effective_left_baseline)
+        if raw_left_wrist_forward is not None and effective_left_baseline is not None
+        else None
+    )
+    right_wrist_forward = (
+        abs(raw_right_wrist_forward - effective_right_baseline)
+        if raw_right_wrist_forward is not None and effective_right_baseline is not None
+        else None
+    )
+    wrist_forward = (
+        min(left_wrist_forward, right_wrist_forward)
+        if left_wrist_forward is not None and right_wrist_forward is not None
+        else None
+    )
     wrist_extension = _compute_wrist_extension(frame)
     wrist_gap = _compute_wrist_gap(frame)
     wrist_height_error = _compute_wrist_height_error(frame)
@@ -104,14 +114,14 @@ def extract_daniel_forward_press_features(
 def _compute_wrist_forward(
     shoulder: NormalizedLandmark | None,
     wrist: NormalizedLandmark | None,
-) -> float:
+) -> float | None:
     if shoulder is None or wrist is None or shoulder.z is None or wrist.z is None:
-        return 0.0
+        return None
 
     return wrist.z - shoulder.z
 
 
-def _compute_wrist_extension(frame: NormalizedPoseFrame) -> float:
+def _compute_wrist_extension(frame: NormalizedPoseFrame) -> float | None:
     left_elbow = frame.landmarks.get(LEFT_ELBOW)
     right_elbow = frame.landmarks.get(RIGHT_ELBOW)
     left_wrist = frame.landmarks.get(LEFT_WRIST)
@@ -126,25 +136,25 @@ def _compute_wrist_extension(frame: NormalizedPoseFrame) -> float:
         or left_wrist.z is None
         or right_wrist.z is None
     ):
-        return 0.0
+        return None
 
     left_extension = abs(left_wrist.z - left_elbow.z)
     right_extension = abs(right_wrist.z - right_elbow.z)
     return min(left_extension, right_extension)
 
 
-def _compute_wrist_gap(frame: NormalizedPoseFrame) -> float:
+def _compute_wrist_gap(frame: NormalizedPoseFrame) -> float | None:
     left_wrist = frame.landmarks.get(LEFT_WRIST)
     right_wrist = frame.landmarks.get(RIGHT_WRIST)
     if left_wrist is None or right_wrist is None:
-        return UNAVAILABLE_FEATURE_VALUE
+        return None
 
     dx = left_wrist.x - right_wrist.x
     dy = left_wrist.y - right_wrist.y
     return sqrt(dx * dx + dy * dy)
 
 
-def _compute_wrist_height_error(frame: NormalizedPoseFrame) -> float:
+def _compute_wrist_height_error(frame: NormalizedPoseFrame) -> float | None:
     left_shoulder = frame.landmarks.get(LEFT_SHOULDER)
     right_shoulder = frame.landmarks.get(RIGHT_SHOULDER)
     left_wrist = frame.landmarks.get(LEFT_WRIST)
@@ -155,14 +165,14 @@ def _compute_wrist_height_error(frame: NormalizedPoseFrame) -> float:
         or left_wrist is None
         or right_wrist is None
     ):
-        return UNAVAILABLE_FEATURE_VALUE
+        return None
 
     shoulder_y = (left_shoulder.y + right_shoulder.y) / 2.0
     wrist_y = (left_wrist.y + right_wrist.y) / 2.0
     return abs(wrist_y - shoulder_y)
 
 
-def _compute_wrist_shoulder_offset(frame: NormalizedPoseFrame) -> float:
+def _compute_wrist_shoulder_offset(frame: NormalizedPoseFrame) -> float | None:
     left_shoulder = frame.landmarks.get(LEFT_SHOULDER)
     right_shoulder = frame.landmarks.get(RIGHT_SHOULDER)
     left_wrist = frame.landmarks.get(LEFT_WRIST)
@@ -173,7 +183,7 @@ def _compute_wrist_shoulder_offset(frame: NormalizedPoseFrame) -> float:
         or left_wrist is None
         or right_wrist is None
     ):
-        return -UNAVAILABLE_FEATURE_VALUE
+        return None
 
     shoulder_y = (left_shoulder.y + right_shoulder.y) / 2.0
     wrist_y = (left_wrist.y + right_wrist.y) / 2.0

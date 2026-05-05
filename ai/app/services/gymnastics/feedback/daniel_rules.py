@@ -21,8 +21,8 @@ def select_daniel_forward_press_feedback_candidate(
     *,
     state: str,
     tracking: str,
-    wrist_forward: float,
-    wrist_extension: float,
+    wrist_forward: float | None,
+    wrist_extension: float | None,
     left_elbow_angle: float | None,
     right_elbow_angle: float | None,
     torso_tilt: float,
@@ -44,6 +44,9 @@ def select_daniel_forward_press_feedback_candidate(
 
     if torso_tilt > torso_tilt_max:
         return STRAIGHTEN_BACK
+
+    if wrist_forward is None or wrist_extension is None:
+        return None
 
     if wrist_forward < forward_threshold or wrist_extension < wrist_extension_threshold:
         return PRESS_HANDS_FORWARD

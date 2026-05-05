@@ -129,11 +129,17 @@ class DanielForwardPressEvaluator(BaseHoldEvaluator):
         next_baseline_left_wrist_forward = baseline_left_wrist_forward
         next_baseline_right_wrist_forward = baseline_right_wrist_forward
         captured_baseline_this_frame = False
+        if (next_baseline_left_wrist_forward is None) != (next_baseline_right_wrist_forward is None):
+            next_baseline_left_wrist_forward = None
+            next_baseline_right_wrist_forward = None
         if frame.tracking == "tracking_ok":
-            if next_baseline_left_wrist_forward is None:
+            if (
+                next_baseline_left_wrist_forward is None
+                and next_baseline_right_wrist_forward is None
+                and features.raw_left_wrist_forward is not None
+                and features.raw_right_wrist_forward is not None
+            ):
                 next_baseline_left_wrist_forward = features.raw_left_wrist_forward
-                captured_baseline_this_frame = True
-            if next_baseline_right_wrist_forward is None:
                 next_baseline_right_wrist_forward = features.raw_right_wrist_forward
                 captured_baseline_this_frame = True
 
@@ -144,10 +150,15 @@ class DanielForwardPressEvaluator(BaseHoldEvaluator):
         is_pose_valid = (
             frame.tracking == "tracking_ok"
             and not captured_baseline_this_frame
+            and features.wrist_forward is not None
             and features.wrist_forward >= self.config.forward_threshold
+            and features.wrist_extension is not None
             and features.wrist_extension >= self.config.wrist_extension_threshold
+            and features.wrist_gap is not None
             and features.wrist_gap <= self.config.wrist_gap_max
+            and features.wrist_height_error is not None
             and features.wrist_height_error <= self.config.wrist_height_error_max
+            and features.wrist_shoulder_offset is not None
             and features.wrist_shoulder_offset >= self.config.wrist_below_shoulder_min
             and features.torso_tilt <= self.config.torso_tilt_max
         )
@@ -219,8 +230,20 @@ class DanielForwardPressEvaluator(BaseHoldEvaluator):
             features.left_elbow_angle,
             features.right_elbow_angle,
         )
+        forward_value = features.wrist_forward if features.wrist_forward is not None else 0.0
+        wrist_gap_value = (
+            features.wrist_gap
+            if features.wrist_gap is not None
+            else self.config.wrist_gap_max
+        )
+        wrist_height_error_value = (
+            features.wrist_height_error
+            if features.wrist_height_error is not None
+            else self.config.wrist_height_error_max
+        )
+
         forward_score = min(
-            features.wrist_forward / max(self.config.forward_threshold, 1e-6),
+            forward_value / max(self.config.forward_threshold, 1e-6),
             1.0,
         )
         arm_score = min(
@@ -228,12 +251,12 @@ class DanielForwardPressEvaluator(BaseHoldEvaluator):
             1.0,
         )
         wrist_gap_score = max(
-            1.0 - features.wrist_gap / max(self.config.wrist_gap_max, 1e-6),
+            1.0 - wrist_gap_value / max(self.config.wrist_gap_max, 1e-6),
             0.0,
         )
         wrist_height_score = max(
             1.0
-            - features.wrist_height_error / max(self.config.wrist_height_error_max, 1e-6),
+            - wrist_height_error_value / max(self.config.wrist_height_error_max, 1e-6),
             0.0,
         )
         torso_score = max(
