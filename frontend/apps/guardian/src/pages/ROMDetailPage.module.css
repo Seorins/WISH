@@ -100,29 +100,6 @@
   min-height: 0;
 }
 
-.characterPlaceholder {
-  width: 100%;
-  height: 100%;
-  border-radius: var(--dash-radius-md);
-  background:
-    radial-gradient(
-      circle at 50% 38%,
-      rgba(168, 146, 255, 0.18) 0%,
-      rgba(168, 146, 255, 0) 60%
-    ),
-    var(--dash-color-bg-page);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.placeholderLabel {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--dash-color-text-muted);
-  letter-spacing: -0.005em;
-}
-
 .rightCol {
   display: flex;
   flex-direction: column;

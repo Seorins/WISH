@@ -4,6 +4,7 @@ import { HeaderBar } from '@/features/dashboard/components/HeaderBar'
 import { ChevronLeftIcon } from '@/features/dashboard/components/icons'
 import { JointStepNav } from '@/features/rom/components/JointStepNav'
 import { ROMAnalysisPanel } from '@/features/rom/components/ROMAnalysisPanel'
+import { ROMCharacter3D } from '@/features/rom/components/ROMCharacter3D'
 import { JOINT_ROM_DETAILS, type JointId } from '@/features/rom/data/mock'
 import '@/features/dashboard/tokens.css'
 import styles from './ROMDetailPage.module.css'
@@ -91,11 +92,7 @@ export function ROMDetailPage() {
               <JointStepNav activeId={activeId} onSelect={handleSelect} />
             </div>
             <div className={styles.characterSlot}>
-              <div className={styles.characterPlaceholder} aria-hidden>
-                <span className={styles.placeholderLabel}>
-                  {JOINT_ROM_DETAILS.find(j => j.id === activeId)?.name} 줌인 영역
-                </span>
-              </div>
+              <ROMCharacter3D focusJoint={activeId} />
             </div>
           </article>
         </aside>
