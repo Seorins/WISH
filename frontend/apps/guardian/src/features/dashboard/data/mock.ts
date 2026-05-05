@@ -36,8 +36,8 @@ export type TrendPoint = {
 export type SessionView = 'current' | 'previous'
 
 export const PATIENT = {
-  name: '김알렉스',
-  age: 9,
+  name: '김댕동',
+  age: 8,
   avatarUrl: faceUrl,
 }
 
