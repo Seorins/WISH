@@ -28,6 +28,9 @@ const MODEL_OFFSET_Y = -0.95
 const KP_SCALE = 0.43
 const HIP_LOCAL_Y = 0.85
 
+/** UpLeg 본 위치(허리 라인)를 시각적 hip(엉덩이) 라인으로 내리는 오프셋 */
+const HIP_Y_OFFSET = -0.18
+
 /**
  * 캐릭터 본 retargeting on/off.
  * 더미 sin 기반 keypoint로는 자세가 자연스럽게 안 나옴 + 본 rest pose 보정이 GLB마다 까다로워
@@ -115,8 +118,8 @@ const FALLBACK_JOINTS: Joint[] = [
   { id: 'elbow-r', position: [0.22, 1.0, 0.05] },
   { id: 'wrist-l', position: [-0.24, 0.7, 0.05] },
   { id: 'wrist-r', position: [0.24, 0.7, 0.05] },
-  { id: 'hip-l', position: [-0.1, 0.8, 0.06] },
-  { id: 'hip-r', position: [0.1, 0.8, 0.06] },
+  { id: 'hip-l', position: [-0.1, 0.62, 0.06] },
+  { id: 'hip-r', position: [0.1, 0.62, 0.06] },
   { id: 'knee-l', position: [-0.1, 0.4, 0.06] },
   { id: 'knee-r', position: [0.1, 0.4, 0.06] },
   { id: 'ankle-l', position: [-0.1, 0.05, 0.06] },
@@ -234,7 +237,8 @@ function CharacterModel({
       if (!id || found.has(id)) return
       obj.getWorldPosition(tmp)
       group.worldToLocal(tmp)
-      found.set(id, [tmp.x, tmp.y, tmp.z])
+      const yOffset = id === 'hip-l' || id === 'hip-r' ? HIP_Y_OFFSET : 0
+      found.set(id, [tmp.x, tmp.y + yOffset, tmp.z])
     })
     if (found.size > 0) {
       onStaticJoints(Array.from(found, ([id, position]) => ({ id, position })))
@@ -292,6 +296,7 @@ function CharacterModel({
         bone.getWorldPosition(tmpV)
         g.worldToLocal(tmpV)
         ref.position.copy(tmpV)
+        if (j.id === 'hip-l' || j.id === 'hip-r') ref.position.y += HIP_Y_OFFSET
       }
       return
     }

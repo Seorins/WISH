@@ -81,6 +81,10 @@
   min-height: 0;
 }
 
+.leftColCollapsed {
+  justify-content: center;
+}
+
 .list {
   display: flex;
   flex-direction: column;
