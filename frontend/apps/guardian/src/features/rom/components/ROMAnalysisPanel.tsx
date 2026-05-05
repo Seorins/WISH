@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, XAxis, YAxis } from 'recharts'
+import { ScoreRing } from '@/features/dashboard/components/ScoreRing'
+import { ArrowUpIcon } from '@/features/dashboard/components/icons'
 import {
   ROM_RANGE_OPTIONS,
   type JointROMDetail,
@@ -132,6 +134,149 @@ export function ROMAnalysisPanel({ joint }: Props) {
               />
             </AreaChart>
           </ResponsiveContainer>
+        </div>
+      </section>
+
+      <section className={styles.metricGrid}>
+        <div className={`${styles.metricCard} ${styles.metricCardWithRing}`}>
+          <div className={styles.metricBody}>
+            <span className={styles.metricLabel}>현재 점수</span>
+            <span className={styles.metricValue}>
+              {joint.currentScore}
+              <span className={styles.metricUnit}>/100</span>
+            </span>
+            <span className={styles.metricFoot}>
+              {joint.currentScore >= 90
+                ? '훌륭해요!'
+                : joint.currentScore >= 80
+                  ? '좋아요!'
+                  : '꾸준히 해봐요'}
+            </span>
+          </div>
+          <ScoreRing
+            value={joint.currentScore}
+            size={56}
+            strokeWidth={6}
+            fontSize={0}
+            gradientFrom="#6ddec0"
+            gradientTo="#34c99c"
+          />
+        </div>
+
+        <div className={styles.metricCard}>
+          <span className={styles.metricLabel}>이전 대비</span>
+          <span className={styles.metricValueRow}>
+            <span className={styles.metricValueDelta}>+{joint.deltaPrev}</span>
+            <span className={styles.metricBadge} aria-hidden>
+              <ArrowUpIcon className={styles.metricBadgeIcon} />
+            </span>
+          </span>
+          <span className={styles.metricFoot}>지난주 {joint.currentScore - joint.deltaPrev}점</span>
+        </div>
+
+        <div className={styles.metricCard}>
+          <span className={styles.metricLabel}>개선 폭</span>
+          <span className={styles.metricValueRow}>
+            <span className={styles.metricValueDelta}>+{joint.improvement}</span>
+            <span className={styles.metricBadge} aria-hidden>
+              <ArrowUpIcon className={styles.metricBadgeIcon} />
+            </span>
+          </span>
+          <span className={styles.metricFoot}>
+            2주 전 {joint.currentScore - joint.improvement}점 대비
+          </span>
+        </div>
+
+        <div className={`${styles.metricCard} ${styles.metricCardWithRing}`}>
+          <div className={styles.metricBody}>
+            <span className={styles.metricLabel}>좌/우 균형</span>
+            <span className={styles.metricValue}>{joint.balance}%</span>
+            <span className={styles.metricFootBalance}>균형이 좋아요</span>
+          </div>
+          <ScoreRing
+            value={joint.balance}
+            size={56}
+            strokeWidth={6}
+            fontSize={0}
+            gradientFrom="#a892ff"
+            gradientTo="#7c5cff"
+          />
+        </div>
+      </section>
+
+      <section className={styles.detailGrid}>
+        <article className={styles.detailCard}>
+          <header className={styles.detailHead}>
+            <h3 className={styles.detailTitle}>좌/우 {joint.name} 비교</h3>
+          </header>
+          <div className={styles.balanceRow}>
+            <div className={styles.balanceSide}>
+              <span className={styles.balanceLabel}>왼쪽 {joint.name}</span>
+              <span className={styles.balanceValue}>
+                {joint.leftScore}
+                <span className={styles.balanceUnit}>/100</span>
+              </span>
+              <div className={styles.balanceBar}>
+                <span className={styles.balanceBarFill} style={{ width: `${joint.leftScore}%` }} />
+              </div>
+            </div>
+
+            <div className={styles.balanceCenter}>
+              <ScoreRing
+                value={joint.balance}
+                size={84}
+                strokeWidth={8}
+                fontSize={20}
+                fontWeight={700}
+                unit="%"
+                showUnit
+                gradientFrom="#a892ff"
+                gradientTo="#7c5cff"
+              />
+              <span className={styles.balanceCenterLabel}>균형도</span>
+            </div>
+
+            <div className={styles.balanceSide}>
+              <span className={styles.balanceLabel}>오른쪽 {joint.name}</span>
+              <span className={styles.balanceValue}>
+                {joint.rightScore}
+                <span className={styles.balanceUnit}>/100</span>
+              </span>
+              <div className={styles.balanceBar}>
+                <span className={styles.balanceBarFill} style={{ width: `${joint.rightScore}%` }} />
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article className={`${styles.detailCard} ${styles.insightCard}`}>
+          <header className={styles.detailHead}>
+            <h3 className={styles.detailTitle}>
+              <span className={styles.insightSparkle} aria-hidden>
+                ✨
+              </span>
+              AI 인사이트
+            </h3>
+          </header>
+          <p className={styles.insightText}>{joint.aiInsight}</p>
+          <p className={styles.insightHint}>
+            지속하면 재활/회복에 도움이 되는 운동을
+            <br />
+            계속해보아요!
+          </p>
+          <span className={styles.insightStar} aria-hidden>
+            ⭐
+          </span>
+        </article>
+      </section>
+
+      <section className={styles.tipCard}>
+        <span className={styles.tipIcon} aria-hidden>
+          💡
+        </span>
+        <div className={styles.tipBody}>
+          <span className={styles.tipLabel}>팁</span>
+          <p className={styles.tipText}>{joint.tip}</p>
         </div>
       </section>
     </article>

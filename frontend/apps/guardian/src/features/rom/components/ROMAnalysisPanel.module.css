@@ -89,3 +89,285 @@
 .chartBody {
   height: 240px;
 }
+
+/* ===== Metric grid (4 cards) ===== */
+
+.metricGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--dash-space-3);
+}
+
+.metricCard {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px 18px;
+  border-radius: var(--dash-radius-card);
+  background: var(--dash-color-surface);
+  box-shadow: var(--dash-shadow-card);
+  min-width: 0;
+}
+
+.metricCardWithRing {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--dash-space-3);
+}
+
+.metricBody {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.metricLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--dash-color-text-muted);
+  letter-spacing: -0.005em;
+}
+
+.metricValue {
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--dash-color-text-strong);
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+.metricUnit {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--dash-color-text-muted);
+  margin-left: 2px;
+}
+
+.metricValueRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 2px;
+}
+
+.metricValueDelta {
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--dash-color-text-strong);
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+.metricBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: rgba(52, 201, 156, 0.14);
+  color: var(--dash-color-success);
+}
+
+.metricBadgeIcon {
+  width: 14px;
+  height: 14px;
+}
+
+.metricFoot {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--dash-color-success);
+  margin-top: 4px;
+}
+
+.metricFootBalance {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--dash-color-primary);
+  margin-top: 4px;
+}
+
+/* ===== Detail grid (comparison + AI) ===== */
+
+.detailGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  gap: var(--dash-space-3);
+}
+
+.detailCard {
+  position: relative;
+  padding: 18px 20px;
+  border-radius: var(--dash-radius-card);
+  background: var(--dash-color-surface);
+  box-shadow: var(--dash-shadow-card);
+  display: flex;
+  flex-direction: column;
+  gap: var(--dash-space-3);
+  overflow: hidden;
+}
+
+.detailHead {
+  display: flex;
+  align-items: center;
+}
+
+.detailTitle {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--dash-color-text-strong);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Comparison */
+
+.balanceRow {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: var(--dash-space-4);
+  align-items: center;
+}
+
+.balanceSide {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.balanceLabel {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--dash-color-text-muted);
+}
+
+.balanceValue {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--dash-color-text-strong);
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+.balanceUnit {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--dash-color-text-muted);
+  margin-left: 2px;
+}
+
+.balanceBar {
+  position: relative;
+  height: 6px;
+  border-radius: var(--dash-radius-pill);
+  background: var(--dash-color-surface-tint);
+  overflow: hidden;
+  margin-top: 4px;
+}
+
+.balanceBarFill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--dash-gradient-primary);
+  border-radius: var(--dash-radius-pill);
+}
+
+.balanceCenter {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.balanceCenterLabel {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--dash-color-text-muted);
+}
+
+/* AI insight */
+
+.insightCard {
+  background:
+    radial-gradient(
+      circle at 90% 18%,
+      rgba(168, 146, 255, 0.18) 0%,
+      rgba(168, 146, 255, 0) 55%
+    ),
+    var(--dash-color-surface);
+}
+
+.insightSparkle {
+  font-size: 14px;
+}
+
+.insightText {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--dash-color-text-strong);
+  line-height: 1.55;
+  letter-spacing: -0.005em;
+}
+
+.insightHint {
+  margin: 0;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--dash-color-text-muted);
+  line-height: 1.55;
+}
+
+.insightStar {
+  position: absolute;
+  right: 16px;
+  bottom: 12px;
+  font-size: 28px;
+  filter: drop-shadow(0 4px 8px rgba(255, 200, 80, 0.35));
+}
+
+/* Tip */
+
+.tipCard {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--dash-space-3);
+  padding: 14px 18px;
+  border-radius: var(--dash-radius-card);
+  background: var(--dash-color-surface);
+  box-shadow: var(--dash-shadow-card);
+}
+
+.tipIcon {
+  font-size: 18px;
+  margin-top: 1px;
+}
+
+.tipBody {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.tipLabel {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--dash-color-text-strong);
+}
+
+.tipText {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--dash-color-text-muted);
+  line-height: 1.55;
+  letter-spacing: -0.005em;
+}
