@@ -3,6 +3,7 @@ import { Canvas, useFrame } from '@react-three/fiber'
 import { Html, OrbitControls, useGLTF } from '@react-three/drei'
 import { Vector3, type Group } from 'three'
 import wishGlbUrl from '@/assets/wish.glb?url'
+import type { LandmarkName, MotionClip } from '../data/motionClips'
 import { MinusIcon, PersonIcon, PlusIcon, RefreshIcon } from './icons'
 import styles from './Character3D.module.css'
 
@@ -11,9 +12,29 @@ useGLTF.preload(wishGlbUrl)
 const BASE_SCALE = 1.0
 const MODEL_OFFSET_Y = -0.95
 
+// keypoint(정규화) → 모델 local 좌표 변환 상수
+// keypoint: hip(0,0), shoulder y≈-1.10, ankle y≈1.95 (y-down)
+// model local: hip y≈0.85, shoulder y≈1.40, ankle y≈0.05 (y-up)
+const KP_SCALE = 0.43
+const HIP_LOCAL_Y = 0.85
+
+const KP_TO_JOINT_ID: Record<LandmarkName, string> = {
+  LEFT_SHOULDER: 'shoulder-l',
+  RIGHT_SHOULDER: 'shoulder-r',
+  LEFT_ELBOW: 'elbow-l',
+  RIGHT_ELBOW: 'elbow-r',
+  LEFT_WRIST: 'wrist-l',
+  RIGHT_WRIST: 'wrist-r',
+  LEFT_HIP: 'hip-l',
+  RIGHT_HIP: 'hip-r',
+  LEFT_KNEE: 'knee-l',
+  RIGHT_KNEE: 'knee-r',
+  LEFT_ANKLE: 'ankle-l',
+  RIGHT_ANKLE: 'ankle-r',
+}
+
 type Joint = { id: string; position: [number, number, number] }
 
-// 좌표는 모델 group 기준 (local). 본 추출 실패 시 fallback.
 const FALLBACK_JOINTS: Joint[] = [
   { id: 'shoulder-l', position: [-0.18, 1.3, 0.06] },
   { id: 'shoulder-r', position: [0.18, 1.3, 0.06] },
@@ -50,17 +71,34 @@ function classifyBone(rawName: string): string | null {
   return null
 }
 
+function frameToJoints(clip: MotionClip, frameIdx: number): Joint[] {
+  const frame = clip.frames[frameIdx]
+  return clip.landmarks.map((name, i) => {
+    const lm = frame.lm[i]
+    return {
+      id: KP_TO_JOINT_ID[name],
+      position: [lm[0] * KP_SCALE, HIP_LOCAL_Y - lm[1] * KP_SCALE, -lm[2] * KP_SCALE],
+    }
+  })
+}
+
 function CharacterModel({
   targetScale,
   joints,
-  onJoints,
+  onStaticJoints,
+  activeMotion,
+  onMotionFrame,
 }: {
   targetScale: number
   joints: Joint[]
-  onJoints: (joints: Joint[]) => void
+  onStaticJoints: (joints: Joint[]) => void
+  activeMotion: MotionClip | null
+  onMotionFrame: (joints: Joint[]) => void
 }) {
   const { scene } = useGLTF(wishGlbUrl)
   const groupRef = useRef<Group>(null)
+  const playStartMs = useRef<number>(0)
+  const lastFrameIdx = useRef<number>(-1)
 
   useEffect(() => {
     const group = groupRef.current
@@ -77,15 +115,27 @@ function CharacterModel({
       found.set(id, [tmp.x, tmp.y, tmp.z])
     })
     if (found.size > 0) {
-      onJoints(Array.from(found, ([id, position]) => ({ id, position })))
+      onStaticJoints(Array.from(found, ([id, position]) => ({ id, position })))
     }
-  }, [scene, onJoints])
+  }, [scene, onStaticJoints])
+
+  useEffect(() => {
+    playStartMs.current = performance.now()
+    lastFrameIdx.current = -1
+  }, [activeMotion])
 
   useFrame(() => {
     const g = groupRef.current
-    if (!g) return
-    const next = g.scale.x + (targetScale - g.scale.x) * 0.15
-    g.scale.set(next, next, next)
+    if (g) {
+      const next = g.scale.x + (targetScale - g.scale.x) * 0.15
+      g.scale.set(next, next, next)
+    }
+    if (!activeMotion) return
+    const elapsed = (performance.now() - playStartMs.current) % activeMotion.durationMs
+    const idx = Math.floor((elapsed / 1000) * activeMotion.fps) % activeMotion.frames.length
+    if (idx === lastFrameIdx.current) return
+    lastFrameIdx.current = idx
+    onMotionFrame(frameToJoints(activeMotion, idx))
   })
 
   return (
@@ -100,13 +150,30 @@ function CharacterModel({
   )
 }
 
-export function Character3D() {
+type Character3DProps = {
+  activeMotion?: MotionClip | null
+}
+
+export function Character3D({ activeMotion = null }: Character3DProps) {
   const controlsRef = useRef<ComponentRef<typeof OrbitControls>>(null)
   const [zoom, setZoom] = useState(0)
   const [joints, setJoints] = useState<Joint[]>(FALLBACK_JOINTS)
+  const staticJointsRef = useRef<Joint[]>(FALLBACK_JOINTS)
+  const activeMotionRef = useRef(activeMotion)
 
-  const handleJoints = useCallback((extracted: Joint[]) => {
-    if (extracted.length > 0) setJoints(extracted)
+  useEffect(() => {
+    activeMotionRef.current = activeMotion
+    if (!activeMotion) setJoints(staticJointsRef.current)
+  }, [activeMotion])
+
+  const handleStaticJoints = useCallback((extracted: Joint[]) => {
+    if (extracted.length === 0) return
+    staticJointsRef.current = extracted
+    if (!activeMotionRef.current) setJoints(extracted)
+  }, [])
+
+  const handleMotionFrame = useCallback((frameJoints: Joint[]) => {
+    setJoints(frameJoints)
   }, [])
 
   const targetScale = BASE_SCALE * (1 + zoom * 0.15)
@@ -124,7 +191,13 @@ export function Character3D() {
           <directionalLight position={[2, 4, 3]} intensity={0.9} />
           <directionalLight position={[-3, 2, -2]} intensity={0.35} color="#c8b6ff" />
           <Suspense fallback={null}>
-            <CharacterModel targetScale={targetScale} joints={joints} onJoints={handleJoints} />
+            <CharacterModel
+              targetScale={targetScale}
+              joints={joints}
+              onStaticJoints={handleStaticJoints}
+              activeMotion={activeMotion}
+              onMotionFrame={handleMotionFrame}
+            />
           </Suspense>
           <OrbitControls
             ref={controlsRef}
