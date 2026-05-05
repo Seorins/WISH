@@ -1,6 +1,15 @@
 import { useState } from 'react'
+import logoUrl from '@/assets/logo.png'
 import { PATIENT } from '../data/mock'
-import { BellIcon, ChevronDownIcon, ClipboardIcon, ExerciseIcon, GoalIcon, HomeIcon } from './icons'
+import {
+  BellIcon,
+  ChevronDownIcon,
+  ClipboardIcon,
+  ExerciseIcon,
+  GoalIcon,
+  HomeIcon,
+  SettingsIcon,
+} from './icons'
 import styles from './HeaderBar.module.css'
 
 type TabId = 'dashboard' | 'reports' | 'exercises' | 'goals'
@@ -18,11 +27,7 @@ export function HeaderBar() {
   return (
     <header className={styles.header}>
       <div className={styles.brand}>
-        <div className={styles.brandMark} aria-hidden />
-        <div className={styles.brandText}>
-          <span className={styles.brandName}>WISH</span>
-          <span className={styles.brandTag}>동작 분석</span>
-        </div>
+        <img src={logoUrl} alt="WISH" className={styles.brandLogo} />
       </div>
 
       <nav className={styles.tabs}>
@@ -43,10 +48,15 @@ export function HeaderBar() {
       </nav>
 
       <div className={styles.right}>
-        <button type="button" className={styles.bell} aria-label="알림">
-          <BellIcon />
-          <span className={styles.bellDot} />
-        </button>
+        <div className={styles.iconGroup}>
+          <button type="button" className={styles.iconBtn} aria-label="설정">
+            <SettingsIcon width={20} height={20} />
+          </button>
+          <button type="button" className={styles.iconBtn} aria-label="알림">
+            <BellIcon width={20} height={20} />
+            <span className={styles.bellDot} />
+          </button>
+        </div>
         <button type="button" className={styles.profile}>
           <span className={styles.avatar}>
             <img src={PATIENT.avatarUrl} alt="" />
