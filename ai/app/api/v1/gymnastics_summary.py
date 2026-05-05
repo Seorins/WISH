@@ -138,8 +138,13 @@ for route_segment, motion_id, motion_name in _DANIEL_STRETCH_SUMMARY_SPECS:
 
 @router.post("/daniel/summary", response_model=StretchMotionSummaryResponse)
 def summarize_daniel_stretch(payload: DanielStretchSummaryRequest) -> StretchMotionSummaryResponse:
+    motion_name = _DANIEL_STRETCH_MOTION_NAMES.get(payload.motion_id)
+    if motion_name is None:
+        logger.warning("Invalid daniel stretch summary motion_id: %s", payload.motion_id)
+        raise HTTPException(status_code=400, detail="Invalid daniel stretch motion_id")
+
     return _summarize_stretch_motion(
         payload=payload,
         motion_id=payload.motion_id,
-        motion_name=_DANIEL_STRETCH_MOTION_NAMES[payload.motion_id],
+        motion_name=motion_name,
     )

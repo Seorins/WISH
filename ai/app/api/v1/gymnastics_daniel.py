@@ -528,7 +528,12 @@ def _to_integrated_daniel_response(
 
 @router.post("/daniel/evaluate", response_model=DanielStretchEvaluationResponse)
 def evaluate_daniel_stretch(payload: DanielStretchEvaluationRequest) -> DanielStretchEvaluationResponse:
-    motion_name, request_model, handler = _DANIEL_STRETCH_EVALUATION_SPECS[payload.motion_id]
+    spec = _DANIEL_STRETCH_EVALUATION_SPECS.get(payload.motion_id)
+    if spec is None:
+        logger.warning("Invalid daniel stretch motion_id: %s", payload.motion_id)
+        raise HTTPException(status_code=400, detail="Invalid daniel stretch motion_id")
+
+    motion_name, request_model, handler = spec
     specific_payload = request_model.model_validate(payload.model_dump())
     result = handler(specific_payload)
     return _to_integrated_daniel_response(motion_name=motion_name, result=result)
