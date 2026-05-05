@@ -76,6 +76,9 @@
 }
 
 .row {
+  appearance: none;
+  border: 1.5px solid transparent;
+  width: 100%;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -84,11 +87,26 @@
   border-radius: var(--dash-radius-card);
   box-shadow: var(--dash-shadow-card);
   cursor: pointer;
-  transition: box-shadow 0.15s ease;
+  font: inherit;
+  text-align: left;
+  transition:
+    box-shadow 0.15s ease,
+    border-color 0.15s ease,
+    background 0.15s ease;
 }
 
 .row:hover {
   box-shadow: var(--dash-shadow-card-hover);
+}
+
+.rowActive {
+  border-color: var(--dash-color-primary);
+  background: var(--dash-color-primary-50);
+  box-shadow: var(--dash-shadow-pill);
+}
+
+.rowActive:hover {
+  box-shadow: var(--dash-shadow-pill);
 }
 
 .thumb {
