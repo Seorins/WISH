@@ -36,7 +36,7 @@ import { seongsuDialogs } from './dialog/seongsuDialogs'
 const TALK_DISTANCE = 100
 const GYMNASTICS_ROOM_SPAWN = { xRatio: 0.5, yRatio: 0.76 }
 const GYMNASTICS_EXIT_PORTAL = { xRatio: 0.44, yRatio: 0.86, widthRatio: 0.12, heightRatio: 0.12 }
-const GYMNASTICS_RETURN_SPAWN = { xRatio: 0.72, yRatio: 0.58 }
+const GYMNASTICS_RETURN_SPAWN = { xRatio: 0.733, yRatio: 0.286 }
 const DIALOG_TEXT_BOX = { x: 520, y: 210, width: 1240, height: 240 }
 const DIALOG_NAME_BOX = { x: 450, y: 115, width: 360, height: 95 }
 const CARD_DEPTH = 24
