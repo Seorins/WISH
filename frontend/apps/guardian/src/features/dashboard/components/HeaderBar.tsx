@@ -1,15 +1,24 @@
 import { useState } from 'react'
+import logoUrl from '@/assets/logo.png'
 import { PATIENT } from '../data/mock'
-import { BellIcon, ChevronDownIcon, ClipboardIcon, ExerciseIcon, GoalIcon, HomeIcon } from './icons'
+import {
+  BellIcon,
+  ChevronDownIcon,
+  ClipboardIcon,
+  ExerciseIcon,
+  GoalIcon,
+  HomeIcon,
+  SettingsIcon,
+} from './icons'
 import styles from './HeaderBar.module.css'
 
 type TabId = 'dashboard' | 'reports' | 'exercises' | 'goals'
 
 const TABS: ReadonlyArray<{ id: TabId; label: string; Icon: typeof HomeIcon }> = [
-  { id: 'dashboard', label: 'Dashboard', Icon: HomeIcon },
-  { id: 'reports', label: 'Reports', Icon: ClipboardIcon },
-  { id: 'exercises', label: 'Exercises', Icon: ExerciseIcon },
-  { id: 'goals', label: 'Goals', Icon: GoalIcon },
+  { id: 'dashboard', label: '대시보드', Icon: HomeIcon },
+  { id: 'reports', label: '리포트', Icon: ClipboardIcon },
+  { id: 'exercises', label: '운동', Icon: ExerciseIcon },
+  { id: 'goals', label: '목표', Icon: GoalIcon },
 ]
 
 export function HeaderBar() {
@@ -18,11 +27,7 @@ export function HeaderBar() {
   return (
     <header className={styles.header}>
       <div className={styles.brand}>
-        <div className={styles.brandMark} aria-hidden />
-        <div className={styles.brandText}>
-          <span className={styles.brandName}>WISH</span>
-          <span className={styles.brandTag}>Movement Analysis</span>
-        </div>
+        <img src={logoUrl} alt="WISH" className={styles.brandLogo} />
       </div>
 
       <nav className={styles.tabs}>
@@ -43,15 +48,22 @@ export function HeaderBar() {
       </nav>
 
       <div className={styles.right}>
-        <button type="button" className={styles.bell} aria-label="알림">
-          <BellIcon />
-          <span className={styles.bellDot} />
-        </button>
+        <div className={styles.iconGroup}>
+          <button type="button" className={styles.iconBtn} aria-label="설정">
+            <SettingsIcon width={20} height={20} />
+          </button>
+          <button type="button" className={styles.iconBtn} aria-label="알림">
+            <BellIcon width={20} height={20} />
+            <span className={styles.bellDot} />
+          </button>
+        </div>
         <button type="button" className={styles.profile}>
-          <span className={styles.avatar}>{PATIENT.avatarEmoji}</span>
+          <span className={styles.avatar}>
+            <img src={PATIENT.avatarUrl} alt="" />
+          </span>
           <span className={styles.profileText}>
             <span className={styles.profileName}>{PATIENT.name}</span>
-            <span className={styles.profileMeta}>Age {PATIENT.age}</span>
+            <span className={styles.profileMeta}>{PATIENT.age}세</span>
           </span>
           <ChevronDownIcon className={styles.chev} />
         </button>

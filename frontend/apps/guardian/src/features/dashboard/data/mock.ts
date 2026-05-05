@@ -1,9 +1,13 @@
-export type MovementCategory = 'all' | 'upper' | 'lower' | 'balance' | 'flexibility'
+import faceUrl from '@/assets/face.png'
+import top1Url from '@/assets/top1.png'
+import top2Url from '@/assets/top2.png'
+import top3Url from '@/assets/top3.png'
+import top4Url from '@/assets/top4.png'
+import top5Url from '@/assets/top5.png'
 
 export type Movement = {
   id: string
   name: string
-  category: Exclude<MovementCategory, 'all'>
   score: number
   thumbnail: string
 }
@@ -19,9 +23,8 @@ export type Session = {
 
 export type RangeOfMotion = {
   joint: string
-  emoji: string
   percent: number
-  rating: 'Good' | 'Excellent' | 'Needs Work'
+  rating: '좋음' | '우수' | '보완 필요'
   tone: 'mint' | 'lavender' | 'pink' | 'cyan'
 }
 
@@ -33,78 +36,54 @@ export type TrendPoint = {
 export type SessionView = 'current' | 'previous'
 
 export const PATIENT = {
-  name: 'Alex Kim',
-  age: 9,
-  avatarEmoji: '🧒',
+  name: '김댕동',
+  age: 8,
+  avatarUrl: faceUrl,
 }
 
 export const MOVEMENTS: Movement[] = [
-  { id: 'arm-raise', name: 'Arm Raise', category: 'upper', score: 92, thumbnail: '🙆' },
-  { id: 'deep-squat', name: 'Deep Squat', category: 'lower', score: 78, thumbnail: '🧎' },
-  {
-    id: 'single-leg-balance',
-    name: 'Single Leg Balance',
-    category: 'balance',
-    score: 85,
-    thumbnail: '🧍',
-  },
+  { id: 'march', name: '제자리 걷기', score: 92, thumbnail: top1Url },
+  { id: 'side-step', name: '사이드 스텝', score: 84, thumbnail: top2Url },
+  { id: 'torso-cross', name: '몸통 가로 지르기', score: 78, thumbnail: top3Url },
+  { id: 'face-cross', name: '얼굴 가로 지르기', score: 81, thumbnail: top4Url },
+  { id: 'sit-stand', name: '앉았다 일어서기', score: 88, thumbnail: top5Url },
 ]
 
 export const RECENT_SESSIONS: Session[] = [
-  { id: 's1', date: '2025-05-03', weekday: 'Fri', shortDate: 'May 3', score: 78 },
-  { id: 's2', date: '2025-05-05', weekday: 'Sun', shortDate: 'May 5', score: 82 },
-  { id: 's3', date: '2025-05-08', weekday: 'Wed', shortDate: 'May 8', score: 75 },
-  { id: 's4', date: '2025-05-10', weekday: 'Fri', shortDate: 'May 10', score: 80 },
-  { id: 's5', date: '2025-05-12', weekday: 'Sun', shortDate: 'May 12', score: 83 },
-  { id: 's6', date: '2025-05-17', weekday: 'Today', shortDate: 'May 17', score: 87, isToday: true },
+  { id: 's1', date: '2025-05-03', weekday: '금', shortDate: '5월 3일', score: 78 },
+  { id: 's2', date: '2025-05-05', weekday: '일', shortDate: '5월 5일', score: 82 },
+  { id: 's3', date: '2025-05-08', weekday: '수', shortDate: '5월 8일', score: 75 },
+  { id: 's4', date: '2025-05-10', weekday: '금', shortDate: '5월 10일', score: 80 },
+  { id: 's5', date: '2025-05-12', weekday: '일', shortDate: '5월 12일', score: 83 },
+  {
+    id: 's6',
+    date: '2025-05-17',
+    weekday: '오늘',
+    shortDate: '5월 17일',
+    score: 87,
+    isToday: true,
+  },
 ]
 
 export const RANGE_OF_MOTION: RangeOfMotion[] = [
-  { joint: 'Shoulders', emoji: '🤸', percent: 92, rating: 'Good', tone: 'mint' },
-  { joint: 'Hips', emoji: '🕺', percent: 88, rating: 'Good', tone: 'lavender' },
-  { joint: 'Knees', emoji: '🦵', percent: 84, rating: 'Good', tone: 'pink' },
-  { joint: 'Ankles', emoji: '👟', percent: 90, rating: 'Excellent', tone: 'cyan' },
+  { joint: '어깨', percent: 92, rating: '좋음', tone: 'mint' },
+  { joint: '엉덩이', percent: 88, rating: '좋음', tone: 'lavender' },
+  { joint: '무릎', percent: 84, rating: '좋음', tone: 'pink' },
+  { joint: '발목', percent: 90, rating: '우수', tone: 'cyan' },
 ]
 
 export const TREND: TrendPoint[] = [
-  { date: 'Apr 12', score: 42 },
-  { date: 'Apr 19', score: 55 },
-  { date: 'Apr 26', score: 60 },
-  { date: 'May 3', score: 52 },
-  { date: 'May 10', score: 75 },
-  { date: 'May 17', score: 82 },
+  { date: '4월 12일', score: 42 },
+  { date: '4월 19일', score: 55 },
+  { date: '4월 26일', score: 60 },
+  { date: '5월 3일', score: 52 },
+  { date: '5월 10일', score: 75 },
+  { date: '5월 17일', score: 82 },
 ]
 
 export const OVERALL_SCORE = {
   current: 87,
   delta: 6,
-  title: 'Great Job!',
-  subtitle: "You're performing\nbetter than last time.",
+  title: '아주 잘했어요!',
+  subtitle: '지난 번보다\n더 잘하고 있어요.',
 }
-
-export const NEXT_SESSION = {
-  date: 'May 24, 2025',
-  time: '10:00 AM',
-  label: 'Full Body Assessment',
-}
-
-export type JointMarker = {
-  id: string
-  label: string
-  position: [number, number, number]
-}
-
-export const JOINT_MARKERS: JointMarker[] = [
-  { id: 'shoulder-l', label: 'L Shoulder', position: [-0.35, 1.25, 0.05] },
-  { id: 'shoulder-r', label: 'R Shoulder', position: [0.35, 1.25, 0.05] },
-  { id: 'elbow-l', label: 'L Elbow', position: [-0.5, 0.85, 0.05] },
-  { id: 'elbow-r', label: 'R Elbow', position: [0.5, 0.85, 0.05] },
-  { id: 'wrist-l', label: 'L Wrist', position: [-0.55, 0.45, 0.05] },
-  { id: 'wrist-r', label: 'R Wrist', position: [0.55, 0.45, 0.05] },
-  { id: 'hip-l', label: 'L Hip', position: [-0.18, 0.2, 0.05] },
-  { id: 'hip-r', label: 'R Hip', position: [0.18, 0.2, 0.05] },
-  { id: 'knee-l', label: 'L Knee', position: [-0.2, -0.3, 0.05] },
-  { id: 'knee-r', label: 'R Knee', position: [0.2, -0.3, 0.05] },
-  { id: 'ankle-l', label: 'L Ankle', position: [-0.22, -0.85, 0.05] },
-  { id: 'ankle-r', label: 'R Ankle', position: [0.22, -0.85, 0.05] },
-]

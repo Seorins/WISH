@@ -1,6 +1,6 @@
 :root {
-  --dash-color-bg: #f5f3fb;
-  --dash-color-bg-page: linear-gradient(180deg, #f6f3fb 0%, #efeafb 100%);
+  --dash-color-bg: #fbfaff;
+  --dash-color-bg-page: linear-gradient(180deg, #fcfbff 0%, #f5f1fc 100%);
   --dash-color-surface: #ffffff;
   --dash-color-surface-muted: #f8f7fb;
   --dash-color-surface-tint: #f4f0ff;
@@ -17,15 +17,16 @@
   --dash-color-primary-soft: #a892ff;
   --dash-color-primary-50: #f1edff;
   --dash-color-primary-100: #e3dcff;
+  --dash-color-lavender-soft: #f7f4ff;
 
   --dash-color-success: #34c99c;
   --dash-color-success-soft: #d4f3e5;
   --dash-color-mint: #6ddec0;
-  --dash-color-mint-soft: #d6f5ec;
+  --dash-color-mint-soft: #eaf9f2;
   --dash-color-pink: #ffa8c5;
-  --dash-color-pink-soft: #ffe1ec;
+  --dash-color-pink-soft: #fff0f5;
   --dash-color-cyan: #6ec9e0;
-  --dash-color-cyan-soft: #d6eef6;
+  --dash-color-cyan-soft: #ebf6fa;
   --dash-color-yellow: #ffd55c;
   --dash-color-warning: #ffb547;
 

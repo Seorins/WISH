@@ -2,10 +2,16 @@
   background: var(--dash-color-surface);
   border-radius: var(--dash-radius-card);
   box-shadow: var(--dash-shadow-card);
-  padding: var(--dash-space-6);
+  padding: var(--dash-space-4) var(--dash-space-5);
   display: flex;
   flex-direction: column;
-  gap: var(--dash-space-3);
+  gap: var(--dash-space-2);
+  min-height: 0;
+}
+
+.cardFlex {
+  flex: 1;
+  min-height: 0;
 }
 
 .cardHead {
@@ -65,10 +71,10 @@
 
 .scoreBody {
   display: grid;
-  grid-template-columns: 116px 1fr auto;
+  grid-template-columns: 96px 1fr auto;
   align-items: center;
-  gap: var(--dash-space-4);
-  padding-top: 4px;
+  gap: var(--dash-space-3);
+  padding-top: 2px;
 }
 
 .scoreCopy {
@@ -113,7 +119,7 @@
 }
 
 .scoreStar {
-  font-size: 38px;
+  font-size: 32px;
   line-height: 1;
   filter: drop-shadow(0 4px 8px rgba(255, 213, 92, 0.45));
   align-self: center;
@@ -122,7 +128,8 @@
 /* ===== Trend Chart ===== */
 
 .trendBody {
-  height: 160px;
+  flex: 1;
+  min-height: 100px;
   margin: -4px -8px 0 -8px;
 }
 
@@ -139,8 +146,8 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  padding: 14px 6px 12px;
+  gap: 2px;
+  padding: 10px 6px;
   border-radius: var(--dash-radius-md);
   text-align: center;
 }
@@ -150,7 +157,7 @@
 }
 
 .romCellLavender {
-  background: var(--dash-color-primary-50);
+  background: var(--dash-color-lavender-soft);
 }
 
 .romCellPink {

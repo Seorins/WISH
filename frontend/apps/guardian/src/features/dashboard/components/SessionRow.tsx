@@ -1,5 +1,5 @@
-import { NEXT_SESSION, RECENT_SESSIONS } from '../data/mock'
-import { ArrowRightIcon, CalendarIcon, ChevronLeftIcon, ChevronRightIcon } from './icons'
+import { RECENT_SESSIONS } from '../data/mock'
+import { ChevronLeftIcon, ChevronRightIcon } from './icons'
 import { ScoreRing } from './ScoreRing'
 import styles from './SessionRow.module.css'
 
@@ -7,7 +7,7 @@ export function SessionRow() {
   return (
     <div className={styles.row}>
       <section className={styles.recent}>
-        <span className={styles.recentTitle}>Recent Sessions</span>
+        <span className={styles.recentTitle}>최근 세션</span>
         <button type="button" className={styles.recentArrow} aria-label="이전 세션">
           <ChevronLeftIcon className={styles.recentArrowIcon} />
         </button>
@@ -44,24 +44,6 @@ export function SessionRow() {
         </div>
         <button type="button" className={styles.recentArrow} aria-label="다음 세션">
           <ChevronRightIcon className={styles.recentArrowIcon} />
-        </button>
-      </section>
-
-      <section className={styles.next}>
-        <div className={styles.nextIcon}>
-          <CalendarIcon />
-        </div>
-        <div className={styles.nextBody}>
-          <span className={styles.nextLabel}>Next Session</span>
-          <span className={styles.nextDate}>
-            {NEXT_SESSION.date}
-            <span className={styles.nextDateDot} />
-            {NEXT_SESSION.time}
-          </span>
-          <span className={styles.nextType}>{NEXT_SESSION.label}</span>
-        </div>
-        <button type="button" className={styles.nextCta} aria-label="세션 상세">
-          <ArrowRightIcon className={styles.nextCtaIcon} />
         </button>
       </section>
     </div>

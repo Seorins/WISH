@@ -1,4 +1,4 @@
-import { CartesianGrid, Line, LineChart, ResponsiveContainer, XAxis, YAxis } from 'recharts'
+import { Area, AreaChart, CartesianGrid, ResponsiveContainer, XAxis, YAxis } from 'recharts'
 import { OVERALL_SCORE, RANGE_OF_MOTION, TREND, type RangeOfMotion } from '../data/mock'
 import { ArrowUpIcon, ChevronDownIcon, InfoIcon } from './icons'
 import { ScoreRing } from './ScoreRing'
@@ -17,14 +17,14 @@ export function OverallScoreCard() {
   return (
     <article className={styles.card}>
       <header className={styles.cardHead}>
-        <CardTitle>Overall Movement Score</CardTitle>
+        <CardTitle>전체 동작 점수</CardTitle>
       </header>
       <div className={styles.scoreBody}>
         <ScoreRing
           value={OVERALL_SCORE.current}
-          size={108}
-          strokeWidth={9}
-          fontSize={32}
+          size={90}
+          strokeWidth={8}
+          fontSize={26}
           gradientFrom="#6ddec0"
           gradientTo="#34c99c"
         />
@@ -33,7 +33,7 @@ export function OverallScoreCard() {
           <span className={styles.scoreSubtitle}>{OVERALL_SCORE.subtitle}</span>
           <span className={styles.scoreDelta}>
             <ArrowUpIcon className={styles.scoreDeltaIcon} />
-            {OVERALL_SCORE.delta} pts
+            {OVERALL_SCORE.delta}점
           </span>
         </div>
         <span className={styles.scoreStar} aria-hidden>
@@ -44,23 +44,40 @@ export function OverallScoreCard() {
   )
 }
 
+function buildYDomain(values: number[]): { domain: [number, number]; ticks: number[] } {
+  if (values.length === 0) return { domain: [0, 100], ticks: [0, 25, 50, 75, 100] }
+  const min = Math.min(...values)
+  const max = Math.max(...values)
+  const lower = Math.max(0, Math.floor((min - 5) / 10) * 10)
+  const upper = Math.min(100, Math.ceil((max + 5) / 10) * 10)
+  const span = upper - lower
+  const step = span / 4
+  const ticks = [0, 1, 2, 3, 4].map(i => Math.round(lower + step * i))
+  return { domain: [lower, upper], ticks }
+}
+
 export function TrendChartCard() {
+  const { domain, ticks } = buildYDomain(TREND.map(t => t.score))
   return (
-    <article className={styles.card}>
+    <article className={`${styles.card} ${styles.cardFlex}`}>
       <header className={styles.cardHead}>
-        <CardTitle>Movement Trend</CardTitle>
+        <CardTitle>동작 추세</CardTitle>
         <button type="button" className={styles.cardAction}>
-          Last 6 Sessions
+          최근 6회
           <ChevronDownIcon className={styles.cardActionChev} />
         </button>
       </header>
       <div className={styles.trendBody}>
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={TREND} margin={{ top: 8, right: 12, left: -8, bottom: 4 }}>
+          <AreaChart data={TREND} margin={{ top: 8, right: 12, left: -8, bottom: 4 }}>
             <defs>
               <linearGradient id="trend-line" x1="0" y1="0" x2="1" y2="0">
                 <stop offset="0%" stopColor="#a892ff" />
                 <stop offset="100%" stopColor="#7c5cff" />
+              </linearGradient>
+              <linearGradient id="trend-area" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#a892ff" stopOpacity={0.35} />
+                <stop offset="100%" stopColor="#a892ff" stopOpacity={0} />
               </linearGradient>
             </defs>
             <CartesianGrid stroke="#ECE9F5" vertical={false} />
@@ -72,22 +89,37 @@ export function TrendChartCard() {
               padding={{ left: 8, right: 8 }}
             />
             <YAxis
-              ticks={[0, 25, 50, 75, 100]}
-              domain={[0, 100]}
+              ticks={ticks}
+              domain={domain}
               tick={{ fontSize: 10.5, fill: '#b6b4c8' }}
               tickLine={false}
               axisLine={false}
               width={28}
             />
-            <Line
+            <Area
               type="monotone"
               dataKey="score"
               stroke="url(#trend-line)"
               strokeWidth={2.5}
-              dot={{ r: 3.5, fill: '#fff', stroke: '#7c5cff', strokeWidth: 2 }}
-              activeDot={{ r: 5.5, fill: '#7c5cff', stroke: '#fff', strokeWidth: 2.5 }}
+              fill="url(#trend-area)"
+              dot={(props: { cx?: number; cy?: number; index?: number; key?: string | number }) => {
+                const { cx = 0, cy = 0, index = 0, key } = props
+                const isLast = index === TREND.length - 1
+                return (
+                  <circle
+                    key={key ?? `trend-dot-${index}`}
+                    cx={cx}
+                    cy={cy}
+                    r={isLast ? 5.5 : 3.5}
+                    fill={isLast ? '#7c5cff' : '#fff'}
+                    stroke={isLast ? '#fff' : '#7c5cff'}
+                    strokeWidth={isLast ? 2.5 : 2}
+                  />
+                )
+              }}
+              activeDot={{ r: 6, fill: '#7c5cff', stroke: '#fff', strokeWidth: 2.5 }}
             />
-          </LineChart>
+          </AreaChart>
         </ResponsiveContainer>
       </div>
     </article>
@@ -105,9 +137,9 @@ export function ROMSummaryCard() {
   return (
     <article className={styles.card}>
       <header className={styles.cardHead}>
-        <CardTitle>Range of Motion Summary</CardTitle>
+        <CardTitle>관절 가동 범위</CardTitle>
         <button type="button" className={styles.cardAction}>
-          Details
+          상세 보기
         </button>
       </header>
       <div className={styles.romGrid}>
@@ -115,9 +147,6 @@ export function ROMSummaryCard() {
           const tone = ROM_TONE_CLASS[item.tone]
           return (
             <div key={item.joint} className={`${styles.romCell} ${tone.cell}`}>
-              <span className={styles.romEmoji} aria-hidden>
-                {item.emoji}
-              </span>
               <span className={styles.romJoint}>{item.joint}</span>
               <span className={styles.romPercent}>{item.percent}%</span>
               <span className={`${styles.romRating} ${tone.rating}`}>{item.rating}</span>

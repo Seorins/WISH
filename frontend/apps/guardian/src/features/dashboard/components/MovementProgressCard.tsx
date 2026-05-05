@@ -1,26 +1,15 @@
-import { useMemo, useState } from 'react'
-import { MOVEMENTS, type MovementCategory, type SessionView } from '../data/mock'
+import { useState } from 'react'
+import { MOVEMENTS, type SessionView } from '../data/mock'
 import { Character3D } from './Character3D'
-import { ChevronRightIcon, SparkleIcon } from './icons'
+import { ChevronDownIcon } from './icons'
 import { ScoreRing } from './ScoreRing'
 import styles from './MovementProgressCard.module.css'
 
-const CATEGORIES: ReadonlyArray<{ id: MovementCategory; label: string }> = [
-  { id: 'all', label: 'All Movements' },
-  { id: 'upper', label: 'Upper Body' },
-  { id: 'lower', label: 'Lower Body' },
-  { id: 'balance', label: 'Balance' },
-  { id: 'flexibility', label: 'Flexibility' },
-]
+const COLLAPSED_COUNT = 3
 
 export function MovementProgressCard() {
-  const [category, setCategory] = useState<MovementCategory>('all')
   const [session, setSession] = useState<SessionView>('current')
-
-  const filtered = useMemo(
-    () => (category === 'all' ? MOVEMENTS : MOVEMENTS.filter(m => m.category === category)),
-    [category],
-  )
+  const [expanded, setExpanded] = useState(false)
 
   const scoreColor = (score: number) => {
     if (score >= 90) return { from: '#6ddec0', to: '#34c99c' }
@@ -28,55 +17,45 @@ export function MovementProgressCard() {
     return { from: '#7cc7ff', to: '#5b9eff' }
   }
 
+  const visible = expanded ? MOVEMENTS : MOVEMENTS.slice(0, COLLAPSED_COUNT)
+  const canExpand = MOVEMENTS.length > COLLAPSED_COUNT
+
   return (
     <article className={styles.card}>
-      <header className={styles.headRow}>
-        <h2 className={styles.title}>
-          Movement
-          <br />
-          Progress
-          <SparkleIcon className={styles.titleSparkle} />
-        </h2>
-        <p className={styles.tagline}>
-          Track, understand, and celebrate
-          <br />
-          every step of your progress.
-        </p>
-      </header>
+      <div className={styles.sessionToggle}>
+        <div className={styles.toggleInner}>
+          <button
+            type="button"
+            className={`${styles.toggleBtn} ${session === 'current' ? styles.toggleBtnActive : ''}`}
+            onClick={() => setSession('current')}
+          >
+            현재 세션
+          </button>
+          <button
+            type="button"
+            className={`${styles.toggleBtn} ${session === 'previous' ? styles.toggleBtnActive : ''}`}
+            onClick={() => setSession('previous')}
+          >
+            이전 세션
+          </button>
+        </div>
+      </div>
 
       <div className={styles.leftCol}>
-        <div className={styles.chips} role="tablist">
-          {CATEGORIES.map(({ id, label }) => {
-            const isActive = id === category
-            return (
-              <button
-                key={id}
-                type="button"
-                role="tab"
-                aria-selected={isActive}
-                className={`${styles.chip} ${isActive ? styles.chipActive : ''}`}
-                onClick={() => setCategory(id)}
-              >
-                {label}
-              </button>
-            )
-          })}
-        </div>
-
         <div className={styles.list}>
-          {filtered.map(m => {
+          {visible.map(m => {
             const { from, to } = scoreColor(m.score)
             return (
               <div key={m.id} className={styles.row}>
                 <div className={styles.thumb} aria-hidden>
-                  {m.thumbnail}
+                  <img src={m.thumbnail} alt="" />
                 </div>
                 <span className={styles.rowName}>{m.name}</span>
                 <ScoreRing
                   value={m.score}
-                  size={50}
-                  strokeWidth={5}
-                  fontSize={15}
+                  size={52}
+                  strokeWidth={5.5}
+                  fontSize={17}
                   gradientFrom={from}
                   gradientTo={to}
                 />
@@ -85,35 +64,25 @@ export function MovementProgressCard() {
           })}
         </div>
 
-        <button type="button" className={styles.viewAll}>
-          View All Movements
-          <ChevronRightIcon className={styles.viewAllChev} />
-        </button>
+        {canExpand && (
+          <button
+            type="button"
+            className={styles.viewAll}
+            onClick={() => setExpanded(v => !v)}
+            aria-expanded={expanded}
+          >
+            {expanded ? '접기' : '전체 동작 보기'}
+            <ChevronDownIcon
+              className={`${styles.viewAllChev} ${expanded ? styles.viewAllChevOpen : ''}`}
+            />
+          </button>
+        )}
       </div>
 
       <div className={styles.rightCol}>
         <div className={styles.ghost} aria-hidden />
         <div className={styles.stage}>
           <Character3D />
-        </div>
-      </div>
-
-      <div className={styles.sessionToggle}>
-        <div className={styles.toggleInner}>
-          <button
-            type="button"
-            className={`${styles.toggleBtn} ${session === 'current' ? styles.toggleBtnActive : ''}`}
-            onClick={() => setSession('current')}
-          >
-            Current Session
-          </button>
-          <button
-            type="button"
-            className={`${styles.toggleBtn} ${session === 'previous' ? styles.toggleBtnActive : ''}`}
-            onClick={() => setSession('previous')}
-          >
-            Previous Session
-          </button>
         </div>
       </div>
     </article>

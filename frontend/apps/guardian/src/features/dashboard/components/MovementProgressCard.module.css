@@ -1,197 +1,23 @@
 .card {
   position: relative;
+  height: 100%;
   background: var(--dash-gradient-card-tint);
   border-radius: var(--dash-radius-card);
   box-shadow: var(--dash-shadow-card);
-  padding: var(--dash-space-7);
+  padding: var(--dash-space-5);
   display: grid;
   grid-template-columns: minmax(280px, 320px) minmax(0, 1fr);
-  grid-template-rows: auto 1fr auto;
-  gap: var(--dash-space-5) var(--dash-space-6);
-  min-height: 540px;
-  overflow: hidden;
-}
-
-.headRow {
-  grid-column: 1 / -1;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0;
-  font-size: 30px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  color: var(--dash-color-text-strong);
-  line-height: 1.1;
-}
-
-.titleSparkle {
-  color: var(--dash-color-yellow);
-  width: 22px;
-  height: 22px;
-  filter: drop-shadow(0 1px 2px rgba(255, 213, 92, 0.5));
-}
-
-.tagline {
-  margin: 0;
-  font-size: 13.5px;
-  font-weight: 500;
-  color: var(--dash-color-text-muted);
-  line-height: 1.5;
-  max-width: 320px;
-}
-
-.leftCol {
-  display: flex;
-  flex-direction: column;
-  gap: var(--dash-space-4);
-  min-width: 0;
-}
-
-.chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.chip {
-  appearance: none;
-  border: 1px solid transparent;
-  background: rgba(255, 255, 255, 0.55);
-  padding: 7px 14px;
-  border-radius: var(--dash-radius-pill);
-  cursor: pointer;
-  font: inherit;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--dash-color-text-muted);
-  transition:
-    background 0.15s,
-    color 0.15s,
-    box-shadow 0.15s;
-}
-
-.chip:hover {
-  background: #fff;
-  color: var(--dash-color-text-strong);
-}
-
-.chipActive {
-  background: var(--dash-gradient-primary);
-  color: #fff;
-  box-shadow: var(--dash-shadow-pill);
-}
-
-.chipActive:hover {
-  background: var(--dash-gradient-primary);
-  color: #fff;
-}
-
-.list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 14px 10px 10px;
-  background: var(--dash-color-surface);
-  border-radius: var(--dash-radius-md);
-  box-shadow: var(--dash-shadow-soft);
-  cursor: pointer;
-  transition: box-shadow 0.15s ease;
-}
-
-.row:hover {
-  box-shadow: var(--dash-shadow-card);
-}
-
-.thumb {
-  width: 50px;
-  height: 50px;
-  border-radius: 12px;
-  background: var(--dash-color-primary-50);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 28px;
-  flex-shrink: 0;
-}
-
-.rowName {
-  flex: 1;
-  font-size: 13.5px;
-  font-weight: 600;
-  color: var(--dash-color-text-strong);
-  letter-spacing: -0.005em;
-}
-
-.viewAll {
-  appearance: none;
-  border: 1px solid var(--dash-color-border-strong);
-  background: rgba(255, 255, 255, 0.6);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 16px;
-  border-radius: var(--dash-radius-md);
-  cursor: pointer;
-  font: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--dash-color-text);
-  transition: background 0.15s;
-}
-
-.viewAll:hover {
-  background: #fff;
-}
-
-.viewAllChev {
-  width: 16px;
-  height: 16px;
-  color: var(--dash-color-text-muted);
-}
-
-.rightCol {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  min-height: 360px;
-  min-width: 0;
-}
-
-.rightCol .ghost {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: radial-gradient(
-    ellipse 50% 65% at 60% 55%,
-    rgba(168, 146, 255, 0.18) 0%,
-    rgba(168, 146, 255, 0) 70%
-  );
-}
-
-.rightCol .stage {
-  position: relative;
-  flex: 1;
+  grid-template-rows: auto 1fr;
+  column-gap: var(--dash-space-5);
+  row-gap: var(--dash-space-3);
   min-height: 0;
 }
 
 .sessionToggle {
   grid-column: 1 / -1;
+  grid-row: 1;
   display: flex;
   justify-content: center;
-  margin-top: var(--dash-space-3);
 }
 
 .toggleInner {
@@ -199,16 +25,17 @@
   gap: 4px;
   padding: 4px;
   border-radius: var(--dash-radius-pill);
-  background: rgba(255, 255, 255, 0.65);
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: var(--dash-shadow-soft);
 }
 
 .toggleBtn {
   appearance: none;
   border: none;
   background: transparent;
-  padding: 9px 22px;
+  padding: 7px 20px;
   font: inherit;
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--dash-color-text-muted);
   border-radius: var(--dash-radius-pill);
@@ -230,4 +57,119 @@
 
 .toggleBtnActive:hover {
   color: #fff;
+}
+
+.leftCol {
+  grid-row: 2;
+  grid-column: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--dash-space-3);
+  min-width: 0;
+  min-height: 0;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px 8px 12px;
+  background: var(--dash-color-surface);
+  border-radius: var(--dash-radius-card);
+  box-shadow: var(--dash-shadow-card);
+  cursor: pointer;
+  transition: box-shadow 0.15s ease;
+}
+
+.row:hover {
+  box-shadow: var(--dash-shadow-card-hover);
+}
+
+.thumb {
+  width: 54px;
+  height: 54px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: transparent;
+}
+
+.thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.rowName {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--dash-color-text-strong);
+  letter-spacing: -0.01em;
+}
+
+.viewAll {
+  appearance: none;
+  border: 1px solid var(--dash-color-border-strong);
+  background: rgba(255, 255, 255, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 14px;
+  border-radius: var(--dash-radius-md);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--dash-color-text);
+  transition: background 0.15s;
+}
+
+.viewAll:hover {
+  background: #fff;
+}
+
+.viewAllChev {
+  width: 16px;
+  height: 16px;
+  color: var(--dash-color-text-muted);
+  transition: transform 0.2s ease;
+}
+
+.viewAllChevOpen {
+  transform: rotate(180deg);
+}
+
+.rightCol {
+  grid-row: 2;
+  grid-column: 2;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.ghost {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse 50% 65% at 50% 55%,
+    rgba(168, 146, 255, 0.18) 0%,
+    rgba(168, 146, 255, 0) 70%
+  );
+}
+
+.stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
 }
