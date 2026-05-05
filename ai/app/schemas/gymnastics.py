@@ -279,6 +279,24 @@ class DanielLeftSideBendEvaluationResponse(StretchHoldEvaluationResponseBase):
     features: DanielLeftSideBendFeaturesResponse
 
 
+class DanielRightSideBendEvaluationRequest(StretchHoldEvaluationRequestBase):
+    pass
+
+
+class DanielRightSideBendFeaturesResponse(BaseModel):
+    torso_tilt: float
+    wrist_height: float | None = None
+    left_elbow_angle: float | None = None
+    right_elbow_angle: float | None = None
+    pelvis_shift_x: float
+    pelvis_shift_y: float
+    pelvis_depth_shift: float
+
+
+class DanielRightSideBendEvaluationResponse(StretchHoldEvaluationResponseBase):
+    features: DanielRightSideBendFeaturesResponse
+
+
 class SideStepEvaluationRequest(BaseModel):
     frame: PoseFrameRequest
     previous_state: str = Field(default="idle", description="Previous evaluator state")
