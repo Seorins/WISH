@@ -21,6 +21,7 @@ import {
   formatExerciseType,
 } from '@/features/exerciseSessions/format'
 import { queryClient } from '@/queryClient'
+import { speakFeedback, stopFeedbackSpeech } from '@/shared/lib/feedbackTts'
 
 type GymnasticsMotion = {
   title: string
@@ -81,6 +82,13 @@ type LandmarkPayload = {
   visibility?: number
 }
 
+type GymnasticsFeedbackTts = {
+  should_play: boolean
+  key: string | null
+  text: string | null
+  priority: 'tracking' | 'posture' | null
+}
+
 type GymnasticsAiResponse = {
   state: string
   step_count?: number
@@ -113,6 +121,7 @@ type GymnasticsAiResponse = {
   baseline_left_wrist_forward?: number | null
   baseline_right_wrist_forward?: number | null
   baseline_stance_span?: number | null
+  tts?: GymnasticsFeedbackTts
 }
 
 type GymnasticsAiState = {
@@ -445,6 +454,8 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
   private savedSession: ExerciseSessionDetail | null = null
   private saveState: 'idle' | 'saving' | 'success' | 'error' = 'idle'
   private saveRetryButton?: Phaser.GameObjects.Text
+  private lastTtsKey: string | null = null
+  private lastTtsPlayedAtMs = 0
 
   constructor(
     sceneKey: string,
@@ -507,6 +518,9 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     this.hasSubmittedSession = false
     this.savedSession = null
     this.saveState = 'idle'
+    this.lastTtsKey = null
+    this.lastTtsPlayedAtMs = 0
+    stopFeedbackSpeech()
 
     addCoverBackground(this, GYMNASTICS_PLAY_BACKGROUND_TEXTURE_KEY).setDepth(0)
     this.add.rectangle(vw / 2, vh / 2, vw, vh, 0x2d1b10, 0.16).setDepth(1)
@@ -1442,7 +1456,9 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
       return
     }
 
-    this.updateAiState((await response.json()) as GymnasticsAiResponse)
+    const payload = (await response.json()) as GymnasticsAiResponse
+    this.playFeedbackTtsIfNeeded(payload)
+    this.updateAiState(payload)
     this.clearAiConnectionIssue()
     this.applyAiFeedback()
     this.advanceMotionIfCompleted()
@@ -1930,6 +1946,29 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     this.positionFeedbackStar()
   }
 
+  private playFeedbackTtsIfNeeded(payload: GymnasticsAiResponse) {
+    const tts = payload.tts
+    // TTS is only emitted for displayed feedback transitions with a complete code/text pair.
+    if (!tts?.should_play || !tts.key || !tts.text) return
+
+    const now = Date.now()
+    const cooldownMs = tts.priority === 'tracking' ? 2500 : 3000
+
+    if (this.lastTtsKey === tts.key && now - this.lastTtsPlayedAtMs < cooldownMs) {
+      return
+    }
+
+    this.lastTtsKey = tts.key
+    this.lastTtsPlayedAtMs = now
+    speakFeedback(tts.text)
+  }
+
+  private resetFeedbackTts() {
+    stopFeedbackSpeech()
+    this.lastTtsKey = null
+    this.lastTtsPlayedAtMs = 0
+  }
+
   private getFriendlyFeedbackText(feedback: string | null | undefined) {
     if (!feedback?.trim()) return null
 
@@ -2179,6 +2218,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     this.saveState = 'saving'
     this.isMotionAdvancing = true
     this.aiRequestsEnabled = false
+    this.resetFeedbackTts()
     this.renderSaveState()
 
     try {
@@ -2257,6 +2297,8 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
   private advanceToNextMotion(manual: boolean) {
     if (manual && this.isMotionAdvancing) return
 
+    this.resetFeedbackTts()
+
     if (this.motionIndex < this.motions.length - 1) {
       if (manual) {
         this.recordCurrentMotionResult()
@@ -2280,6 +2322,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
   private returnToPreviousMotion() {
     if (this.isMotionAdvancing || this.motionIndex <= 0) return
 
+    this.resetFeedbackTts()
     this.motionIndex -= 1
     this.aiState = createInitialAiState()
     this.aiError = null
@@ -2417,6 +2460,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     this.poseTracker?.stop()
     this.poseTracker = null
     this.requestInFlight = false
+    this.resetFeedbackTts()
   }
 }
 
