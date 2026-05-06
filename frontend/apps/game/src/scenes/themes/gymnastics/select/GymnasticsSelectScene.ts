@@ -29,11 +29,10 @@ import {
   drawCutePillButton,
   type CuteCardPalette,
 } from '@/game/ui/cuteCard'
-import { addCoverBackground } from '@/game/world/background'
 import { createRatioRectangle, getRectangleEntryState } from '@/game/world/portal'
 import { seongsuDialogs } from './dialog/seongsuDialogs'
 
-const TALK_DISTANCE = 100
+const TALK_DISTANCE = 82
 const GYMNASTICS_ROOM_SPAWN = { xRatio: 0.5, yRatio: 0.76 }
 const GYMNASTICS_EXIT_PORTAL = { xRatio: 0.44, yRatio: 0.86, widthRatio: 0.12, heightRatio: 0.12 }
 const GYMNASTICS_RETURN_SPAWN = { xRatio: 0.733, yRatio: 0.286 }
@@ -44,6 +43,19 @@ const CARD_FRAME_ASPECT_RATIO = 408 / 612
 const CONTENT_CONFIRM_VISIBLE_MS = 1000
 const CARD_FONT_FAMILY =
   '"Pretendard Variable", Pretendard, "Noto Sans KR", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", sans-serif'
+const GYMNASTICS_BACKGROUND_TEXTURE_KEY = 'gymnastics-background-v3'
+const gymnasticsRoomSceneConfig = {
+  backgroundFitMode: 'cover',
+  backgroundAnchor: 'center',
+  showNpcIndicator: true,
+  npcPosition: {
+    anchorTarget: 'center_main_purple_mat',
+    xRatio: 0.5,
+    yRatio: 0.62,
+    offsetX: 0,
+    offsetY: 0,
+  },
+} as const
 const RACCOON_IDLE_ANIM_KEY = 'raccoon-gymnastics-idle'
 const RACCOON_TEXTURE_KEY = 'raccoon-clean'
 const RACCOON_FRAME_SIZE = 360
@@ -101,6 +113,13 @@ type GymnasticsSelectSceneData = {
   spawn?: RatioPoint
 }
 
+type BackgroundDisplayArea = {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
 export class GymnasticsSelectScene extends Phaser.Scene {
   private player!: PlayerSprite
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys
@@ -123,6 +142,7 @@ export class GymnasticsSelectScene extends Phaser.Scene {
   private isWaitingContentStart = false
   private contentStartTimer: Phaser.Time.TimerEvent | null = null
   private sessionHistoryButton!: Phaser.GameObjects.Text
+  private backgroundDisplayArea!: BackgroundDisplayArea
 
   constructor() {
     super({ key: 'GymnasticsSelectScene' })
@@ -130,7 +150,7 @@ export class GymnasticsSelectScene extends Phaser.Scene {
 
   preload() {
     this.load.image(
-      'gymnastics-background',
+      GYMNASTICS_BACKGROUND_TEXTURE_KEY,
       assetPath('images/themes/gymnastics/background/gymbackground.png'),
     )
     this.load.image(
@@ -166,12 +186,18 @@ export class GymnasticsSelectScene extends Phaser.Scene {
     this.clearContentStartTimer()
     this.target = null
 
-    addCoverBackground(this, 'gymnastics-background')
+    this.backgroundDisplayArea = this.addContainBackground(GYMNASTICS_BACKGROUND_TEXTURE_KEY)
     this.physics.world.setBounds(0, 0, vw, vh)
 
-    const raccoonX = vw * 0.58
-    const raccoonY = vh * 0.6
-    const raccoonH = vh * 0.18
+    const npcPosition = this.toBackgroundPoint(
+      gymnasticsRoomSceneConfig.npcPosition.xRatio,
+      gymnasticsRoomSceneConfig.npcPosition.yRatio,
+      gymnasticsRoomSceneConfig.npcPosition.offsetX,
+      gymnasticsRoomSceneConfig.npcPosition.offsetY,
+    )
+    const raccoonX = npcPosition.x
+    const raccoonY = npcPosition.y
+    const raccoonH = Math.min(vh, this.backgroundDisplayArea.height) * 0.17
     this.createCleanRaccoonTexture()
     this.ensureRaccoonAnimations()
     this.raccoon = this.add.sprite(raccoonX, raccoonY, RACCOON_TEXTURE_KEY, 0)
@@ -186,6 +212,7 @@ export class GymnasticsSelectScene extends Phaser.Scene {
       depth: 6,
       bobOffset: 10,
     })
+    this.talkIcon.setVisible(gymnasticsRoomSceneConfig.showNpcIndicator)
 
     this.createDialogUi()
     this.createSessionHistoryButton(vw)
@@ -193,7 +220,12 @@ export class GymnasticsSelectScene extends Phaser.Scene {
     ensurePlayerWalkAnimations(this)
 
     const spawn = data.spawn ?? GYMNASTICS_ROOM_SPAWN
-    this.player = createPlayer(this, vw * spawn.xRatio, vh * spawn.yRatio)
+    const spawnX = vw * spawn.xRatio
+    const spawnY = vh * spawn.yRatio
+    this.player = createPlayer(this, spawnX, spawnY)
+    this.dialogDismissed =
+      Phaser.Math.Distance.Between(spawnX, spawnY, this.raccoonAnchor.x, this.raccoonAnchor.y) <=
+      TALK_DISTANCE
     this.exitPortal = createRatioRectangle(vw, vh, GYMNASTICS_EXIT_PORTAL)
     this.cursors = this.input.keyboard!.createCursorKeys()
 
@@ -341,6 +373,36 @@ export class GymnasticsSelectScene extends Phaser.Scene {
 
   private openSessionHistory() {
     this.game.events.emit('exercise-sessions:open')
+  }
+
+  private addContainBackground(textureKey: string): BackgroundDisplayArea {
+    const { width, height } = this.scale
+    const backgroundFill = this.add.rectangle(width / 2, height / 2, width, height, 0x1f1a15)
+    backgroundFill.setDepth(-1)
+
+    const background = this.add.image(width / 2, height / 2, textureKey)
+    const source = background.texture.getSourceImage() as HTMLImageElement
+    const scale =
+      gymnasticsRoomSceneConfig.backgroundFitMode === 'cover'
+        ? Math.max(width / source.width, height / source.height)
+        : Math.min(width / source.width, height / source.height)
+    const displayWidth = source.width * scale
+    const displayHeight = source.height * scale
+    background.setOrigin(0.5).setScale(scale).setDepth(0)
+
+    return {
+      x: (width - displayWidth) / 2,
+      y: (height - displayHeight) / 2,
+      width: displayWidth,
+      height: displayHeight,
+    }
+  }
+
+  private toBackgroundPoint(xRatio: number, yRatio: number, offsetX = 0, offsetY = 0) {
+    return {
+      x: this.backgroundDisplayArea.x + this.backgroundDisplayArea.width * xRatio + offsetX,
+      y: this.backgroundDisplayArea.y + this.backgroundDisplayArea.height * yRatio + offsetY,
+    }
   }
 
   private createCleanRaccoonTexture() {

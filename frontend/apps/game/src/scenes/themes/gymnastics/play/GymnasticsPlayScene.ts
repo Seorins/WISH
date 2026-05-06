@@ -1,8 +1,26 @@
 import Phaser from 'phaser'
+import {
+  calculateAverageAccuracy,
+  createExerciseSession,
+  CREATE_EXERCISE_SESSION_ERROR_MESSAGE,
+  type CreateExerciseSessionRequest,
+  type ExerciseSessionDetail,
+} from '@wish/api-client'
 import { assetPath } from '@/game/assets/assetPath'
 import { POSE_LANDMARK_NAMES, PoseTracker } from '@/game/motion/poseTracker'
 import { fadeToScene } from '@/game/systems/sceneTransition'
 import { addCoverBackground } from '@/game/world/background'
+import { resolvePatientProfileId } from '@/features/exerciseSessions/patientProfile'
+import {
+  EXERCISE_SESSION_REPORT_QUERY_KEY,
+  EXERCISE_SESSIONS_QUERY_KEY,
+} from '@/features/exerciseSessions/hooks'
+import {
+  formatAccuracy,
+  formatDurationSec,
+  formatExerciseType,
+} from '@/features/exerciseSessions/format'
+import { queryClient } from '@/queryClient'
 
 type GymnasticsMotion = {
   title: string
@@ -34,16 +52,26 @@ type DanielMotionKind =
 type TopAiMotionSpec = {
   type: 'top'
   kind: GymnasticsMotionKind
+  exerciseMotionId: number
   targetSteps: number
 }
 
 type DanielAiMotionSpec = {
   type: 'daniel'
   kind: DanielMotionKind
+  exerciseMotionId: number
   targetHoldMs: number
 }
 
 type AiMotionSpec = TopAiMotionSpec | DanielAiMotionSpec
+
+type LocalExerciseMotionResult = {
+  exerciseMotionId: number
+  durationSec: number
+  accuracy: number
+  completedReps: number
+  feedback: string
+}
 
 type LandmarkPayload = {
   name: string
@@ -131,23 +159,49 @@ const AI_BASE_URL = (import.meta.env.VITE_AI_BASE_URL ?? 'http://localhost:8001/
   /\/$/,
   '',
 )
+const GYMNASTICS_PLAY_BACKGROUND_TEXTURE_KEY = 'gymnastics-play-background-v3'
 
 const TOP_AI_SEQUENCE: AiMotionSpec[] = [
-  { type: 'top', kind: 'march', targetSteps: 8 },
-  { type: 'top', kind: 'side-step', targetSteps: 8 },
-  { type: 'top', kind: 'diagonal-body-punch', targetSteps: 8 },
-  { type: 'top', kind: 'diagonal-face-punch', targetSteps: 8 },
-  { type: 'top', kind: 'squat', targetSteps: 8 },
+  { type: 'top', kind: 'march', exerciseMotionId: 1, targetSteps: 8 },
+  { type: 'top', kind: 'side-step', exerciseMotionId: 2, targetSteps: 8 },
+  { type: 'top', kind: 'diagonal-body-punch', exerciseMotionId: 3, targetSteps: 8 },
+  { type: 'top', kind: 'diagonal-face-punch', exerciseMotionId: 4, targetSteps: 8 },
+  { type: 'top', kind: 'squat', exerciseMotionId: 5, targetSteps: 8 },
 ]
 
 const DEFAULT_DANIEL_TARGET_HOLD_MS = 3000
 
 const DANIEL_AI_SEQUENCE: AiMotionSpec[] = [
-  { type: 'daniel', kind: 'daniel_forward_press', targetHoldMs: DEFAULT_DANIEL_TARGET_HOLD_MS },
-  { type: 'daniel', kind: 'daniel_upward_press', targetHoldMs: DEFAULT_DANIEL_TARGET_HOLD_MS },
-  { type: 'daniel', kind: 'daniel_side_bend_left', targetHoldMs: DEFAULT_DANIEL_TARGET_HOLD_MS },
-  { type: 'daniel', kind: 'daniel_side_bend_right', targetHoldMs: DEFAULT_DANIEL_TARGET_HOLD_MS },
-  { type: 'daniel', kind: 'daniel_forward_bend', targetHoldMs: DEFAULT_DANIEL_TARGET_HOLD_MS },
+  {
+    type: 'daniel',
+    kind: 'daniel_forward_press',
+    exerciseMotionId: 6,
+    targetHoldMs: DEFAULT_DANIEL_TARGET_HOLD_MS,
+  },
+  {
+    type: 'daniel',
+    kind: 'daniel_upward_press',
+    exerciseMotionId: 7,
+    targetHoldMs: DEFAULT_DANIEL_TARGET_HOLD_MS,
+  },
+  {
+    type: 'daniel',
+    kind: 'daniel_side_bend_left',
+    exerciseMotionId: 8,
+    targetHoldMs: DEFAULT_DANIEL_TARGET_HOLD_MS,
+  },
+  {
+    type: 'daniel',
+    kind: 'daniel_side_bend_right',
+    exerciseMotionId: 9,
+    targetHoldMs: DEFAULT_DANIEL_TARGET_HOLD_MS,
+  },
+  {
+    type: 'daniel',
+    kind: 'daniel_forward_bend',
+    exerciseMotionId: 10,
+    targetHoldMs: DEFAULT_DANIEL_TARGET_HOLD_MS,
+  },
 ]
 
 const MOTION_ENDPOINTS: Record<GymnasticsMotionKind, string> = {
@@ -351,11 +405,19 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
   private isMotionAdvancing = false
   private aiState = createInitialAiState()
   private aiError: string | null = null
+  private sessionStartedAtMs = 0
+  private motionStartedAtMs = 0
+  private motionResults: LocalExerciseMotionResult[] = []
+  private hasSubmittedSession = false
+  private savedSession: ExerciseSessionDetail | null = null
+  private saveState: 'idle' | 'saving' | 'success' | 'error' = 'idle'
+  private saveRetryButton?: Phaser.GameObjects.Text
 
   constructor(
     sceneKey: string,
     private readonly motions: GymnasticsMotion[],
     private readonly modeLabel: string,
+    private readonly exerciseType: string,
     private readonly aiSequence: AiMotionSpec[],
   ) {
     super({ key: sceneKey })
@@ -363,7 +425,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
 
   preload() {
     this.load.image(
-      'gymnastics-play-background',
+      GYMNASTICS_PLAY_BACKGROUND_TEXTURE_KEY,
       assetPath('images/themes/gymnastics/background/gymbackground.png'),
     )
     this.load.image(
@@ -396,8 +458,14 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     this.requestInFlight = false
     this.aiRequestsEnabled = true
     this.isMotionAdvancing = false
+    this.sessionStartedAtMs = Date.now()
+    this.motionStartedAtMs = this.sessionStartedAtMs
+    this.motionResults = []
+    this.hasSubmittedSession = false
+    this.savedSession = null
+    this.saveState = 'idle'
 
-    addCoverBackground(this, 'gymnastics-play-background').setDepth(0)
+    addCoverBackground(this, GYMNASTICS_PLAY_BACKGROUND_TEXTURE_KEY).setDepth(0)
     this.add.rectangle(vw / 2, vh / 2, vw, vh, 0x2d1b10, 0.16).setDepth(1)
 
     this.createCameraTexture()
@@ -774,6 +842,26 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
         .setOrigin(0.5)
         .setDepth(13),
     ]
+
+    this.saveRetryButton = this.add
+      .text(x + width / 2, feedbackFrameTop + feedbackFrameH * 0.82, '다시 저장하기', {
+        fontFamily: 'sans-serif',
+        fontSize: `${Math.round(Phaser.Math.Clamp(feedbackH * 0.07, 14, 19))}px`,
+        color: '#ffffff',
+        fontStyle: 'bold',
+        align: 'center',
+        backgroundColor: '#2f9e58',
+        padding: { x: 18, y: 8 },
+      })
+      .setOrigin(0.5)
+      .setDepth(14)
+      .setVisible(false)
+      .setInteractive({ useHandCursor: true })
+
+    this.saveRetryButton.on('pointerup', () => {
+      if (this.saveState !== 'error') return
+      void this.finishExerciseSession()
+    })
   }
 
   private createPanel(x: number, y: number, width: number, height: number, radius: number) {
@@ -1592,6 +1680,8 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
   }
 
   private applyAiFeedback() {
+    if (this.saveState !== 'idle') return
+
     const motionSpec = this.getCurrentAiMotionSpec()
     const progressText =
       motionSpec.type === 'daniel'
@@ -1617,6 +1707,115 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     this.positionFeedbackStar()
   }
 
+  private recordCurrentMotionResult() {
+    const motionSpec = this.getCurrentAiMotionSpec()
+    if (
+      this.motionResults.some(result => result.exerciseMotionId === motionSpec.exerciseMotionId)
+    ) {
+      return
+    }
+
+    const durationSec = Math.max(0, Math.round((Date.now() - this.motionStartedAtMs) / 1000))
+    const accuracy = Phaser.Math.Clamp(this.aiState.accuracy, 0, 1)
+    const completedReps =
+      motionSpec.type === 'daniel'
+        ? this.aiState.holdCompleted || this.aiState.holdDurationMs >= motionSpec.targetHoldMs
+          ? 1
+          : 0
+        : this.aiState.stepCount
+    const feedback =
+      this.aiState.representativeFeedbackText ??
+      this.aiState.displayedFeedbackText ??
+      this.aiState.feedback ??
+      ''
+
+    this.motionResults.push({
+      exerciseMotionId: motionSpec.exerciseMotionId,
+      durationSec,
+      accuracy,
+      completedReps,
+      feedback,
+    })
+  }
+
+  private buildExerciseSessionPayload(): CreateExerciseSessionRequest {
+    const patientProfileId = resolvePatientProfileId()
+    if (!patientProfileId) {
+      throw new Error('환자 정보가 올바르지 않습니다.')
+    }
+
+    const durationSec = Math.max(0, Math.round((Date.now() - this.sessionStartedAtMs) / 1000))
+    return {
+      patientProfileId,
+      exerciseType: this.exerciseType,
+      durationSec,
+      averageAccuracy: calculateAverageAccuracy(this.motionResults),
+      motions: this.motionResults,
+    }
+  }
+
+  private async finishExerciseSession() {
+    if (this.hasSubmittedSession || this.saveState === 'saving' || this.saveState === 'success')
+      return
+
+    this.recordCurrentMotionResult()
+    this.hasSubmittedSession = true
+    this.saveState = 'saving'
+    this.isMotionAdvancing = true
+    this.aiRequestsEnabled = false
+    this.renderSaveState()
+
+    try {
+      const payload = this.buildExerciseSessionPayload()
+      const savedSession = await createExerciseSession(payload)
+      this.savedSession = savedSession
+      this.saveState = 'success'
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: [EXERCISE_SESSIONS_QUERY_KEY, savedSession.patientProfileId],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: [EXERCISE_SESSION_REPORT_QUERY_KEY, savedSession.patientProfileId],
+        }),
+      ])
+      this.renderSaveState()
+      this.time.delayedCall(1500, () => fadeToScene(this, 'GymnasticsSelectScene'))
+    } catch (error) {
+      console.warn('[GymnasticsPlayScene] Failed to save exercise session.', error)
+      this.hasSubmittedSession = false
+      this.saveState = 'error'
+      this.renderSaveState()
+    }
+  }
+
+  private renderSaveState() {
+    this.saveRetryButton?.setVisible(this.saveState === 'error')
+
+    if (this.saveState === 'saving') {
+      this.feedbackTitleText?.setText('기록 저장 중')
+      this.feedbackTipTexts[0]?.setText('기록을 저장하는 중입니다.')
+    } else if (this.saveState === 'success') {
+      const savedSession = this.savedSession
+      this.feedbackTitleText?.setText('저장 완료')
+      this.feedbackTipTexts[0]?.setText(
+        savedSession
+          ? `체조 기록이 저장되었습니다. ${formatExerciseType(
+              savedSession.exerciseType,
+            )} · ${formatDurationSec(savedSession.durationSec)} · ${formatAccuracy(
+              savedSession.averageAccuracy,
+            )}`
+          : '체조 기록이 저장되었습니다.',
+      )
+    } else if (this.saveState === 'error') {
+      this.feedbackTitleText?.setText('저장 실패')
+      this.feedbackTipTexts[0]?.setText(CREATE_EXERCISE_SESSION_ERROR_MESSAGE)
+    }
+
+    this.fitTextToWidth(this.feedbackTitleText, this.feedbackTitleMaxWidth, 34, 20)
+    this.fitTextToWidth(this.feedbackTipTexts[0], this.feedbackTitleMaxWidth, 22, 14)
+    this.positionFeedbackStar()
+  }
+
   private advanceMotionIfCompleted() {
     const motionSpec = this.getCurrentAiMotionSpec()
     const isComplete =
@@ -1626,6 +1825,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     if (!isComplete || this.isMotionAdvancing) return
 
     this.isMotionAdvancing = true
+    this.recordCurrentMotionResult()
     this.feedbackTitleText?.setText('Complete')
     this.time.delayedCall(700, () => {
       this.advanceToNextMotion(false)
@@ -1636,16 +1836,19 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     if (manual && this.isMotionAdvancing) return
 
     if (this.motionIndex < this.motions.length - 1) {
+      if (manual) {
+        this.recordCurrentMotionResult()
+      }
       this.motionIndex += 1
       this.aiState = createInitialAiState()
       this.aiError = null
       this.isMotionAdvancing = false
+      this.motionStartedAtMs = Date.now()
       this.renderMotion()
       return
     }
 
-    this.isMotionAdvancing = false
-    fadeToScene(this, 'GymnasticsSelectScene')
+    void this.finishExerciseSession()
   }
 
   private returnToPreviousMotion() {
@@ -1748,7 +1951,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
 
 export class GymnasticsTopScene extends GymnasticsPlaySceneBase {
   constructor() {
-    super('GymnasticsTopScene', TOP_AI_MOTIONS, 'top \uCCB4\uC870', TOP_AI_SEQUENCE)
+    super('GymnasticsTopScene', TOP_AI_MOTIONS, 'top \uCCB4\uC870', 'TOP', TOP_AI_SEQUENCE)
   }
 }
 
@@ -1758,6 +1961,7 @@ export class GymnasticsDanielScene extends GymnasticsPlaySceneBase {
       'GymnasticsDanielScene',
       DANIEL_MOTIONS,
       '\uB2E4\uB2C8\uC5D8 \uCCB4\uC870',
+      'DANIEL',
       DANIEL_AI_SEQUENCE,
     )
   }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { QueryClientProvider } from '@tanstack/react-query'
 import { createGame } from './phaser'
 import type Phaser from 'phaser'
 import DanielForwardPressDebugPage from './debug/DanielForwardPressDebugPage'
@@ -16,6 +16,7 @@ import SquatDebugPage from './debug/SquatDebugPage'
 import { ensureDemoAuthToken } from './auth/demoAuth'
 import { AuthOverlay } from './features/auth'
 import { ExerciseSessionListOverlay } from './features/exerciseSessions'
+import { queryClient } from './queryClient'
 
 const DEBUG_MARCH_MODE = 'march'
 const DEBUG_SIDE_STEP_MODE = 'side-step'
@@ -28,7 +29,6 @@ const DEBUG_DANIEL_UPWARD_PRESS_MODE = 'daniel-upward-press'
 const DEBUG_DANIEL_LEFT_SIDE_BEND_MODE = 'daniel-left-side-bend'
 const DEBUG_DANIEL_RIGHT_SIDE_BEND_MODE = 'daniel-right-side-bend'
 const DEBUG_DANIEL_STRETCH_MODE = 'daniel-stretch'
-const queryClient = new QueryClient()
 
 function App() {
   const params = new URLSearchParams(window.location.search)

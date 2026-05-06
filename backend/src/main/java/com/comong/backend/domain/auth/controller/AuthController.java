@@ -17,6 +17,7 @@ import com.comong.backend.domain.user.dto.UserResponse;
 import com.comong.backend.global.common.response.ApiResponse;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 
@@ -29,6 +30,17 @@ public class AuthController {
     private final AuthService authService;
 
     @Operation(summary = "회원가입", description = "이메일/닉네임/비밀번호로 신규 계정을 생성한다.")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "201",
+                description = "가입 성공"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "400",
+                description = "입력값 검증 실패 (G-001) — 이메일 형식, 비밀번호 길이 등"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "409",
+                description = "이메일 중복 (U-002) 또는 닉네임 중복 (U-003). 응답 body 의 code 필드로 구분.")
+    })
     @PostMapping("/signup")
     public ResponseEntity<ApiResponse<UserResponse>> signup(
             @Valid @RequestBody SignupRequest request) {
@@ -37,6 +49,17 @@ public class AuthController {
     }
 
     @Operation(summary = "로그인", description = "이메일/비밀번호로 JWT access 토큰을 발급한다.")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "200",
+                description = "로그인 성공"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "400",
+                description = "입력값 검증 실패 (G-001)"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "401",
+                description = "이메일/비밀번호 불일치 (A-001) — 어느 쪽이 틀렸는지는 의도적으로 노출하지 않음")
+    })
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<TokenResponse>> login(
             @Valid @RequestBody LoginRequest request) {

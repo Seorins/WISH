@@ -28,35 +28,36 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
 
 /**
- * S3 백엔드 {@link ImageStorage} 구현체. private 버킷을 가정 — 외부 노출 URL 은 매 응답마다 짧은 TTL 로 발급되는 presigned GET
- * URL.
+ * S3 백엔드 {@link VideoStorage} 구현체. {@link S3ImageStorage} 와 동일한 패턴 — 영상 매직바이트 검증 (MP4 ftyp / WebM
+ * EBML), private 버킷 + presigned GET URL.
  *
  * <p><b>저장 식별자 (DB)</b>: SDK 가 만들어주는 영구 객체 URL ({@code
- * https://<bucket>.s3.<region>.amazonaws.com/<prefix>/<uuid>.<ext>}). 이 값은 DB 에 저장되며 자체로 클라이언트가 GET
- * 해도 403 (private 버킷) — 응답 직렬화 시점에 {@link #toPublicUrl} 이 presigned URL 로 변환해 내려준다.
+ * https://<bucket>.s3.<region>.amazonaws.com/<prefix>/videos/<uuid>.<ext>}). 영상은 이미지와 prefix 를 분리
+ * ({@code videos/}) 해 ops/감사 가독성 확보 — {@link LocalVideoStorage} 와 동일 컨벤션.
  *
- * <p><b>업로드 검증 — 4중 방어</b>: {@link LocalImageStorage} 와 동일 로직 (Content-Type, magic bytes, 확장자 일치,
- * whitelist). 두 구현체가 같은 검증 의도를 갖되 helper 추출은 별도 후속 이슈로 분리 — 변경 시 두 곳 모두 갱신 필수.
+ * <p><b>업로드 방식</b>: 100MB 한도 내라 단일 {@code putObject} 로 충분 (S3 putObject 는 5GB 까지). {@code
+ * S3TransferManager} 의 분할 업로드는 파일이 더 커질 때 도입 — 현재는 의존성만 클래스패스에 있고 사용은 후속 이슈에서.
  *
- * <p><b>idempotent delete</b>: {@code NoSuchKey} 는 무시 (이미 삭제된 객체에 대한 재호출 안전).
+ * <p><b>idempotent delete</b>: {@code NoSuchKey} 무시.
  */
 @Slf4j
 @Component
 @ConditionalOnProperty(name = "storage.type", havingValue = "s3")
-public class S3ImageStorage implements ImageStorage {
+public class S3VideoStorage implements VideoStorage {
 
-    private static final Set<String> ALLOWED_EXTENSIONS =
-            Set.of(".png", ".jpg", ".jpeg", ".webp", ".gif");
+    private static final Set<String> ALLOWED_EXTENSIONS = Set.of(".mp4", ".webm");
 
     private static final int MAGIC_HEAD_SIZE = 12;
 
-    private static final long MAX_IMAGE_BYTES = 10L * 1024 * 1024;
+    private static final long MAX_VIDEO_BYTES = 100L * 1024 * 1024;
+
+    private static final String VIDEOS_SUBPATH = "videos";
 
     private final StorageProperties properties;
     private final S3Client s3Client;
     private final S3Presigner s3Presigner;
 
-    public S3ImageStorage(
+    public S3VideoStorage(
             StorageProperties properties, S3Client s3Client, S3Presigner s3Presigner) {
         this.properties = properties;
         this.s3Client = s3Client;
@@ -64,15 +65,21 @@ public class S3ImageStorage implements ImageStorage {
     }
 
     @Override
-    public StoredImage upload(MultipartFile file) {
-        ImageFormat detectedFormat = validateImage(file);
+    public StoredVideo upload(MultipartFile file) {
+        VideoFormat detectedFormat = validateVideo(file);
         String originalExtension = extractExtension(file.getOriginalFilename());
         if (!detectedFormat.matchesExtension(originalExtension)) {
-            throw new BusinessException(StorageErrorCode.INVALID_IMAGE);
+            throw new BusinessException(StorageErrorCode.INVALID_VIDEO);
         }
 
         StorageProperties.S3 s3 = properties.s3();
-        String key = s3.prefix() + "/" + UUID.randomUUID() + detectedFormat.canonicalExtension();
+        String key =
+                s3.prefix()
+                        + "/"
+                        + VIDEOS_SUBPATH
+                        + "/"
+                        + UUID.randomUUID()
+                        + detectedFormat.canonicalExtension();
 
         try (InputStream in = file.getInputStream()) {
             s3Client.putObject(
@@ -83,7 +90,7 @@ public class S3ImageStorage implements ImageStorage {
                             .build(),
                     RequestBody.fromInputStream(in, file.getSize()));
         } catch (IOException | S3Exception e) {
-            log.warn("S3 이미지 업로드 실패 (bucket={}, key={}): {}", s3.bucket(), key, e.getMessage(), e);
+            log.warn("S3 영상 업로드 실패 (bucket={}, key={}): {}", s3.bucket(), key, e.getMessage(), e);
             throw new BusinessException(StorageErrorCode.STORAGE_FAILURE);
         }
 
@@ -91,14 +98,12 @@ public class S3ImageStorage implements ImageStorage {
                 s3Client.utilities()
                         .getUrl(GetUrlRequest.builder().bucket(s3.bucket()).key(key).build())
                         .toString();
-        return new StoredImage(permanentUrl);
+        return new StoredVideo(permanentUrl);
     }
 
     /**
-     * @return presigned GET URL, 또는 stored 가 자기 형식 (S3 객체 URL) 이 아닐 때 {@code null}. 후자는
-     *     [S14P31E103-493 머지 후 dev/prod 가 s3 로 전환됐는데 DB 에 옛 LocalImageStorage 시절 URL 이 남아있는 케이스] 를
-     *     graceful 하게 처리하기 위함 — 응답이 500 으로 깨지지 않고 클라엔 {@code imageUrl: null} 로 내려간다
-     *     (S14P31E103-511).
+     * @return presigned GET URL, 또는 stored 가 자기 형식 (S3 객체 URL) 이 아닐 때 {@code null}. graceful 처리 의도는
+     *     {@link S3ImageStorage#toPublicUrl} javadoc 참조 (S14P31E103-511).
      */
     @Override
     public String toPublicUrl(String stored) {
@@ -120,10 +125,7 @@ public class S3ImageStorage implements ImageStorage {
         return s3Presigner.presignGetObject(req).url().toString();
     }
 
-    /**
-     * stored 가 자기 형식이 아니면 idempotent 무시 (S3 에 객체 자체가 없을 가능성). 옛 LocalImageStorage 시절 URL 을 가진 작품을
-     * UI 에서 삭제해도 500 으로 깨지지 않도록 (S14P31E103-511).
-     */
+    /** stored 가 자기 형식이 아니면 idempotent 무시 (S14P31E103-511). */
     @Override
     public void delete(String stored) {
         if (stored == null || stored.isBlank()) {
@@ -140,27 +142,14 @@ public class S3ImageStorage implements ImageStorage {
             s3Client.deleteObject(
                     DeleteObjectRequest.builder().bucket(s3.bucket()).key(key).build());
         } catch (NoSuchKeyException ignored) {
-            // idempotent — 이미 사라진 객체에 대한 재시도는 정상 흐름
+            // idempotent — 이미 사라진 객체에 대한 재시도는 정상
         } catch (S3Exception e) {
-            log.warn("S3 이미지 삭제 실패 (bucket={}, key={}): {}", s3.bucket(), key, e.getMessage(), e);
+            log.warn("S3 영상 삭제 실패 (bucket={}, key={}): {}", s3.bucket(), key, e.getMessage(), e);
             throw new BusinessException(StorageErrorCode.STORAGE_FAILURE);
         }
     }
 
-    /**
-     * SDK 가 만들어주는 객체 URL 에서 S3 key 추출. 두 형식 지원:
-     *
-     * <ul>
-     *   <li>virtual-hosted (운영 기본): {@code https://<bucket>.s3.<region>.amazonaws.com/<key>} — path
-     *       자체가 key
-     *   <li>path-style (LocalStack 등 endpoint override 환경): {@code https://<host>/<bucket>/<key>} —
-     *       path 첫 segment 가 bucket
-     * </ul>
-     *
-     * <p>host 에 bucket prefix 가 붙었는지로 두 형식을 구분. 둘 다 아닌 형식 (옛 LocalImageStorage URL, DB 변조, 적대 입력 등)
-     * 은 WARN 로그를 남기고 {@link Optional#empty()} 반환 — 호출자는 graceful 처리. 운영자는 WARN 양으로 stale 데이터 / 변조
-     * 가능성을 모니터링 (S14P31E103-511).
-     */
+    /** {@link S3ImageStorage#tryExtractKey(String)} 와 동일 — virtual-hosted / path-style 양쪽 지원. */
     private Optional<String> tryExtractKey(String url) {
         URI uri;
         try {
@@ -187,115 +176,76 @@ public class S3ImageStorage implements ImageStorage {
         return Optional.empty();
     }
 
-    private ImageFormat validateImage(MultipartFile file) {
+    private VideoFormat validateVideo(MultipartFile file) {
         if (file == null || file.isEmpty()) {
-            throw new BusinessException(StorageErrorCode.INVALID_IMAGE);
+            throw new BusinessException(StorageErrorCode.INVALID_VIDEO);
         }
-        if (file.getSize() > MAX_IMAGE_BYTES) {
+        if (file.getSize() > MAX_VIDEO_BYTES) {
             throw new BusinessException(StorageErrorCode.PAYLOAD_TOO_LARGE);
         }
         String contentType = file.getContentType();
-        if (contentType == null || !contentType.toLowerCase(Locale.ROOT).startsWith("image/")) {
-            throw new BusinessException(StorageErrorCode.INVALID_IMAGE);
+        if (contentType == null || !contentType.toLowerCase(Locale.ROOT).startsWith("video/")) {
+            throw new BusinessException(StorageErrorCode.INVALID_VIDEO);
         }
         return detectMagicBytes(file);
     }
 
-    private ImageFormat detectMagicBytes(MultipartFile file) {
+    private VideoFormat detectMagicBytes(MultipartFile file) {
         byte[] head;
         try (InputStream in = file.getInputStream()) {
             head = in.readNBytes(MAGIC_HEAD_SIZE);
         } catch (IOException e) {
-            log.warn("magic-bytes 읽기 IO 실패: {}", e.getMessage(), e);
+            log.warn("영상 magic-bytes 읽기 IO 실패: {}", e.getMessage(), e);
             throw new BusinessException(StorageErrorCode.STORAGE_FAILURE);
         }
         if (head.length < MAGIC_HEAD_SIZE) {
-            throw new BusinessException(StorageErrorCode.INVALID_IMAGE);
+            throw new BusinessException(StorageErrorCode.INVALID_VIDEO);
         }
-        if (isPng(head)) {
-            return ImageFormat.PNG;
+        if (isMp4(head)) {
+            return VideoFormat.MP4;
         }
-        if (isJpeg(head)) {
-            return ImageFormat.JPEG;
+        if (isWebm(head)) {
+            return VideoFormat.WEBM;
         }
-        if (isGif(head)) {
-            return ImageFormat.GIF;
-        }
-        if (isWebp(head)) {
-            return ImageFormat.WEBP;
-        }
-        throw new BusinessException(StorageErrorCode.INVALID_IMAGE);
+        throw new BusinessException(StorageErrorCode.INVALID_VIDEO);
     }
 
-    private static boolean isPng(byte[] h) {
-        return h.length >= 8
-                && (h[0] & 0xFF) == 0x89
-                && h[1] == 0x50
-                && h[2] == 0x4E
-                && h[3] == 0x47
-                && h[4] == 0x0D
-                && h[5] == 0x0A
-                && h[6] == 0x1A
-                && h[7] == 0x0A;
+    private static boolean isMp4(byte[] h) {
+        return h.length >= 8 && h[4] == 'f' && h[5] == 't' && h[6] == 'y' && h[7] == 'p';
     }
 
-    private static boolean isJpeg(byte[] h) {
-        return h.length >= 3
-                && (h[0] & 0xFF) == 0xFF
-                && (h[1] & 0xFF) == 0xD8
-                && (h[2] & 0xFF) == 0xFF;
-    }
-
-    private static boolean isGif(byte[] h) {
-        if (h.length < 6) {
-            return false;
-        }
-        return h[0] == 'G'
-                && h[1] == 'I'
-                && h[2] == 'F'
-                && h[3] == '8'
-                && (h[4] == '7' || h[4] == '9')
-                && h[5] == 'a';
-    }
-
-    private static boolean isWebp(byte[] h) {
-        return h.length >= 12
-                && h[0] == 'R'
-                && h[1] == 'I'
-                && h[2] == 'F'
-                && h[3] == 'F'
-                && h[8] == 'W'
-                && h[9] == 'E'
-                && h[10] == 'B'
-                && h[11] == 'P';
+    private static boolean isWebm(byte[] h) {
+        return h.length >= 4
+                && (h[0] & 0xFF) == 0x1A
+                && (h[1] & 0xFF) == 0x45
+                && (h[2] & 0xFF) == 0xDF
+                && (h[3] & 0xFF) == 0xA3;
     }
 
     private String extractExtension(String originalFilename) {
         if (originalFilename == null) {
-            throw new BusinessException(StorageErrorCode.INVALID_IMAGE);
+            throw new BusinessException(StorageErrorCode.INVALID_VIDEO);
         }
         int dot = originalFilename.lastIndexOf('.');
         if (dot < 0 || dot == originalFilename.length() - 1) {
-            throw new BusinessException(StorageErrorCode.INVALID_IMAGE);
+            throw new BusinessException(StorageErrorCode.INVALID_VIDEO);
         }
         String ext = originalFilename.substring(dot).toLowerCase(Locale.ROOT);
         if (!ALLOWED_EXTENSIONS.contains(ext)) {
-            throw new BusinessException(StorageErrorCode.INVALID_IMAGE);
+            throw new BusinessException(StorageErrorCode.INVALID_VIDEO);
         }
         return ext;
     }
 
-    private enum ImageFormat {
-        PNG(".png", "image/png", Set.of(".png")),
-        JPEG(".jpg", "image/jpeg", Set.of(".jpg", ".jpeg")),
-        GIF(".gif", "image/gif", Set.of(".gif")),
-        WEBP(".webp", "image/webp", Set.of(".webp"));
+    private enum VideoFormat {
+        MP4(".mp4", "video/mp4", Set.of(".mp4")),
+        WEBM(".webm", "video/webm", Set.of(".webm"));
 
         private final String canonicalExtension;
         private final String mimeType;
         private final Set<String> acceptedExtensions;
 
-        ImageFormat(String canonicalExtension, String mimeType, Set<String> acceptedExtensions) {
+        VideoFormat(String canonicalExtension, String mimeType, Set<String> acceptedExtensions) {
             this.canonicalExtension = canonicalExtension;
             this.mimeType = mimeType;
             this.acceptedExtensions = acceptedExtensions;

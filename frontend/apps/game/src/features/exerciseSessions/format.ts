@@ -1,4 +1,8 @@
-import type { ExerciseSessionSummary } from '@wish/api-client'
+import type {
+  ExerciseSessionDetail,
+  ExerciseSessionMotionResult,
+  ExerciseSessionSummary,
+} from '@wish/api-client'
 
 export type ExerciseSessionReportSummary = {
   totalSessionCount: number
@@ -10,12 +14,12 @@ export type ExerciseSessionReportSummary = {
 }
 
 export function formatDurationSec(durationSec: number) {
-  if (!Number.isFinite(durationSec) || durationSec <= 0) return '0초'
+  if (!Number.isFinite(durationSec) || durationSec <= 0) return '0\uCD08'
   const totalSeconds = Math.floor(durationSec)
   const minutes = Math.floor(totalSeconds / 60)
   const seconds = totalSeconds % 60
-  if (minutes <= 0) return `${seconds}초`
-  return seconds > 0 ? `${minutes}분 ${seconds}초` : `${minutes}분`
+  if (minutes <= 0) return `${seconds}\uCD08`
+  return seconds > 0 ? `${minutes}\uBD84 ${seconds}\uCD08` : `${minutes}\uBD84`
 }
 
 export function formatAccuracy(value: number | null | undefined) {
@@ -26,10 +30,10 @@ export function formatAccuracy(value: number | null | undefined) {
 
 export function formatExerciseType(type: string) {
   const labels: Record<string, string> = {
-    TOP: '상체',
-    BOTTOM: '하체',
-    FULL_BODY: '전신',
-    DANIEL: '다니엘',
+    TOP: '\uC0C1\uCCB4',
+    BOTTOM: '\uD558\uCCB4',
+    FULL_BODY: '\uC804\uC2E0',
+    DANIEL: '\uB2E4\uB2C8\uC5D8',
   }
 
   return labels[type] ?? type
@@ -43,9 +47,23 @@ export function formatDateTime(createdAt: string | null | undefined) {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
   })
     .format(date)
     .replace(/\s/g, '')
+}
+
+export function sortExerciseSessionMotions(
+  motions: ExerciseSessionDetail['motions'],
+): ExerciseSessionMotionResult[] {
+  return [...motions].sort((a, b) => {
+    if (a.routineOrder !== b.routineOrder) {
+      return a.routineOrder - b.routineOrder
+    }
+
+    return a.id - b.id
+  })
 }
 
 export function buildExerciseSessionReportSummary(
