@@ -58,6 +58,9 @@ dependencies {
     implementation platform('software.amazon.awssdk:bom:2.29.45')
     implementation 'software.amazon.awssdk:s3'
     implementation 'software.amazon.awssdk:s3-transfer-manager'
+    // LocalStack: S3*Storage 단위 테스트가 실제 S3 API 와 통신하도록 한다 (Mock 보다 회귀 안정성 ↑).
+    // testcontainers BOM 은 spring-boot-testcontainers 가 관리. (S14P31E103-491)
+    testImplementation 'org.testcontainers:testcontainers-localstack'
     testCompileOnly 'org.projectlombok:lombok'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     testAnnotationProcessor 'org.projectlombok:lombok'

@@ -73,21 +73,25 @@ public class ArtworkService {
                                 .playDurationSeconds(request.playDurationSeconds())
                                 .isPublic(request.isPublic())
                                 .build());
-        return ArtworkResponse.from(saved);
+        return ArtworkResponse.from(saved, imageStorage);
     }
 
     public ArtworkResponse findOne(Long currentUserId, Long id) {
         Artwork artwork = findOrThrow(id);
         accessChecker.verifyReadable(artwork, currentUserId);
-        return ArtworkResponse.from(artwork);
+        return ArtworkResponse.from(artwork, imageStorage);
     }
 
     public Page<ArtworkResponse> findMine(Long userId, Pageable pageable) {
-        return artworkRepository.findByOwnerUserId(userId, pageable).map(ArtworkResponse::from);
+        return artworkRepository
+                .findByOwnerUserId(userId, pageable)
+                .map(artwork -> ArtworkResponse.from(artwork, imageStorage));
     }
 
     public Page<PublicArtworkResponse> findPublic(Pageable pageable) {
-        return artworkRepository.findPublic(pageable).map(PublicArtworkResponse::from);
+        return artworkRepository
+                .findPublic(pageable)
+                .map(artwork -> PublicArtworkResponse.from(artwork, imageStorage));
     }
 
     @Transactional
@@ -110,7 +114,7 @@ public class ArtworkService {
             artwork.addPlayDuration(request.additionalPlayDurationSeconds());
         }
 
-        return ArtworkResponse.from(artwork);
+        return ArtworkResponse.from(artwork, imageStorage);
     }
 
     @Transactional
