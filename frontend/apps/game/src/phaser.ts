@@ -37,6 +37,7 @@ export function createGame(parent: HTMLElement): Phaser.Game {
     height: window.innerHeight,
     backgroundColor: '#000000',
     antialias: true,
+    roundPixels: true,
     disableContextMenu: true,
     input: {
       mouse: {
