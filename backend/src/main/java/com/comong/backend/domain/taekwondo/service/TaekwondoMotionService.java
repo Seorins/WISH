@@ -48,12 +48,12 @@ public class TaekwondoMotionService {
 
     public List<TaekwondoMotionResponse> findAllByPoomsae(Poomsae poomsae) {
         return taekwondoMotionRepository.findAllByPoomsaeOrderByRoutineOrderAsc(poomsae).stream()
-                .map(TaekwondoMotionResponse::from)
+                .map(motion -> TaekwondoMotionResponse.from(motion, imageStorage, videoStorage))
                 .toList();
     }
 
     public TaekwondoMotionResponse findOne(Long id) {
-        return TaekwondoMotionResponse.from(findOrThrow(id));
+        return TaekwondoMotionResponse.from(findOrThrow(id), imageStorage, videoStorage);
     }
 
     @Transactional
@@ -92,7 +92,7 @@ public class TaekwondoMotionService {
                                 .demoVideoUrl(demoVideoUrl)
                                 .thumbnailUrl(thumbnailUrl)
                                 .build());
-        return TaekwondoMotionResponse.from(saved);
+        return TaekwondoMotionResponse.from(saved, imageStorage, videoStorage);
     }
 
     @Transactional
@@ -122,7 +122,7 @@ public class TaekwondoMotionService {
         applyThumbnailChange(motion, request, thumbnail);
         applyDemoVideoChange(motion, request, demoVideo);
 
-        return TaekwondoMotionResponse.from(motion);
+        return TaekwondoMotionResponse.from(motion, imageStorage, videoStorage);
     }
 
     @Transactional
