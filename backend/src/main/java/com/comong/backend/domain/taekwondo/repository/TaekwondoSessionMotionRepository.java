@@ -18,4 +18,6 @@ public interface TaekwondoSessionMotionRepository
                     + "order by m.routineOrder asc")
     List<TaekwondoSessionMotion> findAllBySessionIdWithMotionOrderByRoutineOrderAsc(
             @Param("sessionId") Long sessionId);
+
+    boolean existsByMotionId(Long motionId);
 }
