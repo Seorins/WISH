@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createGame } from './phaser'
 import type Phaser from 'phaser'
 import DanielForwardPressDebugPage from './debug/DanielForwardPressDebugPage'
@@ -14,6 +15,7 @@ import SideStepDebugPage from './debug/SideStepDebugPage'
 import SquatDebugPage from './debug/SquatDebugPage'
 import { ensureDemoAuthToken } from './auth/demoAuth'
 import { AuthOverlay } from './features/auth'
+import { ExerciseSessionListOverlay } from './features/exerciseSessions'
 
 const DEBUG_MARCH_MODE = 'march'
 const DEBUG_SIDE_STEP_MODE = 'side-step'
@@ -26,6 +28,7 @@ const DEBUG_DANIEL_UPWARD_PRESS_MODE = 'daniel-upward-press'
 const DEBUG_DANIEL_LEFT_SIDE_BEND_MODE = 'daniel-left-side-bend'
 const DEBUG_DANIEL_RIGHT_SIDE_BEND_MODE = 'daniel-right-side-bend'
 const DEBUG_DANIEL_STRETCH_MODE = 'daniel-stretch'
+const queryClient = new QueryClient()
 
 function App() {
   const params = new URLSearchParams(window.location.search)
@@ -33,6 +36,7 @@ function App() {
   const containerRef = useRef<HTMLDivElement>(null)
   const gameRef = useRef<Phaser.Game | null>(null)
   const [showAuth, setShowAuth] = useState(false)
+  const [showExerciseSessions, setShowExerciseSessions] = useState(false)
 
   useEffect(() => {
     if (
@@ -59,6 +63,7 @@ function App() {
       const game = createGame(containerRef.current)
       gameRef.current = game
       game.events.on('auth:request', () => setShowAuth(true))
+      game.events.on('exercise-sessions:open', () => setShowExerciseSessions(true))
     })
 
     return () => {
@@ -138,6 +143,12 @@ function App() {
         }}
       />
       <AuthOverlay open={showAuth} onAuthSuccess={handleAuthSuccess} onCancel={handleAuthCancel} />
+      <QueryClientProvider client={queryClient}>
+        <ExerciseSessionListOverlay
+          open={showExerciseSessions}
+          onClose={() => setShowExerciseSessions(false)}
+        />
+      </QueryClientProvider>
     </>
   )
 }

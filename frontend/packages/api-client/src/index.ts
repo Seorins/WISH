@@ -10,6 +10,7 @@ export {
   reorderExerciseMotions,
   updateExerciseMotion,
 } from './exercise-motions'
+export { EXERCISE_SESSION_ERROR_MESSAGE, getExerciseSessions } from './exercise-sessions'
 export { getMyBestMusicResults, saveMusicResult } from './music-results'
 export { createPatientProfile, listPatientProfiles } from './patient-profiles'
 export {
@@ -44,6 +45,7 @@ export type {
   UpdateExerciseMotionParams,
   UpdateExerciseMotionRequest,
 } from './exercise-motions'
+export type { ExerciseSessionSummary, ExerciseSessionType } from './exercise-sessions'
 export type { MusicBestResult, MusicResult, MusicResultRequest } from './music-results'
 export type { Gender, PatientProfile, PatientProfileCreateRequest } from './patient-profiles'
 export type {

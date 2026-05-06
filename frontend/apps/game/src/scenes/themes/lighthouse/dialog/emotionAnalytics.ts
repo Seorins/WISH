@@ -149,7 +149,8 @@ function inferSupportPreference(events: SelectedChoiceEvent[]): SelectedSupportP
   const choiceIds = events.map(event => event.choiceId)
   if (choiceIds.includes('support_family')) return 'family'
   if (choiceIds.includes('support_medical')) return 'medical_staff'
-  if (choiceIds.includes('support_draw') || choiceIds.includes('light_draw')) return 'draw_or_write'
+  if (choiceIds.includes('support_draw') || choiceIds.includes('action_draw'))
+    return 'draw_or_write'
   return 'unknown'
 }
 
