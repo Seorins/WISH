@@ -33,7 +33,7 @@ const RETURN_SPAWN = { xRatio: 0.445, yRatio: 0.15 }
 const SEOKJAE = { xRatio: 0.5, yRatio: 0.4, scaleRatio: 0.34 }
 const SEOKJAE_INTERACTION = { radiusRatio: 0.08 }
 const SEOKJAE_TALK_ICON_OFFSET = { yRatio: 0.15 }
-const SEOKJAE_POSES = [0, 1, 2]
+const SEOKJAE_POSES = [4, 6, 7]
 const RANDOM_POSE_DELAY = 500
 const DIALOG_TEXT_BOX = { x: 580, y: 180, width: 1500, height: 400 }
 const DIALOG_NAME_BOX = { x: 505, y: 109, width: 390, height: 150 }
@@ -48,6 +48,7 @@ export class TaekwondoSelectScene extends Phaser.Scene {
   private lastDirection: PlayerDirection = 'down'
   private exitPortal!: Phaser.Geom.Rectangle
   private randomPoseTimer?: Phaser.Time.TimerEvent
+  private seokjaePoseIndex = 0
   private isTransitioning = false
 
   private dialog!: SimpleDialogUi
@@ -112,6 +113,7 @@ export class TaekwondoSelectScene extends Phaser.Scene {
   create() {
     const { width: vw, height: vh } = this.scale
     this.isTransitioning = false
+    this.seokjaePoseIndex = 0
     this.target = null
     this.isDialogVisible = false
     this.dialogDismissed = false
@@ -252,12 +254,13 @@ export class TaekwondoSelectScene extends Phaser.Scene {
 
   private startRandomSeokjaePose() {
     this.randomPoseTimer?.remove(false)
-    this.seokjaeNpc.setFrame(Phaser.Utils.Array.GetRandom(SEOKJAE_POSES))
+    this.seokjaeNpc.setFrame(SEOKJAE_POSES[this.seokjaePoseIndex])
     this.randomPoseTimer = this.time.addEvent({
       delay: RANDOM_POSE_DELAY,
       loop: true,
       callback: () => {
-        this.seokjaeNpc.setFrame(Phaser.Utils.Array.GetRandom(SEOKJAE_POSES))
+        this.seokjaePoseIndex = (this.seokjaePoseIndex + 1) % SEOKJAE_POSES.length
+        this.seokjaeNpc.setFrame(SEOKJAE_POSES[this.seokjaePoseIndex])
       },
     })
   }
