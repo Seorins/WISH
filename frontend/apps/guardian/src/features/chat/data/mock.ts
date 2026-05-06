@@ -1,9 +1,11 @@
 import comongImg from '@/assets/comong.png'
+import comongChatImg from '@/assets/comong_chat.png'
 import dainImg from '@/assets/dain.png'
 import gunbinImg from '@/assets/gunbin.png'
 import jeonghoImg from '@/assets/jeongho.png'
 import sehyunImg from '@/assets/sehyun.png'
 import yeongchulImg from '@/assets/yeongchul.png'
+import youngchulChatImg from '@/assets/youngchul_chat.png'
 
 export type EmotionTone = 'calm' | 'tired' | 'worried'
 
@@ -16,12 +18,25 @@ export type ChatCharacter = {
   thumbOffsetY?: string
   /** 사이드바 썸네일 줌 배율. 클수록 클로즈업 (기본 1.25) */
   thumbScale?: string
+  /** 메인 stage 우측에 표시할 채팅용 이미지 (없으면 avatarUrl 폴백) */
+  chatImageUrl?: string
+  /** 우측 이미지의 width 값. 클수록 줌인. 기본 260% */
+  chatImageScale?: string
+  /** 우측 이미지 가로 오프셋(중앙 기준, 음수=왼쪽). 예: '-8%' */
+  chatImageOffsetX?: string
+  /** 우측 이미지 세로 오프셋(상단 기준, 양수=아래로). 예: '12%' */
+  chatImageOffsetY?: string
+}
+
+export type MessagePart = {
+  text: string
+  sentiment?: 'positive' | 'negative'
 }
 
 export type ChatMessage = {
   id: string
   speaker: 'character' | 'child'
-  text: string
+  parts: MessagePart[]
 }
 
 export type EmotionTrendPoint = {
@@ -56,6 +71,7 @@ export const CHARACTERS: ChatCharacter[] = [
     emotion: 'tired',
     thumbOffsetY: '-4%',
     thumbScale: '1.45',
+    chatImageUrl: youngchulChatImg,
   },
   {
     id: 'comong',
@@ -64,6 +80,10 @@ export const CHARACTERS: ChatCharacter[] = [
     emotion: 'calm',
     thumbOffsetY: '-10%',
     thumbScale: '1.5',
+    chatImageUrl: comongChatImg,
+    chatImageScale: '180%',
+    chatImageOffsetX: '-3%',
+    chatImageOffsetY: '14%',
   },
   {
     id: 'dain',
@@ -100,15 +120,32 @@ export const CHARACTERS: ChatCharacter[] = [
 ]
 
 export const SESSION_META = {
-  characterId: 'comong',
+  characterId: 'yeongchul',
   whenLabel: '어제, 오후 7:20',
   durationLabel: '대화 완료 (10분)',
 }
 
 export const MESSAGES: ChatMessage[] = [
-  { id: 'm1', speaker: 'character', text: '오늘 하루는 어땠어?' },
-  { id: 'm2', speaker: 'child', text: '조금 피곤했어. 숙제가 많았거든.' },
-  { id: 'm3', speaker: 'character', text: '이야기해줘서 고마워!' },
+  { id: 'm1', speaker: 'character', parts: [{ text: '오늘 기분은 어땠어?' }] },
+  {
+    id: 'm2',
+    speaker: 'child',
+    parts: [
+      { text: '주사 맞을 때 조금 ' },
+      { text: '무서웠어', sentiment: 'negative' },
+      { text: '.' },
+    ],
+  },
+  { id: 'm3', speaker: 'character', parts: [{ text: '잘 참았어, 정말 씩씩하다!' }] },
+  {
+    id: 'm4',
+    speaker: 'child',
+    parts: [
+      { text: '엄마가 옆에 있어줘서 ' },
+      { text: '안심됐어', sentiment: 'positive' },
+      { text: '.' },
+    ],
+  },
 ]
 
 export const SUMMARY: ConversationSummary = {

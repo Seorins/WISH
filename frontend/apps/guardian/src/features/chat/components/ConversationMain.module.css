@@ -82,11 +82,31 @@
   min-height: 0;
   border-radius: 20px;
   background: linear-gradient(180deg, #f7f4ff 0%, #ffffff 100%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  align-items: stretch;
   padding: 16px;
   overflow: hidden;
+  gap: 12px;
+}
+
+.stageLeft,
+.stageRight {
+  height: 100%;
+  min-width: 0;
+}
+
+.stageRight {
+  position: relative;
+}
+
+.partnerImg {
+  position: absolute;
+  width: var(--partner-img-scale, 260%);
+  height: auto;
+  top: var(--partner-img-y, -2%);
+  left: 50%;
+  transform: translateX(calc(-50% + var(--partner-img-x, 0%)));
 }
 
 .bubbles {
@@ -94,6 +114,7 @@
   flex-direction: column;
   gap: 10px;
   align-items: center;
+  justify-content: center;
 }
 
 .bubble {
@@ -105,12 +126,34 @@
   font-weight: 500;
   max-width: 360px;
   box-shadow: 0 2px 6px rgba(60, 50, 120, 0.06);
+  animation: bubbleIn 0.45s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+@keyframes bubbleIn {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .bubbleChild {
   background: #f3f0ff;
-  color: var(--dash-color-primary, #7c5cff);
+  color: var(--dash-color-text-strong, #1f1b3a);
   border-color: transparent;
+}
+
+.bubbleTextPositive {
+  color: #2563eb;
+  font-weight: 700;
+}
+
+.bubbleTextNegative {
+  color: #dc2626;
+  font-weight: 700;
 }
 
 .summarySection {

@@ -37,6 +37,10 @@ export function ChatPage() {
           durationLabel={SESSION_META.durationLabel}
           messages={MESSAGES}
           summary={SUMMARY}
+          partnerImageUrl={selected.chatImageUrl ?? selected.avatarUrl}
+          partnerImageScale={selected.chatImageScale}
+          partnerImageOffsetX={selected.chatImageOffsetX}
+          partnerImageOffsetY={selected.chatImageOffsetY}
         />
       }
       rightPanel={
