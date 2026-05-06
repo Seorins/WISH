@@ -14,7 +14,9 @@ export {
   calculateAverageAccuracy,
   CREATE_EXERCISE_SESSION_ERROR_MESSAGE,
   createExerciseSession,
+  EXERCISE_SESSION_DETAIL_ERROR_MESSAGE,
   EXERCISE_SESSION_ERROR_MESSAGE,
+  getExerciseSessionDetail,
   getExerciseSessions,
   validateCreateExerciseSessionRequest,
 } from './exercise-sessions'
