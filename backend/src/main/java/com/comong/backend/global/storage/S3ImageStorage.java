@@ -5,6 +5,7 @@ import java.io.InputStream;
 import java.net.URI;
 import java.time.Duration;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -93,13 +94,23 @@ public class S3ImageStorage implements ImageStorage {
         return new StoredImage(permanentUrl);
     }
 
+    /**
+     * @return presigned GET URL, 또는 stored 가 자기 형식 (S3 객체 URL) 이 아닐 때 {@code null}. 후자는
+     *     [S14P31E103-493 머지 후 dev/prod 가 s3 로 전환됐는데 DB 에 옛 LocalImageStorage 시절 URL 이 남아있는 케이스] 를
+     *     graceful 하게 처리하기 위함 — 응답이 500 으로 깨지지 않고 클라엔 {@code imageUrl: null} 로 내려간다
+     *     (S14P31E103-511).
+     */
     @Override
     public String toPublicUrl(String stored) {
         if (stored == null || stored.isBlank()) {
             return stored;
         }
         StorageProperties.S3 s3 = properties.s3();
-        String key = extractKey(stored);
+        Optional<String> keyOpt = tryExtractKey(stored);
+        if (keyOpt.isEmpty()) {
+            return null;
+        }
+        String key = keyOpt.get();
         GetObjectPresignRequest req =
                 GetObjectPresignRequest.builder()
                         .signatureDuration(Duration.ofSeconds(s3.presignedTtlSeconds()))
@@ -109,13 +120,22 @@ public class S3ImageStorage implements ImageStorage {
         return s3Presigner.presignGetObject(req).url().toString();
     }
 
+    /**
+     * stored 가 자기 형식이 아니면 idempotent 무시 (S3 에 객체 자체가 없을 가능성). 옛 LocalImageStorage 시절 URL 을 가진 작품을
+     * UI 에서 삭제해도 500 으로 깨지지 않도록 (S14P31E103-511).
+     */
     @Override
     public void delete(String stored) {
         if (stored == null || stored.isBlank()) {
             return;
         }
         StorageProperties.S3 s3 = properties.s3();
-        String key = extractKey(stored);
+        Optional<String> keyOpt = tryExtractKey(stored);
+        if (keyOpt.isEmpty()) {
+            log.info("S3 형식 아닌 stored URL — delete idempotent 무시: {}", stored);
+            return;
+        }
+        String key = keyOpt.get();
         try {
             s3Client.deleteObject(
                     DeleteObjectRequest.builder().bucket(s3.bucket()).key(key).build());
@@ -137,32 +157,34 @@ public class S3ImageStorage implements ImageStorage {
      *       path 첫 segment 가 bucket
      * </ul>
      *
-     * <p>host 에 bucket prefix 가 붙었는지로 두 형식을 구분. 둘 다 아닌 형식은 무결성 위반으로 STORAGE_FAILURE 거부.
+     * <p>host 에 bucket prefix 가 붙었는지로 두 형식을 구분. 둘 다 아닌 형식 (옛 LocalImageStorage URL, DB 변조, 적대 입력 등)
+     * 은 WARN 로그를 남기고 {@link Optional#empty()} 반환 — 호출자는 graceful 처리. 운영자는 WARN 양으로 stale 데이터 / 변조
+     * 가능성을 모니터링 (S14P31E103-511).
      */
-    private String extractKey(String url) {
+    private Optional<String> tryExtractKey(String url) {
         URI uri;
         try {
             uri = URI.create(url);
         } catch (IllegalArgumentException e) {
-            log.warn("S3 URL 무결성 위반 — URI 파싱 실패: {}", url);
-            throw new BusinessException(StorageErrorCode.STORAGE_FAILURE);
+            log.warn("S3 URL 형식 아님 — URI 파싱 실패: {}", url);
+            return Optional.empty();
         }
         String path = uri.getPath();
         if (path == null || path.length() <= 1 || !path.startsWith("/")) {
-            log.warn("S3 URL 무결성 위반 — path 비어있음: {}", url);
-            throw new BusinessException(StorageErrorCode.STORAGE_FAILURE);
+            log.warn("S3 URL 형식 아님 — path 비어있음: {}", url);
+            return Optional.empty();
         }
         String pathWithoutLeadingSlash = path.substring(1);
         String host = uri.getHost();
         String bucket = properties.s3().bucket();
         if (host != null && host.startsWith(bucket + ".")) {
-            return pathWithoutLeadingSlash;
+            return Optional.of(pathWithoutLeadingSlash);
         }
         if (pathWithoutLeadingSlash.startsWith(bucket + "/")) {
-            return pathWithoutLeadingSlash.substring(bucket.length() + 1);
+            return Optional.of(pathWithoutLeadingSlash.substring(bucket.length() + 1));
         }
-        log.warn("S3 URL 무결성 위반 — 알려진 형식 아님: {}", url);
-        throw new BusinessException(StorageErrorCode.STORAGE_FAILURE);
+        log.warn("S3 URL 형식 아님 — 알려진 형식 아님: {}", url);
+        return Optional.empty();
     }
 
     private ImageFormat validateImage(MultipartFile file) {

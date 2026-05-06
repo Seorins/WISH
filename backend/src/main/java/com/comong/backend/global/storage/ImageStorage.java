@@ -35,8 +35,12 @@ public interface ImageStorage {
      * <p>기본 구현은 identity (로컬 디스크 저장소처럼 식별자 자체가 이미 외부 노출 URL 인 경우). S3 구현체는 presigner 로 짧은 TTL GET
      * URL 발급.
      *
+     * <p><b>graceful fallback (S14P31E103-511)</b>: 구현체가 자기 형식이 아닌 stored 를 만나면 (다른 백엔드 시절 옛 데이터,
+     * DB 변조, 적대 입력 등) 예외 대신 {@code null} 을 반환한다. 호출자 (응답 매핑) 는 결과를 그대로 응답에 넣고, 결과가 null 이면 응답의 url
+     * 필드도 null 로 내려간다. 운영자는 구현체 로그(WARN) 양으로 stale 데이터 / 변조 가능성을 모니터링한다.
+     *
      * @param stored {@link #upload} 가 반환했던, 그리고 DB 에 저장된 식별자
-     * @return 클라이언트가 그대로 GET 할 수 있는 URL
+     * @return 클라이언트가 그대로 GET 할 수 있는 URL, 또는 stored 가 구현체 형식이 아닐 때 {@code null}
      */
     default String toPublicUrl(String stored) {
         return stored;

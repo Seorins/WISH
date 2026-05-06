@@ -217,6 +217,34 @@ class S3ImageStorageTest {
     }
 
     @Test
+    void toPublicUrlReturnsNullForLegacyLocalStorageUrl() {
+        // S14P31E103-511 — #493 머지 후 dev 에 옛 LocalImageStorage URL 이 DB 에 남아있는 케이스.
+        // toPublicUrl 이 예외 던지지 않고 null 반환해서 응답이 500 으로 깨지지 않게 한다.
+        S3ImageStorage storage = new S3ImageStorage(properties, s3Client, s3Presigner);
+
+        String legacyUrl = "/api/v1/uploads/0fd6176f-6731-4f7b-ba62-867b5b121090.png";
+        assertThat(storage.toPublicUrl(legacyUrl)).isNull();
+    }
+
+    @Test
+    void deleteIsIdempotentForLegacyLocalStorageUrl() {
+        // S14P31E103-511 — 옛 작품을 UI 에서 삭제해도 500 으로 깨지지 않게.
+        S3ImageStorage storage = new S3ImageStorage(properties, s3Client, s3Presigner);
+
+        String legacyUrl = "/api/v1/uploads/0fd6176f-6731-4f7b-ba62-867b5b121090.png";
+        assertThatCode(() -> storage.delete(legacyUrl)).doesNotThrowAnyException();
+    }
+
+    @Test
+    void toPublicUrlReturnsNullForArbitraryNonS3Url() {
+        // 적대 입력 — DB 변조나 임의 URL 도 graceful 처리.
+        S3ImageStorage storage = new S3ImageStorage(properties, s3Client, s3Presigner);
+
+        assertThat(storage.toPublicUrl("https://evil.example.com/some/path.png")).isNull();
+        assertThat(storage.toPublicUrl("not even a url")).isNull();
+    }
+
+    @Test
     void uploadGeneratesUniqueKeysForRepeatedFiles() {
         S3ImageStorage storage = new S3ImageStorage(properties, s3Client, s3Presigner);
         MultipartFile a = new MockMultipartFile("file", "a.png", "image/png", PNG_BYTES);
