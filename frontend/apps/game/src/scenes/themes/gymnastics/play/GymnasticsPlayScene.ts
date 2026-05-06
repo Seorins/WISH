@@ -24,6 +24,27 @@ type GymnasticsMotionKind =
   | 'diagonal-face-punch'
   | 'squat'
 
+type DanielMotionKind =
+  | 'daniel_forward_press'
+  | 'daniel_upward_press'
+  | 'daniel_side_bend_left'
+  | 'daniel_side_bend_right'
+  | 'daniel_forward_bend'
+
+type TopAiMotionSpec = {
+  type: 'top'
+  kind: GymnasticsMotionKind
+  targetSteps: number
+}
+
+type DanielAiMotionSpec = {
+  type: 'daniel'
+  kind: DanielMotionKind
+  targetHoldMs: number
+}
+
+type AiMotionSpec = TopAiMotionSpec | DanielAiMotionSpec
+
 type LandmarkPayload = {
   name: string
   x: number
@@ -34,10 +55,13 @@ type LandmarkPayload = {
 
 type GymnasticsAiResponse = {
   state: string
-  step_count: number
+  step_count?: number
   accuracy: number
   feedback: string | null
   tracking: string
+  hold_duration_ms?: number
+  hold_completed?: boolean
+  hold_last_timestamp_ms?: number | null
   last_counted_side?: string | null
   last_seen_side?: string | null
   left_armed?: boolean
@@ -66,6 +90,9 @@ type GymnasticsAiResponse = {
 type GymnasticsAiState = {
   previousState: string
   stepCount: number
+  holdDurationMs: number
+  holdCompleted: boolean
+  holdLastTimestampMs: number | null
   lastCountedSide: string | null
   lastSeenSide: string | null
   leftArmed: boolean
@@ -105,15 +132,23 @@ const AI_BASE_URL = (import.meta.env.VITE_AI_BASE_URL ?? 'http://localhost:8001/
   '',
 )
 
-const TOP_AI_SEQUENCE: { kind: GymnasticsMotionKind; targetSteps: number }[] = [
-  { kind: 'march', targetSteps: 8 },
-  { kind: 'side-step', targetSteps: 8 },
-  { kind: 'diagonal-body-punch', targetSteps: 8 },
-  { kind: 'diagonal-face-punch', targetSteps: 8 },
-  { kind: 'squat', targetSteps: 8 },
+const TOP_AI_SEQUENCE: AiMotionSpec[] = [
+  { type: 'top', kind: 'march', targetSteps: 8 },
+  { type: 'top', kind: 'side-step', targetSteps: 8 },
+  { type: 'top', kind: 'diagonal-body-punch', targetSteps: 8 },
+  { type: 'top', kind: 'diagonal-face-punch', targetSteps: 8 },
+  { type: 'top', kind: 'squat', targetSteps: 8 },
 ]
 
-const DANIEL_AI_SEQUENCE = TOP_AI_SEQUENCE
+const DEFAULT_DANIEL_TARGET_HOLD_MS = 3000
+
+const DANIEL_AI_SEQUENCE: AiMotionSpec[] = [
+  { type: 'daniel', kind: 'daniel_forward_press', targetHoldMs: DEFAULT_DANIEL_TARGET_HOLD_MS },
+  { type: 'daniel', kind: 'daniel_upward_press', targetHoldMs: DEFAULT_DANIEL_TARGET_HOLD_MS },
+  { type: 'daniel', kind: 'daniel_side_bend_left', targetHoldMs: DEFAULT_DANIEL_TARGET_HOLD_MS },
+  { type: 'daniel', kind: 'daniel_side_bend_right', targetHoldMs: DEFAULT_DANIEL_TARGET_HOLD_MS },
+  { type: 'daniel', kind: 'daniel_forward_bend', targetHoldMs: DEFAULT_DANIEL_TARGET_HOLD_MS },
+]
 
 const MOTION_ENDPOINTS: Record<GymnasticsMotionKind, string> = {
   march: 'march',
@@ -123,7 +158,7 @@ const MOTION_ENDPOINTS: Record<GymnasticsMotionKind, string> = {
   squat: 'squat',
 }
 
-const TOP_MOTIONS: GymnasticsMotion[] = [
+export const TOP_MOTIONS: GymnasticsMotion[] = [
   {
     title: '팔 벌리기',
     goal: '양팔을 어깨 높이로 올려요',
@@ -141,7 +176,53 @@ const TOP_MOTIONS: GymnasticsMotion[] = [
   },
 ]
 
-const DANIEL_MOTIONS: GymnasticsMotion[] = TOP_MOTIONS
+const DANIEL_MOTIONS: GymnasticsMotion[] = [
+  {
+    title: '\uC190 \uAE4D\uC9C0 \uB07C\uACE0 \uC55E\uC73C\uB85C \uBC00\uAE30',
+    goal: '\uC190\uC744 \uBAA8\uC544 \uC55E\uC73C\uB85C \uBC00\uACE0 \uC790\uC138\uB97C \uC720\uC9C0\uD574\uC694.',
+    tips: [
+      '\uC5B4\uAE68\uB97C \uC62C\uB9AC\uC9C0 \uC54A\uACE0 \uD314\uC744 \uC55E\uC73C\uB85C \uBC00\uC5B4\uC694.',
+      '\uC190\uBAA9\uC740 \uC5B4\uAE68 \uB192\uC774\uC5D0 \uB9DE\uCD94\uC5B4\uC694.',
+      '\uD5C8\uB9AC\uB294 \uBC18\uB4EF\uD558\uAC8C \uC138\uC6CC\uC694.',
+    ],
+  },
+  {
+    title: '\uC190 \uAE4D\uC9C0 \uB07C\uACE0 \uC704\uB85C \uBC00\uAE30',
+    goal: '\uC190\uC744 \uC704\uB85C \uC62C\uB824 \uB298\uC5B4\uB098\uB294 \uC790\uC138\uB97C \uC720\uC9C0\uD574\uC694.',
+    tips: [
+      '\uD314\uAF08\uCE58\uB97C \uD3B4\uACE0 \uC190\uC744 \uB192\uAC8C \uC62C\uB824\uC694.',
+      '\uC591\uC190 \uB192\uC774\uB97C \uBE44\uC2B7\uD558\uAC8C \uB9DE\uCD94\uC5B4\uC694.',
+      '\uBAB8\uC774 \uD55C\uCABD\uC73C\uB85C \uAE30\uC6B8\uC9C0 \uC54A\uAC8C \uD574\uC694.',
+    ],
+  },
+  {
+    title: '\uC67C\uCABD \uC606\uAD6C\uB9AC \uAD7D\uD788\uAE30',
+    goal: '\uC190\uC744 \uC704\uB85C \uC62C\uB9B0 \uCC44 \uC67C\uCABD\uC73C\uB85C \uCC9C\uCC9C\uD788 \uAE30\uC6B8\uC5EC\uC694.',
+    tips: [
+      '\uD314\uC744 \uD3B4\uACE0 \uC606\uAD6C\uB9AC\uAC00 \uB298\uC5B4\uB098\uAC8C \uD574\uC694.',
+      '\uACE8\uBC18\uC774 \uB108\uBB34 \uBC00\uB9AC\uC9C0 \uC54A\uAC8C \uC720\uC9C0\uD574\uC694.',
+      '\uBB34\uB9AC\uD558\uC9C0 \uC54A\uACE0 \uC720\uC9C0\uD574\uC694.',
+    ],
+  },
+  {
+    title: '\uC624\uB978\uCABD \uC606\uAD6C\uB9AC \uAD7D\uD788\uAE30',
+    goal: '\uC190\uC744 \uC704\uB85C \uC62C\uB9B0 \uCC44 \uC624\uB978\uCABD\uC73C\uB85C \uCC9C\uCC9C\uD788 \uAE30\uC6B8\uC5EC\uC694.',
+    tips: [
+      '\uD314\uC744 \uD3B4\uACE0 \uC606\uAD6C\uB9AC\uAC00 \uB298\uC5B4\uB098\uAC8C \uD574\uC694.',
+      '\uACE8\uBC18\uC774 \uB108\uBB34 \uBC00\uB9AC\uC9C0 \uC54A\uAC8C \uC720\uC9C0\uD574\uC694.',
+      '\uBB34\uB9AC\uD558\uC9C0 \uC54A\uACE0 \uC720\uC9C0\uD574\uC694.',
+    ],
+  },
+  {
+    title: '\uC190 \uAE4D\uC9C0 \uB07C\uACE0 \uC544\uB798\uB85C \uC219\uC774\uAE30',
+    goal: '\uBB34\uB98E\uC744 \uD3B4\uACE0 \uC0C1\uCCB4\uB97C \uC55E\uC73C\uB85C \uC219\uC5EC\uC694.',
+    tips: [
+      '\uBB34\uB98E\uC774 \uAD7D\uD600\uC9C0\uC9C0 \uC54A\uAC8C \uD574\uC694.',
+      '\uC190\uC740 \uC790\uC5F0\uC2A4\uB7FD\uAC8C \uC544\uB798\uB85C \uB0B4\uB824\uC694.',
+      '\uCC9C\uCC9C\uD788 \uC219\uC774\uACE0 \uC790\uC138\uB97C \uC720\uC9C0\uD574\uC694.',
+    ],
+  },
+]
 
 const TOP_AI_MOTIONS: GymnasticsMotion[] = [
   {
@@ -202,6 +283,9 @@ function createInitialAiState(): GymnasticsAiState {
   return {
     previousState: 'idle',
     stepCount: 0,
+    holdDurationMs: 0,
+    holdCompleted: false,
+    holdLastTimestampMs: null,
     lastCountedSide: null,
     lastSeenSide: null,
     leftArmed: true,
@@ -272,7 +356,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     sceneKey: string,
     private readonly motions: GymnasticsMotion[],
     private readonly modeLabel: string,
-    private readonly aiSequence: { kind: GymnasticsMotionKind; targetSteps: number }[],
+    private readonly aiSequence: AiMotionSpec[],
   ) {
     super({ key: sceneKey })
   }
@@ -1030,46 +1114,63 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     landmarks: readonly { x: number; y: number; z: number; visibility?: number }[],
   ) {
     const motionSpec = this.getCurrentAiMotionSpec()
-    const response = await fetch(
-      `${AI_BASE_URL}/gymnastics/${MOTION_ENDPOINTS[motionSpec.kind]}/evaluate`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          frame: {
-            timestamp_ms: Math.floor(timestampMs),
-            mirrored: true,
-            landmarks: this.toLandmarkPayload(landmarks),
-          },
-          previous_state: this.aiState.previousState,
-          step_count: this.aiState.stepCount,
-          target_steps: motionSpec.targetSteps,
-          last_counted_side: this.aiState.lastCountedSide,
-          last_seen_side: this.aiState.lastSeenSide,
-          left_armed: this.aiState.leftArmed,
-          right_armed: this.aiState.rightArmed,
-          reference_hip_x: this.aiState.referenceHipX,
-          reference_hip_y: this.aiState.referenceHipY,
-          reference_scale: this.aiState.referenceScale,
-          displayed_feedback_code: this.aiState.displayedFeedbackCode,
-          displayed_feedback_text: this.aiState.displayedFeedbackText,
-          displayed_feedback_frames: this.aiState.displayedFeedbackFrames,
-          candidate_feedback_code: this.aiState.candidateFeedbackCode,
-          candidate_feedback_text: this.aiState.candidateFeedbackText,
-          candidate_feedback_streak: this.aiState.candidateFeedbackStreak,
-          representative_feedback_totals: this.aiState.representativeFeedbackTotals,
-          representative_feedback_code: this.aiState.representativeFeedbackCode,
-          representative_feedback_text: this.aiState.representativeFeedbackText,
-          representative_feedback_frames: this.aiState.representativeFeedbackFrames,
-          baseline_left_step_extent: this.aiState.baselineLeftStepExtent,
-          baseline_right_step_extent: this.aiState.baselineRightStepExtent,
-          baseline_ankle_span: this.aiState.baselineAnkleSpan,
-          baseline_left_wrist_forward: this.aiState.baselineLeftWristForward,
-          baseline_right_wrist_forward: this.aiState.baselineRightWristForward,
-          baseline_stance_span: this.aiState.baselineStanceSpan,
-        }),
-      },
-    )
+    const frame = {
+      timestamp_ms: Math.floor(timestampMs),
+      mirrored: true,
+      landmarks: this.toLandmarkPayload(landmarks),
+    }
+    const sharedPayload = {
+      frame,
+      previous_state: this.aiState.previousState,
+      reference_hip_x: this.aiState.referenceHipX,
+      reference_hip_y: this.aiState.referenceHipY,
+      reference_scale: this.aiState.referenceScale,
+      displayed_feedback_code: this.aiState.displayedFeedbackCode,
+      displayed_feedback_text: this.aiState.displayedFeedbackText,
+      displayed_feedback_frames: this.aiState.displayedFeedbackFrames,
+      candidate_feedback_code: this.aiState.candidateFeedbackCode,
+      candidate_feedback_text: this.aiState.candidateFeedbackText,
+      candidate_feedback_streak: this.aiState.candidateFeedbackStreak,
+      representative_feedback_totals: this.aiState.representativeFeedbackTotals,
+      representative_feedback_code: this.aiState.representativeFeedbackCode,
+      representative_feedback_text: this.aiState.representativeFeedbackText,
+      representative_feedback_frames: this.aiState.representativeFeedbackFrames,
+    }
+    const requestUrl =
+      motionSpec.type === 'daniel'
+        ? `${AI_BASE_URL}/gymnastics/daniel/evaluate`
+        : `${AI_BASE_URL}/gymnastics/${MOTION_ENDPOINTS[motionSpec.kind]}/evaluate`
+    const requestBody =
+      motionSpec.type === 'daniel'
+        ? {
+            ...sharedPayload,
+            motion_id: motionSpec.kind,
+            target_hold_ms: motionSpec.targetHoldMs,
+            hold_duration_ms: this.aiState.holdDurationMs,
+            hold_last_timestamp_ms: this.aiState.holdLastTimestampMs,
+            baseline_left_wrist_forward: this.aiState.baselineLeftWristForward,
+            baseline_right_wrist_forward: this.aiState.baselineRightWristForward,
+          }
+        : {
+            ...sharedPayload,
+            step_count: this.aiState.stepCount,
+            target_steps: motionSpec.targetSteps,
+            last_counted_side: this.aiState.lastCountedSide,
+            last_seen_side: this.aiState.lastSeenSide,
+            left_armed: this.aiState.leftArmed,
+            right_armed: this.aiState.rightArmed,
+            baseline_left_step_extent: this.aiState.baselineLeftStepExtent,
+            baseline_right_step_extent: this.aiState.baselineRightStepExtent,
+            baseline_ankle_span: this.aiState.baselineAnkleSpan,
+            baseline_left_wrist_forward: this.aiState.baselineLeftWristForward,
+            baseline_right_wrist_forward: this.aiState.baselineRightWristForward,
+            baseline_stance_span: this.aiState.baselineStanceSpan,
+          }
+    const response = await fetch(requestUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(requestBody),
+    })
 
     if (!response.ok) {
       this.aiError = `AI response error: ${response.status}`
@@ -1088,6 +1189,8 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     landmarks: readonly { x: number; y: number; z: number; visibility?: number }[],
   ) {
     const motionSpec = this.getCurrentAiMotionSpec()
+    if (motionSpec.type === 'daniel') return
+
     const previousStepCount = this.aiState.stepCount
     const nextState = { ...this.aiState, tracking: 'tracked', feedback: '동작을 따라 해볼까요?' }
 
@@ -1451,7 +1554,10 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     this.aiState = {
       ...this.aiState,
       previousState: payload.state,
-      stepCount: payload.step_count,
+      stepCount: payload.step_count ?? (payload.hold_completed ? 1 : this.aiState.stepCount),
+      holdDurationMs: payload.hold_duration_ms ?? this.aiState.holdDurationMs,
+      holdCompleted: payload.hold_completed ?? this.aiState.holdCompleted,
+      holdLastTimestampMs: payload.hold_last_timestamp_ms ?? null,
       lastCountedSide: payload.last_counted_side ?? null,
       lastSeenSide: payload.last_seen_side ?? null,
       leftArmed: payload.left_armed ?? this.aiState.leftArmed,
@@ -1487,7 +1593,13 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
 
   private applyAiFeedback() {
     const motionSpec = this.getCurrentAiMotionSpec()
-    const progressText = `${this.aiState.stepCount}/${motionSpec.targetSteps}`
+    const progressText =
+      motionSpec.type === 'daniel'
+        ? `${Math.min(
+            100,
+            Math.round((this.aiState.holdDurationMs / motionSpec.targetHoldMs) * 100),
+          )}%`
+        : `${this.aiState.stepCount}/${motionSpec.targetSteps}`
     const title = this.aiState.feedback || this.aiState.representativeFeedbackText || 'Good'
     const detail = `Progress ${progressText}`
 
@@ -1507,7 +1619,11 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
 
   private advanceMotionIfCompleted() {
     const motionSpec = this.getCurrentAiMotionSpec()
-    if (this.aiState.stepCount < motionSpec.targetSteps || this.isMotionAdvancing) return
+    const isComplete =
+      motionSpec.type === 'daniel'
+        ? this.aiState.holdCompleted || this.aiState.holdDurationMs >= motionSpec.targetHoldMs
+        : this.aiState.stepCount >= motionSpec.targetSteps
+    if (!isComplete || this.isMotionAdvancing) return
 
     this.isMotionAdvancing = true
     this.feedbackTitleText?.setText('Complete')
