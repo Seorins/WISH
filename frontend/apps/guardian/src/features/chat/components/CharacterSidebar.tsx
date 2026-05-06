@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react'
 import type { ChatCharacter, EmotionTone } from '../data/mock'
 import styles from './CharacterSidebar.module.css'
 
@@ -33,7 +34,21 @@ export function CharacterSidebar({ characters, selectedId, onSelect }: Props) {
               className={`${styles.item} ${isActive ? styles.itemActive : ''}`}
               onClick={() => onSelect(c.id)}
             >
-              <span className={styles.avatar} />
+              <span className={styles.avatar}>
+                {c.avatarUrl ? (
+                  <img
+                    src={c.avatarUrl}
+                    alt=""
+                    className={styles.avatarImg}
+                    style={
+                      {
+                        ...(c.thumbOffsetY ? { '--thumb-offset-y': c.thumbOffsetY } : {}),
+                        ...(c.thumbScale ? { '--thumb-scale': c.thumbScale } : {}),
+                      } as CSSProperties
+                    }
+                  />
+                ) : null}
+              </span>
               <span className={styles.meta}>
                 <span className={styles.name}>{c.name}</span>
                 <span className={`${styles.tone} ${TONE_CLASS[c.emotion]}`}>
@@ -45,9 +60,6 @@ export function CharacterSidebar({ characters, selectedId, onSelect }: Props) {
           )
         })}
       </div>
-      <button type="button" className={styles.more}>
-        더 보기 ⌄
-      </button>
     </div>
   )
 }

@@ -1,3 +1,10 @@
+import comongImg from '@/assets/comong.png'
+import dainImg from '@/assets/dain.png'
+import gunbinImg from '@/assets/gunbin.png'
+import jeonghoImg from '@/assets/jeongho.png'
+import sehyunImg from '@/assets/sehyun.png'
+import yeongchulImg from '@/assets/yeongchul.png'
+
 export type EmotionTone = 'calm' | 'tired' | 'worried'
 
 export type ChatCharacter = {
@@ -5,6 +12,10 @@ export type ChatCharacter = {
   name: string
   avatarUrl: string
   emotion: EmotionTone
+  /** 사이드바 썸네일 세로 오프셋. 음수일수록 캐릭터를 위로 올림 (예: '-12%') */
+  thumbOffsetY?: string
+  /** 사이드바 썸네일 줌 배율. 클수록 클로즈업 (기본 1.25) */
+  thumbScale?: string
 }
 
 export type ChatMessage = {
@@ -38,14 +49,58 @@ export type ConversationSummary = {
 }
 
 export const CHARACTERS: ChatCharacter[] = [
-  { id: 'tori', name: '토리', avatarUrl: '', emotion: 'calm' },
-  { id: 'bruno', name: '브루노', avatarUrl: '', emotion: 'tired' },
-  { id: 'luna', name: '루나', avatarUrl: '', emotion: 'worried' },
-  { id: 'koa', name: '코아', avatarUrl: '', emotion: 'calm' },
+  {
+    id: 'yeongchul',
+    name: '영철',
+    avatarUrl: yeongchulImg,
+    emotion: 'tired',
+    thumbOffsetY: '-4%',
+    thumbScale: '1.45',
+  },
+  {
+    id: 'comong',
+    name: '코몽',
+    avatarUrl: comongImg,
+    emotion: 'calm',
+    thumbOffsetY: '-10%',
+    thumbScale: '1.5',
+  },
+  {
+    id: 'dain',
+    name: '다인',
+    avatarUrl: dainImg,
+    emotion: 'tired',
+    thumbOffsetY: '-6%',
+    thumbScale: '1.5',
+  },
+  {
+    id: 'gunbin',
+    name: '건빈',
+    avatarUrl: gunbinImg,
+    emotion: 'worried',
+    thumbOffsetY: '-11%',
+    thumbScale: '1.45',
+  },
+  {
+    id: 'jeongho',
+    name: '정호',
+    avatarUrl: jeonghoImg,
+    emotion: 'calm',
+    thumbOffsetY: '-6%',
+    thumbScale: '1.5',
+  },
+  {
+    id: 'sehyun',
+    name: '세현',
+    avatarUrl: sehyunImg,
+    emotion: 'calm',
+    thumbOffsetY: '-10%',
+    thumbScale: '1.5',
+  },
 ]
 
 export const SESSION_META = {
-  characterId: 'tori',
+  characterId: 'comong',
   whenLabel: '어제, 오후 7:20',
   durationLabel: '대화 완료 (10분)',
 }

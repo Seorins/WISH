@@ -20,22 +20,27 @@
 .list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 14px;
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.list::-webkit-scrollbar {
+  display: none;
 }
 
 .item {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 14px;
-  border-radius: 18px;
+  gap: 14px;
+  padding: 14px 16px;
+  border-radius: 20px;
   border: 2px solid transparent;
   background: #fff;
-  box-shadow: 0 2px 8px rgba(60, 50, 120, 0.05);
+  box-shadow: 0 3px 12px rgba(60, 50, 120, 0.09);
   cursor: pointer;
   text-align: left;
   font: inherit;
@@ -46,7 +51,7 @@
 }
 
 .item:hover {
-  box-shadow: 0 4px 14px rgba(60, 50, 120, 0.08);
+  box-shadow: 0 5px 16px rgba(60, 50, 120, 0.12);
 }
 
 .itemActive {
@@ -55,11 +60,20 @@
 }
 
 .avatar {
-  width: 64px;
-  height: 64px;
-  border-radius: 16px;
-  background: linear-gradient(135deg, #ffe1c4 0%, #ffb796 100%);
+  position: relative;
+  width: 84px;
+  height: 84px;
+  border-radius: 20px;
   flex-shrink: 0;
+  overflow: hidden;
+}
+
+.avatarImg {
+  display: block;
+  width: 100%;
+  height: auto;
+  transform: scale(var(--thumb-scale, 1.25)) translateY(var(--thumb-offset-y, 0));
+  transform-origin: top center;
 }
 
 .meta {
@@ -115,20 +129,3 @@
   font-weight: 700;
 }
 
-.more {
-  margin-top: auto;
-  appearance: none;
-  border: 1px solid var(--dash-color-border, #ece8f7);
-  background: transparent;
-  font: inherit;
-  font-size: 13px;
-  color: var(--dash-color-text-muted, #7a7596);
-  cursor: pointer;
-  padding: 10px;
-  border-radius: 999px;
-  font-weight: 500;
-}
-
-.more:hover {
-  background: #faf9ff;
-}
