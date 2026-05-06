@@ -64,14 +64,42 @@ public class ExerciseSessionController {
     }
 
     @Operation(summary = "체조 세션 기록 상세 조회", description = "체조 세션과 동작별 수행 결과를 조회합니다.")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "200",
+                description = "조회 성공"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "401",
+                description = "인증 필요 (G-003)"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "404",
+                description =
+                        "세션이 없거나 본인 환자 프로필 소유가 아님 (EX-005) — enumeration 방지를 위해 비소유/비존재를 구분하지 않음")
+    })
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<ExerciseSessionResponse>> detail(
-            @AuthenticationPrincipal AuthenticatedUser currentUser, @PathVariable Long id) {
+            @AuthenticationPrincipal AuthenticatedUser currentUser,
+            @Parameter(description = "체조 세션 ID (본인 환자 프로필 소유)", required = true) @PathVariable
+                    Long id) {
         return ResponseEntity.ok(
                 ApiResponse.success(exerciseSessionService.findOne(currentUser.userId(), id)));
     }
 
     @Operation(summary = "체조 세션 기록 저장", description = "체조 세션과 동작별 수행 결과를 저장합니다.")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "201",
+                description = "저장 성공"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "400",
+                description = "입력값 검증 실패 (G-001) 또는 세션 체조 타입과 동작 체조 타입 불일치 (EX-004)"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "401",
+                description = "인증 필요 (G-003)"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "404",
+                description = "환자 프로필이 없거나 (P-001) 또는 요청한 동작 ID 가 존재하지 않음 (EX-001)")
+    })
     @PostMapping
     public ResponseEntity<ApiResponse<ExerciseSessionResponse>> create(
             @AuthenticationPrincipal AuthenticatedUser currentUser,
