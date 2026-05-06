@@ -417,10 +417,16 @@ export function Character3D({ activeMotion = null }: Character3DProps) {
   return (
     <div className={styles.viewer}>
       <div className={styles.canvasWrap}>
-        <Canvas camera={{ position: [0, 0, 3.8], fov: 32 }} gl={{ alpha: true, antialias: true }}>
-          <ambientLight intensity={0.85} />
-          <directionalLight position={[2, 4, 3]} intensity={0.9} />
-          <directionalLight position={[-3, 2, -2]} intensity={0.35} color="#c8b6ff" />
+        <Canvas
+          flat
+          camera={{ position: [0, 0, 3.8], fov: 32 }}
+          gl={{ alpha: true, antialias: true }}
+        >
+          <ambientLight intensity={1.5} />
+          <hemisphereLight args={['#fefdfb', '#f6f3ff', 0.4]} />
+          <directionalLight position={[2, 4, 3]} intensity={1.1} color="#fefdfa" />
+          <directionalLight position={[-3, 2, -2]} intensity={0.25} color="#ebe5ff" />
+          <directionalLight position={[0, 2, 5]} intensity={0.15} color="#fefaf2" />
           <Suspense fallback={null}>
             <CharacterModel
               targetScale={targetScale}

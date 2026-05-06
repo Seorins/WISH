@@ -31,7 +31,8 @@ public interface VideoStorage {
 
     /**
      * DB 에 저장된 식별자를 클라이언트에 노출 가능한 URL 로 변환한다. 기본 구현은 identity. S3 구현체는 presigner 로 짧은 TTL GET URL
-     * 발급. 자세한 의도는 {@link ImageStorage#toPublicUrl} javadoc 참조.
+     * 발급. graceful fallback (자기 형식 아닌 stored → null) 등 자세한 의도는 {@link ImageStorage#toPublicUrl}
+     * javadoc 참조.
      */
     default String toPublicUrl(String stored) {
         return stored;

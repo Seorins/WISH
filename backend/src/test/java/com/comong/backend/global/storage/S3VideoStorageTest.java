@@ -218,4 +218,21 @@ class S3VideoStorageTest {
         assertThatCode(() -> storage.delete("")).doesNotThrowAnyException();
         assertThatCode(() -> storage.delete("   ")).doesNotThrowAnyException();
     }
+
+    @Test
+    void toPublicUrlReturnsNullForLegacyLocalStorageUrl() {
+        // S14P31E103-511 — 옛 LocalVideoStorage URL 이 DB 에 남아있는 케이스 graceful 처리.
+        S3VideoStorage storage = new S3VideoStorage(properties, s3Client, s3Presigner);
+
+        String legacyUrl = "/api/v1/uploads/videos/abc123.mp4";
+        assertThat(storage.toPublicUrl(legacyUrl)).isNull();
+    }
+
+    @Test
+    void deleteIsIdempotentForLegacyLocalStorageUrl() {
+        S3VideoStorage storage = new S3VideoStorage(properties, s3Client, s3Presigner);
+
+        String legacyUrl = "/api/v1/uploads/videos/abc123.mp4";
+        assertThatCode(() -> storage.delete(legacyUrl)).doesNotThrowAnyException();
+    }
 }

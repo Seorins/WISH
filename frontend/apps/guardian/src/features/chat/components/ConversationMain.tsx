@@ -1,0 +1,191 @@
+import { memo, useEffect, useState, type CSSProperties } from 'react'
+import type { ChatMessage, ConversationSummary } from '../data/mock'
+import styles from './ConversationMain.module.css'
+import { WishCharacter3D } from './WishCharacter3D'
+
+const VISIBLE_MAX = 3
+const TICK_MS = 2400
+
+/** 가상의 대화 흐름: tick 이 증가할 때마다 messages 를 한 칸씩 슬라이드. 최근 3개만 노출.
+ *  마지막 메시지가 노출된 뒤로는 더 이상 진행하지 않음 (한 번만 재생). */
+function useStreamingMessages(messages: ChatMessage[]) {
+  const [tick, setTick] = useState(0)
+
+  useEffect(() => {
+    setTick(0)
+  }, [messages])
+
+  useEffect(() => {
+    if (messages.length === 0) return
+    if (tick >= messages.length - 1) return
+    const id = window.setTimeout(() => setTick(t => t + 1), TICK_MS)
+    return () => window.clearTimeout(id)
+  }, [messages, tick])
+
+  if (messages.length === 0) return []
+  const out: Array<ChatMessage & { _streamId: string }> = []
+  const start = Math.max(0, tick - (VISIBLE_MAX - 1))
+  for (let i = start; i <= tick && i < messages.length; i++) {
+    out.push({ ...messages[i], _streamId: `s-${i}` })
+  }
+  return out
+}
+
+/** tick 마다 부모가 재렌더되어도 3D Canvas 가 재초기화되지 않게 격리. */
+const StableLeftStage = memo(function StableLeftStage() {
+  return (
+    <div className={styles.stageLeft}>
+      <WishCharacter3D />
+    </div>
+  )
+})
+
+type RightStageProps = {
+  partnerImageUrl?: string
+  partnerImageScale?: string
+  partnerImageOffsetX?: string
+  partnerImageOffsetY?: string
+}
+
+const StableRightStage = memo(function StableRightStage({
+  partnerImageUrl,
+  partnerImageScale,
+  partnerImageOffsetX,
+  partnerImageOffsetY,
+}: RightStageProps) {
+  return (
+    <div className={styles.stageRight}>
+      {partnerImageUrl ? (
+        <img
+          src={partnerImageUrl}
+          alt=""
+          className={styles.partnerImg}
+          style={
+            {
+              ...(partnerImageScale ? { '--partner-img-scale': partnerImageScale } : {}),
+              ...(partnerImageOffsetX ? { '--partner-img-x': partnerImageOffsetX } : {}),
+              ...(partnerImageOffsetY ? { '--partner-img-y': partnerImageOffsetY } : {}),
+            } as CSSProperties
+          }
+        />
+      ) : null}
+    </div>
+  )
+})
+
+const StreamingBubbles = memo(function StreamingBubbles({ messages }: { messages: ChatMessage[] }) {
+  const visibleMessages = useStreamingMessages(messages)
+  return (
+    <div className={styles.bubbles}>
+      {visibleMessages.map(m => (
+        <div
+          key={m._streamId}
+          className={`${styles.bubble} ${m.speaker === 'child' ? styles.bubbleChild : ''}`}
+        >
+          {m.parts.map((p, i) => {
+            const isChildSentiment = m.speaker === 'child' && p.sentiment
+            const cls = isChildSentiment
+              ? p.sentiment === 'positive'
+                ? styles.bubbleTextPositive
+                : styles.bubbleTextNegative
+              : ''
+            return (
+              <span key={i} className={cls}>
+                {p.text}
+              </span>
+            )
+          })}
+        </div>
+      ))}
+    </div>
+  )
+})
+
+type Props = {
+  characterName: string
+  whenLabel: string
+  durationLabel: string
+  messages: ChatMessage[]
+  summary: ConversationSummary
+  partnerImageUrl?: string
+  partnerImageScale?: string
+  partnerImageOffsetX?: string
+  partnerImageOffsetY?: string
+}
+
+/** 한글 받침 유무로 와/과 등 조사 결정. 비한글이면 vowel형 반환. */
+function withParticle(name: string, vowel: string, consonant: string): string {
+  const last = name.charCodeAt(name.length - 1)
+  if (last < 0xac00 || last > 0xd7a3) return name + vowel
+  const hasFinal = (last - 0xac00) % 28 !== 0
+  return name + (hasFinal ? consonant : vowel)
+}
+
+export function ConversationMain({
+  characterName,
+  whenLabel,
+  durationLabel,
+  messages,
+  summary,
+  partnerImageUrl,
+  partnerImageScale,
+  partnerImageOffsetX,
+  partnerImageOffsetY,
+}: Props) {
+  return (
+    <div className={styles.card}>
+      <div className={styles.topRow}>
+        <div className={styles.titleBlock}>
+          <h2 className={styles.title}>{withParticle(characterName, '와', '과')}의 대화</h2>
+          <div className={styles.metaRow}>
+            <span className={styles.metaChip}>{whenLabel}</span>
+            <span className={`${styles.metaChip} ${styles.metaChipDone}`}>✓ {durationLabel}</span>
+          </div>
+        </div>
+        <button type="button" className={styles.pastBtn}>
+          📅 지난 대화 보기
+        </button>
+      </div>
+
+      <div className={styles.stage}>
+        <StableLeftStage />
+        <StreamingBubbles messages={messages} />
+        <StableRightStage
+          partnerImageUrl={partnerImageUrl}
+          partnerImageScale={partnerImageScale}
+          partnerImageOffsetX={partnerImageOffsetX}
+          partnerImageOffsetY={partnerImageOffsetY}
+        />
+      </div>
+
+      <div className={styles.summarySection}>
+        <div className={styles.summaryHeader}>
+          <span>✨ 대화 결과 요약</span>
+          <span className={styles.summarySub}>이번 대화의 핵심을 한눈에 확인해요.</span>
+        </div>
+        <div className={styles.summaryRow}>
+          <div className={styles.summaryCard}>
+            <div className={styles.summaryTitle}>관계 신뢰 상승</div>
+            <div>{withParticle(characterName, '와', '과')}의 신뢰가 더 깊어졌어요.</div>
+            <div className={styles.summaryDelta}>↑ {summary.trustDelta}%</div>
+          </div>
+          <div className={styles.summaryCard}>
+            <div className={styles.summaryTitle}>대화 주제</div>
+            <div>주요 주제예요.</div>
+            <div className={styles.tagRow}>
+              {summary.topics.map(t => (
+                <span key={t} className={styles.tag}>
+                  {t}
+                </span>
+              ))}
+            </div>
+          </div>
+          <div className={styles.summaryCard}>
+            <div className={styles.summaryTitle}>추천 후속 활동</div>
+            <div>{summary.recommendedActivity}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}

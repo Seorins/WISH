@@ -37,18 +37,19 @@ from app.services.gymnastics.features.diagonal_face_punch_features import (
 from app.services.gymnastics.features.march_features import extract_march_features
 from app.services.gymnastics.features.side_step_features import extract_side_step_features
 from app.services.gymnastics.features.squat_features import extract_squat_features
+from app.services.gymnastics.feedback.common import TRACKING_LOW
 
 router = APIRouter()
 
 
-@router.post("/march/evaluate", response_model=MarchEvaluationResponse)
-def evaluate_march(payload: MarchEvaluationRequest) -> MarchEvaluationResponse:
-    normalized = normalizer.normalize(payload.frame)
-    result = march_evaluator.evaluate(
-        frame=normalized,
-        previous_state=payload.previous_state,
+def _build_march_tracking_low_response(payload: MarchEvaluationRequest) -> MarchEvaluationResponse:
+    return MarchEvaluationResponse(
+        motion_id="top_march",
+        state=payload.previous_state,
         step_count=payload.step_count,
-        target_steps=payload.target_steps,
+        accuracy=0.0,
+        feedback=TRACKING_LOW.text,
+        tracking="tracking_low",
         last_counted_side=payload.last_counted_side,
         last_seen_side=payload.last_seen_side,
         left_armed=payload.left_armed,
@@ -56,23 +57,77 @@ def evaluate_march(payload: MarchEvaluationRequest) -> MarchEvaluationResponse:
         reference_hip_x=payload.reference_hip_x,
         reference_hip_y=payload.reference_hip_y,
         reference_scale=payload.reference_scale,
-        displayed_feedback_code=payload.displayed_feedback_code,
-        displayed_feedback_text=payload.displayed_feedback_text,
+        displayed_feedback_code=TRACKING_LOW.code,
+        displayed_feedback_text=TRACKING_LOW.text,
         displayed_feedback_frames=payload.displayed_feedback_frames,
         candidate_feedback_code=payload.candidate_feedback_code,
         candidate_feedback_text=payload.candidate_feedback_text,
         candidate_feedback_streak=payload.candidate_feedback_streak,
-        representative_feedback_totals=payload.representative_feedback_totals,
+        representative_feedback_totals=payload.representative_feedback_totals or {},
         representative_feedback_code=payload.representative_feedback_code,
         representative_feedback_text=payload.representative_feedback_text,
         representative_feedback_frames=payload.representative_feedback_frames,
+        tts=build_feedback_tts_response(
+            previous_displayed_code=payload.displayed_feedback_code,
+            previous_displayed_text=payload.displayed_feedback_text,
+            displayed_code=TRACKING_LOW.code,
+            displayed_text=TRACKING_LOW.text,
+        ),
+        normalized_pose=None,
+        features=MarchFeaturesResponse(
+            left_knee_lift=0.0,
+            right_knee_lift=0.0,
+            left_thigh_angle=0.0,
+            right_thigh_angle=0.0,
+            left_knee_angle=None,
+            right_knee_angle=None,
+            torso_tilt=0.0,
+            pelvis_shift_x=0.0,
+            pelvis_shift_y=0.0,
+            pelvis_depth_shift=0.0,
+        ),
     )
-    features = extract_march_features(
-        normalized,
-        reference_hip_x=result.reference_hip_x,
-        reference_hip_y=result.reference_hip_y,
-        reference_scale=result.reference_scale,
-    )
+
+
+@router.post("/march/evaluate", response_model=MarchEvaluationResponse)
+def evaluate_march(payload: MarchEvaluationRequest) -> MarchEvaluationResponse:
+    try:
+        normalized = normalizer.normalize(payload.frame)
+        result = march_evaluator.evaluate(
+            frame=normalized,
+            previous_state=payload.previous_state,
+            step_count=payload.step_count,
+            target_steps=payload.target_steps,
+            last_counted_side=payload.last_counted_side,
+            last_seen_side=payload.last_seen_side,
+            left_armed=payload.left_armed,
+            right_armed=payload.right_armed,
+            reference_hip_x=payload.reference_hip_x,
+            reference_hip_y=payload.reference_hip_y,
+            reference_scale=payload.reference_scale,
+            displayed_feedback_code=payload.displayed_feedback_code,
+            displayed_feedback_text=payload.displayed_feedback_text,
+            displayed_feedback_frames=payload.displayed_feedback_frames,
+            candidate_feedback_code=payload.candidate_feedback_code,
+            candidate_feedback_text=payload.candidate_feedback_text,
+            candidate_feedback_streak=payload.candidate_feedback_streak,
+            representative_feedback_totals=payload.representative_feedback_totals,
+            representative_feedback_code=payload.representative_feedback_code,
+            representative_feedback_text=payload.representative_feedback_text,
+            representative_feedback_frames=payload.representative_feedback_frames,
+        )
+        features = extract_march_features(
+            normalized,
+            reference_hip_x=result.reference_hip_x,
+            reference_hip_y=result.reference_hip_y,
+            reference_scale=result.reference_scale,
+        )
+    except ValueError as exc:
+        logger.warning("Invalid march evaluation request: %s", exc)
+        return _build_march_tracking_low_response(payload)
+    except Exception:
+        logger.exception("Unexpected error while evaluating march motion")
+        return _build_march_tracking_low_response(payload)
 
     return MarchEvaluationResponse(
         motion_id=result.motion_id,

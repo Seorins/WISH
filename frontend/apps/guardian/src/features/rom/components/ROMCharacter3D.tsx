@@ -123,12 +123,15 @@ export function ROMCharacter3D({ focusJoint }: Props) {
     <div className={styles.viewer}>
       <div className={styles.canvasWrap}>
         <Canvas
+          flat
           camera={{ position: [0, 0.32, 2.0], fov: 28 }}
           gl={{ alpha: true, antialias: true }}
         >
-          <ambientLight intensity={0.9} />
-          <directionalLight position={[2, 4, 3]} intensity={0.95} />
-          <directionalLight position={[-3, 2, -2]} intensity={0.35} color="#c8b6ff" />
+          <ambientLight intensity={1.5} />
+          <hemisphereLight args={['#fefdfb', '#f6f3ff', 0.4]} />
+          <directionalLight position={[2, 4, 3]} intensity={1.1} color="#fefdfa" />
+          <directionalLight position={[-3, 2, -2]} intensity={0.25} color="#ebe5ff" />
+          <directionalLight position={[0, 2, 5]} intensity={0.15} color="#fefaf2" />
           <Suspense fallback={null}>
             <CharacterModel />
             <FocusMarkers focusJoint={focusJoint} />

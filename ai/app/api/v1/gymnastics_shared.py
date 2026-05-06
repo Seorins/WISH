@@ -23,7 +23,7 @@ from app.services.gymnastics.types import NormalizedPoseFrame
 
 logger = logging.getLogger(__name__)
 
-normalizer = PoseNormalizer()
+normalizer = PoseNormalizer(min_confidence=0.25)
 march_evaluator = MarchEvaluator()
 daniel_forward_bend_evaluator = DanielForwardBendEvaluator()
 daniel_forward_press_evaluator = DanielForwardPressEvaluator()
