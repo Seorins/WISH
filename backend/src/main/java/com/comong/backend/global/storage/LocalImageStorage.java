@@ -9,6 +9,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -38,6 +39,7 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 @Component
+@ConditionalOnProperty(name = "storage.type", havingValue = "local", matchIfMissing = true)
 public class LocalImageStorage implements ImageStorage {
 
     /** 저장 허용 확장자 (white-list). */
@@ -73,8 +75,9 @@ public class LocalImageStorage implements ImageStorage {
             throw new BusinessException(StorageErrorCode.INVALID_IMAGE);
         }
 
+        StorageProperties.Local local = properties.local();
         String filename = UUID.randomUUID() + detectedFormat.canonicalExtension();
-        Path target = Path.of(properties.uploadDir()).toAbsolutePath().resolve(filename);
+        Path target = Path.of(local.uploadDir()).toAbsolutePath().resolve(filename);
 
         try {
             Files.createDirectories(target.getParent());
@@ -84,7 +87,7 @@ public class LocalImageStorage implements ImageStorage {
             throw new BusinessException(StorageErrorCode.STORAGE_FAILURE);
         }
 
-        return new StoredImage(contextPath + properties.publicUrlPrefix() + "/" + filename);
+        return new StoredImage(contextPath + local.publicUrlPrefix() + "/" + filename);
     }
 
     /**
@@ -117,7 +120,7 @@ public class LocalImageStorage implements ImageStorage {
             throw new BusinessException(StorageErrorCode.STORAGE_FAILURE);
         }
         // 한 단계 더 — 정규화 후에도 uploadRoot 하위인지 확인 (defense in depth).
-        Path uploadRoot = Path.of(properties.uploadDir()).toAbsolutePath().normalize();
+        Path uploadRoot = Path.of(properties.local().uploadDir()).toAbsolutePath().normalize();
         Path target = uploadRoot.resolve(filename).normalize();
         if (!target.startsWith(uploadRoot)) {
             log.warn("저장소 URL 무결성 위반 — 정규화 후 uploadRoot 외부: {}", target);

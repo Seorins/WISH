@@ -70,9 +70,18 @@ springdoc:
   default-produces-media-type: application/json
 
 storage:
+  # 활성 백엔드. local | s3. 모든 환경에서 명시 (디폴트 local) — 누락 시에도 LocalImageStorage/LocalVideoStorage 가
+  # matchIfMissing=true 로 활성화된다. S3ImageStorage/S3VideoStorage 는 별도 이슈에서 추가 (S14P31E103-491/492).
+  type: ${STORAGE_TYPE:local}
   local:
     # OS 파일시스템상 업로드 디렉토리. 상대경로면 JVM cwd 기준. 운영은 환경변수로 절대경로 주입.
     upload-dir: ${STORAGE_UPLOAD_DIR:./uploads}
     # 외부 노출 servlet 상대 prefix. StorageConfig 정적 핸들러와 SecurityConfig permit 이 모두 이 값을
     # 공유하므로 환경변수로 변경해도 한 곳에서 자동 동기화된다.
     public-url-prefix: ${STORAGE_PUBLIC_URL_PREFIX:/uploads}
+  # S3 백엔드 설정. type=s3 일 때만 사용. 자격증명은 SDK default credential chain (env / EC2/ECS IAM Role) 에 위임.
+  s3:
+    bucket: ${AWS_S3_PRIVATE_BUCKET:}
+    region: ${AWS_REGION:ap-northeast-2}
+    prefix: ${AWS_S3_PRIVATE_PREFIX:local}
+    presigned-ttl-seconds: ${AWS_S3_PRESIGNED_TTL_SECONDS:900}

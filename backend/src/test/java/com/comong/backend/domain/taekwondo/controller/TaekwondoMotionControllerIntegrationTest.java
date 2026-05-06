@@ -582,7 +582,7 @@ class TaekwondoMotionControllerIntegrationTest extends IntegrationTestSupport {
     }
 
     private Path localPath(String url) {
-        String publicPrefix = contextPath + storageProperties.publicUrlPrefix();
+        String publicPrefix = contextPath + storageProperties.local().publicUrlPrefix();
         if (!url.startsWith(publicPrefix)) {
             throw new IllegalStateException("Unexpected URL prefix: " + url);
         }
@@ -590,7 +590,7 @@ class TaekwondoMotionControllerIntegrationTest extends IntegrationTestSupport {
         if (relative.startsWith("/")) {
             relative = relative.substring(1);
         }
-        return Path.of(storageProperties.uploadDir()).toAbsolutePath().resolve(relative);
+        return Path.of(storageProperties.local().uploadDir()).toAbsolutePath().resolve(relative);
     }
 
     private TaekwondoMotion motion(Poomsae poomsae, String name, int routineOrder) {

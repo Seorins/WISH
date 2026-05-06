@@ -9,6 +9,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -39,6 +40,7 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 @Component
+@ConditionalOnProperty(name = "storage.type", havingValue = "local", matchIfMissing = true)
 public class LocalVideoStorage implements VideoStorage {
 
     /** 저장 허용 확장자. */
@@ -72,8 +74,9 @@ public class LocalVideoStorage implements VideoStorage {
             throw new BusinessException(StorageErrorCode.INVALID_VIDEO);
         }
 
+        StorageProperties.Local local = properties.local();
         String filename = UUID.randomUUID() + detectedFormat.canonicalExtension();
-        Path videosDir = Path.of(properties.uploadDir()).toAbsolutePath().resolve(VIDEOS_SUBPATH);
+        Path videosDir = Path.of(local.uploadDir()).toAbsolutePath().resolve(VIDEOS_SUBPATH);
         Path target = videosDir.resolve(filename);
 
         try {
@@ -85,7 +88,7 @@ public class LocalVideoStorage implements VideoStorage {
         }
 
         return new StoredVideo(
-                contextPath + properties.publicUrlPrefix() + "/" + VIDEOS_SUBPATH + "/" + filename);
+                contextPath + local.publicUrlPrefix() + "/" + VIDEOS_SUBPATH + "/" + filename);
     }
 
     @Override
@@ -105,7 +108,7 @@ public class LocalVideoStorage implements VideoStorage {
             throw new BusinessException(StorageErrorCode.STORAGE_FAILURE);
         }
         Path videosDir =
-                Path.of(properties.uploadDir())
+                Path.of(properties.local().uploadDir())
                         .toAbsolutePath()
                         .resolve(VIDEOS_SUBPATH)
                         .normalize();
