@@ -262,6 +262,7 @@ export class VillageScene extends Phaser.Scene {
     VILLAGE_THEME_PORTALS.forEach(portal => {
       const rectangle = this.portals.get(portal.key)
       if (!rectangle) {
+        console.warn(`[VillageScene] Missing portal rectangle for "${portal.key}"`)
         return
       }
 
@@ -278,9 +279,7 @@ export class VillageScene extends Phaser.Scene {
         this.enterThemeScene(portal.sceneKey)
       }
 
-      this.playerWasInPortal[portal.key] = canUsePortal
-        ? portalState.isInside
-        : this.playerWasInPortal[portal.key] && portalState.isInside
+      this.playerWasInPortal[portal.key] = portalState.isInside
     })
   }
 

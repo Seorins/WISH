@@ -37,10 +37,13 @@ export const VILLAGE_THEME_PORTALS: VillageThemePortal[] = [
 ]
 
 export function createInitialVillagePortalState(): Record<VillagePortalKey, boolean> {
-  return Object.fromEntries(VILLAGE_THEME_PORTALS.map(portal => [portal.key, true])) as Record<
-    VillagePortalKey,
-    boolean
-  >
+  return VILLAGE_THEME_PORTALS.reduce(
+    (state, portal) => {
+      state[portal.key] = true
+      return state
+    },
+    {} as Record<VillagePortalKey, boolean>,
+  )
 }
 
 export function createVillagePortalRectangles(width: number, height: number) {
