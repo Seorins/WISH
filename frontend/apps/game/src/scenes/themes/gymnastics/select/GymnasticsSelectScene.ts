@@ -122,6 +122,7 @@ export class GymnasticsSelectScene extends Phaser.Scene {
   private selectedMode: GymnasticsContentMode | null = null
   private isWaitingContentStart = false
   private contentStartTimer: Phaser.Time.TimerEvent | null = null
+  private sessionHistoryButton!: Phaser.GameObjects.Text
 
   constructor() {
     super({ key: 'GymnasticsSelectScene' })
@@ -187,6 +188,7 @@ export class GymnasticsSelectScene extends Phaser.Scene {
     })
 
     this.createDialogUi()
+    this.createSessionHistoryButton(vw)
     this.createChoiceCards(vw, vh)
     ensurePlayerWalkAnimations(this)
 
@@ -241,6 +243,11 @@ export class GymnasticsSelectScene extends Phaser.Scene {
   }
 
   private readonly handlePointerDown = (pointer: Phaser.Input.Pointer) => {
+    if (this.sessionHistoryButton.getBounds().contains(pointer.x, pointer.y)) {
+      this.openSessionHistory()
+      return
+    }
+
     if (this.isDialogVisible) {
       if (this.isWaitingContentStart) return
 
@@ -301,6 +308,39 @@ export class GymnasticsSelectScene extends Phaser.Scene {
       nameFontSize: 34,
       opticalOffsets: { single: 0 },
     })
+  }
+
+  private createSessionHistoryButton(vw: number) {
+    this.sessionHistoryButton = this.add
+      .text(vw - 28, 28, '기록 보기', {
+        fontFamily: CARD_FONT_FAMILY,
+        fontSize: '18px',
+        fontStyle: 'bold',
+        color: '#fff8ec',
+        backgroundColor: '#6d4a27',
+        padding: { x: 14, y: 9 },
+      })
+      .setOrigin(1, 0)
+      .setDepth(30)
+      .setScrollFactor(0)
+      .setInteractive({ useHandCursor: true })
+
+    this.sessionHistoryButton.on(
+      'pointerdown',
+      (
+        _pointer: Phaser.Input.Pointer,
+        _localX: number,
+        _localY: number,
+        event: Phaser.Types.Input.EventData,
+      ) => {
+        event.stopPropagation()
+        this.openSessionHistory()
+      },
+    )
+  }
+
+  private openSessionHistory() {
+    this.game.events.emit('exercise-sessions:open')
   }
 
   private createCleanRaccoonTexture() {
