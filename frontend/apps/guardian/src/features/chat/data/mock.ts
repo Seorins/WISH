@@ -68,7 +68,7 @@ export const CHARACTERS: ChatCharacter[] = [
     id: 'yeongchul',
     name: '영철',
     avatarUrl: yeongchulImg,
-    emotion: 'tired',
+    emotion: 'worried',
     thumbOffsetY: '-4%',
     thumbScale: '1.45',
     chatImageUrl: youngchulChatImg,
@@ -141,7 +141,7 @@ export const MESSAGES: ChatMessage[] = [
     id: 'm4',
     speaker: 'child',
     parts: [
-      { text: '엄마가 옆에 있어줘서 ' },
+      { text: '엄마가 옆에 같이 있어줘서 마음이 정말 ' },
       { text: '안심됐어', sentiment: 'positive' },
       { text: '.' },
     ],
@@ -150,8 +150,8 @@ export const MESSAGES: ChatMessage[] = [
 
 export const SUMMARY: ConversationSummary = {
   trustDelta: 12,
-  topics: ['숙제', '피로'],
-  recommendedActivity: '가벼운 스트레칭과 감정 일기 쓰기를 추천해요.',
+  topics: ['주사', '용기'],
+  recommendedActivity: '용기 낸 순간을 칭찬하고 감정 일기로 함께 기록해보세요.',
 }
 
 export const TODAY_SCORE = 72
@@ -172,7 +172,12 @@ export const EMOTION_TREND: EmotionTrendPoint[] = [
 ]
 
 export const EMOTION_SIGNALS: EmotionSignal[] = [
-  { id: 's1', tone: 'tired', title: '피로 표현 있음', description: '숙제와 피로를 이야기했어요.' },
+  {
+    id: 's1',
+    tone: 'worried',
+    title: '두려움 표현 있음',
+    description: '주사 맞을 때 무서운 마음을 이야기했어요.',
+  },
   {
     id: 's2',
     tone: 'calm',
