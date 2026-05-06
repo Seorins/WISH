@@ -36,6 +36,9 @@ export function AdminShell({ title, description, actions, children }: Props) {
           <NavLink to="/motions" style={({ isActive }) => navLinkStyle(isActive)}>
             모션 관리
           </NavLink>
+          <NavLink to="/taekwondo-motions" style={({ isActive }) => navLinkStyle(isActive)}>
+            태권도 관리
+          </NavLink>
         </nav>
       </aside>
 

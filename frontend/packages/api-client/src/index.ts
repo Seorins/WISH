@@ -12,6 +12,14 @@ export {
 } from './exercise-motions'
 export { getMyBestMusicResults, saveMusicResult } from './music-results'
 export { createPatientProfile, listPatientProfiles } from './patient-profiles'
+export {
+  createTaekwondoMotion,
+  deleteTaekwondoMotion,
+  getTaekwondoMotion,
+  listTaekwondoMotions,
+  reorderTaekwondoMotions,
+  updateTaekwondoMotion,
+} from './taekwondo-motions'
 export { listUsers } from './users'
 export type { LoginRequest, SignupRequest, TokenResponse, UserResponse, UserRole } from './auth'
 export type {
@@ -38,3 +46,12 @@ export type {
 } from './exercise-motions'
 export type { MusicBestResult, MusicResult, MusicResultRequest } from './music-results'
 export type { Gender, PatientProfile, PatientProfileCreateRequest } from './patient-profiles'
+export type {
+  CreateTaekwondoMotionParams,
+  CreateTaekwondoMotionRequest,
+  Poomsae,
+  TaekwondoMotion,
+  TaekwondoMotionReorderRequest,
+  UpdateTaekwondoMotionParams,
+  UpdateTaekwondoMotionRequest,
+} from './taekwondo-motions'
