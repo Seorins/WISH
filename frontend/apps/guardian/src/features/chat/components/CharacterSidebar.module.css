@@ -1,0 +1,134 @@
+.card {
+  background: var(--dash-color-surface, #fff);
+  border-radius: 22px;
+  padding: 18px 16px;
+  box-shadow: var(--dash-shadow-soft, 0 2px 12px rgba(60, 50, 120, 0.06));
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 100%;
+  min-height: 0;
+}
+
+.title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--dash-color-text-strong, #1f1b3a);
+  margin: 0 4px 4px;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 18px;
+  border: 2px solid transparent;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(60, 50, 120, 0.05);
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    background 0.15s ease;
+}
+
+.item:hover {
+  box-shadow: 0 4px 14px rgba(60, 50, 120, 0.08);
+}
+
+.itemActive {
+  border-color: var(--dash-color-primary, #7c5cff);
+  background: var(--dash-color-primary-50, #f1edff);
+}
+
+.avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #ffe1c4 0%, #ffb796 100%);
+  flex-shrink: 0;
+}
+
+.meta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+
+.name {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--dash-color-text-strong, #1f1b3a);
+}
+
+.tone {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  width: fit-content;
+}
+
+.toneCalm {
+  background: #e6f7ec;
+  color: #1f9a55;
+}
+.toneTired {
+  background: #fff1e1;
+  color: #d97a1f;
+}
+.toneWorried {
+  background: #efeaff;
+  color: #6a4ee0;
+}
+
+.check {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--dash-color-primary, #7c5cff);
+  color: #fff;
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+}
+
+.more {
+  margin-top: auto;
+  appearance: none;
+  border: 1px solid var(--dash-color-border, #ece8f7);
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  color: var(--dash-color-text-muted, #7a7596);
+  cursor: pointer;
+  padding: 10px;
+  border-radius: 999px;
+  font-weight: 500;
+}
+
+.more:hover {
+  background: #faf9ff;
+}
