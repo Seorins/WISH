@@ -3,25 +3,46 @@ import { assetPath } from '@/game/assets/assetPath'
 import { fadeToScene } from '@/game/systems/sceneTransition'
 import { addCoverBackground } from '@/game/world/background'
 
+type TaekwondoPoomsaePracticeData = {
+  poomsaeId?: string
+  poomsaeName?: string
+}
+
 const ASSET_KEYS = {
   background: 'taekwondo-practice-background',
+  currentPoomsae: 'taekwondo-practice-current-poomsae',
   deleteButton: 'taekwondo-practice-delete-button',
   feedback: 'taekwondo-practice-feedback',
+  guide: 'taekwondo-practice-guide',
+  guidePose: 'taekwondo-practice-guide-pose',
+  progress: 'taekwondo-practice-progress',
   seokjae: 'taekwondo-practice-seokjae',
   seokjaeProgress: 'taekwondo-practice-seokjae-progress',
   seokjaeProgressActive: 'taekwondo-practice-seokjae-progress-active',
+  userCamera: 'taekwondo-practice-user-camera',
 } as const
 
 const FADE_DURATION = 220
-const OVERLAY_ALPHA = 0.12
-const PANEL_FILL = 0xfff7ea
-const PANEL_STROKE = 0x7b4a19
-const PANEL_ALPHA = 0.9
-const TEXT_COLOR = '#2c1708'
-const TEMP_POOMSAE_STEP_COUNT = 6
-const TEMP_COMPLETED_STEP_COUNT = 2
-const TEMP_FEEDBACK_MESSAGE = '주어지는 피드백 표시 후 소멸'
-const FEEDBACK_VISIBLE_MS = 2200
+const OVERLAY_ALPHA = 0.08
+const TEXT_COLOR = '#3a2110'
+const TEMP_TOTAL_STEP_COUNT = 9
+const TEMP_ACTIVE_STEP_COUNT = 4
+const DEFAULT_POOMSAE_NAME = '태극 1장'
+const DEFAULT_FEEDBACK_MESSAGE = '실시간 피드백'
+const CAMERA_DENIED_MESSAGE = '카메라를 아직 준비 중입니다.'
+const CURRENT_POOMSAE_VISIBLE_HEIGHT_RATIO = 397 / 724
+const PROGRESS_VISIBLE_HEIGHT_RATIO = 274 / 725
+const PROGRESS_VISIBLE_CENTER_OFFSET_RATIO = (725 / 2 - (193 + 466) / 2) / 725
+
+const IMAGE_ASPECT = {
+  currentPoomsae: 2173 / 724,
+  deleteButton: 344 / 336,
+  feedback: 852 / 330,
+  guide: 1086 / 1449,
+  progress: 2169 / 725,
+  seokjae: 617 / 890,
+  userCamera: 1448 / 1086,
+} as const
 
 export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
   private mediaStream: MediaStream | null = null
@@ -29,9 +50,11 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
   private cameraCanvas: HTMLCanvasElement | null = null
   private cameraContext: CanvasRenderingContext2D | null = null
   private cameraTexture: Phaser.Textures.CanvasTexture | null = null
-  private feedbackContainer?: Phaser.GameObjects.Container
+  private feedbackText?: Phaser.GameObjects.Text
   private hasDrawnCameraPlaceholder = false
   private lastVideoTime = -1
+  private poomsaeId = 'taegeuk-1'
+  private poomsaeName = DEFAULT_POOMSAE_NAME
 
   private readonly handleEscDown = () => {
     this.returnToPoomsaeSelect()
@@ -41,14 +64,29 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     super({ key: 'TaekwondoPoomsaePracticeScene' })
   }
 
+  init(data: TaekwondoPoomsaePracticeData = {}) {
+    this.poomsaeId = data.poomsaeId ?? 'taegeuk-1'
+    this.poomsaeName = data.poomsaeName ?? DEFAULT_POOMSAE_NAME
+  }
+
   preload() {
     this.load.image(
       ASSET_KEYS.background,
       assetPath('images/themes/taekwondo/background/taekwondo_inside.png'),
     )
-    this.load.image(ASSET_KEYS.seokjae, assetPath('images/themes/taekwondo/characters/seokjae.png'))
+    this.load.image(
+      ASSET_KEYS.currentPoomsae,
+      assetPath('images/themes/taekwondo/ui/current_poomsae.png'),
+    )
     this.load.image(ASSET_KEYS.deleteButton, assetPath('images/themes/taekwondo/ui/delete_btn.png'))
     this.load.image(ASSET_KEYS.feedback, assetPath('images/themes/taekwondo/ui/feedback.png'))
+    this.load.image(ASSET_KEYS.guide, assetPath('images/themes/taekwondo/ui/guide.png'))
+    this.load.image(
+      ASSET_KEYS.guidePose,
+      assetPath(`images/themes/taekwondo/characters/poomsae_${this.getPoomsaeNumber()}.png`),
+    )
+    this.load.image(ASSET_KEYS.progress, assetPath('images/themes/taekwondo/ui/progress.png'))
+    this.load.image(ASSET_KEYS.seokjae, assetPath('images/themes/taekwondo/characters/seokjae.png'))
     this.load.image(
       ASSET_KEYS.seokjaeProgress,
       assetPath('images/themes/taekwondo/ui/seokjae_icon.png'),
@@ -57,6 +95,7 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
       ASSET_KEYS.seokjaeProgressActive,
       assetPath('images/themes/taekwondo/ui/seokjae_icon_activate.png'),
     )
+    this.load.image(ASSET_KEYS.userCamera, assetPath('images/themes/taekwondo/ui/user_camera.png'))
   }
 
   create() {
@@ -66,10 +105,8 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     this.add.rectangle(vw / 2, vh / 2, vw, vh, 0x120d08, OVERLAY_ALPHA).setDepth(1)
 
     this.createCameraTexture()
-    this.createTopBar(vw, vh)
-    this.createPracticePanels(vw, vh)
-    this.createGuideNpc(vw, vh)
-    this.showFeedback(TEMP_FEEDBACK_MESSAGE)
+    this.createTopStatus(vw, vh)
+    this.createPracticeLayout(vw, vh)
     this.startCamera()
 
     this.input.keyboard?.on('keydown-ESC', this.handleEscDown)
@@ -104,118 +141,187 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     this.cameraTexture = texture
   }
 
-  private createTopBar(vw: number, vh: number) {
-    const topY = vh * 0.075
-    const topHeight = Phaser.Math.Clamp(vh * 0.075, 58, 78)
-    this.createPoomsaeProgress(vw / 2, topY, topHeight)
-
-    this.createDeleteButton(vw * 0.87, topY, topHeight, () => this.stopPractice())
+  private getPoomsaeNumber() {
+    const match = this.poomsaeId.match(/\d+$/)
+    return match?.[0] ?? '1'
   }
 
-  private createPracticePanels(vw: number, vh: number) {
-    const contentTop = vh * 0.145
-    const contentBottom = vh * 0.92
-    const contentHeight = contentBottom - contentTop
-    const leftX = vw * 0.275
-    const leftWidth = vw * 0.42
-    const rightX = vw * 0.7
-    const rightWidth = vw * 0.42
-
-    this.createCameraPanel(leftX, contentTop + contentHeight / 2, leftWidth, contentHeight)
-
-    this.createPanel(rightX, contentTop + contentHeight / 2, rightWidth, contentHeight, 0.68)
-    this.addLabel(rightX, contentTop + contentHeight * 0.42, '따라할 동작', 32, 5)
-  }
-
-  private createGuideNpc(vw: number, vh: number) {
-    const npcHeight = Phaser.Math.Clamp(vh * 0.3, 140, 230)
-    const npcX = vw * 0.93
-    const npcY = vh * 0.98
+  private createTopStatus(vw: number, vh: number) {
+    const topY = vh * 0.116
+    const progressWidth = vw * 0.49
+    const progressHeight = vh * 0.25
+    const currentHeight =
+      progressHeight * (PROGRESS_VISIBLE_HEIGHT_RATIO / CURRENT_POOMSAE_VISIBLE_HEIGHT_RATIO)
+    const visualTopY = topY - progressHeight * PROGRESS_VISIBLE_CENTER_OFFSET_RATIO
+    const currentY = topY - progressHeight * 0.032
+    const currentWidth = currentHeight * IMAGE_ASPECT.currentPoomsae
+    const deleteSize = vh * 0.073
 
     this.add
-      .image(npcX, npcY, ASSET_KEYS.seokjae)
-      .setOrigin(0.5, 1)
-      .setDisplaySize(npcHeight * (617 / 890), npcHeight)
-      .setDepth(5)
-  }
+      .image(vw * 0.203, currentY, ASSET_KEYS.currentPoomsae)
+      .setDisplaySize(currentWidth, currentHeight)
+      .setDepth(4)
 
-  private showFeedback(message: string) {
-    this.feedbackContainer?.destroy()
-
-    if (!message) {
-      this.feedbackContainer = undefined
-      return
-    }
-
-    const { width: vw, height: vh } = this.scale
-    const feedbackWidth = Math.min(vw * 0.32, 500)
-    const feedbackHeight = feedbackWidth * (330 / 852)
-    const feedbackX = vw * 0.8
-    const feedbackY = vh * 0.615
-
-    const background = this.add
-      .image(0, 0, ASSET_KEYS.feedback)
-      .setDisplaySize(feedbackWidth, feedbackHeight)
-      .setDepth(7)
-    const label = this.add
-      .text(0, -feedbackHeight * 0.04, message, {
+    this.add
+      .text(vw * 0.203, currentY - currentHeight * 0.02, `${this.poomsaeName}`, {
         fontFamily: 'sans-serif',
-        fontSize: `${Math.round(Phaser.Math.Clamp(feedbackHeight * 0.18, 18, 28))}px`,
+        fontSize: `${Math.round(Phaser.Math.Clamp(currentHeight * 0.34, 24, 34))}px`,
         color: TEXT_COLOR,
         fontStyle: '700',
-        align: 'center',
-        wordWrap: { width: feedbackWidth * 0.72, useAdvancedWrap: true },
       })
       .setOrigin(0.5)
-      .setDepth(8)
+      .setDepth(5)
 
-    this.feedbackContainer = this.add
-      .container(feedbackX, feedbackY, [background, label])
-      .setDepth(7)
-      .setAlpha(0)
+    this.createPoomsaeProgress(
+      vw * 0.553,
+      topY,
+      progressWidth,
+      progressHeight,
+      TEMP_TOTAL_STEP_COUNT,
+      TEMP_ACTIVE_STEP_COUNT,
+    )
 
-    this.tweens.add({
-      targets: this.feedbackContainer,
-      alpha: 1,
-      duration: 160,
-      yoyo: true,
-      hold: FEEDBACK_VISIBLE_MS,
-      onComplete: () => {
-        this.feedbackContainer?.destroy()
-        this.feedbackContainer = undefined
-      },
-    })
+    this.createDeleteButton(vw * 0.843, visualTopY, deleteSize, () => this.stopPractice())
+  }
+
+  private createPracticeLayout(vw: number, vh: number) {
+    const cameraWidth = vw * 0.51
+    const cameraHeight = vh * 0.732
+    const cameraX = vw * 0.334
+    const cameraY = vh * 0.548
+    const rightX = vw * 0.754
+    const rightWidth = vw * 0.286
+    const guideY = vh * 0.396
+    const guideHeight = vh * 0.437
+    const feedbackY = vh * 0.783
+    const feedbackHeight = vh * 0.25
+
+    this.createCameraPanel(cameraX, cameraY, cameraWidth, cameraHeight)
+    this.createGuideVideoPanel(rightX, guideY, rightWidth, guideHeight)
+    this.createFeedbackPanel(rightX, feedbackY, rightWidth, feedbackHeight)
   }
 
   private createCameraPanel(x: number, y: number, width: number, height: number) {
-    this.createPanel(x, y, width, height, 0.92)
+    const borderSize = 5
+    const radius = Math.round(Math.min(width, height) * 0.04)
+    const frame = this.add.graphics().setDepth(3)
+    frame.fillStyle(0xfff8eb, 0.96)
+    frame.fillRoundedRect(
+      x - width / 2 - borderSize,
+      y - height / 2 - borderSize,
+      width + borderSize * 2,
+      height + borderSize * 2,
+      radius + borderSize,
+    )
+    frame.lineStyle(2, 0xe5c58f, 0.9)
+    frame.strokeRoundedRect(
+      x - width / 2 - borderSize,
+      y - height / 2 - borderSize,
+      width + borderSize * 2,
+      height + borderSize * 2,
+      radius + borderSize,
+    )
 
-    const cameraInset = 10
-    const cameraWidth = width - cameraInset * 2
-    const cameraHeight = height - cameraInset * 2
+    const cameraWidth = width
+    const cameraHeight = height
+    const cameraX = x
+    const cameraY = y
     this.resizeCameraTexture(cameraWidth, cameraHeight)
 
     if (!this.cameraTexture) {
-      return
+      return frame
     }
 
     const cameraImage = this.add
-      .image(x, y, this.cameraTexture.key)
+      .image(cameraX, cameraY, this.cameraTexture.key)
       .setDisplaySize(cameraWidth, cameraHeight)
-      .setDepth(5)
+      .setDepth(4)
 
     const maskShape = this.add.graphics()
     maskShape
       .fillStyle(0xffffff, 1)
       .fillRoundedRect(
-        x - width / 2 + cameraInset,
-        y - height / 2 + cameraInset,
+        cameraX - cameraWidth / 2,
+        cameraY - cameraHeight / 2,
         cameraWidth,
         cameraHeight,
-        10,
+        radius,
       )
       .setVisible(false)
     cameraImage.setMask(maskShape.createGeometryMask())
+
+    return frame
+  }
+
+  private createGuideVideoPanel(x: number, y: number, width: number, height: number) {
+    const borderSize = 5
+    const radius = Math.round(Math.min(width, height) * 0.08)
+    const frame = this.add.graphics().setDepth(3)
+    frame.fillStyle(0xfff8eb, 0.96)
+    frame.fillRoundedRect(
+      x - width / 2 - borderSize,
+      y - height / 2 - borderSize,
+      width + borderSize * 2,
+      height + borderSize * 2,
+      radius + borderSize,
+    )
+    frame.lineStyle(2, 0xe5c58f, 0.9)
+    frame.strokeRoundedRect(
+      x - width / 2 - borderSize,
+      y - height / 2 - borderSize,
+      width + borderSize * 2,
+      height + borderSize * 2,
+      radius + borderSize,
+    )
+
+    this.add
+      .text(x, y - height * 0.36, '\uac00\uc774\ub4dc \uc601\uc0c1', {
+        fontFamily: 'sans-serif',
+        fontSize: `${Math.round(Phaser.Math.Clamp(height * 0.085, 24, 38))}px`,
+        color: TEXT_COLOR,
+        fontStyle: '700',
+      })
+      .setOrigin(0.5)
+      .setDepth(5)
+
+    this.add
+      .image(x, y + height * 0.08, ASSET_KEYS.guidePose)
+      .setDisplaySize(width * 0.38, height * 0.52)
+      .setDepth(5)
+  }
+
+  private createFeedbackPanel(x: number, y: number, width: number, height: number) {
+    const borderSize = 5
+    const radius = Math.round(Math.min(width, height) * 0.12)
+    const frame = this.add.graphics().setDepth(3)
+    frame.fillStyle(0xfff8eb, 0.96)
+    frame.fillRoundedRect(
+      x - width / 2 - borderSize,
+      y - height / 2 - borderSize,
+      width + borderSize * 2,
+      height + borderSize * 2,
+      radius + borderSize,
+    )
+    frame.lineStyle(2, 0xe5c58f, 0.9)
+    frame.strokeRoundedRect(
+      x - width / 2 - borderSize,
+      y - height / 2 - borderSize,
+      width + borderSize * 2,
+      height + borderSize * 2,
+      radius + borderSize,
+    )
+
+    this.feedbackText = this.add
+      .text(x, y, DEFAULT_FEEDBACK_MESSAGE, {
+        fontFamily: 'sans-serif',
+        fontSize: `${Math.round(Phaser.Math.Clamp(height * 0.16, 22, 34))}px`,
+        color: TEXT_COLOR,
+        fontStyle: '700',
+        align: 'center',
+        wordWrap: { width: width * 0.78, useAdvancedWrap: true },
+      })
+      .setOrigin(0.5)
+      .setDepth(5)
   }
 
   private resizeCameraTexture(displayWidth: number, displayHeight: number) {
@@ -243,41 +349,41 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     this.lastVideoTime = -1
   }
 
-  private createPanel(x: number, y: number, width: number, height: number, alpha = PANEL_ALPHA) {
-    const panel = this.add
-      .rectangle(x, y, width, height, PANEL_FILL, alpha)
-      .setStrokeStyle(Math.max(3, Math.round(Math.min(width, height) * 0.035)), PANEL_STROKE, 0.85)
-      .setDepth(3)
+  private createPoomsaeProgress(
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    totalStepCount: number,
+    activeStepCount: number,
+  ) {
+    this.add.image(x, y, ASSET_KEYS.progress).setDisplaySize(width, height).setDepth(4)
 
-    return panel
-  }
-
-  private createPoomsaeProgress(x: number, y: number, height: number) {
-    const iconSize = height * 0.82
-    const gap = iconSize * 0.22
-    const totalWidth = iconSize * TEMP_POOMSAE_STEP_COUNT + gap * (TEMP_POOMSAE_STEP_COUNT - 1)
+    const iconSize = Phaser.Math.Clamp(this.scale.height * 0.052, 44, 58)
+    const iconY = y - height * 0.04
+    const gap = iconSize * 0.18
+    const totalWidth = iconSize * totalStepCount + gap * (totalStepCount - 1)
     const startX = x - totalWidth / 2 + iconSize / 2
 
-    for (let index = 0; index < TEMP_POOMSAE_STEP_COUNT; index += 1) {
+    for (let index = 0; index < totalStepCount; index += 1) {
       const texture =
-        index < TEMP_COMPLETED_STEP_COUNT
-          ? ASSET_KEYS.seokjaeProgressActive
-          : ASSET_KEYS.seokjaeProgress
+        index < activeStepCount ? ASSET_KEYS.seokjaeProgressActive : ASSET_KEYS.seokjaeProgress
 
       this.add
-        .image(startX + index * (iconSize + gap), y, texture)
+        .image(startX + index * (iconSize + gap), iconY, texture)
         .setDisplaySize(iconSize, iconSize)
         .setDepth(5)
     }
   }
 
   private createDeleteButton(x: number, y: number, size: number, onClick: () => void) {
+    const buttonWidth = size * IMAGE_ASPECT.deleteButton
     const button = this.add
       .image(0, 0, ASSET_KEYS.deleteButton)
-      .setDisplaySize(size, size)
+      .setDisplaySize(buttonWidth, size)
       .setDepth(6)
 
-    const hitArea = this.add.rectangle(0, 0, size, size, 0xffffff, 0).setInteractive({
+    const hitArea = this.add.rectangle(0, 0, buttonWidth, size, 0xffffff, 0).setInteractive({
       useHandCursor: true,
     })
     hitArea.on('pointerdown', onClick)
@@ -287,18 +393,8 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     return this.add.container(x, y, [button, hitArea]).setDepth(6)
   }
 
-  private addLabel(x: number, y: number, text: string, fontSize: number, depth: number) {
-    return this.add
-      .text(x, y, text, {
-        fontFamily: 'sans-serif',
-        fontSize: `${fontSize}px`,
-        color: TEXT_COLOR,
-        fontStyle: '700',
-        align: 'center',
-        lineSpacing: 8,
-      })
-      .setOrigin(0.5)
-      .setDepth(depth)
+  private showFeedback(message: string) {
+    this.feedbackText?.setText(message)
   }
 
   private async startCamera() {
@@ -321,7 +417,7 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
       this.mediaStream = null
       this.videoElement = null
       this.hasDrawnCameraPlaceholder = false
-      this.showFeedback('카메라 권한을 허용해주세요')
+      this.showFeedback(CAMERA_DENIED_MESSAGE)
     }
   }
 
@@ -395,7 +491,7 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
       this.cameraContext.textAlign = 'center'
       this.cameraContext.textBaseline = 'middle'
       this.cameraContext.fillText(
-        '카메라를 준비하고 있어요',
+        '\uce74\uba54\ub77c\ub97c \uc900\ube44\ud558\ub294 \uc911\uc774\uc5d0\uc694.',
         this.cameraCanvas.width / 2,
         this.cameraCanvas.height / 2,
       )
@@ -429,8 +525,7 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
 
   private cleanup() {
     this.input.keyboard?.off('keydown-ESC', this.handleEscDown)
-    this.feedbackContainer?.destroy()
-    this.feedbackContainer = undefined
+    this.feedbackText = undefined
     this.stopCamera()
 
     if (this.cameraTexture) {
