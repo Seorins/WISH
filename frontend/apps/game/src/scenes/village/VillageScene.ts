@@ -78,7 +78,6 @@ export class VillageScene extends Phaser.Scene {
     })
     this.load.image('sehyun_talk', assetPath('images/npcs/sehyun/dialog-frame.png'))
     this.load.image('profile', assetPath('images/common/profile.png'))
-    this.load.image('menu', assetPath('images/ui/buttons/menu.png'))
     this.load.image('menu-frame', assetPath('images/ui/buttons/meunframe.png'))
     this.load.image('setting-frame', assetPath('images/ui/buttons/settingframe.png'))
     this.load.image('settings-button', assetPath('images/ui/buttons/settingbutton.png'))
@@ -135,8 +134,8 @@ export class VillageScene extends Phaser.Scene {
 
     this.anims.create({
       key: 'sehyun-loop',
-      frames: this.anims.generateFrameNumbers('sehyun', { start: 0, end: 15 }),
-      frameRate: 6,
+      frames: this.anims.generateFrameNumbers('sehyun', { start: 0, end: 3 }),
+      frameRate: 3,
       repeat: -1,
     })
     this.sehyunNpc = this.add.sprite(0.38 * W, 0.3 * H, 'sehyun').setDepth(4)
@@ -162,20 +161,13 @@ export class VillageScene extends Phaser.Scene {
     profile.x = profileSize / 2 + 12
     profile.y = profileSize / 2 + 12
 
-    const menu = this.add.image(0, 0, 'menu')
-    const menuW = profileSize * 0.65
-    menu.setDisplaySize(menuW, menuW * (menu.height / menu.width))
-    menu.setDepth(20).setScrollFactor(0)
-    menu.x = menuW / 2 + 12 + (profileSize - menuW) / 2
-    menu.y = profile.y + profileSize / 2 + menu.displayHeight / 2 - 4
-
     const spawn = data.spawn ?? DEFAULT_PLAYER_SPAWN
     this.player = createPlayer(this, W * spawn.xRatio, H * spawn.yRatio, { depth: 5 })
 
     this.physics.add.collider(this.player, this.obstacles)
 
     this.cameras.main.centerOn(this.player.x, this.player.y)
-    this.cameras.main.startFollow(this.player, true, 0.12, 0.12)
+    this.cameras.main.startFollow(this.player, true, 1, 1)
 
     this.cursors = this.input.keyboard!.createCursorKeys()
     this.settingsMenu = createSettingsMenu(this, {
