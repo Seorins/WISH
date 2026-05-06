@@ -142,7 +142,11 @@ class LocalVideoStorageTest {
     }
 
     private LocalVideoStorage storage() {
-        return new LocalVideoStorage(
-                new StorageProperties(uploadDir.toString(), "/uploads"), "/api/v1");
+        StorageProperties properties =
+                new StorageProperties(
+                        StorageProperties.Type.LOCAL,
+                        new StorageProperties.Local(uploadDir.toString(), "/uploads"),
+                        null);
+        return new LocalVideoStorage(properties, "/api/v1");
     }
 }

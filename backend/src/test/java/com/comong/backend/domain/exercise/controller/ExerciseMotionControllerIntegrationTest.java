@@ -569,7 +569,7 @@ class ExerciseMotionControllerIntegrationTest extends IntegrationTestSupport {
      * URL 에서 local 디스크의 절대 경로를 복원한다 ({@code <upload-dir>/...} 또는 {@code <upload-dir>/videos/...}).
      */
     private Path localPath(String url) {
-        String publicPrefix = contextPath + storageProperties.publicUrlPrefix();
+        String publicPrefix = contextPath + storageProperties.local().publicUrlPrefix();
         if (!url.startsWith(publicPrefix)) {
             throw new IllegalStateException("Unexpected URL prefix: " + url);
         }
@@ -577,7 +577,7 @@ class ExerciseMotionControllerIntegrationTest extends IntegrationTestSupport {
         if (relative.startsWith("/")) {
             relative = relative.substring(1);
         }
-        return Path.of(storageProperties.uploadDir()).toAbsolutePath().resolve(relative);
+        return Path.of(storageProperties.local().uploadDir()).toAbsolutePath().resolve(relative);
     }
 
     private ExerciseMotion exerciseMotion(

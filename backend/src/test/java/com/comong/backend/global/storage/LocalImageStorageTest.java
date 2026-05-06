@@ -124,7 +124,11 @@ class LocalImageStorageTest {
     }
 
     private LocalImageStorage storage() {
-        return new LocalImageStorage(
-                new StorageProperties(uploadDir.toString(), "/uploads"), "/api/v1");
+        StorageProperties properties =
+                new StorageProperties(
+                        StorageProperties.Type.LOCAL,
+                        new StorageProperties.Local(uploadDir.toString(), "/uploads"),
+                        null);
+        return new LocalImageStorage(properties, "/api/v1");
     }
 }

@@ -34,9 +34,10 @@ import lombok.RequiredArgsConstructor;
  *
  * <p>원칙: Stateless JWT 기반, 세션/CSRF/formLogin/httpBasic 모두 비활성. 공개 엔드포인트 외 전부 인증 필요.
  *
- * <p>스토리지 prefix ({@link StorageProperties#publicUrlPrefix()}) 는 {@code STORAGE_PUBLIC_URL_PREFIX}
- * 환경변수로 운영에서 변경 가능하므로 하드코딩하지 않고 런타임에 합쳐넣는다 — 그래야 정적 핸들러 매핑과 Security permit 이 같은 source of truth 를
- * 공유한다.
+ * <p>스토리지 prefix ({@link StorageProperties.Local#publicUrlPrefix()}) 는 {@code
+ * STORAGE_PUBLIC_URL_PREFIX} 환경변수로 운영에서 변경 가능하므로 하드코딩하지 않고 런타임에 합쳐넣는다 — 그래야 정적 핸들러 매핑과 Security
+ * permit 이 같은 source of truth 를 공유한다. {@code storage.type=s3} 환경에서는 로컬 정적 핸들러 자체가 비활성화되므로 prefix
+ * permit 도 추가되지 않는다 (S14P31E103-490).
  */
 @Configuration
 @RequiredArgsConstructor
@@ -90,10 +91,18 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        String storagePattern = stripTrailingSlash(storageProperties.publicUrlPrefix()) + "/**";
+        // storage.type=s3 환경에서는 storage.local 자체가 null 일 수 있다 (로컬 정적 핸들러도 비활성).
+        // 그 경우 storage prefix permit 자체가 의미 없으므로 정적 엔드포인트만 노출한다.
+        StorageProperties.Local local = storageProperties.local();
         String[] genericPublicEndpoints =
-                Stream.concat(Arrays.stream(STATIC_PUBLIC_ENDPOINTS), Stream.of(storagePattern))
-                        .toArray(String[]::new);
+                local == null
+                        ? STATIC_PUBLIC_ENDPOINTS
+                        : Stream.concat(
+                                        Arrays.stream(STATIC_PUBLIC_ENDPOINTS),
+                                        Stream.of(
+                                                stripTrailingSlash(local.publicUrlPrefix())
+                                                        + "/**"))
+                                .toArray(String[]::new);
 
         http.csrf(AbstractHttpConfigurer::disable)
                 .cors(Customizer.withDefaults())

@@ -51,6 +51,13 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-testcontainers'
     testImplementation 'org.testcontainers:testcontainers-junit-jupiter'
     testImplementation 'org.testcontainers:testcontainers-postgresql'
+    // AWS SDK v2 — S3 스토리지 백엔드. BOM 으로 모든 모듈 버전을 한 번에 핀. presigner 는 s3 모듈에 내장,
+    // 100MB 영상 업로드의 multipart 분할은 s3-transfer-manager 가 담당. 본 모듈 자체는 storage.type=local
+    // 환경에서도 클래스패스에 존재하지만, S3Client/S3Presigner 빈은 storage.type=s3 일 때만 등록되므로
+    // 추가 자원 비용은 사실상 없음. (S14P31E103-490)
+    implementation platform('software.amazon.awssdk:bom:2.29.45')
+    implementation 'software.amazon.awssdk:s3'
+    implementation 'software.amazon.awssdk:s3-transfer-manager'
     testCompileOnly 'org.projectlombok:lombok'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     testAnnotationProcessor 'org.projectlombok:lombok'

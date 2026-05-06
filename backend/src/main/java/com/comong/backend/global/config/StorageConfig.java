@@ -2,6 +2,7 @@ package com.comong.backend.global.config;
 
 import java.nio.file.Path;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
@@ -29,14 +30,16 @@ import lombok.RequiredArgsConstructor;
 @Configuration
 @RequiredArgsConstructor
 @EnableConfigurationProperties(StorageProperties.class)
+@ConditionalOnProperty(name = "storage.type", havingValue = "local", matchIfMissing = true)
 public class StorageConfig implements WebMvcConfigurer {
 
     private final StorageProperties properties;
 
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
-        String handlerPattern = stripTrailingSlash(properties.publicUrlPrefix()) + "/**";
-        Path uploadRoot = Path.of(properties.uploadDir()).toAbsolutePath().normalize();
+        StorageProperties.Local local = properties.local();
+        String handlerPattern = stripTrailingSlash(local.publicUrlPrefix()) + "/**";
+        Path uploadRoot = Path.of(local.uploadDir()).toAbsolutePath().normalize();
         String location = uploadRoot.toUri().toString();
         if (!location.endsWith("/")) {
             location += "/";
