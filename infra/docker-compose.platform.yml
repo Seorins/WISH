@@ -10,6 +10,7 @@ services:
       - "443:443"
     volumes:
       - ./nginx:/etc/nginx/conf.d:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
     networks:
       - e103-platform-network
 
@@ -83,7 +84,6 @@ services:
     user: root
     environment:
       TZ: ${TZ:-Asia/Seoul}
-      JENKINS_OPTS: --prefix=/jenkins
     volumes:
       - jenkins_home:/var/jenkins_home
       - /var/run/docker.sock:/var/run/docker.sock

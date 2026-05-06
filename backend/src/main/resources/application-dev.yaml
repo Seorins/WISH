@@ -15,6 +15,9 @@ spring:
 cors:
   allowed-origins:
     - https://k14e103.p.ssafy.io
+    - https://game-dev.wish-e103.xyz
+    - https://admin-dev.wish-e103.xyz
+    - https://guardian-dev.wish-e103.xyz
     - http://localhost:3001
     - http://localhost:3002
     - http://localhost:3003
