@@ -20,21 +20,18 @@ import {
   type SimpleDialogUi,
 } from '@/game/ui/simpleDialog'
 import { createSettingsMenu } from '@/game/ui/settingsMenu'
-import {
-  createRatioRectangle,
-  getRectangleEntryState,
-  isPointInRectangle,
-} from '@/game/world/portal'
+import { getRectangleEntryState } from '@/game/world/portal'
 import { villageDialogs } from './dialog/villageDialogs'
+import {
+  createInitialVillagePortalState,
+  createVillagePortalRectangles,
+  VILLAGE_THEME_PORTALS,
+  type VillagePortalKey,
+} from './villagePortals'
 
 const TALK_DISTANCE = 55
 const DIALOG_TEXT_BOX = { x: 830, y: 470, width: 780, height: 190 }
 const DEFAULT_PLAYER_SPAWN = { xRatio: 0.5, yRatio: 0.3 }
-const ART_PORTAL = { xRatio: 0.364, yRatio: 0.51, widthRatio: 0.02, heightRatio: 0.065 }
-const TAEKWONDO_PORTAL = { xRatio: 0.437, yRatio: 0.083, widthRatio: 0.02, heightRatio: 0.065 }
-const GYMNASTICS_PORTAL = { xRatio: 0.724, yRatio: 0.225, widthRatio: 0.02, heightRatio: 0.065 }
-const MUSIC_PORTAL = { xRatio: 0.231, yRatio: 0.15, widthRatio: 0.02, heightRatio: 0.065 }
-const LIGHTHOUSE_PORTAL = { xRatio: 0.688, yRatio: 0.595, widthRatio: 0.02, heightRatio: 0.065 }
 const MAP_TILE_ROWS = 3
 const MAP_TILE_COLUMNS = 3
 const MAP_TILE_KEYS = Array.from({ length: MAP_TILE_ROWS * MAP_TILE_COLUMNS }, (_, index) => {
@@ -61,16 +58,9 @@ export class VillageScene extends Phaser.Scene {
   private obstacles!: Phaser.Physics.Arcade.StaticGroup
   private sehyunNpc!: Phaser.GameObjects.Sprite
   private dialog!: SimpleDialogUi
-  private artPortal!: Phaser.Geom.Rectangle
-  private taekwondoPortal!: Phaser.Geom.Rectangle
   private portalCooldownUntil = 0
-  private gymnasticsPortal!: Phaser.Geom.Rectangle
-  private musicPortal!: Phaser.Geom.Rectangle
-  private lighthousePortal!: Phaser.Geom.Rectangle
-  private playerWasInArtPortal = true
-  private playerWasInGymnasticsPortal = true
-  private playerWasInMusicPortal = true
-  private playerWasInLighthousePortal = true
+  private portals = new Map<VillagePortalKey, Phaser.Geom.Rectangle>()
+  private playerWasInPortal = createInitialVillagePortalState()
   private isTransitioning = false
   private target: Phaser.Math.Vector2 | null = null
   private lastDirection: PlayerDirection = 'down'
@@ -131,15 +121,8 @@ export class VillageScene extends Phaser.Scene {
 
     this.physics.world.setBounds(0, 0, W, H)
     this.cameras.main.setBounds(0, 0, W, H)
-    this.playerWasInArtPortal = true
-    this.playerWasInGymnasticsPortal = true
-    this.playerWasInMusicPortal = true
-    this.playerWasInLighthousePortal = true
-    this.artPortal = createRatioRectangle(W, H, ART_PORTAL)
-    this.taekwondoPortal = createRatioRectangle(W, H, TAEKWONDO_PORTAL)
-    this.gymnasticsPortal = createRatioRectangle(W, H, GYMNASTICS_PORTAL)
-    this.musicPortal = createRatioRectangle(W, H, MUSIC_PORTAL)
-    this.lighthousePortal = createRatioRectangle(W, H, LIGHTHOUSE_PORTAL)
+    this.playerWasInPortal = createInitialVillagePortalState()
+    this.portals = createVillagePortalRectangles(W, H)
 
     this.obstacles = this.physics.add.staticGroup()
     OBSTACLES.forEach(({ x, y, w, h }) => {
@@ -257,51 +240,7 @@ export class VillageScene extends Phaser.Scene {
       }
     }
 
-    const artState = getRectangleEntryState(
-      this.artPortal,
-      this.player.x,
-      this.player.y,
-      this.playerWasInArtPortal,
-    )
-    if (!this.isTransitioning && artState.didEnter) {
-      this.enterArtScene()
-    }
-    this.playerWasInArtPortal = artState.isInside
-
-    this.tryEnterTaekwondoScene()
-
-    const gymState = getRectangleEntryState(
-      this.gymnasticsPortal,
-      this.player.x,
-      this.player.y,
-      this.playerWasInGymnasticsPortal,
-    )
-    if (!this.isTransitioning && gymState.didEnter) {
-      this.enterGymnasticsScene()
-    }
-    this.playerWasInGymnasticsPortal = gymState.isInside
-
-    const musicState = getRectangleEntryState(
-      this.musicPortal,
-      this.player.x,
-      this.player.y,
-      this.playerWasInMusicPortal,
-    )
-    if (!this.isTransitioning && musicState.didEnter) {
-      this.enterMusicScene()
-    }
-    this.playerWasInMusicPortal = musicState.isInside
-
-    const lighthouseState = getRectangleEntryState(
-      this.lighthousePortal,
-      this.player.x,
-      this.player.y,
-      this.playerWasInLighthousePortal,
-    )
-    if (!this.isTransitioning && lighthouseState.didEnter) {
-      this.enterLighthouseScene()
-    }
-    this.playerWasInLighthousePortal = lighthouseState.isInside
+    this.updateThemePortalTransitions()
   }
 
   private showSehyunDialog() {
@@ -319,19 +258,32 @@ export class VillageScene extends Phaser.Scene {
     fadeSimpleDialog(this, this.dialog, 0, 200)
   }
 
-  private enterGymnasticsScene() {
-    this.isTransitioning = true
-    this.target = null
-    this.player.setVelocity(0, 0)
+  private updateThemePortalTransitions() {
+    VILLAGE_THEME_PORTALS.forEach(portal => {
+      const rectangle = this.portals.get(portal.key)
+      if (!rectangle) {
+        console.warn(`[VillageScene] Missing portal rectangle for "${portal.key}"`)
+        return
+      }
 
-    if (this.isDialogVisible) {
-      this.hideDialog(false)
-    }
+      const portalState = getRectangleEntryState(
+        rectangle,
+        this.player.x,
+        this.player.y,
+        this.playerWasInPortal[portal.key],
+      )
 
-    fadeToScene(this, 'GymnasticsSelectScene', { duration: 250 })
+      const canUsePortal = this.time.now >= this.portalCooldownUntil
+
+      if (!this.isTransitioning && canUsePortal && portalState.didEnter) {
+        this.enterThemeScene(portal.sceneKey)
+      }
+
+      this.playerWasInPortal[portal.key] = portalState.isInside
+    })
   }
 
-  private enterArtScene() {
+  private enterThemeScene(sceneKey: string) {
     this.isTransitioning = true
     this.target = null
     this.player.setVelocity(0, 0)
@@ -340,51 +292,7 @@ export class VillageScene extends Phaser.Scene {
       this.hideDialog(false)
     }
 
-    fadeToScene(this, 'ArtSelectScene', { duration: 250 })
-  }
-
-  private enterMusicScene() {
-    this.isTransitioning = true
-    this.target = null
-    this.player.setVelocity(0, 0)
-
-    if (this.isDialogVisible) {
-      this.hideDialog(false)
-    }
-
-    fadeToScene(this, 'MusicSelectScene', { duration: 250 })
-  }
-
-  private enterLighthouseScene() {
-    this.isTransitioning = true
-    this.target = null
-    this.player.setVelocity(0, 0)
-
-    if (this.isDialogVisible) {
-      this.hideDialog(false)
-    }
-
-    fadeToScene(this, 'LighthouseSelectScene', { duration: 250 })
-  }
-
-  private tryEnterTaekwondoScene() {
-    if (this.isTransitioning || this.time.now < this.portalCooldownUntil) {
-      return
-    }
-
-    if (!isPointInRectangle(this.taekwondoPortal, this.player.x, this.player.y)) {
-      return
-    }
-
-    this.isTransitioning = true
-    this.target = null
-    this.player.setVelocity(0, 0)
-
-    if (this.isDialogVisible) {
-      this.hideDialog(false)
-    }
-
-    fadeToScene(this, 'TaekwondoSelectScene', { duration: 250 })
+    fadeToScene(this, sceneKey, { duration: 250 })
   }
 
   private logout() {
