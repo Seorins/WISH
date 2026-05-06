@@ -336,15 +336,34 @@ Long userId = user.userId();
 
 ### 추상화
 
-- `global/storage/ImageStorage` — 이미지 인터페이스 (`upload`, `delete`)
-- `global/storage/LocalImageStorage` — 로컬 디스크 이미지 구현체
-- `global/storage/StoredImage` — 이미지 URL 래퍼 (DB `image_url`/`thumbnail_url` 컬럼에 저장)
+- `global/storage/ImageStorage` — 이미지 인터페이스 (`upload`, `toPublicUrl`, `delete`)
+- `global/storage/LocalImageStorage` — 로컬 디스크 이미지 구현체 (`storage.type=local` / 디폴트)
+- `global/storage/S3ImageStorage` — S3 이미지 구현체 (`storage.type=s3`, S14P31E103-491)
+- `global/storage/StoredImage` — 이미지 영구 식별자 래퍼 (DB `image_url`/`thumbnail_url` 컬럼에 저장)
 - `global/storage/VideoStorage` — 영상 인터페이스 (S14P31E103-308)
-- `global/storage/LocalVideoStorage` — 로컬 디스크 영상 구현체
-- `global/storage/StoredVideo` — 영상 URL 래퍼 (DB `demo_video_url` 컬럼에 저장)
-- `global/storage/StorageProperties` — `storage.local.{upload-dir, public-url-prefix}` 바인딩 (이미지·영상 공유)
+- `global/storage/LocalVideoStorage` — 로컬 디스크 영상 구현체 (`storage.type=local` / 디폴트)
+- `global/storage/S3VideoStorage` — S3 영상 구현체 (`storage.type=s3`, S14P31E103-492)
+- `global/storage/StoredVideo` — 영상 영구 식별자 래퍼 (DB `demo_video_url` 컬럼에 저장)
+- `global/storage/StorageProperties` — `storage.{type, local.*, s3.*}` 바인딩
+- `global/config/S3ClientConfig` — `storage.type=s3` 일 때만 `S3Client` / `S3Presigner` 빈 등록
 
-S3 구현체는 S14P31E103-240 (이미지) 및 후속 영상용 이슈에서 추가. 인터페이스 분리되어 있어 프로파일별 빈 교체로 갈아끼운다.
+### 프로파일별 활성 백엔드 (S14P31E103-490 ~ 493)
+
+| 프로파일 | `storage.type` | 동작 |
+| --- | --- | --- |
+| `local` | `local` | 디스크 (`./uploads/`) 에 저장. 정적 핸들러로 직접 서빙. |
+| `dev`, `prod` | `s3` | private S3 버킷에 putObject. 응답마다 presigned GET URL (TTL 15분) 발급. |
+
+자격증명은 SDK default credential chain (env 변수 `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` 또는 EC2/ECS IAM Role) 에서 자동으로 읽는다 — yaml/코드 어디에도 박지 않는다. 버킷 / IAM 정책 / 환경변수 주입 절차는 [`infra/aws-s3-bucket-setup-guide.md`](../../infra/aws-s3-bucket-setup-guide.md) (S14P31E103-393) 참조.
+
+#### 저장 식별자 vs 외부 노출 URL (S14P31E103-491)
+
+`upload()` 가 반환하는 `StoredImage.url` / `StoredVideo.url` 은 **DB 에 영구 저장하는 식별자**다. 응답에 내려보낼 때는 반드시 `imageStorage.toPublicUrl(stored)` / `videoStorage.toPublicUrl(stored)` 을 거쳐야 한다.
+
+- 로컬 백엔드: `toPublicUrl` 은 identity. 식별자 자체가 영구 servlet URL.
+- S3 백엔드: 식별자는 영구 객체 URL (private 이라 직접 GET 시 403). `toPublicUrl` 이 매번 새 presigned URL 발급.
+
+호출자가 `toPublicUrl` 을 거치지 않고 stored 값을 그대로 응답에 내려주면 S3 환경에서 클라가 403 을 받는다. `ArtworkResponse.from(artwork, imageStorage)` / `ExerciseMotionResponse.from(motion, imageStorage, videoStorage)` 같은 시그니처가 이 호출을 강제한다.
 
 ### 업로드 검증 — 4중 방어 (이미지·영상 동일 패턴)
 
@@ -369,14 +388,20 @@ IO 실패는 `S-002 STORAGE_FAILURE`. 한도 초과는 `S-003 PAYLOAD_TOO_LARGE`
 - 다만 URL 의 filename 부분에 경로 구분자(`/` `\`), `..`, 단일 `.` 가 포함되면 `S-002` 로 거부한다 (DB 변조 등 데이터 무결성 위반 가드).
 - 한 단계 더: 정규화 후에도 정해진 root (이미지는 `uploadRoot`, 영상은 `uploadRoot/videos`) 하위인지 검사 (defense in depth).
 
-### 디렉토리 레이아웃
+### 디렉토리 레이아웃 / S3 키 컨벤션
 
-- 이미지: `<upload-dir>/UUID.<ext>` (flat)
-- 영상: `<upload-dir>/videos/UUID.<ext>` (subpath 분리 — ops/감사 가독성)
+| 백엔드 | 이미지 | 영상 |
+| --- | --- | --- |
+| 로컬 | `<upload-dir>/UUID.<ext>` (flat) | `<upload-dir>/videos/UUID.<ext>` |
+| S3 | `<storage.s3.prefix>/UUID.<ext>` | `<storage.s3.prefix>/videos/UUID.<ext>` |
 
-### prefix / public URL 동기화
+영상은 양쪽 모두 `videos/` 서브패스로 분리해 ops/감사 가독성 확보. S3 의 `prefix` 는 환경별 (`local` / `dev` / `prod`) 분리되어 객체가 섞이지 않는다.
 
-`storage.local.public-url-prefix` (yaml) → 각 storage 구현체가 반환 URL 을 생성, `StorageConfig` 가 정적 리소스 핸들러에 매핑, `SecurityConfig.PUBLIC_ENDPOINTS` 가 같은 prefix 를 permit. **세 군데가 동일한 값을 공유**하므로 yaml 한 곳만 바꾸면 모두 따라간다. 새 prefix 를 도입할 때 한 군데라도 빠뜨리지 말 것.
+### prefix / public URL 동기화 (로컬 백엔드만)
+
+`storage.local.public-url-prefix` (yaml) → `LocalImageStorage` / `LocalVideoStorage` 가 반환 URL 을 생성, `StorageConfig` 가 정적 리소스 핸들러에 매핑, `SecurityConfig.PUBLIC_ENDPOINTS` 가 같은 prefix 를 permit. **세 군데가 동일한 값을 공유**하므로 yaml 한 곳만 바꾸면 모두 따라간다. 새 prefix 를 도입할 때 한 군데라도 빠뜨리지 말 것.
+
+S3 백엔드에서는 `StorageConfig` / `SecurityConfig` 의 prefix 매핑이 자동으로 비활성화된다 (BE 가 정적 서빙을 하지 않으므로). presigned URL 은 `storage.s3.bucket` 의 도메인 위에서 직접 발급된다.
 
 ### 멀티파트 한도
 
@@ -400,9 +425,14 @@ IO 실패는 `S-002 STORAGE_FAILURE`. 한도 초과는 `S-003 PAYLOAD_TOO_LARGE`
 
 완벽한 2PC 가 아니라 최악의 경우(커밋 직전 JVM 크래시 등) 일부 orphan 이 남을 수 있음 — 별도 cleanup 배치는 후속 이슈.
 
-### 접근 통제 — 현재 정책
+### 접근 통제
 
-현재 모든 업로드 파일(이미지·영상)은 정적 리소스 핸들러를 통해 **누구나 URL 만 알면 접근 가능**하다. UUID 가 추측을 어렵게 하지만, 비공개 컨텐츠에 대한 권한 체크는 제공하지 않는다. 인증된 다운로드 컨트롤러로의 전환은 별도 이슈에서 결정.
+| 백엔드 | 정책 |
+| --- | --- |
+| 로컬 (`storage.type=local`) | 정적 핸들러 — UUID 만 알면 누구나 GET 가능. 비공개 컨텐츠에 대한 권한 체크 없음. |
+| S3 (`storage.type=s3`) | private 버킷 + presigned GET URL (TTL 15분). 영구 객체 URL 은 BE 만 알고, 클라엔 매번 짧은 TTL URL 만 노출. |
+
+S3 백엔드에서도 작품 단위의 인가 체크 (예: 비공개 작품을 본인만 볼 수 있게) 는 `ArtworkAccessChecker` 같은 service 레이어가 담당. presigned URL 자체는 발급 받기만 하면 누구나 GET 가능 — 인가 검증을 BE 가 통과시킨 뒤에만 발급한다.
 
 ## 14. 커밋 메시지
 
