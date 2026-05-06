@@ -5,6 +5,7 @@ import java.io.InputStream;
 import java.net.URI;
 import java.time.Duration;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -100,13 +101,21 @@ public class S3VideoStorage implements VideoStorage {
         return new StoredVideo(permanentUrl);
     }
 
+    /**
+     * @return presigned GET URL, 또는 stored 가 자기 형식 (S3 객체 URL) 이 아닐 때 {@code null}. graceful 처리 의도는
+     *     {@link S3ImageStorage#toPublicUrl} javadoc 참조 (S14P31E103-511).
+     */
     @Override
     public String toPublicUrl(String stored) {
         if (stored == null || stored.isBlank()) {
             return stored;
         }
         StorageProperties.S3 s3 = properties.s3();
-        String key = extractKey(stored);
+        Optional<String> keyOpt = tryExtractKey(stored);
+        if (keyOpt.isEmpty()) {
+            return null;
+        }
+        String key = keyOpt.get();
         GetObjectPresignRequest req =
                 GetObjectPresignRequest.builder()
                         .signatureDuration(Duration.ofSeconds(s3.presignedTtlSeconds()))
@@ -116,13 +125,19 @@ public class S3VideoStorage implements VideoStorage {
         return s3Presigner.presignGetObject(req).url().toString();
     }
 
+    /** stored 가 자기 형식이 아니면 idempotent 무시 (S14P31E103-511). */
     @Override
     public void delete(String stored) {
         if (stored == null || stored.isBlank()) {
             return;
         }
         StorageProperties.S3 s3 = properties.s3();
-        String key = extractKey(stored);
+        Optional<String> keyOpt = tryExtractKey(stored);
+        if (keyOpt.isEmpty()) {
+            log.info("S3 형식 아닌 stored URL — delete idempotent 무시: {}", stored);
+            return;
+        }
+        String key = keyOpt.get();
         try {
             s3Client.deleteObject(
                     DeleteObjectRequest.builder().bucket(s3.bucket()).key(key).build());
@@ -134,31 +149,31 @@ public class S3VideoStorage implements VideoStorage {
         }
     }
 
-    /** {@link S3ImageStorage#extractKey(String)} 와 동일 — virtual-hosted / path-style 양쪽 지원. */
-    private String extractKey(String url) {
+    /** {@link S3ImageStorage#tryExtractKey(String)} 와 동일 — virtual-hosted / path-style 양쪽 지원. */
+    private Optional<String> tryExtractKey(String url) {
         URI uri;
         try {
             uri = URI.create(url);
         } catch (IllegalArgumentException e) {
-            log.warn("S3 URL 무결성 위반 — URI 파싱 실패: {}", url);
-            throw new BusinessException(StorageErrorCode.STORAGE_FAILURE);
+            log.warn("S3 URL 형식 아님 — URI 파싱 실패: {}", url);
+            return Optional.empty();
         }
         String path = uri.getPath();
         if (path == null || path.length() <= 1 || !path.startsWith("/")) {
-            log.warn("S3 URL 무결성 위반 — path 비어있음: {}", url);
-            throw new BusinessException(StorageErrorCode.STORAGE_FAILURE);
+            log.warn("S3 URL 형식 아님 — path 비어있음: {}", url);
+            return Optional.empty();
         }
         String pathWithoutLeadingSlash = path.substring(1);
         String host = uri.getHost();
         String bucket = properties.s3().bucket();
         if (host != null && host.startsWith(bucket + ".")) {
-            return pathWithoutLeadingSlash;
+            return Optional.of(pathWithoutLeadingSlash);
         }
         if (pathWithoutLeadingSlash.startsWith(bucket + "/")) {
-            return pathWithoutLeadingSlash.substring(bucket.length() + 1);
+            return Optional.of(pathWithoutLeadingSlash.substring(bucket.length() + 1));
         }
-        log.warn("S3 URL 무결성 위반 — 알려진 형식 아님: {}", url);
-        throw new BusinessException(StorageErrorCode.STORAGE_FAILURE);
+        log.warn("S3 URL 형식 아님 — 알려진 형식 아님: {}", url);
+        return Optional.empty();
     }
 
     private VideoFormat validateVideo(MultipartFile file) {
