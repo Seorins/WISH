@@ -61,12 +61,12 @@ public class ExerciseMotionService {
         return exerciseMotionRepository
                 .findAllByExerciseTypeOrderByRoutineOrderAsc(exerciseType)
                 .stream()
-                .map(ExerciseMotionResponse::from)
+                .map(motion -> ExerciseMotionResponse.from(motion, imageStorage, videoStorage))
                 .toList();
     }
 
     public ExerciseMotionResponse findOne(Long id) {
-        return ExerciseMotionResponse.from(findOrThrow(id));
+        return ExerciseMotionResponse.from(findOrThrow(id), imageStorage, videoStorage);
     }
 
     @Transactional
@@ -99,7 +99,7 @@ public class ExerciseMotionService {
                                 .demoVideoUrl(demoVideoUrl)
                                 .thumbnailUrl(thumbnailUrl)
                                 .build());
-        return ExerciseMotionResponse.from(saved);
+        return ExerciseMotionResponse.from(saved, imageStorage, videoStorage);
     }
 
     @Transactional
@@ -123,7 +123,7 @@ public class ExerciseMotionService {
         applyThumbnailChange(motion, request, thumbnail);
         applyDemoVideoChange(motion, request, demoVideo);
 
-        return ExerciseMotionResponse.from(motion);
+        return ExerciseMotionResponse.from(motion, imageStorage, videoStorage);
     }
 
     @Transactional
