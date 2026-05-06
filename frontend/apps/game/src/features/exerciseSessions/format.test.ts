@@ -5,8 +5,9 @@ import {
   formatDateTime,
   formatDurationSec,
   formatExerciseType,
+  sortExerciseSessionMotions,
 } from './format'
-import type { ExerciseSessionSummary } from '@wish/api-client'
+import type { ExerciseSessionDetail, ExerciseSessionSummary } from '@wish/api-client'
 
 const sessions: ExerciseSessionSummary[] = [
   {
@@ -31,9 +32,10 @@ const sessions: ExerciseSessionSummary[] = [
 
 describe('exercise session formatters', () => {
   it('formats duration seconds as Korean minutes and seconds', () => {
-    expect(formatDurationSec(200)).toBe('3분 20초')
-    expect(formatDurationSec(12)).toBe('12초')
-    expect(formatDurationSec(0)).toBe('0초')
+    expect(formatDurationSec(200)).toBe('3\uBD84 20\uCD08')
+    expect(formatDurationSec(120)).toBe('2\uBD84')
+    expect(formatDurationSec(12)).toBe('12\uCD08')
+    expect(formatDurationSec(0)).toBe('0\uCD08')
   })
 
   it('formats accuracy safely for 0-1 and 0-100 values', () => {
@@ -43,9 +45,49 @@ describe('exercise session formatters', () => {
   })
 
   it('formats exercise type and date labels', () => {
-    expect(formatExerciseType('TOP')).toBe('상체')
+    expect(formatExerciseType('TOP')).toBe('\uC0C1\uCCB4')
     expect(formatExerciseType('UNKNOWN')).toBe('UNKNOWN')
     expect(formatDateTime('2026-05-06T01:36:20.863Z')).toContain('2026.')
+  })
+
+  it('sorts motion results by routine order and id fallback', () => {
+    const motions: ExerciseSessionDetail['motions'] = [
+      {
+        id: 3,
+        exerciseMotionId: 3,
+        motionName: 'C',
+        routineOrder: 2,
+        durationSec: 10,
+        accuracy: 0.8,
+        completedReps: 3,
+        feedback: '',
+        createdAt: '2026-05-06T01:36:20.863Z',
+      },
+      {
+        id: 1,
+        exerciseMotionId: 1,
+        motionName: 'A',
+        routineOrder: 1,
+        durationSec: 10,
+        accuracy: 0.8,
+        completedReps: 3,
+        feedback: '',
+        createdAt: '2026-05-06T01:36:20.863Z',
+      },
+      {
+        id: 2,
+        exerciseMotionId: 2,
+        motionName: 'B',
+        routineOrder: 1,
+        durationSec: 10,
+        accuracy: 0.8,
+        completedReps: 3,
+        feedback: '',
+        createdAt: '2026-05-06T01:36:20.863Z',
+      },
+    ]
+
+    expect(sortExerciseSessionMotions(motions).map(motion => motion.id)).toEqual([1, 2, 3])
   })
 
   it('builds report summary from session list', () => {

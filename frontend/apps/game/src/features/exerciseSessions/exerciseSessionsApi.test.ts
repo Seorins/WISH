@@ -3,7 +3,9 @@ import {
   calculateAverageAccuracy,
   CREATE_EXERCISE_SESSION_ERROR_MESSAGE,
   createExerciseSession,
+  EXERCISE_SESSION_DETAIL_ERROR_MESSAGE,
   EXERCISE_SESSION_ERROR_MESSAGE,
+  getExerciseSessionDetail,
   getExerciseSessions,
   validateCreateExerciseSessionRequest,
   type CreateExerciseSessionRequest,
@@ -32,7 +34,7 @@ const createPayload: CreateExerciseSessionRequest = {
       durationSec: 12,
       accuracy: 0.91,
       completedReps: 8,
-      feedback: '무릎을 조금 더 올려요',
+      feedback: '\uBB34\uB98E\uC744 \uC870\uAE08 \uB354 \uC62C\uB824\uC694',
     },
   ],
 }
@@ -49,18 +51,30 @@ const createdSession: ExerciseSessionDetail = {
     {
       id: 100,
       exerciseMotionId: 1,
-      motionName: '제자리 걷기',
+      motionName: '\uC81C\uC790\uB9AC \uAC77\uAE30',
       routineOrder: 1,
       durationSec: 12,
       accuracy: 0.91,
       completedReps: 8,
-      feedback: '무릎을 조금 더 올려요',
+      feedback: '\uBB34\uB98E\uC744 \uC870\uAE08 \uB354 \uC62C\uB824\uC694',
       createdAt: '2026-05-06T01:58:09.949Z',
     },
   ],
 }
 
-function createClient(data: ExerciseSessionSummary[] | null = [session]) {
+function createListClient(data: ExerciseSessionSummary[] | null = [session]) {
+  return {
+    get: vi.fn().mockResolvedValue({
+      data: {
+        code: 'OK',
+        message: 'ok',
+        data,
+      },
+    }),
+  }
+}
+
+function createDetailClient(data: ExerciseSessionDetail | null = createdSession) {
   return {
     get: vi.fn().mockResolvedValue({
       data: {
@@ -74,7 +88,7 @@ function createClient(data: ExerciseSessionSummary[] | null = [session]) {
 
 describe('getExerciseSessions', () => {
   it('requests exercise sessions with patientProfileId and Accept header', async () => {
-    const client = createClient()
+    const client = createListClient()
 
     await expect(getExerciseSessions(1, client as never)).resolves.toEqual([session])
 
@@ -85,17 +99,15 @@ describe('getExerciseSessions', () => {
   })
 
   it('returns an empty array when response data is null', async () => {
-    const client = createClient(null)
+    const client = createListClient(null)
 
     await expect(getExerciseSessions(1, client as never)).resolves.toEqual([])
   })
 
   it('does not request when patientProfileId is invalid', async () => {
-    const client = createClient()
+    const client = createListClient()
 
-    await expect(getExerciseSessions(0, client as never)).rejects.toThrow(
-      'patientProfileId가 올바르지 않습니다.',
-    )
+    await expect(getExerciseSessions(0, client as never)).rejects.toThrow(/patientProfileId/)
     expect(client.get).not.toHaveBeenCalled()
   })
 
@@ -113,6 +125,58 @@ describe('getExerciseSessions', () => {
 
     await expect(getExerciseSessions(1, client as never)).rejects.toThrow(
       EXERCISE_SESSION_ERROR_MESSAGE,
+    )
+  })
+})
+
+describe('getExerciseSessionDetail', () => {
+  it('requests exercise session detail with id and Accept header', async () => {
+    const client = createDetailClient()
+
+    await expect(getExerciseSessionDetail(1, client as never)).resolves.toEqual(createdSession)
+
+    expect(client.get).toHaveBeenCalledWith('/exercise-sessions/1', {
+      headers: { Accept: 'application/json' },
+    })
+  })
+
+  it('parses motion results from response data', async () => {
+    const client = createDetailClient()
+
+    const result = await getExerciseSessionDetail(1, client as never)
+
+    expect(result.motions).toEqual(createdSession.motions)
+  })
+
+  it('does not request when id is invalid', async () => {
+    const client = createDetailClient()
+
+    await expect(getExerciseSessionDetail(0, client as never)).rejects.toThrow(/ID/)
+    expect(client.get).not.toHaveBeenCalled()
+  })
+
+  it('returns a user-friendly error when detail API reports errors', async () => {
+    const client = {
+      get: vi.fn().mockResolvedValue({
+        data: {
+          code: 'ERROR',
+          message: '',
+          data: null,
+          errors: { id: 'invalid' },
+        },
+      }),
+    }
+
+    await expect(getExerciseSessionDetail(1, client as never)).rejects.toThrow(
+      EXERCISE_SESSION_DETAIL_ERROR_MESSAGE,
+    )
+  })
+
+  it('throws when detail response data is missing', async () => {
+    const client = createDetailClient(null)
+
+    await expect(getExerciseSessionDetail(1, client as never)).rejects.toThrow(
+      '\uCCB4\uC870 \uC138\uC158 \uC0C1\uC138 \uC751\uB2F5\uC774 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.',
     )
   })
 })
@@ -164,7 +228,9 @@ describe('createExerciseSession', () => {
 
     await expect(
       createExerciseSession({ ...createPayload, averageAccuracy: 1.2 }, client as never),
-    ).rejects.toThrow('평균 정확도가 올바르지 않습니다.')
+    ).rejects.toThrow(
+      '\uD3C9\uADE0 \uC815\uD655\uB3C4\uAC00 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.',
+    )
     expect(client.post).not.toHaveBeenCalled()
   })
 
@@ -197,7 +263,7 @@ describe('createExerciseSession', () => {
     }
 
     await expect(createExerciseSession(createPayload, client as never)).rejects.toThrow(
-      '체조 세션 저장 응답이 올바르지 않습니다.',
+      '\uCCB4\uC870 \uC138\uC158 \uC800\uC7A5 \uC751\uB2F5\uC774 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.',
     )
   })
 })
@@ -210,25 +276,29 @@ describe('validateCreateExerciseSessionRequest', () => {
   it('rejects invalid patient, exercise type, empty motions, and invalid motion values', () => {
     expect(() =>
       validateCreateExerciseSessionRequest({ ...createPayload, patientProfileId: 0 }),
-    ).toThrow('patientProfileId가 올바르지 않습니다.')
+    ).toThrow(/patientProfileId/)
     expect(() =>
       validateCreateExerciseSessionRequest({ ...createPayload, exerciseType: '' }),
-    ).toThrow('운동 종류가 올바르지 않습니다.')
+    ).toThrow('\uC6B4\uB3D9 \uC885\uB958\uAC00 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.')
     expect(() => validateCreateExerciseSessionRequest({ ...createPayload, motions: [] })).toThrow(
-      '저장할 동작 결과가 없습니다.',
+      '\uC800\uC7A5\uD560 \uB3D9\uC791 \uACB0\uACFC\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.',
     )
     expect(() =>
       validateCreateExerciseSessionRequest({
         ...createPayload,
         motions: [{ ...createPayload.motions[0], accuracy: Number.NaN }],
       }),
-    ).toThrow('1번째 동작 정확도가 올바르지 않습니다.')
+    ).toThrow(
+      '1\uBC88\uC9F8 \uB3D9\uC791 \uC815\uD655\uB3C4\uAC00 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.',
+    )
     expect(() =>
       validateCreateExerciseSessionRequest({
         ...createPayload,
         motions: [{ ...createPayload.motions[0], completedReps: -1 }],
       }),
-    ).toThrow('1번째 반복 횟수가 올바르지 않습니다.')
+    ).toThrow(
+      '1\uBC88\uC9F8 \uBC18\uBCF5 \uD69F\uC218\uAC00 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.',
+    )
   })
 })
 
