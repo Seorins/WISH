@@ -3,7 +3,7 @@ import { FilesetResolver, PoseLandmarker, type NormalizedLandmark } from '@media
 const MEDIAPIPE_VERSION = '0.10.21'
 const DEFAULT_WASM_BASE_URL = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MEDIAPIPE_VERSION}/wasm`
 const DEFAULT_POSE_MODEL_URL =
-  'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task'
+  'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task'
 
 export const POSE_LANDMARK_NAMES = [
   'NOSE',
@@ -46,6 +46,9 @@ export type PoseTrackerOptions = {
   modelAssetPath?: string
   delegate?: 'CPU' | 'GPU'
   video?: MediaTrackConstraints
+  minPoseDetectionConfidence?: number
+  minPosePresenceConfidence?: number
+  minTrackingConfidence?: number
 }
 
 export type TrackedPose = {
@@ -74,6 +77,9 @@ export class PoseTracker {
         width: { ideal: 640 },
         height: { ideal: 480 },
       },
+      minPoseDetectionConfidence: options.minPoseDetectionConfidence ?? 0.3,
+      minPosePresenceConfidence: options.minPosePresenceConfidence ?? 0.3,
+      minTrackingConfidence: options.minTrackingConfidence ?? 0.3,
     }
   }
 
@@ -96,6 +102,9 @@ export class PoseTracker {
       },
       runningMode: 'VIDEO',
       numPoses: 1,
+      minPoseDetectionConfidence: this.options.minPoseDetectionConfidence,
+      minPosePresenceConfidence: this.options.minPosePresenceConfidence,
+      minTrackingConfidence: this.options.minTrackingConfidence,
     })
 
     this.mediaStream = await navigator.mediaDevices.getUserMedia({

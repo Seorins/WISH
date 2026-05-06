@@ -13,6 +13,8 @@ function normalizeBasePath(value: string | undefined) {
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
+  const aiProxyPrefix = env.VITE_AI_PROXY_PREFIX || '/api/v1'
+  const deployedAiProxyTarget = env.VITE_DEPLOYED_AI_PROXY_TARGET || 'https://k14e103.p.ssafy.io'
 
   return {
     base: normalizeBasePath(env.VITE_APP_BASE_PATH),
@@ -22,7 +24,22 @@ export default defineConfig(({ mode }) => {
         '@': fileURLToPath(new URL('./src', import.meta.url)),
       },
     },
-    server: { port: 3001 },
+    server: {
+      port: 3001,
+      proxy: {
+        '/ai-api': {
+          target: env.VITE_AI_PROXY_TARGET || 'http://localhost:8001',
+          changeOrigin: true,
+          secure: false,
+          rewrite: path => path.replace(/^\/ai-api/, aiProxyPrefix),
+        },
+        '/dev/ai/api/v1': {
+          target: deployedAiProxyTarget,
+          changeOrigin: true,
+          secure: false,
+        },
+      },
+    },
     test: {
       environment: 'jsdom',
       globals: true,
