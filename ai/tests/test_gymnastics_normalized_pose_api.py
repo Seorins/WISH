@@ -148,6 +148,57 @@ def test_evaluate_march_includes_normalized_pose(monkeypatch) -> None:
     assert len(response.normalized_pose.landmarks) == 12
 
 
+def test_evaluate_march_returns_tracking_low_when_normalization_fails(monkeypatch) -> None:
+    monkeypatch.setattr(
+        gymnastics_top.normalizer,
+        "normalize",
+        lambda _frame: (_ for _ in ()).throw(ValueError("tracking quality is too low")),
+    )
+
+    response = gymnastics_top.evaluate_march(
+        MarchEvaluationRequest(
+            frame={
+                "timestamp_ms": 1000,
+                "mirrored": True,
+                "landmarks": [{"name": "LEFT_SHOULDER", "x": 0.5, "y": 0.3, "z": 0.0}],
+            }
+        )
+    )
+
+    assert response.motion_id == "top_march"
+    assert response.tracking == "tracking_low"
+    assert response.accuracy == 0.0
+    assert response.normalized_pose is None
+    assert response.features.left_knee_lift == 0.0
+
+
+def test_evaluate_march_returns_tracking_low_when_evaluator_fails(monkeypatch) -> None:
+    normalized = _build_normalized_frame()
+
+    monkeypatch.setattr(gymnastics_top.normalizer, "normalize", lambda _frame: normalized)
+    monkeypatch.setattr(
+        gymnastics_top.march_evaluator,
+        "evaluate",
+        lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("evaluation failed")),
+    )
+
+    response = gymnastics_top.evaluate_march(
+        MarchEvaluationRequest(
+            frame={
+                "timestamp_ms": 1000,
+                "mirrored": True,
+                "landmarks": [{"name": "LEFT_SHOULDER", "x": 0.5, "y": 0.3, "z": 0.0}],
+            }
+        )
+    )
+
+    assert response.motion_id == "top_march"
+    assert response.tracking == "tracking_low"
+    assert response.step_count == 0
+    assert response.normalized_pose is None
+    assert response.features.right_knee_lift == 0.0
+
+
 def test_evaluate_daniel_forward_press_includes_normalized_pose(monkeypatch) -> None:
     normalized = _build_normalized_frame()
 

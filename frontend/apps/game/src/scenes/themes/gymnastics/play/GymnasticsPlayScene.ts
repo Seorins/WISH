@@ -1,8 +1,26 @@
 import Phaser from 'phaser'
+import {
+  calculateAverageAccuracy,
+  createExerciseSession,
+  CREATE_EXERCISE_SESSION_ERROR_MESSAGE,
+  type CreateExerciseSessionRequest,
+  type ExerciseSessionDetail,
+} from '@wish/api-client'
 import { assetPath } from '@/game/assets/assetPath'
 import { POSE_LANDMARK_NAMES, PoseTracker } from '@/game/motion/poseTracker'
 import { fadeToScene } from '@/game/systems/sceneTransition'
 import { addCoverBackground } from '@/game/world/background'
+import { resolvePatientProfileId } from '@/features/exerciseSessions/patientProfile'
+import {
+  EXERCISE_SESSION_REPORT_QUERY_KEY,
+  EXERCISE_SESSIONS_QUERY_KEY,
+} from '@/features/exerciseSessions/hooks'
+import {
+  formatAccuracy,
+  formatDurationSec,
+  formatExerciseType,
+} from '@/features/exerciseSessions/format'
+import { queryClient } from '@/queryClient'
 
 type GymnasticsMotion = {
   title: string
@@ -34,16 +52,26 @@ type DanielMotionKind =
 type TopAiMotionSpec = {
   type: 'top'
   kind: GymnasticsMotionKind
+  exerciseMotionId: number
   targetSteps: number
 }
 
 type DanielAiMotionSpec = {
   type: 'daniel'
   kind: DanielMotionKind
+  exerciseMotionId: number
   targetHoldMs: number
 }
 
 type AiMotionSpec = TopAiMotionSpec | DanielAiMotionSpec
+
+type LocalExerciseMotionResult = {
+  exerciseMotionId: number
+  durationSec: number
+  accuracy: number
+  completedReps: number
+  feedback: string
+}
 
 type LandmarkPayload = {
   name: string
@@ -131,23 +159,49 @@ const AI_BASE_URL = (import.meta.env.VITE_AI_BASE_URL ?? 'http://localhost:8001/
   /\/$/,
   '',
 )
+const GYMNASTICS_PLAY_BACKGROUND_TEXTURE_KEY = 'gymnastics-play-background-v3'
 
 const TOP_AI_SEQUENCE: AiMotionSpec[] = [
-  { type: 'top', kind: 'march', targetSteps: 8 },
-  { type: 'top', kind: 'side-step', targetSteps: 8 },
-  { type: 'top', kind: 'diagonal-body-punch', targetSteps: 8 },
-  { type: 'top', kind: 'diagonal-face-punch', targetSteps: 8 },
-  { type: 'top', kind: 'squat', targetSteps: 8 },
+  { type: 'top', kind: 'march', exerciseMotionId: 1, targetSteps: 8 },
+  { type: 'top', kind: 'side-step', exerciseMotionId: 2, targetSteps: 8 },
+  { type: 'top', kind: 'diagonal-body-punch', exerciseMotionId: 3, targetSteps: 8 },
+  { type: 'top', kind: 'diagonal-face-punch', exerciseMotionId: 4, targetSteps: 8 },
+  { type: 'top', kind: 'squat', exerciseMotionId: 5, targetSteps: 8 },
 ]
 
-const DEFAULT_DANIEL_TARGET_HOLD_MS = 3000
+const DEFAULT_DANIEL_TARGET_HOLD_MS = 10_000
 
 const DANIEL_AI_SEQUENCE: AiMotionSpec[] = [
-  { type: 'daniel', kind: 'daniel_forward_press', targetHoldMs: DEFAULT_DANIEL_TARGET_HOLD_MS },
-  { type: 'daniel', kind: 'daniel_upward_press', targetHoldMs: DEFAULT_DANIEL_TARGET_HOLD_MS },
-  { type: 'daniel', kind: 'daniel_side_bend_left', targetHoldMs: DEFAULT_DANIEL_TARGET_HOLD_MS },
-  { type: 'daniel', kind: 'daniel_side_bend_right', targetHoldMs: DEFAULT_DANIEL_TARGET_HOLD_MS },
-  { type: 'daniel', kind: 'daniel_forward_bend', targetHoldMs: DEFAULT_DANIEL_TARGET_HOLD_MS },
+  {
+    type: 'daniel',
+    kind: 'daniel_forward_press',
+    exerciseMotionId: 6,
+    targetHoldMs: DEFAULT_DANIEL_TARGET_HOLD_MS,
+  },
+  {
+    type: 'daniel',
+    kind: 'daniel_upward_press',
+    exerciseMotionId: 7,
+    targetHoldMs: DEFAULT_DANIEL_TARGET_HOLD_MS,
+  },
+  {
+    type: 'daniel',
+    kind: 'daniel_side_bend_left',
+    exerciseMotionId: 8,
+    targetHoldMs: DEFAULT_DANIEL_TARGET_HOLD_MS,
+  },
+  {
+    type: 'daniel',
+    kind: 'daniel_side_bend_right',
+    exerciseMotionId: 9,
+    targetHoldMs: DEFAULT_DANIEL_TARGET_HOLD_MS,
+  },
+  {
+    type: 'daniel',
+    kind: 'daniel_forward_bend',
+    exerciseMotionId: 10,
+    targetHoldMs: DEFAULT_DANIEL_TARGET_HOLD_MS,
+  },
 ]
 
 const MOTION_ENDPOINTS: Record<GymnasticsMotionKind, string> = {
@@ -156,6 +210,14 @@ const MOTION_ENDPOINTS: Record<GymnasticsMotionKind, string> = {
   'diagonal-body-punch': 'diagonal-body-punch',
   'diagonal-face-punch': 'diagonal-face-punch',
   squat: 'squat',
+}
+
+const DANIEL_MOTION_ENDPOINTS: Record<DanielMotionKind, string> = {
+  daniel_forward_press: 'daniel-forward-press',
+  daniel_upward_press: 'daniel-upward-press',
+  daniel_side_bend_left: 'daniel-left-side-bend',
+  daniel_side_bend_right: 'daniel-right-side-bend',
+  daniel_forward_bend: 'daniel-forward-bend',
 }
 
 export const TOP_MOTIONS: GymnasticsMotion[] = [
@@ -273,8 +335,18 @@ const FEEDBACK_FRAME_CAP_WIDTH = 360
 const SIDE_FRAME_VISIBLE_SCALE = 0.96
 const GUIDE_TITLE_Y_RATIO = 0.082
 const FEEDBACK_TITLE_Y_RATIO = 0.086
-const FEEDBACK_MAIN_Y_RATIO = 0.47
-const FEEDBACK_TIP_Y_RATIO = 0.66
+const FEEDBACK_MAIN_Y_RATIO = 0.38
+const FEEDBACK_TIP_Y_RATIO = 0.68
+const FEEDBACK_PROGRESS_Y_RATIO = 0.82
+const FEEDBACK_TITLE_MIN_VISIBLE_MS = 4800
+const FEEDBACK_DETAIL_MIN_VISIBLE_MS = 4200
+const FEEDBACK_PROGRESS_DETAIL_MIN_VISIBLE_MS = 1200
+const FEEDBACK_MAIN_MAX_FONT_SIZE = 40
+const FEEDBACK_MAIN_MIN_FONT_SIZE = 26
+const FEEDBACK_TIMER_MAX_FONT_SIZE = 24
+const FEEDBACK_TIMER_MIN_FONT_SIZE = 16
+const AI_EVALUATION_INTERVAL_MS = 550
+const AI_REQUEST_RETRY_DELAY_MS = 2000
 const FRAME_TEXT_COLOR = '#5a2f12'
 const FRAME_TEXT_STROKE = '#fff0c8'
 const FRAME_TEXT_SHADOW = '#2f1708'
@@ -338,6 +410,10 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
   private feedbackTitleText!: Phaser.GameObjects.Text
   private feedbackStarImage!: Phaser.GameObjects.Image
   private feedbackTipTexts: Phaser.GameObjects.Text[] = []
+  private holdProgressTrack!: Phaser.GameObjects.Rectangle
+  private holdProgressBar!: Phaser.GameObjects.Rectangle
+  private holdProgressText!: Phaser.GameObjects.Text
+  private holdProgressWidth = 0
   private feedbackFrameBounds!: PanelBounds
   private timerEvent?: Phaser.Time.TimerEvent
   private isCameraRecognized = false
@@ -346,16 +422,35 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
   private timerMaxWidth = 0
   private headerFontSize = 0
   private feedbackTitleMaxWidth = 0
+  private holdStatusMaxWidth = 0
+  private displayedFeedbackTitle = ''
+  private feedbackTitleChangedAtMs = 0
+  private displayedFeedbackDetail = ''
+  private feedbackDetailChangedAtMs = 0
   private requestInFlight = false
+  private lastAiEvaluationRequestedAtMs = 0
   private aiRequestsEnabled = true
+  private aiRetryAvailableAtMs = 0
+  private aiConnectionIssue = false
+  private lastLoggedAiRequestUrl = ''
+  private poseMissCount = 0
+  private lastPoseDiagnosticAtMs = 0
   private isMotionAdvancing = false
   private aiState = createInitialAiState()
   private aiError: string | null = null
+  private sessionStartedAtMs = 0
+  private motionStartedAtMs = 0
+  private motionResults: LocalExerciseMotionResult[] = []
+  private hasSubmittedSession = false
+  private savedSession: ExerciseSessionDetail | null = null
+  private saveState: 'idle' | 'saving' | 'success' | 'error' = 'idle'
+  private saveRetryButton?: Phaser.GameObjects.Text
 
   constructor(
     sceneKey: string,
     private readonly motions: GymnasticsMotion[],
     private readonly modeLabel: string,
+    private readonly exerciseType: string,
     private readonly aiSequence: AiMotionSpec[],
   ) {
     super({ key: sceneKey })
@@ -363,7 +458,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
 
   preload() {
     this.load.image(
-      'gymnastics-play-background',
+      GYMNASTICS_PLAY_BACKGROUND_TEXTURE_KEY,
       assetPath('images/themes/gymnastics/background/gymbackground.png'),
     )
     this.load.image(
@@ -394,16 +489,33 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     this.aiState = createInitialAiState()
     this.aiError = null
     this.requestInFlight = false
+    this.lastAiEvaluationRequestedAtMs = 0
     this.aiRequestsEnabled = true
+    this.aiRetryAvailableAtMs = 0
+    this.aiConnectionIssue = false
+    this.lastLoggedAiRequestUrl = ''
+    this.poseMissCount = 0
+    this.lastPoseDiagnosticAtMs = 0
     this.isMotionAdvancing = false
+    this.displayedFeedbackTitle = ''
+    this.feedbackTitleChangedAtMs = 0
+    this.displayedFeedbackDetail = ''
+    this.feedbackDetailChangedAtMs = 0
+    this.sessionStartedAtMs = Date.now()
+    this.motionStartedAtMs = this.sessionStartedAtMs
+    this.motionResults = []
+    this.hasSubmittedSession = false
+    this.savedSession = null
+    this.saveState = 'idle'
 
-    addCoverBackground(this, 'gymnastics-play-background').setDepth(0)
+    addCoverBackground(this, GYMNASTICS_PLAY_BACKGROUND_TEXTURE_KEY).setDepth(0)
     this.add.rectangle(vw / 2, vh / 2, vw, vh, 0x2d1b10, 0.16).setDepth(1)
 
     this.createCameraTexture()
     this.createHeaderFrameTexture()
     this.createLayout(vw, vh)
     this.renderMotion()
+    void this.checkAiServiceHealth()
     this.startPoseTracker()
 
     this.timerEvent = this.time.addEvent({
@@ -730,7 +842,13 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(13)
 
-    const feedbackTitleFontSize = Math.round(Phaser.Math.Clamp(feedbackFrameH * 0.15, 24, 32))
+    const feedbackTitleFontSize = Math.round(
+      Phaser.Math.Clamp(
+        feedbackFrameH * 0.12,
+        FEEDBACK_MAIN_MIN_FONT_SIZE,
+        FEEDBACK_MAIN_MAX_FONT_SIZE,
+      ),
+    )
     this.feedbackTitleText = this.add
       .text(
         this.feedbackFrameBounds.x + this.feedbackFrameBounds.width / 2,
@@ -744,36 +862,100 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
           stroke: '#fff1d0',
           strokeThickness: 2,
           align: 'center',
+          letterSpacing: 2,
+          lineSpacing: 0,
         },
       )
       .setOrigin(0.5)
       .setDepth(13)
-    this.feedbackTitleMaxWidth = frameW * 0.72
+      .setMaxLines(1)
+    this.feedbackTitleMaxWidth = frameW * 0.82
 
     this.feedbackStarImage = this.add
       .image(
-        this.feedbackFrameBounds.x + this.feedbackFrameBounds.width * 0.18,
-        this.feedbackTitleText.y,
+        sectionTitleX - Math.min(82, frameW * 0.22),
+        feedbackTitleY,
         'gymnastics-feedback-star',
       )
       .setOrigin(0.5)
       .setDepth(13)
+    this.feedbackStarImage.setDisplaySize(
+      Math.round(Phaser.Math.Clamp(feedbackFrameH * 0.12, 32, 40)),
+      Math.round(Phaser.Math.Clamp(feedbackFrameH * 0.12, 32, 40)),
+    )
 
     this.feedbackTipTexts = [
       this.add
         .text(x + width / 2, feedbackFrameTop + feedbackFrameH * FEEDBACK_TIP_Y_RATIO, '', {
           fontFamily: 'sans-serif',
-          fontSize: `${Math.round(Phaser.Math.Clamp(feedbackH * 0.08, 15, 22))}px`,
+          fontSize: `${Math.round(
+            Phaser.Math.Clamp(
+              feedbackFrameH * 0.09,
+              FEEDBACK_TIMER_MIN_FONT_SIZE,
+              FEEDBACK_TIMER_MAX_FONT_SIZE,
+            ),
+          )}px`,
           color: '#b94122',
           fontStyle: 'bold',
           align: 'center',
+          letterSpacing: 2,
           stroke: '#fff1d0',
           strokeThickness: 1,
-          wordWrap: { width: frameW * 0.78, useAdvancedWrap: true },
         })
         .setOrigin(0.5)
-        .setDepth(13),
+        .setDepth(13)
+        .setMaxLines(1),
     ]
+    this.holdStatusMaxWidth = frameW * 0.82
+    this.feedbackTipTexts[0]?.setFixedSize(
+      this.holdStatusMaxWidth,
+      Math.round(Phaser.Math.Clamp(feedbackFrameH * 0.16, 36, 52)),
+    )
+
+    this.holdProgressWidth = frameW * 0.66
+    const holdProgressY = feedbackFrameTop + feedbackFrameH * FEEDBACK_PROGRESS_Y_RATIO
+    this.holdProgressTrack = this.add
+      .rectangle(x + width / 2, holdProgressY, this.holdProgressWidth, 10, 0x7a5430, 0.22)
+      .setOrigin(0.5)
+      .setDepth(13)
+      .setVisible(false)
+    this.holdProgressBar = this.add
+      .rectangle(x + width / 2 - this.holdProgressWidth / 2, holdProgressY, 0, 10, 0x2f9e58, 0.86)
+      .setOrigin(0, 0.5)
+      .setDepth(14)
+      .setVisible(false)
+    this.holdProgressText = this.add
+      .text(x + width / 2, feedbackFrameTop + feedbackFrameH * 0.9, '', {
+        fontFamily: 'sans-serif',
+        fontSize: `${Math.round(Phaser.Math.Clamp(feedbackFrameH * 0.065, 18, 22))}px`,
+        color: '#5a2f12',
+        fontStyle: 'bold',
+        align: 'center',
+      })
+      .setOrigin(0.5)
+      .setDepth(14)
+      .setMaxLines(1)
+      .setVisible(false)
+
+    this.saveRetryButton = this.add
+      .text(x + width / 2, feedbackFrameTop + feedbackFrameH * 0.82, '다시 저장하기', {
+        fontFamily: 'sans-serif',
+        fontSize: `${Math.round(Phaser.Math.Clamp(feedbackH * 0.07, 14, 19))}px`,
+        color: '#ffffff',
+        fontStyle: 'bold',
+        align: 'center',
+        backgroundColor: '#2f9e58',
+        padding: { x: 18, y: 8 },
+      })
+      .setOrigin(0.5)
+      .setDepth(14)
+      .setVisible(false)
+      .setInteractive({ useHandCursor: true })
+
+    this.saveRetryButton.on('pointerup', () => {
+      if (this.saveState !== 'error') return
+      void this.finishExerciseSession()
+    })
   }
 
   private createPanel(x: number, y: number, width: number, height: number, radius: number) {
@@ -1020,6 +1202,9 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     try {
       const tracker = new PoseTracker({
         delegate: 'CPU',
+        minPoseDetectionConfidence: 0.25,
+        minPosePresenceConfidence: 0.25,
+        minTrackingConfidence: 0.25,
         video: {
           facingMode: 'user',
           width: { ideal: 960 },
@@ -1035,11 +1220,54 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     }
   }
 
+  private async checkAiServiceHealth() {
+    const controller = new AbortController()
+    const timeoutId = window.setTimeout(() => controller.abort(), 2500)
+
+    try {
+      const response = await fetch(`${AI_BASE_URL}/health`, {
+        headers: { Accept: 'application/json' },
+        signal: controller.signal,
+      })
+
+      if (!response.ok) {
+        this.markAiConnectionIssue(`AI health check failed: ${response.status}`)
+        return
+      }
+
+      this.clearAiConnectionIssue()
+      console.info('[GymnasticsPlayScene] AI service connected:', AI_BASE_URL)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'AI health check failed'
+      this.markAiConnectionIssue(message)
+    } finally {
+      window.clearTimeout(timeoutId)
+    }
+  }
+
   private canReadCameraFrame() {
     return Boolean(
       this.poseTracker?.video &&
       this.poseTracker.video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA,
     )
+  }
+
+  private logPoseDetectionMiss() {
+    if (!import.meta.env.DEV || this.poseMissCount < 45) return
+
+    const now = this.time.now
+    if (now - this.lastPoseDiagnosticAtMs < 3000) return
+
+    this.lastPoseDiagnosticAtMs = now
+    const video = this.poseTracker?.video
+    console.debug('[GymnasticsPlayScene] Pose not detected from camera frame', {
+      canReadCameraFrame: this.canReadCameraFrame(),
+      readyState: video?.readyState,
+      videoWidth: video?.videoWidth,
+      videoHeight: video?.videoHeight,
+      currentTime: video?.currentTime,
+      missCount: this.poseMissCount,
+    })
   }
 
   private drawCameraFrame() {
@@ -1088,21 +1316,44 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     const detection = tracker.detect()
     const pose = detection.poses[0]
     if (!pose) {
-      this.updateRecognitionStatus(this.canReadCameraFrame())
+      this.poseMissCount += 1
+      this.updateRecognitionStatus(false)
+      if (this.saveState === 'idle') {
+        this.setFeedbackTitle('전신이 보이게 서요')
+        const motionSpec = this.getCurrentAiMotionSpec()
+        this.setFeedbackDetail(this.getProgressDetailText(motionSpec), {
+          force: true,
+          isProgressDetail: true,
+        })
+        this.updateHoldProgressUi(motionSpec)
+      }
+      this.logPoseDetectionMiss()
       return
     }
 
+    this.poseMissCount = 0
     this.updateRecognitionStatus(true)
     this.drawPoseLandmarks(pose.landmarks)
-    this.evaluatePoseLocally(detection.timestampMs, pose.landmarks)
+
+    const motionSpec = this.getCurrentAiMotionSpec()
+    if (this.aiConnectionIssue && this.time.now < this.aiRetryAvailableAtMs) {
+      if (motionSpec.type === 'top') {
+        this.evaluatePoseLocally(detection.timestampMs, pose.landmarks)
+      } else {
+        this.applyAiConnectionFallbackFeedback()
+      }
+      return
+    }
 
     if (this.requestInFlight || !this.aiRequestsEnabled) return
+    if (this.time.now - this.lastAiEvaluationRequestedAtMs < AI_EVALUATION_INTERVAL_MS) return
 
     this.requestInFlight = true
+    this.lastAiEvaluationRequestedAtMs = this.time.now
     void this.requestAiEvaluation(detection.timestampMs, pose.landmarks)
       .catch(error => {
-        this.aiError = error instanceof Error ? error.message : 'AI request failed'
-        this.aiRequestsEnabled = false
+        const message = error instanceof Error ? error.message : 'AI request failed'
+        this.markAiConnectionIssue(message)
       })
       .finally(() => {
         this.requestInFlight = false
@@ -1138,19 +1389,30 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     }
     const requestUrl =
       motionSpec.type === 'daniel'
-        ? `${AI_BASE_URL}/gymnastics/daniel/evaluate`
+        ? `${AI_BASE_URL}/gymnastics/${DANIEL_MOTION_ENDPOINTS[motionSpec.kind]}/evaluate`
         : `${AI_BASE_URL}/gymnastics/${MOTION_ENDPOINTS[motionSpec.kind]}/evaluate`
-    const requestBody =
+    if (import.meta.env.DEV && this.lastLoggedAiRequestUrl !== requestUrl) {
+      this.lastLoggedAiRequestUrl = requestUrl
+      console.debug('[GymnasticsPlayScene] AI evaluation endpoint:', requestUrl)
+    }
+    const danielRequestBody =
       motionSpec.type === 'daniel'
         ? {
             ...sharedPayload,
-            motion_id: motionSpec.kind,
             target_hold_ms: motionSpec.targetHoldMs,
             hold_duration_ms: this.aiState.holdDurationMs,
             hold_last_timestamp_ms: this.aiState.holdLastTimestampMs,
-            baseline_left_wrist_forward: this.aiState.baselineLeftWristForward,
-            baseline_right_wrist_forward: this.aiState.baselineRightWristForward,
+            ...(motionSpec.kind === 'daniel_forward_press'
+              ? {
+                  baseline_left_wrist_forward: this.aiState.baselineLeftWristForward,
+                  baseline_right_wrist_forward: this.aiState.baselineRightWristForward,
+                }
+              : {}),
           }
+        : null
+    const requestBody =
+      motionSpec.type === 'daniel'
+        ? danielRequestBody
         : {
             ...sharedPayload,
             step_count: this.aiState.stepCount,
@@ -1168,18 +1430,20 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
           }
     const response = await fetch(requestUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
       body: JSON.stringify(requestBody),
     })
 
     if (!response.ok) {
-      this.aiError = `AI response error: ${response.status}`
-      this.applyAiFeedback()
+      const detail = await response.text().catch(() => '')
+      this.markAiConnectionIssue(
+        `AI response error: ${response.status}${detail ? ` ${detail}` : ''}`,
+      )
       return
     }
 
     this.updateAiState((await response.json()) as GymnasticsAiResponse)
-    this.aiError = null
+    this.clearAiConnectionIssue()
     this.applyAiFeedback()
     this.advanceMotionIfCompleted()
   }
@@ -1591,20 +1855,64 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     }
   }
 
-  private applyAiFeedback() {
-    const motionSpec = this.getCurrentAiMotionSpec()
-    const progressText =
-      motionSpec.type === 'daniel'
-        ? `${Math.min(
-            100,
-            Math.round((this.aiState.holdDurationMs / motionSpec.targetHoldMs) * 100),
-          )}%`
-        : `${this.aiState.stepCount}/${motionSpec.targetSteps}`
-    const title = this.aiState.feedback || this.aiState.representativeFeedbackText || 'Good'
-    const detail = `Progress ${progressText}`
+  private markAiConnectionIssue(message: string) {
+    this.aiError = message
+    this.aiConnectionIssue = true
+    this.aiRetryAvailableAtMs = this.time.now + AI_REQUEST_RETRY_DELAY_MS
+    console.warn('[GymnasticsPlayScene] AI evaluation request failed:', message)
+    this.applyAiConnectionFallbackFeedback()
+  }
 
-    this.feedbackTitleText?.setText(title)
-    this.feedbackTipTexts[0]?.setText(detail)
+  private clearAiConnectionIssue() {
+    this.aiError = null
+    this.aiConnectionIssue = false
+    this.aiRetryAvailableAtMs = 0
+  }
+
+  private applyAiConnectionFallbackFeedback() {
+    if (this.saveState !== 'idle') return
+
+    const motionSpec = this.getCurrentAiMotionSpec()
+    if (motionSpec.type === 'daniel') {
+      this.setFeedbackTitle('자세 판정 연결을 확인하고 있어요')
+      this.setFeedbackDetail('다니엘 자세 유지는 연결 후 진행돼요')
+    } else {
+      this.setFeedbackDetail('AI 연결을 확인하고 있어요. 기본 인식으로 안내할게요')
+    }
+
+    this.setFeedbackDetail(this.getProgressDetailText(motionSpec), {
+      force: true,
+      isProgressDetail: true,
+    })
+    this.updateHoldProgressUi(motionSpec)
+    this.fitFeedbackTitleToOneLine()
+    this.fitTextToWidth(
+      this.feedbackTipTexts[0],
+      this.holdStatusMaxWidth,
+      FEEDBACK_TIMER_MAX_FONT_SIZE,
+      FEEDBACK_TIMER_MIN_FONT_SIZE,
+    )
+    this.positionFeedbackStar()
+  }
+
+  private applyAiFeedback() {
+    if (this.saveState !== 'idle') return
+
+    const motionSpec = this.getCurrentAiMotionSpec()
+    const title =
+      this.getFriendlyFeedbackText(
+        this.aiState.feedback ||
+          this.aiState.displayedFeedbackText ||
+          this.aiState.representativeFeedbackText,
+      ) ?? (this.isCameraRecognized ? '좋아요!' : '전신이 보이게 서요')
+    const detail =
+      motionSpec.type === 'daniel'
+        ? this.getDanielHoldDetail(motionSpec)
+        : this.getProgressDetailText(motionSpec)
+
+    this.setFeedbackTitle(title)
+    this.setFeedbackDetail(detail, { isProgressDetail: motionSpec.type === 'daniel' })
+    this.updateHoldProgressUi(motionSpec)
     this.motionCounterText?.setText(
       `${this.modeLabel} ${this.motionIndex + 1}/${this.motions.length}`,
     )
@@ -1612,8 +1920,321 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
 
     this.fitTextToWidth(this.motionCounterText, this.motionCounterMaxWidth, this.headerFontSize, 14)
     this.fitTextToWidth(this.motionTitleText, this.motionTitleMaxWidth, this.headerFontSize, 14)
-    this.fitTextToWidth(this.feedbackTitleText, this.feedbackTitleMaxWidth, 34, 20)
-    this.fitTextToWidth(this.feedbackTipTexts[0], this.feedbackTitleMaxWidth, 22, 14)
+    this.fitFeedbackTitleToOneLine()
+    this.fitTextToWidth(
+      this.feedbackTipTexts[0],
+      this.holdStatusMaxWidth,
+      FEEDBACK_TIMER_MAX_FONT_SIZE,
+      FEEDBACK_TIMER_MIN_FONT_SIZE,
+    )
+    this.positionFeedbackStar()
+  }
+
+  private getFriendlyFeedbackText(feedback: string | null | undefined) {
+    if (!feedback?.trim()) return null
+
+    const normalized = feedback.toLowerCase()
+    if (/[ÃÂ�ëìïÑãŒ]/.test(feedback) || feedback.includes('?')) {
+      return this.getDefaultFeedbackText()
+    }
+    if (normalized.includes('good') || normalized.includes('complete')) return '좋아요!'
+    if (normalized.includes('progress')) return null
+    if (normalized.includes('hold')) return '자세를 유지해볼까요?'
+    if (normalized.includes('camera') || normalized.includes('pose')) return '전신이 보이게 서요'
+
+    return feedback
+  }
+
+  private getDefaultFeedbackText() {
+    const motionSpec = this.getCurrentAiMotionSpec()
+    if (motionSpec.type === 'daniel') return '자세를 유지해볼까요?'
+    return this.aiState.stepCount > 0 ? '좋아요! 계속 해볼까요?' : '동작을 따라 해볼까요?'
+  }
+
+  private setFeedbackTitle(title: string, options: { force?: boolean } = {}) {
+    const nextTitle = title.trim() || this.getDefaultFeedbackText()
+    const now = this.time.now
+    const elapsedMs = now - this.feedbackTitleChangedAtMs
+    const canChange =
+      options.force ||
+      !this.displayedFeedbackTitle ||
+      nextTitle === this.displayedFeedbackTitle ||
+      elapsedMs >= FEEDBACK_TITLE_MIN_VISIBLE_MS
+
+    if (!canChange) return
+
+    this.displayedFeedbackTitle = nextTitle
+    this.feedbackTitleChangedAtMs = now
+    this.feedbackTitleText?.setText(this.getCompactFeedbackTitle(nextTitle))
+    this.fitFeedbackTitleToOneLine()
+  }
+
+  private getCompactFeedbackTitle(title: string) {
+    const normalized = title.trim()
+    if (!normalized) return normalized
+
+    if (normalized.includes('전신') || normalized.includes('몸 전체')) {
+      return this.selectOneLineFeedbackCandidate([
+        normalized,
+        '몸 전체가 보이게 서요',
+        '몸이 보이게 서요',
+      ])
+    }
+
+    if (normalized.includes('뒤로')) {
+      return this.selectOneLineFeedbackCandidate([normalized, '조금 뒤로 가요', '뒤로 조금'])
+    }
+
+    if (normalized.includes('앞으로')) {
+      return this.selectOneLineFeedbackCandidate([normalized, '조금 앞으로 와요', '앞으로 조금'])
+    }
+
+    if (normalized.includes('왼쪽')) {
+      return this.selectOneLineFeedbackCandidate([normalized, '왼쪽으로 조금', '왼쪽'])
+    }
+
+    if (normalized.includes('오른쪽')) {
+      return this.selectOneLineFeedbackCandidate([normalized, '오른쪽으로 조금', '오른쪽'])
+    }
+
+    if (normalized.includes('가운데') || normalized.includes('중앙')) {
+      return this.selectOneLineFeedbackCandidate([normalized, '가운데로 와요', '가운데'])
+    }
+
+    if (normalized.includes('그대로') || normalized.includes('좋아요')) {
+      return this.selectOneLineFeedbackCandidate([normalized, '좋아요, 그대로', '그대로'])
+    }
+
+    if (normalized.includes('쉬')) {
+      return this.selectOneLineFeedbackCandidate([normalized, '쉬어도 괜찮아요', '쉬어도 돼요'])
+    }
+
+    return this.selectOneLineFeedbackCandidate([normalized])
+  }
+
+  private selectOneLineFeedbackCandidate(candidates: string[]) {
+    const availableWidth = this.feedbackTitleMaxWidth || Number.POSITIVE_INFINITY
+
+    for (const candidate of candidates) {
+      if (this.canFitTextAtFontSize(candidate, availableWidth, FEEDBACK_MAIN_MAX_FONT_SIZE)) {
+        return candidate
+      }
+    }
+
+    return candidates[candidates.length - 1] ?? ''
+  }
+
+  private setFeedbackDetail(
+    detail: string,
+    options: { force?: boolean; isProgressDetail?: boolean } = {},
+  ) {
+    const nextDetail = detail.trim()
+    const now = this.time.now
+    const elapsedMs = now - this.feedbackDetailChangedAtMs
+    const canChange =
+      options.force ||
+      !this.displayedFeedbackDetail ||
+      nextDetail === this.displayedFeedbackDetail ||
+      elapsedMs >=
+        (options.isProgressDetail
+          ? FEEDBACK_PROGRESS_DETAIL_MIN_VISIBLE_MS
+          : FEEDBACK_DETAIL_MIN_VISIBLE_MS)
+
+    if (!canChange) return
+
+    this.displayedFeedbackDetail = nextDetail
+    this.feedbackDetailChangedAtMs = now
+    this.feedbackTipTexts[0]?.setText(nextDetail)
+  }
+
+  private getDanielHoldDetail(motionSpec: DanielAiMotionSpec) {
+    const heldSeconds = Math.min(
+      motionSpec.targetHoldMs / 1000,
+      Math.max(0, this.aiState.holdDurationMs / 1000),
+    )
+    const targetSeconds = motionSpec.targetHoldMs / 1000
+    const percent = Math.min(
+      100,
+      Math.round((this.aiState.holdDurationMs / motionSpec.targetHoldMs) * 100),
+    )
+    const compact = true
+    const veryCompact = this.holdStatusMaxWidth > 0 && this.holdStatusMaxWidth < 300
+
+    if (this.aiState.holdCompleted) {
+      return `${targetSeconds.toFixed(0)}초 완료`
+    }
+
+    return this.formatHoldStatusText({
+      elapsedSec: heldSeconds,
+      targetSec: targetSeconds,
+      percent,
+      compact,
+      veryCompact,
+    })
+  }
+
+  private getProgressDetailText(motionSpec: AiMotionSpec) {
+    if (motionSpec.type === 'daniel') {
+      return this.getDanielHoldDetail(motionSpec)
+    }
+
+    return `${this.aiState.stepCount}/${motionSpec.targetSteps}회`
+  }
+
+  private formatHoldStatusText({
+    elapsedSec,
+    targetSec,
+    percent,
+    compact = false,
+    veryCompact = false,
+  }: {
+    elapsedSec: number
+    targetSec: number
+    percent: number
+    compact?: boolean
+    veryCompact?: boolean
+  }) {
+    const elapsed = elapsedSec.toFixed(1)
+    const target = Math.round(targetSec)
+    const safePercent = Math.round(percent)
+
+    if (veryCompact) {
+      return `${elapsed}/${target}초`
+    }
+
+    if (compact) {
+      return `${elapsed}초 / ${target}초 (${safePercent}%)`
+    }
+
+    return `${elapsed}초 / ${target}초 (${safePercent}%)`
+  }
+
+  private updateHoldProgressUi(motionSpec: AiMotionSpec) {
+    const shouldShow = motionSpec.type === 'daniel' && this.saveState === 'idle'
+    this.holdProgressTrack?.setVisible(shouldShow)
+    this.holdProgressBar?.setVisible(shouldShow)
+    this.holdProgressText?.setVisible(false)
+
+    if (!shouldShow || motionSpec.type !== 'daniel') return
+
+    const progress = Phaser.Math.Clamp(this.aiState.holdDurationMs / motionSpec.targetHoldMs, 0, 1)
+    this.holdProgressBar.setDisplaySize(this.holdProgressWidth * progress, 10)
+    this.holdProgressText.setText(this.aiState.holdCompleted ? '완료' : '자세를 계속 유지해요')
+    this.holdProgressText?.setVisible(false)
+  }
+
+  private recordCurrentMotionResult() {
+    const motionSpec = this.getCurrentAiMotionSpec()
+    if (
+      this.motionResults.some(result => result.exerciseMotionId === motionSpec.exerciseMotionId)
+    ) {
+      return
+    }
+
+    const durationSec = Math.max(0, Math.round((Date.now() - this.motionStartedAtMs) / 1000))
+    const accuracy = Phaser.Math.Clamp(this.aiState.accuracy, 0, 1)
+    const completedReps =
+      motionSpec.type === 'daniel'
+        ? this.aiState.holdCompleted || this.aiState.holdDurationMs >= motionSpec.targetHoldMs
+          ? 1
+          : 0
+        : this.aiState.stepCount
+    const feedback =
+      this.aiState.representativeFeedbackText ??
+      this.aiState.displayedFeedbackText ??
+      this.aiState.feedback ??
+      ''
+
+    this.motionResults.push({
+      exerciseMotionId: motionSpec.exerciseMotionId,
+      durationSec,
+      accuracy,
+      completedReps,
+      feedback,
+    })
+  }
+
+  private buildExerciseSessionPayload(): CreateExerciseSessionRequest {
+    const patientProfileId = resolvePatientProfileId()
+    if (!patientProfileId) {
+      throw new Error('환자 정보가 올바르지 않습니다.')
+    }
+
+    const durationSec = Math.max(0, Math.round((Date.now() - this.sessionStartedAtMs) / 1000))
+    return {
+      patientProfileId,
+      exerciseType: this.exerciseType,
+      durationSec,
+      averageAccuracy: calculateAverageAccuracy(this.motionResults),
+      motions: this.motionResults,
+    }
+  }
+
+  private async finishExerciseSession() {
+    if (this.hasSubmittedSession || this.saveState === 'saving' || this.saveState === 'success')
+      return
+
+    this.recordCurrentMotionResult()
+    this.hasSubmittedSession = true
+    this.saveState = 'saving'
+    this.isMotionAdvancing = true
+    this.aiRequestsEnabled = false
+    this.renderSaveState()
+
+    try {
+      const payload = this.buildExerciseSessionPayload()
+      const savedSession = await createExerciseSession(payload)
+      this.savedSession = savedSession
+      this.saveState = 'success'
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: [EXERCISE_SESSIONS_QUERY_KEY, savedSession.patientProfileId],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: [EXERCISE_SESSION_REPORT_QUERY_KEY, savedSession.patientProfileId],
+        }),
+      ])
+      this.renderSaveState()
+      this.time.delayedCall(1500, () => fadeToScene(this, 'GymnasticsSelectScene'))
+    } catch (error) {
+      console.warn('[GymnasticsPlayScene] Failed to save exercise session.', error)
+      this.hasSubmittedSession = false
+      this.saveState = 'error'
+      this.renderSaveState()
+    }
+  }
+
+  private renderSaveState() {
+    this.updateHoldProgressUi(this.getCurrentAiMotionSpec())
+    this.saveRetryButton?.setVisible(this.saveState === 'error')
+
+    if (this.saveState === 'saving') {
+      this.setFeedbackTitle('기록 저장 중', { force: true })
+      this.feedbackTipTexts[0]?.setText('기록을 저장하는 중입니다.')
+    } else if (this.saveState === 'success') {
+      const savedSession = this.savedSession
+      this.setFeedbackTitle('저장 완료', { force: true })
+      this.feedbackTipTexts[0]?.setText(
+        savedSession
+          ? `체조 기록이 저장되었습니다. ${formatExerciseType(
+              savedSession.exerciseType,
+            )} · ${formatDurationSec(savedSession.durationSec)} · ${formatAccuracy(
+              savedSession.averageAccuracy,
+            )}`
+          : '체조 기록이 저장되었습니다.',
+      )
+    } else if (this.saveState === 'error') {
+      this.setFeedbackTitle('저장 실패', { force: true })
+      this.feedbackTipTexts[0]?.setText(CREATE_EXERCISE_SESSION_ERROR_MESSAGE)
+    }
+
+    this.fitFeedbackTitleToOneLine()
+    this.fitTextToWidth(
+      this.feedbackTipTexts[0],
+      this.holdStatusMaxWidth,
+      FEEDBACK_TIMER_MAX_FONT_SIZE,
+      FEEDBACK_TIMER_MIN_FONT_SIZE,
+    )
     this.positionFeedbackStar()
   }
 
@@ -1626,7 +2247,8 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     if (!isComplete || this.isMotionAdvancing) return
 
     this.isMotionAdvancing = true
-    this.feedbackTitleText?.setText('Complete')
+    this.recordCurrentMotionResult()
+    this.setFeedbackTitle('완료!', { force: true })
     this.time.delayedCall(700, () => {
       this.advanceToNextMotion(false)
     })
@@ -1636,16 +2258,23 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     if (manual && this.isMotionAdvancing) return
 
     if (this.motionIndex < this.motions.length - 1) {
+      if (manual) {
+        this.recordCurrentMotionResult()
+      }
       this.motionIndex += 1
       this.aiState = createInitialAiState()
       this.aiError = null
       this.isMotionAdvancing = false
+      this.displayedFeedbackTitle = ''
+      this.feedbackTitleChangedAtMs = 0
+      this.displayedFeedbackDetail = ''
+      this.feedbackDetailChangedAtMs = 0
+      this.motionStartedAtMs = Date.now()
       this.renderMotion()
       return
     }
 
-    this.isMotionAdvancing = false
-    fadeToScene(this, 'GymnasticsSelectScene')
+    void this.finishExerciseSession()
   }
 
   private returnToPreviousMotion() {
@@ -1654,6 +2283,10 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     this.motionIndex -= 1
     this.aiState = createInitialAiState()
     this.aiError = null
+    this.displayedFeedbackTitle = ''
+    this.feedbackTitleChangedAtMs = 0
+    this.displayedFeedbackDetail = ''
+    this.feedbackDetailChangedAtMs = 0
     this.renderMotion()
   }
 
@@ -1679,9 +2312,11 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     this.statusDot.setFillStyle(isRecognized ? 0x1fbf5b : 0xd13b2f)
     this.statusText.setText(isRecognized ? '인식 중' : '인식 불가')
     this.feedbackTitleText?.setText(isRecognized ? '좋아요!' : '기다릴게요')
+    this.statusText.setText(isRecognized ? '인식 중' : '인식 대기')
+    this.setFeedbackTitle(isRecognized ? '좋아요!' : '전신이 보이게 서요', { force: true })
     if (this.feedbackTitleText) {
       this.layoutStatusBadge()
-      this.fitTextToWidth(this.feedbackTitleText, this.feedbackTitleMaxWidth, 34, 20)
+      this.fitFeedbackTitleToOneLine()
       this.positionFeedbackStar()
     }
   }
@@ -1694,26 +2329,65 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     this.feedbackTitleText?.setText(this.isCameraRecognized ? '좋아요!' : '기다릴게요')
     this.fitTextToWidth(this.motionCounterText, this.motionCounterMaxWidth, this.headerFontSize, 14)
     this.fitTextToWidth(this.motionTitleText, this.motionTitleMaxWidth, this.headerFontSize, 14)
+    this.setFeedbackTitle(this.isCameraRecognized ? '좋아요!' : '전신이 보이게 서요', {
+      force: true,
+    })
+    this.updateHoldProgressUi(this.getCurrentAiMotionSpec())
     this.fitTextToWidth(this.timerText, this.timerMaxWidth, this.headerFontSize, 14)
-    this.fitTextToWidth(this.feedbackTitleText, this.feedbackTitleMaxWidth, 34, 20)
+    this.fitFeedbackTitleToOneLine()
     this.positionFeedbackStar()
+    const motionSpec = this.getCurrentAiMotionSpec()
+    const initialDetail = this.getProgressDetailText(motionSpec)
     this.feedbackTipTexts.forEach((text, index) => {
-      text.setText(index === 0 ? motion.goal : '')
-      this.fitTextToWidth(text, this.feedbackTitleMaxWidth, 22, 14)
+      text.setText(index === 0 ? initialDetail : '')
+      if (index === 0) {
+        this.displayedFeedbackDetail = initialDetail
+        this.feedbackDetailChangedAtMs = this.time.now
+      }
+      this.fitTextToWidth(
+        text,
+        this.holdStatusMaxWidth,
+        FEEDBACK_TIMER_MAX_FONT_SIZE,
+        FEEDBACK_TIMER_MIN_FONT_SIZE,
+      )
     })
   }
 
   private positionFeedbackStar() {
-    const starSize = Phaser.Math.Clamp(this.feedbackTitleText.height * 0.95, 32, 46)
-    this.feedbackStarImage.setDisplaySize(starSize, starSize)
-    const gap = Math.max(12, this.feedbackTitleText.height * 0.22)
-    const groupW = this.feedbackStarImage.displayWidth + gap + this.feedbackTitleText.width
-    const groupLeft = this.feedbackFrameBounds.x + (this.feedbackFrameBounds.width - groupW) / 2
-    const starX = groupLeft + this.feedbackStarImage.displayWidth / 2
-    const textX =
-      groupLeft + this.feedbackStarImage.displayWidth + gap + this.feedbackTitleText.width / 2
-    this.feedbackTitleText.setPosition(textX, this.feedbackTitleText.y)
-    this.feedbackStarImage.setPosition(starX, this.feedbackTitleText.y)
+    const centerX = this.feedbackFrameBounds.x + this.feedbackFrameBounds.width / 2
+    const mainY =
+      this.feedbackFrameBounds.y + this.feedbackFrameBounds.height * FEEDBACK_MAIN_Y_RATIO
+
+    this.feedbackTitleText.setPosition(centerX, mainY)
+  }
+
+  private fitFeedbackTitleToOneLine() {
+    if (!this.feedbackTitleText) return
+
+    this.feedbackTitleText.setMaxLines(1)
+    this.fitTextToWidth(
+      this.feedbackTitleText,
+      this.feedbackTitleMaxWidth,
+      FEEDBACK_MAIN_MAX_FONT_SIZE,
+      FEEDBACK_MAIN_MIN_FONT_SIZE,
+    )
+  }
+
+  private canFitTextAtFontSize(textValue: string, maxWidth: number, fontSize: number) {
+    if (!this.feedbackTitleText || !Number.isFinite(maxWidth)) return true
+
+    const previousText = this.feedbackTitleText.text
+    const previousFontSize =
+      Number.parseInt(String(this.feedbackTitleText.style.fontSize), 10) || fontSize
+
+    this.feedbackTitleText.setText(textValue)
+    this.feedbackTitleText.setFontSize(fontSize)
+    const canFit = this.feedbackTitleText.width <= maxWidth
+
+    this.feedbackTitleText.setText(previousText)
+    this.feedbackTitleText.setFontSize(previousFontSize)
+
+    return canFit
   }
 
   private fitTextToWidth(
@@ -1748,7 +2422,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
 
 export class GymnasticsTopScene extends GymnasticsPlaySceneBase {
   constructor() {
-    super('GymnasticsTopScene', TOP_AI_MOTIONS, 'top \uCCB4\uC870', TOP_AI_SEQUENCE)
+    super('GymnasticsTopScene', TOP_AI_MOTIONS, 'top \uCCB4\uC870', 'TOP', TOP_AI_SEQUENCE)
   }
 }
 
@@ -1758,6 +2432,7 @@ export class GymnasticsDanielScene extends GymnasticsPlaySceneBase {
       'GymnasticsDanielScene',
       DANIEL_MOTIONS,
       '\uB2E4\uB2C8\uC5D8 \uCCB4\uC870',
+      'DANIEL',
       DANIEL_AI_SEQUENCE,
     )
   }
