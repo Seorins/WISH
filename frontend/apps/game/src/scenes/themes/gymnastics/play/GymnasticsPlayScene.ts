@@ -159,6 +159,7 @@ const AI_BASE_URL = (import.meta.env.VITE_AI_BASE_URL ?? 'http://localhost:8001/
   /\/$/,
   '',
 )
+const GYMNASTICS_PLAY_BACKGROUND_TEXTURE_KEY = 'gymnastics-play-background-v3'
 
 const TOP_AI_SEQUENCE: AiMotionSpec[] = [
   { type: 'top', kind: 'march', exerciseMotionId: 1, targetSteps: 8 },
@@ -424,7 +425,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
 
   preload() {
     this.load.image(
-      'gymnastics-play-background',
+      GYMNASTICS_PLAY_BACKGROUND_TEXTURE_KEY,
       assetPath('images/themes/gymnastics/background/gymbackground.png'),
     )
     this.load.image(
@@ -464,7 +465,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     this.savedSession = null
     this.saveState = 'idle'
 
-    addCoverBackground(this, 'gymnastics-play-background').setDepth(0)
+    addCoverBackground(this, GYMNASTICS_PLAY_BACKGROUND_TEXTURE_KEY).setDepth(0)
     this.add.rectangle(vw / 2, vh / 2, vw, vh, 0x2d1b10, 0.16).setDepth(1)
 
     this.createCameraTexture()
