@@ -228,6 +228,33 @@ public record UserSignupRequest(
 ) { }
 ```
 
+### `ApiResponse` 이름 충돌
+
+자체 응답 record `com.comong.backend.global.common.response.ApiResponse` 와 Swagger 어노테이션 `io.swagger.v3.oas.annotations.responses.ApiResponse` 가 동명 — 같은 컨트롤러에서 둘 다 쓰면 컴파일 ambiguous. **자체 record 가 메서드 시그니처마다 등장**하므로 import 는 자체 쪽을 가져가고, **Swagger 어노테이션은 fully-qualified** 로 적는다. (S14P31E103-504)
+
+```java
+import com.comong.backend.global.common.response.ApiResponse;          // 자체 record
+import io.swagger.v3.oas.annotations.responses.ApiResponses;            // 묶음 어노테이션은 import OK
+// io.swagger.v3.oas.annotations.responses.ApiResponse 는 import 하지 않음
+
+@ApiResponses({
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "..."),
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "...")
+})
+public ResponseEntity<ApiResponse<Foo>> get(...) { ... }
+```
+
+### 동일 status code 에 여러 ErrorCode 가 매핑되는 경우
+
+OpenAPI 스펙상 한 메서드에 같은 `responseCode` 는 한 개만 등록 가능. 같은 status (예: 404) 가 여러 도메인 ErrorCode (P-001, TK-006 등) 로 갈리면 **description 에 모두 나열 + 응답 body 의 `code` 필드 참조 안내** 를 적는다. 클라이언트는 status code 가 아닌 body 의 `code` 로 분기한다 (2장 참조).
+
+```java
+@io.swagger.v3.oas.annotations.responses.ApiResponse(
+    responseCode = "404",
+    description = "환자 프로필이 없거나 본인 소유가 아님 (P-001), 또는 진척도 데이터 없음 (TK-006). "
+                + "응답 body 의 code 필드로 구분.")
+```
+
 ### 프로파일별 활성화
 
 | 프로파일 | Swagger UI | OpenAPI JSON |

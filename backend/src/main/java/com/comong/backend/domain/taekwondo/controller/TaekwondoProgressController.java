@@ -41,7 +41,9 @@ public class TaekwondoProgressController {
                 description = "인증 필요 (G-003)"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
                 responseCode = "404",
-                description = "환자 프로필이 없거나 본인 소유가 아님 (P-001), 또는 진척도 데이터 없음 (TK-006)")
+                description =
+                        "환자 프로필이 없거나 본인 소유가 아님 (P-001), 또는 진척도 데이터 없음 (TK-006)."
+                                + " 응답 body 의 code 필드로 구분.")
     })
     @GetMapping
     public ResponseEntity<ApiResponse<TaekwondoProgressResponse>> findOne(
