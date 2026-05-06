@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import logoUrl from '@/assets/logo.png'
 import { useAuthStore } from '@/shared/auth/store'
 import { PATIENT } from '../data/mock'
@@ -17,15 +17,23 @@ import styles from './HeaderBar.module.css'
 
 type TabId = 'exercise' | 'chat' | 'activity' | 'reports'
 
-const TABS: ReadonlyArray<{ id: TabId; label: string; Icon: typeof HomeIcon }> = [
-  { id: 'exercise', label: '운동', Icon: ExerciseIcon },
-  { id: 'chat', label: '대화', Icon: ChatIcon },
+const TABS: ReadonlyArray<{ id: TabId; label: string; Icon: typeof HomeIcon; to?: string }> = [
+  { id: 'exercise', label: '운동', Icon: ExerciseIcon, to: '/' },
+  { id: 'chat', label: '대화', Icon: ChatIcon, to: '/chat' },
   { id: 'activity', label: '활동', Icon: ActivityIcon },
   { id: 'reports', label: '리포트', Icon: ClipboardIcon },
 ]
 
+function activeTabFromPath(pathname: string): TabId {
+  if (pathname.startsWith('/chat')) return 'chat'
+  if (pathname.startsWith('/activity')) return 'activity'
+  if (pathname.startsWith('/reports')) return 'reports'
+  return 'exercise'
+}
+
 export function HeaderBar() {
-  const [active, setActive] = useState<TabId>('exercise')
+  const location = useLocation()
+  const active = activeTabFromPath(location.pathname)
   const [menuOpen, setMenuOpen] = useState(false)
   const profileRef = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
@@ -62,14 +70,16 @@ export function HeaderBar() {
       </Link>
 
       <nav className={styles.tabs}>
-        {TABS.map(({ id, label, Icon }) => {
+        {TABS.map(({ id, label, Icon, to }) => {
           const isActive = id === active
           return (
             <button
               key={id}
               type="button"
               className={`${styles.tab} ${isActive ? styles.tabActive : ''}`}
-              onClick={() => setActive(id)}
+              onClick={() => {
+                if (to) navigate(to)
+              }}
             >
               <Icon className={styles.tabIcon} />
               {label}
