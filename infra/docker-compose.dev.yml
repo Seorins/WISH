@@ -50,6 +50,8 @@ services:
     image: postgres:15-alpine
     container_name: e103-postgres-dev
     restart: unless-stopped
+    ports:
+      - "127.0.0.1:5432:5432"
     environment:
       POSTGRES_DB: ${POSTGRES_DEV_DB:-e103_dev_db}
       POSTGRES_USER: ${POSTGRES_DEV_USER:-postgres}
