@@ -29,7 +29,7 @@ import { villageDialogs } from './dialog/villageDialogs'
 
 const TALK_DISTANCE = 55
 const DIALOG_TEXT_BOX = { x: 830, y: 470, width: 780, height: 190 }
-const DEFAULT_PLAYER_SPAWN = { xRatio: 0.5, yRatio: 0.47 }
+const DEFAULT_PLAYER_SPAWN = { xRatio: 0.5, yRatio: 0.3 }
 const ART_PORTAL = { xRatio: 0.364, yRatio: 0.51, widthRatio: 0.02, heightRatio: 0.065 }
 const TAEKWONDO_PORTAL = { xRatio: 0.437, yRatio: 0.083, widthRatio: 0.02, heightRatio: 0.065 }
 const GYMNASTICS_PORTAL = { xRatio: 0.724, yRatio: 0.225, widthRatio: 0.02, heightRatio: 0.065 }
@@ -156,7 +156,7 @@ export class VillageScene extends Phaser.Scene {
       frameRate: 6,
       repeat: -1,
     })
-    this.sehyunNpc = this.add.sprite(0.38 * W, 0.55 * H, 'sehyun').setDepth(4)
+    this.sehyunNpc = this.add.sprite(0.38 * W, 0.3 * H, 'sehyun').setDepth(4)
     this.sehyunNpc.setScale(0.38)
     this.sehyunNpc.anims.play('sehyun-loop')
 
