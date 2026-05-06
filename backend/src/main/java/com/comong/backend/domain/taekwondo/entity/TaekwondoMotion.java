@@ -119,6 +119,15 @@ public class TaekwondoMotion {
         }
     }
 
+    /**
+     * routine_order 만 단독 변경 (reorder 시 사용). (poomsae, routine_order) UNIQUE 제약이 DEFERRABLE
+     * INITIALLY DEFERRED 라 트랜잭션 안에서 다수 행을 자유롭게 swap 할 수 있다.
+     */
+    public void changeRoutineOrder(int routineOrder) {
+        validatePositive(routineOrder, "routineOrder");
+        this.routineOrder = routineOrder;
+    }
+
     public void replaceThumbnail(String url) {
         this.thumbnailUrl = Objects.requireNonNull(url, "url must not be null");
     }
