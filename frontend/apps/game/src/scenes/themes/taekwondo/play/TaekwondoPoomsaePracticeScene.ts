@@ -550,8 +550,8 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
   private cleanup() {
     this.input.keyboard?.off('keydown-ESC', this.handleEscDown)
     this.feedbackText = undefined
-    this.cleanupCameraEffects()
     this.stopCamera()
+    this.cleanupCameraEffects()
 
     if (this.cameraTexture) {
       this.textures.remove(this.cameraTexture.key)

@@ -33,7 +33,9 @@ export class CameraSuccessEffect {
   private readonly layer: Phaser.GameObjects.Container
   private readonly bounds: CameraSuccessEffectBounds
   private readonly idleEnemyCount: number
+  private readonly maskShape: Phaser.GameObjects.Graphics
   private readonly onSuccessFeedback?: (message: string) => void
+  private activeTweens: Phaser.Tweens.Tween[] = []
   private enemies: CameraEnemy[] = []
 
   constructor(
@@ -45,13 +47,17 @@ export class CameraSuccessEffect {
       onSuccessFeedback,
     }: CameraSuccessEffectConfig,
   ) {
+    if (bounds.width <= 0 || bounds.height <= 0) {
+      throw new Error('CameraSuccessEffect bounds width and height must be positive.')
+    }
+
     this.bounds = bounds
     this.idleEnemyCount = idleEnemyCount
     this.onSuccessFeedback = onSuccessFeedback
     this.layer = scene.add.container(0, 0).setDepth(depth)
 
-    const maskShape = scene.add.graphics()
-    maskShape
+    this.maskShape = scene.add.graphics()
+    this.maskShape
       .fillStyle(0xffffff, 1)
       .fillRoundedRect(
         bounds.x - bounds.width / 2,
@@ -61,7 +67,7 @@ export class CameraSuccessEffect {
         bounds.radius,
       )
       .setVisible(false)
-    this.layer.setMask(maskShape.createGeometryMask())
+    this.layer.setMask(this.maskShape.createGeometryMask())
 
     this.spawnNextMotionEnemies()
   }
@@ -82,8 +88,10 @@ export class CameraSuccessEffect {
   }
 
   destroy() {
+    this.stopActiveTweens()
     this.clearEnemies()
     this.layer.destroy(true)
+    this.maskShape.destroy()
   }
 
   private ensureEnemies(targetCount: number) {
@@ -112,16 +120,18 @@ export class CameraSuccessEffect {
     container.add(body)
     this.layer.add(container)
 
-    const floatTween = this.scene.tweens.add({
-      targets: container,
-      x: x + Phaser.Math.Between(-18, 18),
-      y: y + Phaser.Math.Between(-16, 16),
-      angle: Phaser.Math.Between(-10, 10),
-      duration: Phaser.Math.Between(1500, 2400),
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
-    })
+    const floatTween = this.trackTween(
+      this.scene.tweens.add({
+        targets: container,
+        x: x + Phaser.Math.Between(-18, 18),
+        y: y + Phaser.Math.Between(-16, 16),
+        angle: Phaser.Math.Between(-10, 10),
+        duration: Phaser.Math.Between(1500, 2400),
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      }),
+    )
 
     return { container, floatTween }
   }
@@ -168,17 +178,19 @@ export class CameraSuccessEffect {
     const burstCount = Math.round(Phaser.Math.Linear(6, 14, intensity))
     this.createSuccessBurst(enemy.container.x, enemy.container.y, burstCount)
 
-    this.scene.tweens.add({
-      targets: enemy.container,
-      x: enemy.container.x + Phaser.Math.Between(-80, 80) * (0.6 + intensity),
-      y: enemy.container.y - Phaser.Math.Between(50, 130) * (0.6 + intensity),
-      angle: Phaser.Math.Between(-180, 180),
-      scale: 0.1,
-      alpha: 0,
-      duration: Math.round(Phaser.Math.Linear(420, 680, intensity)),
-      ease: 'Back.easeIn',
-      onComplete: () => enemy.container.destroy(true),
-    })
+    this.trackTween(
+      this.scene.tweens.add({
+        targets: enemy.container,
+        x: enemy.container.x + Phaser.Math.Between(-80, 80) * (0.6 + intensity),
+        y: enemy.container.y - Phaser.Math.Between(50, 130) * (0.6 + intensity),
+        angle: Phaser.Math.Between(-180, 180),
+        scale: 0.1,
+        alpha: 0,
+        duration: Math.round(Phaser.Math.Linear(420, 680, intensity)),
+        ease: 'Back.easeIn',
+        onComplete: () => enemy.container.destroy(true),
+      }),
+    )
   }
 
   private clearEnemies() {
@@ -203,16 +215,35 @@ export class CameraSuccessEffect {
       const angle = Phaser.Math.FloatBetween(0, Math.PI * 2)
       const distance = Phaser.Math.Between(28, 86)
 
-      this.scene.tweens.add({
-        targets: container,
-        x: x + Math.cos(angle) * distance,
-        y: y + Math.sin(angle) * distance,
-        scale: Phaser.Math.FloatBetween(0.45, 0.9),
-        alpha: 0,
-        duration: Phaser.Math.Between(360, 620),
-        ease: 'Sine.easeOut',
-        onComplete: () => container.destroy(true),
-      })
+      this.trackTween(
+        this.scene.tweens.add({
+          targets: container,
+          x: x + Math.cos(angle) * distance,
+          y: y + Math.sin(angle) * distance,
+          scale: Phaser.Math.FloatBetween(0.45, 0.9),
+          alpha: 0,
+          duration: Phaser.Math.Between(360, 620),
+          ease: 'Sine.easeOut',
+          onComplete: () => container.destroy(true),
+        }),
+      )
     }
+  }
+
+  private trackTween(tween: Phaser.Tweens.Tween) {
+    this.activeTweens.push(tween)
+    tween.once(Phaser.Tweens.Events.TWEEN_COMPLETE, () => {
+      this.activeTweens = this.activeTweens.filter(activeTween => activeTween !== tween)
+    })
+    tween.once(Phaser.Tweens.Events.TWEEN_STOP, () => {
+      this.activeTweens = this.activeTweens.filter(activeTween => activeTween !== tween)
+    })
+    return tween
+  }
+
+  private stopActiveTweens() {
+    const tweens = [...this.activeTweens]
+    this.activeTweens = []
+    tweens.forEach(tween => tween.stop())
   }
 }
