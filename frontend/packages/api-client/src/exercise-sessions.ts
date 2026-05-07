@@ -1,4 +1,4 @@
-import type { AxiosInstance } from 'axios'
+import { isAxiosError, type AxiosInstance } from 'axios'
 import { apiClient } from './client'
 import type { ApiResponse } from './artworks'
 
@@ -76,6 +76,34 @@ export function createExerciseSessionError(error: unknown) {
   const message =
     error instanceof Error && error.message.trim() ? error.message : EXERCISE_SESSION_ERROR_MESSAGE
   return new Error(message)
+}
+
+function createExerciseSessionSaveError(error: unknown) {
+  if (error instanceof Error && error.message === INVALID_SAVE_RESPONSE_MESSAGE) {
+    return error
+  }
+
+  if (isAxiosError(error)) {
+    const status = error.response?.status
+    const responseBody = error.response?.data as Partial<ApiResponse<unknown>> | undefined
+    const responseMessage =
+      typeof responseBody?.message === 'string' && responseBody.message.trim()
+        ? responseBody.message.trim()
+        : undefined
+    const errorDetails =
+      responseBody?.errors && Object.keys(responseBody.errors).length > 0
+        ? JSON.stringify(responseBody.errors)
+        : undefined
+    const detail = responseMessage ?? errorDetails ?? error.message
+
+    return new Error(
+      status
+        ? `${CREATE_EXERCISE_SESSION_ERROR_MESSAGE} (${status}: ${detail})`
+        : `${CREATE_EXERCISE_SESSION_ERROR_MESSAGE} (${detail})`,
+    )
+  }
+
+  return new Error(CREATE_EXERCISE_SESSION_ERROR_MESSAGE)
 }
 
 function assertValidPatientProfileId(patientProfileId: number) {
@@ -226,10 +254,7 @@ export async function createExerciseSession(
 
     return body.data
   } catch (error) {
-    if (error instanceof Error && error.message === INVALID_SAVE_RESPONSE_MESSAGE) {
-      throw error
-    }
-    throw new Error(CREATE_EXERCISE_SESSION_ERROR_MESSAGE)
+    throw createExerciseSessionSaveError(error)
   }
 }
 
