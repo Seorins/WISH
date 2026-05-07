@@ -2,9 +2,7 @@ import Phaser from 'phaser'
 import {
   calculateAverageAccuracy,
   createExerciseSession,
-  CREATE_EXERCISE_SESSION_ERROR_MESSAGE,
   type CreateExerciseSessionRequest,
-  type ExerciseSessionDetail,
 } from '@wish/api-client'
 import { assetPath } from '@/game/assets/assetPath'
 import { POSE_LANDMARK_NAMES, PoseTracker } from '@/game/motion/poseTracker'
@@ -15,11 +13,6 @@ import {
   EXERCISE_SESSION_REPORT_QUERY_KEY,
   EXERCISE_SESSIONS_QUERY_KEY,
 } from '@/features/exerciseSessions/hooks'
-import {
-  formatAccuracy,
-  formatDurationSec,
-  formatExerciseType,
-} from '@/features/exerciseSessions/format'
 import { queryClient } from '@/queryClient'
 import { speakFeedback, stopFeedbackSpeech } from '@/shared/lib/feedbackTts'
 
@@ -416,12 +409,19 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
   private motionCounterText!: Phaser.GameObjects.Text
   private motionTitleText!: Phaser.GameObjects.Text
   private timerText!: Phaser.GameObjects.Text
+  private feedbackLabelText?: Phaser.GameObjects.Text
   private feedbackTitleText!: Phaser.GameObjects.Text
   private feedbackTipTexts: Phaser.GameObjects.Text[] = []
+  private progressLabelText?: Phaser.GameObjects.Text
   private holdProgressTrack!: Phaser.GameObjects.Rectangle
   private holdProgressBar!: Phaser.GameObjects.Rectangle
   private holdProgressText!: Phaser.GameObjects.Text
   private holdProgressWidth = 0
+  private progressTextFontSize = 0
+  private progressCompleteFontSize = 0
+  private progressTextCenterX = 0
+  private progressTextCenterY = 0
+  private progressCompleteCenterY = 0
   private feedbackFrameBounds!: PanelBounds
   private timerEvent?: Phaser.Time.TimerEvent
   private isCameraRecognized = false
@@ -432,6 +432,11 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
   private timerMaxWidth = 0
   private headerFontSize = 0
   private feedbackTitleMaxWidth = 0
+  private feedbackTitleCenterX = 0
+  private feedbackTitleCenterY = 0
+  private feedbackTitleFontSize = 0
+  private saveStatusTitleCenterY = 0
+  private saveStatusTitleFontSize = 0
   private holdStatusMaxWidth = 0
   private displayedFeedbackTitle = ''
   private feedbackTitleChangedAtMs = 0
@@ -453,7 +458,6 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
   private motionAccumulatedDurationMs = 0
   private motionResults: LocalExerciseMotionResult[] = []
   private hasSubmittedSession = false
-  private savedSession: ExerciseSessionDetail | null = null
   private saveState: 'idle' | 'saving' | 'success' | 'error' = 'idle'
   private saveRetryButton?: Phaser.GameObjects.Text
   private lastTtsKey: string | null = null
@@ -523,7 +527,6 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     this.motionAccumulatedDurationMs = 0
     this.motionResults = []
     this.hasSubmittedSession = false
-    this.savedSession = null
     this.saveState = 'idle'
     this.lastTtsKey = null
     this.lastTtsPlayedAtMs = 0
@@ -867,14 +870,19 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
       .setPadding(0, 0, 0, 0)
     this.motionTitleMaxWidth = motionTextMaxWidth
 
-    this.add
-      .text(centerX, feedbackCard.y + feedbackCard.height * 0.2, '실시간 피드백', {
-        fontFamily: 'sans-serif',
-        fontSize: `${Math.round(Phaser.Math.Clamp(feedbackCard.height * 0.13, 22, 30))}px`,
-        color: '#6b4a2f',
-        fontStyle: 'bold',
-        letterSpacing: 3,
-      })
+    this.feedbackLabelText = this.add
+      .text(
+        centerX,
+        feedbackCard.y + feedbackCard.height * 0.2,
+        '\uC2E4\uC2DC\uAC04 \uD53C\uB4DC\uBC31',
+        {
+          fontFamily: 'sans-serif',
+          fontSize: `${Math.round(Phaser.Math.Clamp(feedbackCard.height * 0.13, 22, 30))}px`,
+          color: '#6b4a2f',
+          fontStyle: 'bold',
+          letterSpacing: 3,
+        },
+      )
       .setOrigin(0.5)
       .setDepth(13)
 
@@ -886,10 +894,15 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
       width: feedbackCard.width - 32,
       height: feedbackBodyH,
     }
+    this.feedbackTitleCenterX = centerX
+    this.feedbackTitleCenterY = feedbackBodyTop + feedbackBodyH / 2
+    this.feedbackTitleFontSize = Math.round(Phaser.Math.Clamp(feedbackCard.height * 0.25, 36, 54))
+    this.saveStatusTitleCenterY = feedbackCard.y + feedbackCard.height * 0.52
+    this.saveStatusTitleFontSize = Math.round(Phaser.Math.Clamp(feedbackCard.height * 0.2, 34, 46))
     this.feedbackTitleText = this.add
-      .text(centerX, feedbackBodyTop + feedbackBodyH / 2, '', {
+      .text(this.feedbackTitleCenterX, this.feedbackTitleCenterY, '', {
         fontFamily: 'sans-serif',
-        fontSize: `${Math.round(Phaser.Math.Clamp(feedbackCard.height * 0.25, 36, 54))}px`,
+        fontSize: `${this.feedbackTitleFontSize}px`,
         color: '#2f2118',
         fontStyle: 'bold',
         align: 'center',
@@ -904,7 +917,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
       .image(centerX, feedbackCard.y + feedbackCard.height * 0.22, 'gymnastics-feedback-star')
       .setVisible(false)
 
-    this.add
+    this.progressLabelText = this.add
       .text(centerX, progressCard.y + progressCard.height * 0.24, '\uC9C4\uD589\uB3C4', {
         fontFamily: 'sans-serif',
         fontSize: `${Math.round(Phaser.Math.Clamp(progressCard.height * 0.13, 17, 23))}px`,
@@ -914,11 +927,16 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(13)
 
+    this.progressTextFontSize = Math.round(Phaser.Math.Clamp(progressCard.height * 0.22, 30, 44))
+    this.progressCompleteFontSize = Math.round(Phaser.Math.Clamp(progressCard.height * 0.3, 42, 64))
+    this.progressTextCenterX = centerX
+    this.progressTextCenterY = progressCard.y + progressCard.height * 0.54
+    this.progressCompleteCenterY = progressCard.y + progressCard.height / 2
     this.feedbackTipTexts = [
       this.add
-        .text(centerX, progressCard.y + progressCard.height * 0.54, '', {
+        .text(this.progressTextCenterX, this.progressTextCenterY, '', {
           fontFamily: 'sans-serif',
-          fontSize: `${Math.round(Phaser.Math.Clamp(progressCard.height * 0.22, 30, 44))}px`,
+          fontSize: `${this.progressTextFontSize}px`,
           color: '#a84a3f',
           fontStyle: 'bold',
           align: 'center',
@@ -992,13 +1010,13 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
       () => fadeToScene(this, 'GymnasticsSelectScene'),
     )
     this.saveRetryButton = this.add
-      .text(centerX, feedbackCard.y + feedbackCard.height * 0.82, '다시 저장', {
+      .text(centerX, feedbackCard.y + feedbackCard.height * 0.82, '\uB2E4\uC2DC \uC800\uC7A5', {
         fontFamily: 'sans-serif',
-        fontSize: '18px',
+        fontSize: `${Math.round(Phaser.Math.Clamp(feedbackCard.height * 0.1, 18, 22))}px`,
         color: '#ffffff',
         fontStyle: 'bold',
         align: 'center',
-        backgroundColor: '#2f9e58',
+        backgroundColor: '#67b86b',
         padding: { x: 18, y: 8 },
       })
       .setOrigin(0.5)
@@ -2525,6 +2543,10 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
   }
 
   private setFeedbackTitle(title: string, options: { force?: boolean } = {}) {
+    if (this.saveState === 'idle') {
+      this.showRealtimeFeedbackCard()
+    }
+
     const nextTitle = title.trim() || this.getDefaultFeedbackText()
     const now = this.time.now
     const elapsedMs = now - this.feedbackTitleChangedAtMs
@@ -2646,6 +2668,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
 
   private updateHoldProgressUi(motionSpec: AiMotionSpec) {
     const shouldShow = this.saveState === 'idle'
+    this.progressLabelText?.setVisible(shouldShow)
     this.holdProgressTrack?.setVisible(shouldShow)
     this.holdProgressBar?.setVisible(shouldShow)
     this.holdProgressText?.setVisible(false)
@@ -2663,12 +2686,71 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     this.holdProgressText?.setVisible(false)
   }
 
+  private showMotionProgressComplete() {
+    const progressText = this.feedbackTipTexts[0]
+    this.progressLabelText?.setVisible(false)
+    this.holdProgressTrack?.setVisible(false)
+    this.holdProgressBar?.setVisible(false)
+    this.holdProgressText?.setVisible(false)
+
+    if (!progressText) return
+
+    progressText
+      .setText('\uCCB4\uC870 \uC644\uB8CC')
+      .setFontSize(this.progressCompleteFontSize)
+      .setColor('#2f2118')
+      .setVisible(true)
+      .setPosition(this.progressTextCenterX, this.progressCompleteCenterY)
+    progressText.setFixedSize(this.holdStatusMaxWidth, 0)
+    progressText.setOrigin(0.5)
+  }
+
+  private resetMotionProgressTextStyle() {
+    const progressText = this.feedbackTipTexts[0]
+    if (!progressText) return
+
+    progressText
+      .setFontSize(this.progressTextFontSize)
+      .setColor('#a84a3f')
+      .setVisible(true)
+      .setPosition(this.progressTextCenterX, this.progressTextCenterY)
+    progressText.setFixedSize(this.holdStatusMaxWidth, 0)
+  }
+
+  private showRealtimeFeedbackCard() {
+    this.feedbackLabelText?.setText('\uC2E4\uC2DC\uAC04 \uD53C\uB4DC\uBC31')
+    this.saveRetryButton?.setVisible(false)
+
+    this.feedbackTitleText
+      ?.setFontSize(this.feedbackTitleFontSize)
+      .setColor('#2f2118')
+      .setPosition(this.feedbackTitleCenterX, this.feedbackTitleCenterY)
+      .setMaxLines(1)
+  }
+
+  private showSaveStatusCard(statusText: string, color: string) {
+    this.feedbackLabelText?.setText('\uC800\uC7A5 \uC0C1\uD0DC')
+    this.feedbackTitleText
+      ?.setText(statusText)
+      .setFontSize(this.saveStatusTitleFontSize)
+      .setColor(color)
+      .setPosition(this.feedbackTitleCenterX, this.saveStatusTitleCenterY)
+      .setMaxLines(1)
+    this.fitTextToWidth(
+      this.feedbackTitleText,
+      this.feedbackTitleMaxWidth,
+      this.saveStatusTitleFontSize,
+      30,
+    )
+  }
+
   private refreshMotionProgressDisplay() {
     const motionSpec = this.getCurrentAiMotionSpec()
     const progressDetail = this.getProgressDetailText(motionSpec)
     const progressText = this.feedbackTipTexts[0]
 
     if (progressText) {
+      this.resetMotionProgressTextStyle()
       this.displayedFeedbackDetail = progressDetail
       this.feedbackDetailChangedAtMs = this.time.now
       progressText.setText(progressDetail)
@@ -2704,11 +2786,11 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
           ? 1
           : 0
         : this.aiState.stepCount
-    const feedback =
+    const feedback = this.normalizeSessionFeedback(
       this.aiState.representativeFeedbackText ??
-      this.aiState.displayedFeedbackText ??
-      this.aiState.feedback ??
-      ''
+        this.aiState.displayedFeedbackText ??
+        this.aiState.feedback,
+    )
 
     this.motionResults.push({
       exerciseMotionId: motionSpec.exerciseMotionId,
@@ -2717,6 +2799,11 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
       completedReps,
       feedback,
     })
+  }
+
+  private normalizeSessionFeedback(feedback: string | null | undefined) {
+    const trimmedFeedback = feedback?.trim()
+    return trimmedFeedback ? trimmedFeedback.slice(0, 255) : '\uC6B4\uB3D9 \uC644\uB8CC'
   }
 
   private buildExerciseSessionPayload(): CreateExerciseSessionRequest {
@@ -2751,7 +2838,6 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     try {
       const payload = this.buildExerciseSessionPayload()
       const savedSession = await createExerciseSession(payload)
-      this.savedSession = savedSession
       this.saveState = 'success'
       await Promise.all([
         queryClient.invalidateQueries({
@@ -2764,7 +2850,13 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
       this.renderSaveState()
       this.time.delayedCall(1500, () => fadeToScene(this, 'GymnasticsSelectScene'))
     } catch (error) {
-      console.warn('[GymnasticsPlayScene] Failed to save exercise session.', error)
+      console.warn('[GymnasticsPlayScene] Failed to save exercise session.', {
+        error,
+        apiBaseUrl: import.meta.env.VITE_API_BASE_URL,
+        hasAccessToken: Boolean(window.localStorage.getItem('wish_access_token')),
+        patientProfileId: resolvePatientProfileId(),
+        motionResults: this.motionResults,
+      })
       this.hasSubmittedSession = false
       this.saveState = 'error'
       this.renderSaveState()
@@ -2772,37 +2864,18 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
   }
 
   private renderSaveState() {
-    this.updateHoldProgressUi(this.getCurrentAiMotionSpec())
+    this.showMotionProgressComplete()
     this.saveRetryButton?.setVisible(this.saveState === 'error')
 
     if (this.saveState === 'saving') {
-      this.setFeedbackTitle('기록 저장 중', { force: true })
-      this.feedbackTipTexts[0]?.setText('기록을 저장하는 중입니다.')
+      this.showSaveStatusCard('\uC800\uC7A5 \uC911', '#6b4a2f')
     } else if (this.saveState === 'success') {
-      const savedSession = this.savedSession
-      this.setFeedbackTitle('저장 완료', { force: true })
-      this.feedbackTipTexts[0]?.setText(
-        savedSession
-          ? `체조 기록이 저장되었습니다. ${formatExerciseType(
-              savedSession.exerciseType,
-            )} · ${formatDurationSec(savedSession.durationSec)} · ${formatAccuracy(
-              savedSession.averageAccuracy,
-            )}`
-          : '체조 기록이 저장되었습니다.',
-      )
+      this.showSaveStatusCard('\uC800\uC7A5 \uC644\uB8CC', '#4d9b5d')
     } else if (this.saveState === 'error') {
-      this.setFeedbackTitle('저장 실패', { force: true })
-      this.feedbackTipTexts[0]?.setText(CREATE_EXERCISE_SESSION_ERROR_MESSAGE)
+      this.showSaveStatusCard('\uC800\uC7A5 \uC2E4\uD328', '#b45b4a')
     }
 
-    this.fitFeedbackTitleToOneLine()
-    this.fitTextToWidth(
-      this.feedbackTipTexts[0],
-      this.holdStatusMaxWidth,
-      FEEDBACK_TIMER_MAX_FONT_SIZE,
-      FEEDBACK_TIMER_MIN_FONT_SIZE,
-    )
-    this.positionFeedbackStar()
+    this.saveRetryButton?.setVisible(this.saveState === 'error')
   }
 
   private advanceMotionIfCompleted() {
