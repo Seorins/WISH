@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
 import { assetPath } from '@/game/assets/assetPath'
+import { createSceneWeatherLayer } from '@/features/weather/phaserWeatherLayer'
 import { coloringOptions, type ColoringOption } from './coloringOptions'
 
 const ART_ROOM_RETURN_SPAWN = { xRatio: 0.5, yRatio: 0.76 }
@@ -53,6 +54,7 @@ export class ArtColoringSelectScene extends Phaser.Scene {
     background.setScale(scale).setDepth(0)
 
     this.add.rectangle(vw / 2, vh / 2, vw, vh, 0x1d120b, 0.58).setDepth(1)
+    createSceneWeatherLayer(this)
     this.createHeader(vw)
     this.createExitButton(vw)
     this.createCarousel(vw, vh)

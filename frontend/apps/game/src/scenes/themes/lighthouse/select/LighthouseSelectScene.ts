@@ -12,6 +12,8 @@ import {
 } from '@/game/entities/player'
 import { getPlayerMoveSpeed } from '@/game/settings/gameSettings'
 import { fadeToScene } from '@/game/systems/sceneTransition'
+import { getGameWeather } from '@/features/weather/weatherStore'
+import type { WeatherCondition } from '@/features/weather/types'
 import {
   createFloatingInteractionIcon,
   loadInteractionIcons,
@@ -76,6 +78,8 @@ const CHILD_REPLY_DELAY_MS = 520
 const CHILD_CHOICE_PROMPT = '선택: 지금 마음에 가까운 말'
 const WAVE_METER_PROMPT = '마음 파도계\n지난 며칠 동안 마음의 파도는?'
 const WAVE_METER_LAST_SHOWN_KEY = 'lighthouseWaveMeterLastShownDate'
+const LIGHTHOUSE_BACKGROUND_KEY = 'lighthouse-background'
+const LIGHTHOUSE_CLOUDY_BACKGROUND_KEY = 'lighthouse-background-cloudy'
 const CHOICE_BUTTON = {
   gap: 10,
   widthRatio: 0.48,
@@ -166,6 +170,18 @@ type FinishEmotionCheckinReason =
   | 'missing_followup'
   | 'error_fallback'
 
+function isLighthouseCloudyWeather(condition: WeatherCondition) {
+  return (
+    condition === 'CLOUDY' ||
+    condition === 'PARTLY_CLOUDY' ||
+    condition === 'RAIN' ||
+    condition === 'HEAVY_RAIN' ||
+    condition === 'SNOW' ||
+    condition === 'FOG' ||
+    condition === 'THUNDER'
+  )
+}
+
 export class LighthouseSelectScene extends Phaser.Scene {
   private player!: PlayerSprite
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys
@@ -215,8 +231,12 @@ export class LighthouseSelectScene extends Phaser.Scene {
 
   preload() {
     this.load.image(
-      'lighthouse-background',
+      LIGHTHOUSE_BACKGROUND_KEY,
       assetPath('images/themes/lighthouse/background/Lighthouse.png'),
+    )
+    this.load.image(
+      LIGHTHOUSE_CLOUDY_BACKGROUND_KEY,
+      assetPath('images/themes/lighthouse/background/lighthousecloudy.png'),
     )
     this.load.image(
       'lighthouse-youngcheol',
@@ -245,7 +265,8 @@ export class LighthouseSelectScene extends Phaser.Scene {
     this.target = null
     this.resetEmotionCheckinSession()
 
-    const background = addCoverBackground(this, 'lighthouse-background')
+    const background = addCoverBackground(this, LIGHTHOUSE_BACKGROUND_KEY)
+    this.applyWeatherBackground(background)
     const backgroundLeft = background.x - background.displayWidth / 2
     const backgroundTop = background.y - background.displayHeight / 2
 
@@ -309,6 +330,19 @@ export class LighthouseSelectScene extends Phaser.Scene {
     })
 
     this.cameras.main.fadeIn(250, 0, 0, 0)
+  }
+
+  private async applyWeatherBackground(background: Phaser.GameObjects.Image) {
+    const weather = await getGameWeather()
+
+    if (!this.scene.isActive() || !isLighthouseCloudyWeather(weather.condition)) {
+      return
+    }
+
+    const displayWidth = background.displayWidth
+    const displayHeight = background.displayHeight
+    background.setTexture(LIGHTHOUSE_CLOUDY_BACKGROUND_KEY)
+    background.setDisplaySize(displayWidth, displayHeight)
   }
 
   update() {

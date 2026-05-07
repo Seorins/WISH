@@ -1,6 +1,7 @@
 import Phaser from 'phaser'
 import { createArtwork, updateArtwork } from '@wish/api-client'
 import { assetPath } from '@/game/assets/assetPath'
+import { createSceneWeatherLayer } from '@/features/weather/phaserWeatherLayer'
 import { HandTracker, type TrackedHand } from '@/game/motion/handTracker'
 import { detectIndexFingerGesture } from '@/game/motion/indexFingerGesture'
 import { toPointerCanvasCoordinates } from '@/game/motion/pointerCanvasCoordinates'
@@ -277,6 +278,7 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
 
     // soft warm dim — keeps the room's mood but pushes focus onto the canvas
     this.add.rectangle(vw / 2, vh / 2, vw, vh, 0x1a1208, 0.32).setDepth(1)
+    createSceneWeatherLayer(this)
 
     this.createCanvas(vw, vh)
     if (this.applyInitialArtworkImage()) {
