@@ -44,6 +44,43 @@ const MAP_TILE_KEYS = Array.from({ length: MAP_TILE_ROWS * MAP_TILE_COLUMNS }, (
     column: index % MAP_TILE_COLUMNS,
   }
 })
+const VILLAGE_CHARACTERS = [
+  {
+    key: 'village-character-dain',
+    path: 'images/village/background/character/dain.png',
+    xRatio: 0.405,
+    yRatio: 0.485,
+    scale: 0.095,
+  },
+  {
+    key: 'village-character-geonbin',
+    path: 'images/village/background/character/geonbin.png',
+    xRatio: 0.625,
+    yRatio: 0.645,
+    scale: 0.095,
+  },
+  {
+    key: 'village-character-joeun',
+    path: 'images/village/background/character/joeun.png',
+    xRatio: 0.535,
+    yRatio: 0.585,
+    scale: 0.1,
+  },
+  {
+    key: 'village-character-jungho',
+    path: 'images/village/background/character/jungho.png',
+    xRatio: 0.745,
+    yRatio: 0.385,
+    scale: 0.1,
+  },
+  {
+    key: 'village-character-komonge',
+    path: 'images/village/background/character/komonge.png',
+    xRatio: 0.58,
+    yRatio: 0.395,
+    scale: 0.1,
+  },
+] as const
 
 type ObstacleRect = { x: number; y: number; w: number; h: number }
 type VillageSceneData = {
@@ -76,6 +113,9 @@ export class VillageScene extends Phaser.Scene {
   preload() {
     MAP_TILE_KEYS.forEach(tile => {
       this.load.image(tile.key, assetPath(tile.path))
+    })
+    VILLAGE_CHARACTERS.forEach(character => {
+      this.load.image(character.key, assetPath(character.path))
     })
     this.load.image('sehyun_talk', assetPath('images/npcs/sehyun/dialog-frame.png'))
     this.load.image('profile', assetPath('images/common/profile.png'))
@@ -128,6 +168,16 @@ export class VillageScene extends Phaser.Scene {
     this.obstacles = this.physics.add.staticGroup()
     OBSTACLES.forEach(({ x, y, w, h }) => {
       const box = this.add.rectangle(x * W, y * H, w * W, h * H, 0xff0000, 0).setDepth(1)
+      this.physics.add.existing(box, true)
+      this.obstacles.add(box)
+    })
+
+    VILLAGE_CHARACTERS.forEach(character => {
+      const x = character.xRatio * W
+      const y = character.yRatio * H
+      this.add.image(x, y, character.key).setOrigin(0.5, 1).setScale(character.scale).setDepth(4)
+
+      const box = this.add.rectangle(x, y - 18, 48, 36, 0xff0000, 0).setDepth(1)
       this.physics.add.existing(box, true)
       this.obstacles.add(box)
     })
