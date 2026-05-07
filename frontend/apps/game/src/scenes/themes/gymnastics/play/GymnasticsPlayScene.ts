@@ -29,6 +29,13 @@ type GymnasticsMotion = {
   tips: string[]
 }
 
+type GymnasticsPlayPhase =
+  | 'GUIDE_PREVIEW'
+  | 'COUNTDOWN'
+  | 'TRACKING'
+  | 'MOTION_COMPLETE'
+  | 'SESSION_COMPLETE'
+
 type PanelBounds = {
   x: number
   y: number
@@ -334,28 +341,20 @@ const FLAT_COLORS = {
   primaryDark: 0x237a42,
   secondary: 0xfff6e7,
 }
-const TARGET_POSE_FRAME_SCALE = 1
 const HEADER_FRAME_TEXTURE_KEY = 'gymnastics-header-frame-cropped'
 const HEADER_FRAME_CROP = { x: 38, y: 165, width: 1924, height: 315 }
 const HEADER_FRAME_CAP_WIDTH = 260
-const SIDE_FRAME_ASPECT = 1448 / 1086
-const GUIDE_FRAME_CAP_WIDTH = 260
-const FEEDBACK_FRAME_CAP_WIDTH = 360
-const SIDE_FRAME_VISIBLE_SCALE = 0.96
-const GUIDE_TITLE_Y_RATIO = 0.082
-const FEEDBACK_TITLE_Y_RATIO = 0.086
-const FEEDBACK_MAIN_Y_RATIO = 0.38
-const FEEDBACK_TIP_Y_RATIO = 0.68
-const FEEDBACK_PROGRESS_Y_RATIO = 0.82
+const FEEDBACK_MAIN_Y_RATIO = 0.5
 const FEEDBACK_TITLE_MIN_VISIBLE_MS = 4800
 const FEEDBACK_DETAIL_MIN_VISIBLE_MS = 4200
 const FEEDBACK_PROGRESS_DETAIL_MIN_VISIBLE_MS = 1200
-const FEEDBACK_MAIN_MAX_FONT_SIZE = 40
-const FEEDBACK_MAIN_MIN_FONT_SIZE = 26
-const FEEDBACK_TIMER_MAX_FONT_SIZE = 24
-const FEEDBACK_TIMER_MIN_FONT_SIZE = 16
+const FEEDBACK_MAIN_MAX_FONT_SIZE = 54
+const FEEDBACK_MAIN_MIN_FONT_SIZE = 32
+const FEEDBACK_TIMER_MAX_FONT_SIZE = 44
+const FEEDBACK_TIMER_MIN_FONT_SIZE = 26
 const AI_EVALUATION_INTERVAL_MS = 550
 const AI_REQUEST_RETRY_DELAY_MS = 2000
+const GYMNASTICS_COUNTDOWN_SECONDS = 3
 const FRAME_TEXT_COLOR = '#5a2f12'
 const FRAME_TEXT_STROKE = '#fff0c8'
 const FRAME_TEXT_SHADOW = '#2f1708'
@@ -403,6 +402,7 @@ function createInitialAiState(): GymnasticsAiState {
 }
 
 class GymnasticsPlaySceneBase extends Phaser.Scene {
+  private phase: GymnasticsPlayPhase = 'GUIDE_PREVIEW'
   private motionIndex = 0
   private remainingSeconds = 72
   private poseTracker: PoseTracker | null = null
@@ -417,7 +417,6 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
   private motionTitleText!: Phaser.GameObjects.Text
   private timerText!: Phaser.GameObjects.Text
   private feedbackTitleText!: Phaser.GameObjects.Text
-  private feedbackStarImage!: Phaser.GameObjects.Image
   private feedbackTipTexts: Phaser.GameObjects.Text[] = []
   private holdProgressTrack!: Phaser.GameObjects.Rectangle
   private holdProgressBar!: Phaser.GameObjects.Rectangle
@@ -428,6 +427,8 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
   private isCameraRecognized = false
   private motionCounterMaxWidth = 0
   private motionTitleMaxWidth = 0
+  private motionTitleCenterX = 0
+  private motionTitleCenterY = 0
   private timerMaxWidth = 0
   private headerFontSize = 0
   private feedbackTitleMaxWidth = 0
@@ -449,6 +450,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
   private aiError: string | null = null
   private sessionStartedAtMs = 0
   private motionStartedAtMs = 0
+  private motionAccumulatedDurationMs = 0
   private motionResults: LocalExerciseMotionResult[] = []
   private hasSubmittedSession = false
   private savedSession: ExerciseSessionDetail | null = null
@@ -456,6 +458,9 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
   private saveRetryButton?: Phaser.GameObjects.Text
   private lastTtsKey: string | null = null
   private lastTtsPlayedAtMs = 0
+  private guideOverlay?: Phaser.GameObjects.Container
+  private countdownOverlay?: Phaser.GameObjects.Container
+  private countdownTimers: Phaser.Time.TimerEvent[] = []
 
   constructor(
     sceneKey: string,
@@ -494,6 +499,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
 
   create() {
     const { width: vw, height: vh } = this.scale
+    this.phase = 'GUIDE_PREVIEW'
     this.motionIndex = 0
     this.remainingSeconds = 72
     this.isCameraRecognized = false
@@ -501,7 +507,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     this.aiError = null
     this.requestInFlight = false
     this.lastAiEvaluationRequestedAtMs = 0
-    this.aiRequestsEnabled = true
+    this.aiRequestsEnabled = false
     this.aiRetryAvailableAtMs = 0
     this.aiConnectionIssue = false
     this.lastLoggedAiRequestUrl = ''
@@ -512,8 +518,9 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     this.feedbackTitleChangedAtMs = 0
     this.displayedFeedbackDetail = ''
     this.feedbackDetailChangedAtMs = 0
-    this.sessionStartedAtMs = Date.now()
-    this.motionStartedAtMs = this.sessionStartedAtMs
+    this.sessionStartedAtMs = 0
+    this.motionStartedAtMs = 0
+    this.motionAccumulatedDurationMs = 0
     this.motionResults = []
     this.hasSubmittedSession = false
     this.savedSession = null
@@ -531,14 +538,17 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     this.renderMotion()
     void this.checkAiServiceHealth()
     this.startPoseTracker()
+    this.showGuidePreview()
 
     this.timerEvent = this.time.addEvent({
       delay: 1000,
       loop: true,
       callback: () => {
+        if (this.phase !== 'TRACKING') return
         this.remainingSeconds = Math.max(0, this.remainingSeconds - 1)
         this.timerText.setText(this.formatTime(this.remainingSeconds))
         this.fitTextToWidth(this.timerText, this.timerMaxWidth, this.headerFontSize, 14)
+        this.refreshMotionProgressDisplay()
       },
     })
 
@@ -548,7 +558,9 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
 
   update() {
     this.drawCameraFrame()
-    this.evaluateCurrentPose()
+    if (this.phase === 'TRACKING') {
+      this.evaluateCurrentPose()
+    }
   }
 
   private createCameraTexture() {
@@ -599,27 +611,20 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
   }
 
   private createLayout(vw: number, vh: number) {
-    const margin = Phaser.Math.Clamp(Math.min(vw, vh) * 0.032, 12, 18)
-    const headerH = Phaser.Math.Clamp(vh * 0.085, 32, 44)
-    const sideW = Phaser.Math.Clamp(vw * 0.32, 240, 360)
-    const gap = Phaser.Math.Clamp(vw * 0.014, 8, 12)
-    const contentTop = margin + headerH + gap
+    const margin = Phaser.Math.Clamp(Math.min(vw, vh) * 0.028, 18, 32)
+    const sideW = Phaser.Math.Clamp(vw * 0.23, 300, 380)
+    const gap = Phaser.Math.Clamp(vw * 0.018, 20, 28)
+    const contentTop = margin
     const availableH = vh - contentTop - margin
     const maxGroupW = vw - margin * 2
     const maxCameraW = maxGroupW - sideW - gap
-    const sidePanelGap = Math.max(12, availableH * 0.04)
-    const sidePanelH = Math.min((availableH - sidePanelGap) / 2, sideW / SIDE_FRAME_ASPECT)
-    const contentH = sidePanelH * 2 + sidePanelGap
+    const contentH = availableH
     const cameraH = contentH
-    const cameraW = Math.min(maxCameraW * 0.74, cameraH * SIDE_FRAME_ASPECT)
+    const cameraW = Math.min(maxCameraW, cameraH * (4 / 3))
     const groupW = cameraW + gap + sideW
     const groupX = (vw - groupW) / 2
-    const contentY = contentTop + Math.max(0, (availableH - contentH) / 2)
+    const contentY = contentTop
     const sideX = groupX + cameraW + gap
-    const sideHeaderInset = Math.max(12, sideW * 0.04)
-    const sideHeaderW = sideW - sideHeaderInset * 2
-    const sideHeaderX = sideX + sideHeaderInset
-    const headerTop = Math.max(margin, contentY - gap - headerH)
 
     this.cameraBounds = {
       x: groupX,
@@ -628,12 +633,11 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
       height: cameraH,
     }
 
-    this.createHeader(headerTop, headerH, groupX, cameraW, sideHeaderX, sideHeaderW)
     this.createCameraPanel(this.cameraBounds)
     this.createSidePanels(sideX, contentY, sideW, contentH)
   }
 
-  private createHeader(
+  createHeader(
     headerTop: number,
     headerH: number,
     headerX: number,
@@ -759,6 +763,39 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
       .setOrigin(0, 0.5)
       .setDepth(10)
     this.layoutStatusBadge()
+
+    const progressPillX = badgeX
+    const progressPillY = badgeY + badgeH + 10
+    const progressPillW = Math.min(bounds.width * 0.48, 340)
+    const progressPillH = 34
+    const progressPill = this.add.graphics().setDepth(9)
+    progressPill.fillStyle(0x2d1b10, 0.44)
+    progressPill.fillRoundedRect(progressPillX, progressPillY, progressPillW, progressPillH, 15)
+    progressPill.lineStyle(1, 0xffffff, 0.18)
+    progressPill.strokeRoundedRect(progressPillX, progressPillY, progressPillW, progressPillH, 15)
+    progressPill.setVisible(false)
+
+    this.headerFontSize = Math.round(Phaser.Math.Clamp(bounds.height * 0.028, 16, 22))
+    this.motionCounterMaxWidth = progressPillW - 28
+    this.motionTitleMaxWidth = 1
+    this.timerMaxWidth = 1
+    this.motionCounterText = this.add
+      .text(progressPillX + 14, progressPillY + progressPillH / 2, '', {
+        fontFamily: 'sans-serif',
+        fontSize: `${this.headerFontSize}px`,
+        color: '#fff7dc',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0, 0.5)
+      .setDepth(10)
+      .setMaxLines(1)
+      .setVisible(false)
+    this.motionTitleText = this.add
+      .text(0, 0, '', { fontFamily: 'sans-serif', fontSize: '1px' })
+      .setVisible(false)
+    this.timerText = this.add
+      .text(0, 0, '', { fontFamily: 'sans-serif', fontSize: '1px' })
+      .setVisible(false)
   }
 
   private layoutStatusBadge() {
@@ -773,11 +810,213 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
   }
 
   private createSidePanels(x: number, y: number, width: number, height: number) {
-    const panelGap = Math.max(12, height * 0.04)
-    const panelH = (height - panelGap) / 2
-    const targetH = panelH
-    const feedbackY = y + panelH + panelGap
-    const feedbackH = panelH
+    const gap = Math.round(Phaser.Math.Clamp(height * 0.018, 10, 16))
+    const weights = [1.25, 1.45, 1.15, 0.9]
+    const totalWeight = weights.reduce((sum, weight) => sum + weight, 0)
+    const availableH = height - gap * (weights.length - 1)
+    const cardHeights = weights.map(weight => (availableH * weight) / totalWeight)
+    const cardBounds: PanelBounds[] = []
+    let nextY = y
+
+    for (const cardH of cardHeights) {
+      cardBounds.push({ x, y: nextY, width, height: cardH })
+      nextY += cardH + gap
+    }
+
+    const drawCard = (bounds: PanelBounds) => {
+      const graphics = this.add.graphics().setDepth(11)
+      graphics.fillStyle(0x5c3a1e, 0.22)
+      graphics.fillRoundedRect(bounds.x, bounds.y + 4, bounds.width, bounds.height, 20)
+      graphics.fillStyle(0xfff8e0, 0.97)
+      graphics.fillRoundedRect(bounds.x, bounds.y, bounds.width, bounds.height, 20)
+      graphics.lineStyle(3, 0x7e542d, 0.65)
+      graphics.strokeRoundedRect(bounds.x, bounds.y, bounds.width, bounds.height, 20)
+      graphics.lineStyle(2, 0xffffff, 0.55)
+      graphics.strokeRoundedRect(
+        bounds.x + 5,
+        bounds.y + 5,
+        bounds.width - 10,
+        bounds.height - 10,
+        15,
+      )
+      return graphics
+    }
+
+    cardBounds.slice(0, 3).forEach(drawCard)
+
+    const centerX = x + width / 2
+    const [motionCard, feedbackCard, progressCard, replayCard] = cardBounds
+    const motionTextMaxWidth = width * 0.84
+    this.motionTitleCenterX = centerX
+    this.motionTitleCenterY = motionCard.y + motionCard.height / 2
+
+    this.motionTitleText = this.add
+      .text(this.motionTitleCenterX, this.motionTitleCenterY, '', {
+        fontFamily: 'sans-serif',
+        fontSize: `${Math.round(Phaser.Math.Clamp(motionCard.height * 0.26, 30, 44))}px`,
+        color: '#2f2118',
+        fontStyle: 'bold',
+        align: 'center',
+        letterSpacing: 1,
+        lineSpacing: 0,
+        wordWrap: { width: motionTextMaxWidth, useAdvancedWrap: true },
+      })
+      .setOrigin(0.5, 0.46)
+      .setDepth(13)
+      .setMaxLines(2)
+      .setPadding(0, 0, 0, 0)
+    this.motionTitleMaxWidth = motionTextMaxWidth
+
+    this.add
+      .text(centerX, feedbackCard.y + feedbackCard.height * 0.2, '실시간 피드백', {
+        fontFamily: 'sans-serif',
+        fontSize: `${Math.round(Phaser.Math.Clamp(feedbackCard.height * 0.13, 22, 30))}px`,
+        color: '#6b4a2f',
+        fontStyle: 'bold',
+        letterSpacing: 3,
+      })
+      .setOrigin(0.5)
+      .setDepth(13)
+
+    const feedbackBodyTop = feedbackCard.y + feedbackCard.height * 0.34
+    const feedbackBodyH = feedbackCard.height * 0.56
+    this.feedbackFrameBounds = {
+      x: feedbackCard.x + 16,
+      y: feedbackBodyTop,
+      width: feedbackCard.width - 32,
+      height: feedbackBodyH,
+    }
+    this.feedbackTitleText = this.add
+      .text(centerX, feedbackBodyTop + feedbackBodyH / 2, '', {
+        fontFamily: 'sans-serif',
+        fontSize: `${Math.round(Phaser.Math.Clamp(feedbackCard.height * 0.25, 36, 54))}px`,
+        color: '#2f2118',
+        fontStyle: 'bold',
+        align: 'center',
+        letterSpacing: 2,
+        lineSpacing: 4,
+      })
+      .setOrigin(0.5)
+      .setDepth(13)
+      .setMaxLines(1)
+    this.feedbackTitleMaxWidth = width * 0.78
+    this.add
+      .image(centerX, feedbackCard.y + feedbackCard.height * 0.22, 'gymnastics-feedback-star')
+      .setVisible(false)
+
+    this.add
+      .text(centerX, progressCard.y + progressCard.height * 0.24, '\uC9C4\uD589\uB3C4', {
+        fontFamily: 'sans-serif',
+        fontSize: `${Math.round(Phaser.Math.Clamp(progressCard.height * 0.13, 17, 23))}px`,
+        color: '#6b4a2f',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5)
+      .setDepth(13)
+
+    this.feedbackTipTexts = [
+      this.add
+        .text(centerX, progressCard.y + progressCard.height * 0.54, '', {
+          fontFamily: 'sans-serif',
+          fontSize: `${Math.round(Phaser.Math.Clamp(progressCard.height * 0.22, 30, 44))}px`,
+          color: '#a84a3f',
+          fontStyle: 'bold',
+          align: 'center',
+          letterSpacing: 1,
+        })
+        .setOrigin(0.5)
+        .setDepth(13)
+        .setMaxLines(1),
+    ]
+    this.holdStatusMaxWidth = width * 0.82
+    this.feedbackTipTexts[0]?.setFixedSize(this.holdStatusMaxWidth, progressCard.height * 0.32)
+
+    this.holdProgressWidth = width * 0.82
+    const holdProgressY = progressCard.y + progressCard.height * 0.78
+    this.holdProgressTrack = this.add
+      .rectangle(centerX, holdProgressY, this.holdProgressWidth, 16, 0x62482a, 0.16)
+      .setOrigin(0.5)
+      .setDepth(13)
+      .setVisible(true)
+    this.holdProgressBar = this.add
+      .rectangle(
+        centerX - this.holdProgressWidth / 2,
+        holdProgressY,
+        this.holdProgressWidth,
+        16,
+        0x7bcf7f,
+        0.95,
+      )
+      .setOrigin(0, 0.5)
+      .setScale(0, 1)
+      .setDepth(14)
+      .setVisible(true)
+    this.holdProgressText = this.add
+      .text(centerX, holdProgressY, '', { fontFamily: 'sans-serif', fontSize: '1px' })
+      .setVisible(false)
+
+    const actionGap = Math.round(Phaser.Math.Clamp(replayCard.height * 0.09, 8, 12))
+    const actionH = Math.round(Phaser.Math.Clamp((replayCard.height - actionGap) / 2, 44, 54))
+    const exitSize = actionH * 2 + actionGap
+    const actionGroupW = Math.min(width * 0.94, width - 4)
+    const actionLeftW = Math.max(136, actionGroupW - exitSize - actionGap)
+    const actionLeftX = centerX - actionGroupW / 2 + actionLeftW / 2
+    const exitX = centerX - actionGroupW / 2 + actionLeftW + actionGap + exitSize / 2
+    const firstActionY = replayCard.y + replayCard.height / 2 - actionH / 2 - actionGap / 2
+    const secondActionY = replayCard.y + replayCard.height / 2 + actionH / 2 + actionGap / 2
+    this.createGuideActionButton(
+      actionLeftX,
+      firstActionY,
+      actionLeftW,
+      actionH,
+      '\uC601\uC0C1 \uB2E4\uC2DC\uBCF4\uAE30',
+      0x67b86b,
+      () => this.handleReplayGuideVideo(),
+    )
+    this.createGuideActionButton(
+      actionLeftX,
+      secondActionY,
+      actionLeftW,
+      actionH,
+      '\uB3D9\uC791 \uB2E4\uC2DC\uD558\uAE30',
+      0x8e83d8,
+      () => this.handleRestartCurrentMotion(),
+    )
+    this.createGuideActionButton(
+      exitX,
+      replayCard.y + replayCard.height / 2,
+      exitSize,
+      exitSize,
+      '\uB098\uAC00\uAE30',
+      0xe89a72,
+      () => fadeToScene(this, 'GymnasticsSelectScene'),
+    )
+    this.saveRetryButton = this.add
+      .text(centerX, feedbackCard.y + feedbackCard.height * 0.82, '다시 저장', {
+        fontFamily: 'sans-serif',
+        fontSize: '18px',
+        color: '#ffffff',
+        fontStyle: 'bold',
+        align: 'center',
+        backgroundColor: '#2f9e58',
+        padding: { x: 18, y: 8 },
+      })
+      .setOrigin(0.5)
+      .setDepth(16)
+      .setVisible(false)
+      .setInteractive({ useHandCursor: true })
+
+    this.saveRetryButton.on('pointerup', () => {
+      if (this.saveState !== 'error') return
+      void this.finishExerciseSession()
+    })
+
+    return
+    /*
+
+    const targetH = 0
+    const feedbackY = y
+    const feedbackH = height
     const frameW = width * SIDE_FRAME_VISIBLE_SCALE
     const targetFrameH = targetH * SIDE_FRAME_VISIBLE_SCALE
     const feedbackFrameH = feedbackH * SIDE_FRAME_VISIBLE_SCALE
@@ -806,6 +1045,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
         ),
       )
       .setDepth(11)
+      .setVisible(false)
     this.add
       .text(sectionTitleX, targetTitleY, '가이드 영상', {
         fontFamily: 'sans-serif',
@@ -824,6 +1064,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
       })
       .setOrigin(0.5)
       .setDepth(13)
+      .setVisible(false)
 
     this.add
       .image(
@@ -972,6 +1213,42 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     })
   }
 
+    */
+  }
+
+  private createGuideActionButton(
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    label: string,
+    fill: number,
+    onClick: () => void,
+  ) {
+    const bg = this.add.graphics().setDepth(13)
+    bg.fillStyle(0x533a23, 0.22)
+    bg.fillRoundedRect(x - width / 2, y - height / 2 + 4, width, height, 18)
+    bg.fillStyle(fill, 1)
+    bg.fillRoundedRect(x - width / 2, y - height / 2, width, height, 18)
+    bg.lineStyle(2, 0xffffff, 0.42)
+    bg.strokeRoundedRect(x - width / 2, y - height / 2, width, height, 18)
+    this.add
+      .text(x, y, label, {
+        fontFamily: 'sans-serif',
+        fontSize: `${Math.round(Phaser.Math.Clamp(height * 0.42, 21, 28))}px`,
+        color: '#fffaf0',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5)
+      .setDepth(14)
+
+    return this.add
+      .rectangle(x, y, width, height, 0xffffff, 0)
+      .setDepth(15)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerup', onClick)
+  }
+
   private createPanel(x: number, y: number, width: number, height: number, radius: number) {
     const graphics = this.add.graphics().setDepth(4)
     graphics.fillStyle(0x4b250c, 0.26)
@@ -1065,7 +1342,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     return textureKey
   }
 
-  private createHorizontalSlicedFrameTexture(
+  createHorizontalSlicedFrameTexture(
     sourceKey: string,
     width: number,
     height: number,
@@ -1266,6 +1543,268 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     )
   }
 
+  private showGuidePreview() {
+    this.clearCountdownOverlay()
+    this.clearGuideOverlay()
+    this.phase = 'GUIDE_PREVIEW'
+    this.aiRequestsEnabled = false
+    this.requestInFlight = false
+
+    const { width: vw, height: vh } = this.scale
+    const motion = this.motions[this.motionIndex]
+    const overlay = this.add.container(0, 0).setDepth(30)
+    const dim = this.add.rectangle(vw / 2, vh / 2, vw, vh, 0x24170f, 0.9)
+    const panelWidthRatio = vw < 1400 ? 0.86 : vw >= 2200 ? 0.72 : 0.8
+    const panelMaxW = vw >= 2200 ? 1500 : 1400
+    const panelW = Math.min(vw * panelWidthRatio, panelMaxW)
+    const panelH = Math.min(vh * 0.96, 1320)
+    const panelX = (vw - panelW) / 2
+    const panelY = (vh - panelH) / 2
+    const panel = this.add.graphics()
+    panel.fillStyle(0xf7dfaa, 0.98)
+    panel.fillRoundedRect(panelX, panelY, panelW, panelH, 22)
+    panel.lineStyle(4, 0x7a471c, 1)
+    panel.strokeRoundedRect(panelX, panelY, panelW, panelH, 22)
+    panel.lineStyle(2, 0xfff2c5, 0.86)
+    panel.strokeRoundedRect(panelX + 7, panelY + 7, panelW - 14, panelH - 14, 16)
+
+    const contentPadX = Math.round(Phaser.Math.Clamp(panelW * 0.014, 20, 28))
+    const topPad = Math.round(Phaser.Math.Clamp(panelH * 0.024, 18, 28))
+    const bottomPad = Math.round(Phaser.Math.Clamp(panelH * 0.024, 18, 28))
+    const rowGap = Math.round(Phaser.Math.Clamp(panelH * 0.028, 20, 34))
+    const headerH = Math.round(Phaser.Math.Clamp(panelH * 0.145, 124, 158))
+    const footerH = Math.round(Phaser.Math.Clamp(panelH * 0.095, 82, 100))
+    const headerTop = panelY + topPad
+    const headerCenterX = panelX + panelW / 2
+    const stepPillH = Math.round(Phaser.Math.Clamp(panelH * 0.04, 36, 42))
+    const progress = this.add
+      .text(
+        headerCenterX,
+        headerTop + stepPillH / 2,
+        `${this.motionIndex + 1} / ${this.motions.length}`,
+        {
+          fontFamily: 'sans-serif',
+          fontSize: `${Math.round(Phaser.Math.Clamp(panelH * 0.029, 22, 30))}px`,
+          color: '#4a3324',
+          fontStyle: 'bold',
+        },
+      )
+      .setOrigin(0.5)
+    const stepPillW = Math.max(100, progress.width + 36)
+    const stepPill = this.add.graphics()
+    stepPill.fillStyle(0xfff5d7, 0.94)
+    stepPill.fillRoundedRect(
+      headerCenterX - stepPillW / 2,
+      progress.y - stepPillH / 2,
+      stepPillW,
+      stepPillH,
+      stepPillH / 2,
+    )
+    stepPill.lineStyle(2, 0x744e2a, 0.35)
+    stepPill.strokeRoundedRect(
+      headerCenterX - stepPillW / 2,
+      progress.y - stepPillH / 2,
+      stepPillW,
+      stepPillH,
+      stepPillH / 2,
+    )
+    const motionTitle = this.add
+      .text(headerCenterX, headerTop + stepPillH + 54, motion.title, {
+        fontFamily: 'sans-serif',
+        fontSize: `${Math.round(Phaser.Math.Clamp(panelH * 0.061, 46, 66))}px`,
+        color: '#2f1a0c',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5)
+      .setMaxLines(1)
+    this.fitTextToWidth(motionTitle, panelW - contentPadX * 2, 66, 34)
+
+    const footerTop = panelY + panelH - bottomPad - footerH
+    const videoAreaY = headerTop + headerH + rowGap
+    const videoAreaH = Math.max(1, footerTop - rowGap - videoAreaY)
+    const maxGuideW = panelW - contentPadX * 2
+    const guideW = Math.min(maxGuideW, videoAreaH * (16 / 9))
+    const guideH = guideW * (9 / 16)
+    const guideX = panelX + panelW / 2 - guideW / 2
+    const guideY = videoAreaY + (videoAreaH - guideH) / 2
+    const guideFrame = this.add.graphics()
+    guideFrame.fillStyle(0xfff8df, 1)
+    guideFrame.fillRoundedRect(guideX, guideY, guideW, guideH, 24)
+    guideFrame.lineStyle(3, 0xb0753a, 0.88)
+    guideFrame.strokeRoundedRect(guideX, guideY, guideW, guideH, 24)
+    guideFrame.lineStyle(2, 0xffffff, 0.54)
+    guideFrame.strokeRoundedRect(guideX + 8, guideY + 8, guideW - 16, guideH - 16, 18)
+
+    const buttonW = Math.min(panelW * 0.24, 320)
+    const buttonH = Math.round(Phaser.Math.Clamp(footerH * 0.68, 64, 76))
+    const buttonY = footerTop + footerH / 2
+    const buttonBg = this.add.graphics()
+    buttonBg.fillStyle(0x2f9e58, 1)
+    buttonBg.fillRoundedRect(
+      panelX + panelW / 2 - buttonW / 2,
+      buttonY - buttonH / 2,
+      buttonW,
+      buttonH,
+      20,
+    )
+    buttonBg.lineStyle(2, 0xffffff, 0.38)
+    buttonBg.strokeRoundedRect(
+      panelX + panelW / 2 - buttonW / 2,
+      buttonY - buttonH / 2,
+      buttonW,
+      buttonH,
+      20,
+    )
+    const buttonText = this.add
+      .text(panelX + panelW / 2, buttonY, '시작하기', {
+        fontFamily: 'sans-serif',
+        fontSize: `${Math.round(Phaser.Math.Clamp(buttonH * 0.42, 26, 34))}px`,
+        color: '#ffffff',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5)
+    const hitArea = this.add
+      .rectangle(panelX + panelW / 2, buttonY, buttonW, buttonH, 0xffffff, 0)
+      .setInteractive({ useHandCursor: true })
+    hitArea.on('pointerup', () => this.handleGuideStart())
+
+    overlay.add([
+      dim,
+      panel,
+      stepPill,
+      progress,
+      motionTitle,
+      guideFrame,
+      buttonBg,
+      buttonText,
+      hitArea,
+    ])
+    this.guideOverlay = overlay
+  }
+
+  private handleGuideStart() {
+    if (!this.canReadCameraFrame()) {
+      return
+    }
+
+    this.showCountdown()
+  }
+
+  private handleReplayGuideVideo() {
+    if (this.phase !== 'TRACKING') return
+
+    if (this.motionStartedAtMs > 0) {
+      this.motionAccumulatedDurationMs += Math.max(0, Date.now() - this.motionStartedAtMs)
+      this.motionStartedAtMs = 0
+    }
+    this.aiRequestsEnabled = false
+    this.requestInFlight = false
+    this.resetFeedbackTts()
+    this.showGuidePreview()
+  }
+
+  private handleRestartCurrentMotion() {
+    if (this.phase !== 'TRACKING') return
+
+    this.aiRequestsEnabled = false
+    this.requestInFlight = false
+    this.isMotionAdvancing = false
+    this.motionStartedAtMs = 0
+    this.motionAccumulatedDurationMs = 0
+    this.aiState = createInitialAiState()
+    this.aiError = null
+    this.displayedFeedbackTitle = ''
+    this.feedbackTitleChangedAtMs = 0
+    this.displayedFeedbackDetail = ''
+    this.feedbackDetailChangedAtMs = 0
+    this.resetFeedbackTts()
+    this.renderMotion()
+    this.showCountdown()
+  }
+
+  private showCountdown() {
+    this.clearGuideOverlay()
+    this.clearCountdownOverlay()
+    this.phase = 'COUNTDOWN'
+    this.aiRequestsEnabled = false
+    this.requestInFlight = false
+
+    const { width: vw, height: vh } = this.scale
+    const overlay = this.add.container(0, 0).setDepth(31)
+    const dim = this.add.rectangle(vw / 2, vh / 2, vw, vh, 0x1b120d, 0.54)
+    const countdownLabelFontSize = Math.round(Phaser.Math.Clamp(vh * 0.095, 88, 128))
+    const guide = this.add
+      .text(
+        vw / 2,
+        vh / 2 - Math.round(Phaser.Math.Clamp(vh * 0.18, 136, 190)),
+        '천천히 준비해요',
+        {
+          fontFamily: 'sans-serif',
+          fontSize: `${countdownLabelFontSize}px`,
+          color: '#fff4d5',
+          fontStyle: 'bold',
+          stroke: '#4a2811',
+          strokeThickness: 5,
+        },
+      )
+      .setOrigin(0.5)
+      .setMaxLines(1)
+    this.fitTextToWidth(guide, vw * 0.9, countdownLabelFontSize, 64)
+    const countText = this.add
+      .text(vw / 2, vh / 2, String(GYMNASTICS_COUNTDOWN_SECONDS), {
+        fontFamily: 'sans-serif',
+        fontSize: `${Math.round(Phaser.Math.Clamp(vh * 0.25, 180, 260))}px`,
+        color: '#ffffff',
+        fontStyle: 'bold',
+        stroke: '#4a2811',
+        strokeThickness: 10,
+      })
+      .setOrigin(0.5)
+    overlay.add([dim, guide, countText])
+    this.countdownOverlay = overlay
+
+    for (let index = 0; index < GYMNASTICS_COUNTDOWN_SECONDS; index += 1) {
+      const timer = this.time.delayedCall(index * 1000, () => {
+        countText.setText(String(GYMNASTICS_COUNTDOWN_SECONDS - index))
+      })
+      this.countdownTimers.push(timer)
+    }
+
+    const completeTimer = this.time.delayedCall(GYMNASTICS_COUNTDOWN_SECONDS * 1000, () => {
+      this.beginTracking()
+    })
+    this.countdownTimers.push(completeTimer)
+  }
+
+  private beginTracking() {
+    this.clearCountdownOverlay()
+    this.phase = 'TRACKING'
+    this.aiRequestsEnabled = true
+    this.requestInFlight = false
+    this.isMotionAdvancing = false
+    this.motionStartedAtMs = Date.now()
+    if (this.sessionStartedAtMs <= 0) {
+      this.sessionStartedAtMs = this.motionStartedAtMs
+    }
+    this.renderMotion()
+  }
+
+  private clearGuideOverlay() {
+    this.guideOverlay?.destroy(true)
+    this.guideOverlay = undefined
+  }
+
+  private clearCountdownOverlay() {
+    this.clearCountdownTimers()
+    this.countdownOverlay?.destroy(true)
+    this.countdownOverlay = undefined
+  }
+
+  private clearCountdownTimers() {
+    this.countdownTimers.forEach(timer => timer.remove(false))
+    this.countdownTimers = []
+  }
+
   private logPoseDetectionMiss() {
     if (!import.meta.env.DEV || this.poseMissCount < 45) return
 
@@ -1305,20 +1844,14 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
       gradient.addColorStop(1, '#91511d')
       this.cameraContext.fillStyle = gradient
       this.cameraContext.fillRect(0, 0, this.cameraCanvas.width, this.cameraCanvas.height)
-      this.cameraContext.fillStyle = 'rgba(61, 34, 16, 0.75)'
-      this.cameraContext.font = 'bold 42px sans-serif'
-      this.cameraContext.textAlign = 'center'
-      this.cameraContext.fillText(
-        '카메라를 준비하고 있어요',
-        this.cameraCanvas.width / 2,
-        this.cameraCanvas.height / 2,
-      )
     }
 
     this.cameraTexture.refresh()
   }
 
   private evaluateCurrentPose() {
+    if (this.phase !== 'TRACKING') return
+
     const tracker = this.poseTracker
     if (!tracker) {
       this.updateRecognitionStatus(false)
@@ -1930,12 +2463,13 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     this.setFeedbackDetail(detail, { isProgressDetail: motionSpec.type === 'daniel' })
     this.updateHoldProgressUi(motionSpec)
     this.motionCounterText?.setText(
-      `${this.modeLabel} ${this.motionIndex + 1}/${this.motions.length}`,
+      `${this.motionIndex + 1}/${this.motions.length} ${this.motions[this.motionIndex].title}`,
     )
     this.motionTitleText?.setText(this.motions[this.motionIndex].title)
 
     this.fitTextToWidth(this.motionCounterText, this.motionCounterMaxWidth, this.headerFontSize, 14)
-    this.fitTextToWidth(this.motionTitleText, this.motionTitleMaxWidth, this.headerFontSize, 14)
+    this.fitTextToWidth(this.motionTitleText, this.motionTitleMaxWidth, 44, 28)
+    this.centerMotionTitleText()
     this.fitFeedbackTitleToOneLine()
     this.fitTextToWidth(
       this.feedbackTipTexts[0],
@@ -2087,29 +2621,13 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
   }
 
   private getDanielHoldDetail(motionSpec: DanielAiMotionSpec) {
-    const heldSeconds = Math.min(
-      motionSpec.targetHoldMs / 1000,
-      Math.max(0, this.aiState.holdDurationMs / 1000),
+    const targetSeconds = Math.max(1, Math.round(motionSpec.targetHoldMs / 1000))
+    const elapsedSeconds = Math.min(
+      targetSeconds,
+      Math.floor(Math.max(0, this.aiState.holdDurationMs / 1000)),
     )
-    const targetSeconds = motionSpec.targetHoldMs / 1000
-    const percent = Math.min(
-      100,
-      Math.round((this.aiState.holdDurationMs / motionSpec.targetHoldMs) * 100),
-    )
-    const compact = true
-    const veryCompact = this.holdStatusMaxWidth > 0 && this.holdStatusMaxWidth < 300
 
-    if (this.aiState.holdCompleted) {
-      return `${targetSeconds.toFixed(0)}초 완료`
-    }
-
-    return this.formatHoldStatusText({
-      elapsedSec: heldSeconds,
-      targetSec: targetSeconds,
-      percent,
-      compact,
-      veryCompact,
-    })
+    return `${elapsedSeconds}/${targetSeconds}\uCD08`
   }
 
   private getProgressDetailText(motionSpec: AiMotionSpec) {
@@ -2117,49 +2635,52 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
       return this.getDanielHoldDetail(motionSpec)
     }
 
-    return `${this.aiState.stepCount}/${motionSpec.targetSteps}회`
+    const completedReps = Math.min(this.aiState.stepCount, motionSpec.targetSteps)
+    return `${completedReps}/${motionSpec.targetSteps}\uD68C`
   }
 
-  private formatHoldStatusText({
-    elapsedSec,
-    targetSec,
-    percent,
-    compact = false,
-    veryCompact = false,
-  }: {
-    elapsedSec: number
-    targetSec: number
-    percent: number
-    compact?: boolean
-    veryCompact?: boolean
-  }) {
-    const elapsed = elapsedSec.toFixed(1)
-    const target = Math.round(targetSec)
-    const safePercent = Math.round(percent)
-
-    if (veryCompact) {
-      return `${elapsed}/${target}초`
-    }
-
-    if (compact) {
-      return `${elapsed}초 / ${target}초 (${safePercent}%)`
-    }
-
-    return `${elapsed}초 / ${target}초 (${safePercent}%)`
+  private clampProgressValue(value: number) {
+    if (!Number.isFinite(value)) return 0
+    return Phaser.Math.Clamp(value, 0, 1)
   }
 
   private updateHoldProgressUi(motionSpec: AiMotionSpec) {
-    const shouldShow = motionSpec.type === 'daniel' && this.saveState === 'idle'
+    const shouldShow = this.saveState === 'idle'
     this.holdProgressTrack?.setVisible(shouldShow)
     this.holdProgressBar?.setVisible(shouldShow)
     this.holdProgressText?.setVisible(false)
 
-    if (!shouldShow || motionSpec.type !== 'daniel') return
+    if (!shouldShow) return
 
-    const progress = Phaser.Math.Clamp(this.aiState.holdDurationMs / motionSpec.targetHoldMs, 0, 1)
-    this.holdProgressBar.setDisplaySize(this.holdProgressWidth * progress, 10)
-    this.holdProgressText.setText(this.aiState.holdCompleted ? '완료' : '자세를 계속 유지해요')
+    const progress =
+      motionSpec.type === 'daniel'
+        ? this.clampProgressValue(
+            this.aiState.holdDurationMs / Math.max(1, motionSpec.targetHoldMs),
+          )
+        : this.clampProgressValue(this.aiState.stepCount / Math.max(1, motionSpec.targetSteps))
+    this.holdProgressBar.setScale(progress, 1)
+    this.holdProgressText.setText('')
     this.holdProgressText?.setVisible(false)
+  }
+
+  private refreshMotionProgressDisplay() {
+    const motionSpec = this.getCurrentAiMotionSpec()
+    const progressDetail = this.getProgressDetailText(motionSpec)
+    const progressText = this.feedbackTipTexts[0]
+
+    if (progressText) {
+      this.displayedFeedbackDetail = progressDetail
+      this.feedbackDetailChangedAtMs = this.time.now
+      progressText.setText(progressDetail)
+      this.fitTextToWidth(
+        progressText,
+        this.holdStatusMaxWidth,
+        FEEDBACK_TIMER_MAX_FONT_SIZE,
+        FEEDBACK_TIMER_MIN_FONT_SIZE,
+      )
+    }
+
+    this.updateHoldProgressUi(motionSpec)
   }
 
   private recordCurrentMotionResult() {
@@ -2170,7 +2691,12 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
       return
     }
 
-    const durationSec = Math.max(0, Math.round((Date.now() - this.motionStartedAtMs) / 1000))
+    const activeDurationMs =
+      this.motionStartedAtMs > 0 ? Math.max(0, Date.now() - this.motionStartedAtMs) : 0
+    const durationSec = Math.max(
+      0,
+      Math.round((this.motionAccumulatedDurationMs + activeDurationMs) / 1000),
+    )
     const accuracy = Phaser.Math.Clamp(this.aiState.accuracy, 0, 1)
     const completedReps =
       motionSpec.type === 'daniel'
@@ -2199,7 +2725,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
       throw new Error('환자 정보가 올바르지 않습니다.')
     }
 
-    const durationSec = Math.max(0, Math.round((Date.now() - this.sessionStartedAtMs) / 1000))
+    const durationSec = this.motionResults.reduce((total, result) => total + result.durationSec, 0)
     return {
       patientProfileId,
       exerciseType: this.exerciseType,
@@ -2215,6 +2741,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
 
     this.recordCurrentMotionResult()
     this.hasSubmittedSession = true
+    this.phase = 'SESSION_COMPLETE'
     this.saveState = 'saving'
     this.isMotionAdvancing = true
     this.aiRequestsEnabled = false
@@ -2287,6 +2814,9 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     if (!isComplete || this.isMotionAdvancing) return
 
     this.isMotionAdvancing = true
+    this.phase = 'MOTION_COMPLETE'
+    this.aiRequestsEnabled = false
+    this.requestInFlight = false
     this.recordCurrentMotionResult()
     this.setFeedbackTitle('완료!', { force: true })
     this.time.delayedCall(700, () => {
@@ -2311,8 +2841,10 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
       this.feedbackTitleChangedAtMs = 0
       this.displayedFeedbackDetail = ''
       this.feedbackDetailChangedAtMs = 0
-      this.motionStartedAtMs = Date.now()
+      this.motionStartedAtMs = 0
+      this.motionAccumulatedDurationMs = 0
       this.renderMotion()
+      this.showGuidePreview()
       return
     }
 
@@ -2330,6 +2862,8 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     this.feedbackTitleChangedAtMs = 0
     this.displayedFeedbackDetail = ''
     this.feedbackDetailChangedAtMs = 0
+    this.motionStartedAtMs = 0
+    this.motionAccumulatedDurationMs = 0
     this.renderMotion()
   }
 
@@ -2366,12 +2900,15 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
 
   private renderMotion() {
     const motion = this.motions[this.motionIndex]
-    this.motionCounterText?.setText(this.modeLabel)
+    this.motionCounterText?.setText(
+      `${this.motionIndex + 1}/${this.motions.length} ${motion.title}`,
+    )
     this.motionTitleText?.setText(motion.title)
     this.timerText?.setText(this.formatTime(this.remainingSeconds))
     this.feedbackTitleText?.setText(this.isCameraRecognized ? '좋아요!' : '기다릴게요')
     this.fitTextToWidth(this.motionCounterText, this.motionCounterMaxWidth, this.headerFontSize, 14)
-    this.fitTextToWidth(this.motionTitleText, this.motionTitleMaxWidth, this.headerFontSize, 14)
+    this.fitTextToWidth(this.motionTitleText, this.motionTitleMaxWidth, 44, 28)
+    this.centerMotionTitleText()
     this.setFeedbackTitle(this.isCameraRecognized ? '좋아요!' : '전신이 보이게 서요', {
       force: true,
     })
@@ -2402,6 +2939,13 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
       this.feedbackFrameBounds.y + this.feedbackFrameBounds.height * FEEDBACK_MAIN_Y_RATIO
 
     this.feedbackTitleText.setPosition(centerX, mainY)
+  }
+
+  private centerMotionTitleText() {
+    if (!this.motionTitleText) return
+
+    this.motionTitleText.setPosition(this.motionTitleCenterX, this.motionTitleCenterY)
+    this.motionTitleText.setOrigin(0.5, 0.46)
   }
 
   private fitFeedbackTitleToOneLine() {
@@ -2461,6 +3005,8 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     this.poseTracker = null
     this.requestInFlight = false
     this.resetFeedbackTts()
+    this.clearGuideOverlay()
+    this.clearCountdownOverlay()
   }
 }
 
