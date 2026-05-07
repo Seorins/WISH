@@ -13,6 +13,7 @@ import {
 } from '@/game/entities/player'
 import { fadeToScene } from '@/game/systems/sceneTransition'
 import { getPlayerMoveSpeed } from '@/game/settings/gameSettings'
+import { createSceneWeatherLayer } from '@/features/weather/phaserWeatherLayer'
 import {
   createSimpleDialogUi,
   fadeSimpleDialog,
@@ -117,6 +118,7 @@ export class VillageScene extends Phaser.Scene {
         .setScale(mapScale)
         .setDepth(0)
     })
+    createSceneWeatherLayer(this)
 
     this.physics.world.setBounds(0, 0, W, H)
     this.cameras.main.setBounds(0, 0, W, H)

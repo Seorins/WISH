@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { createSceneWeatherLayer } from '@/features/weather/phaserWeatherLayer'
 
 type CoverBackgroundOptions = {
   depth?: number
@@ -26,6 +27,8 @@ export function addCoverBackground(
     .setPosition(width / 2 - focalOffsetX, height / 2 - focalOffsetY)
     .setScale(scale)
     .setDepth(depth)
+
+  createSceneWeatherLayer(scene)
 
   return background
 }

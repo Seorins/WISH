@@ -12,6 +12,7 @@ import {
 } from '@/game/entities/player'
 import { fadeToScene } from '@/game/systems/sceneTransition'
 import { getPlayerMoveSpeed } from '@/game/settings/gameSettings'
+import { createSceneWeatherLayer } from '@/features/weather/phaserWeatherLayer'
 import {
   createFloatingInteractionIcon,
   loadInteractionIcons,
@@ -187,6 +188,7 @@ export class GymnasticsSelectScene extends Phaser.Scene {
     this.target = null
 
     this.backgroundDisplayArea = this.addContainBackground(GYMNASTICS_BACKGROUND_TEXTURE_KEY)
+    createSceneWeatherLayer(this)
     this.physics.world.setBounds(0, 0, vw, vh)
 
     const npcPosition = this.toBackgroundPoint(
