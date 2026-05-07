@@ -90,16 +90,10 @@ export class MusicRhythmScene extends Phaser.Scene {
   private isLeaving = false
   private cameraBackground: CameraBackground | null = null
   private handTracker: HandTracker | null = null
-  private handCursor: Phaser.GameObjects.Graphics | null = null
-  private laneFingerInside: boolean[] = [false, false, false, false]
-  // 손가락 좌표 적응형 스무딩 (One Euro Filter)
-  // - minCutoff 작게 → 정지 시 강한 평활화 (떨림 거의 0)
-  // - beta 크게  → 빠른 움직임에 즉각 반응
-  private readonly fingerFilter = new OneEuroPointFilter({
-    minCutoff: 0.5,
-    beta: 0.02,
-    dCutoff: 1,
-  })
+  // 양손 손바닥 추적: handedness("Left"/"Right") 키로 손당 커서 + 필터 1개씩
+  private handCursors: Map<string, Phaser.GameObjects.Graphics> = new Map()
+  private palmFilters: Map<string, OneEuroPointFilter> = new Map()
+  private lanePalmInside: boolean[] = [false, false, false, false]
 
   private readonly handleSpaceDown = () => {
     if (this.isFinished) {
@@ -157,8 +151,8 @@ export class MusicRhythmScene extends Phaser.Scene {
     // depth 3+: 게임 UI (또렷)
     addCoverBackground(this, this.getRhythmBackgroundKey(), { depth: 0 }).setAlpha(1)
 
-    // HandTracker가 비디오 + MediaPipe HandLandmarker 둘 다 관리
-    this.handTracker = new HandTracker()
+    // HandTracker가 비디오 + MediaPipe HandLandmarker 둘 다 관리 — 양손 추적
+    this.handTracker = new HandTracker({ numHands: 2 })
     void this.handTracker.start().catch(err => {
       console.warn('[MusicRhythmScene] hand tracker start failed:', err)
     })
@@ -200,8 +194,9 @@ export class MusicRhythmScene extends Phaser.Scene {
       this.handTracker = null
       this.cameraBackground?.destroy()
       this.cameraBackground = null
-      this.handCursor?.destroy()
-      this.handCursor = null
+      this.handCursors.forEach(c => c.destroy())
+      this.handCursors.clear()
+      this.palmFilters.clear()
       this.keyBindings.forEach(key => key.removeAllListeners())
       this.input.keyboard?.off('keydown-SPACE', this.handleSpaceDown)
       this.input.keyboard?.off('keydown-ESC', this.handleEscDown)
@@ -236,74 +231,110 @@ export class MusicRhythmScene extends Phaser.Scene {
     if (!tracker || !tracker.isStarted) return
 
     const result = tracker.detect()
-    const hand = result.hands[0]
 
-    if (!hand) {
-      this.handCursor?.setVisible(false)
-      // 손이 사라지면 모든 lane 상태 + 필터 리셋
-      this.laneFingerInside.fill(false)
-      this.fingerFilter.reset()
+    if (result.hands.length === 0) {
+      // 손이 모두 사라지면 모든 커서 숨김 + 모든 필터 리셋
+      this.handCursors.forEach(cursor => cursor.setVisible(false))
+      this.palmFilters.forEach(filter => filter.reset())
+      this.lanePalmInside.fill(false)
       return
     }
 
-    // landmark 8 = 검지 손가락 끝
-    const indexTip = hand.landmarks[8]
-    if (!indexTip) return
-
     const { width: vw, height: vh } = this.scale
-    // 카메라가 좌우 미러링되어 표시되므로 x도 뒤집어서 화면 좌표에 맞춤
-    const rawX = (1 - indexTip.x) * vw
-    const rawY = indexTip.y * vh
-
-    // One Euro Filter 로 떨림 제거 + 빠른 움직임 추적
-    const smoothed = this.fingerFilter.filter({ x: rawX, y: rawY })
-    const sx = smoothed.x
-    const sy = smoothed.y
-
-    this.drawHandCursor(sx, sy)
-
-    // 손가락이 패드 원에 걸쳐있고 + 그 레인에 판정 윈도우 안의 노트가 있으면 자동 탭
-    // (손가락이 머무는 동안 새 노트가 들어오는 순간마다 hit, 빈 입력 누적 X)
     const elapsedMs = this.getSongTimeMs()
-    for (let lane = 0; lane < LANE_COUNT; lane++) {
-      const padX = this.getLaneCenterX(lane as RhythmLane, this.hitLineY)
-      const padY = this.hitLineY
-      const dx = sx - padX
-      const dy = sy - padY
-      const triggerR = this.padRadius * 1.4 // 손가락 정확도 보정
-      const inside = dx * dx + dy * dy <= triggerR * triggerR
-      this.laneFingerInside[lane] = inside
-      if (!inside) continue
+    const activeHandIds = new Set<string>()
+    const laneAggregate: boolean[] = [false, false, false, false]
 
-      const hasHittableNote = this.activeNotes.some(
-        an =>
-          !an.resolved &&
-          an.note.lane === lane &&
-          Math.abs(an.note.timeMs - elapsedMs) <= MISS_WINDOW_MS,
-      )
-      if (hasHittableNote) {
-        this.handleLaneInput(lane as RhythmLane)
+    result.hands.forEach((hand, index) => {
+      // handedness 가 안정적인 손 키 (Left/Right). 없으면 인덱스 fallback.
+      const handId = hand.handedness ?? `hand-${index}`
+      activeHandIds.add(handId)
+
+      // 손바닥 중심 = 5/9/13/17 (검지·중지·약지·새끼 MCP) 평균
+      const lm = hand.landmarks
+      const a = lm[5]
+      const b = lm[9]
+      const c = lm[13]
+      const d = lm[17]
+      if (!a || !b || !c || !d) return
+
+      const px = (a.x + b.x + c.x + d.x) / 4
+      const py = (a.y + b.y + c.y + d.y) / 4
+
+      // 카메라가 좌우 미러링되어 표시되므로 x 뒤집어서 화면 좌표에 맞춤
+      const rawX = (1 - px) * vw
+      const rawY = py * vh
+
+      let filter = this.palmFilters.get(handId)
+      if (!filter) {
+        filter = new OneEuroPointFilter({ minCutoff: 0.5, beta: 0.02, dCutoff: 1 })
+        this.palmFilters.set(handId, filter)
       }
-    }
+      const smoothed = filter.filter({ x: rawX, y: rawY })
+      const sx = smoothed.x
+      const sy = smoothed.y
+
+      this.drawHandCursor(handId, sx, sy)
+
+      // 손바닥이 패드 위에 있고 그 레인에 판정 윈도우 안의 노트가 있으면 자동 탭
+      for (let lane = 0; lane < LANE_COUNT; lane++) {
+        const padX = this.getLaneCenterX(lane as RhythmLane, this.hitLineY)
+        const padY = this.hitLineY
+        const dx = sx - padX
+        const dy = sy - padY
+        const triggerR = this.padRadius * 1.8 // 손바닥 사이즈 + 정확도 보정
+        const inside = dx * dx + dy * dy <= triggerR * triggerR
+        if (!inside) continue
+
+        laneAggregate[lane] = true
+
+        const hasHittableNote = this.activeNotes.some(
+          an =>
+            !an.resolved &&
+            an.note.lane === lane &&
+            Math.abs(an.note.timeMs - elapsedMs) <= MISS_WINDOW_MS,
+        )
+        if (hasHittableNote) {
+          this.handleLaneInput(lane as RhythmLane)
+        }
+      }
+    })
+
+    this.lanePalmInside = laneAggregate
+
+    // 이 프레임에 보이지 않는 손은 커서 숨기고 필터 리셋
+    this.handCursors.forEach((cursor, id) => {
+      if (!activeHandIds.has(id)) cursor.setVisible(false)
+    })
+    this.palmFilters.forEach((filter, id) => {
+      if (!activeHandIds.has(id)) filter.reset()
+    })
   }
 
-  private drawHandCursor(x: number, y: number) {
-    if (!this.handCursor) {
-      this.handCursor = this.add.graphics().setDepth(45).setScrollFactor(0)
+  private drawHandCursor(handId: string, x: number, y: number) {
+    let g = this.handCursors.get(handId)
+    if (!g) {
+      g = this.add.graphics().setDepth(45).setScrollFactor(0)
+      this.handCursors.set(handId, g)
     }
-    const g = this.handCursor
+    // 손마다 색을 다르게 — Left=cyan, Right=magenta. 그 외는 cyan fallback.
+    const tint = handId === 'Right' ? 0xff6fbd : 0x4fd8ff
     g.setVisible(true)
     g.clear()
-    // 외곽 글로우
-    for (let i = 0; i < 6; i++) {
-      g.fillStyle(0x4fd8ff, 0.04)
-      g.fillCircle(x, y, 22 - i * 2)
+    // 손바닥 사이즈 글로우 (검지 끝보다 크게)
+    for (let i = 0; i < 8; i++) {
+      g.fillStyle(tint, 0.035)
+      g.fillCircle(x, y, 44 - i * 3)
     }
-    // 중심 점
+    // 손바닥 중앙 부드러운 fill
+    g.fillStyle(tint, 0.18)
+    g.fillCircle(x, y, 26)
+    // 외곽 링
+    g.lineStyle(2.5, tint, 0.95)
+    g.strokeCircle(x, y, 26)
+    // 중심 작은 점
     g.fillStyle(0xffffff, 0.95)
-    g.fillCircle(x, y, 6)
-    g.lineStyle(2, 0x4fd8ff, 1)
-    g.strokeCircle(x, y, 10)
+    g.fillCircle(x, y, 5)
   }
 
   private shouldFinishRound(elapsedMs: number) {
@@ -338,9 +369,9 @@ export class MusicRhythmScene extends Phaser.Scene {
     this.isLeaving = false
     this.cameraBackground = null
     this.handTracker = null
-    this.handCursor = null
-    this.laneFingerInside = [false, false, false, false]
-    this.fingerFilter.reset()
+    this.handCursors = new Map()
+    this.palmFilters = new Map()
+    this.lanePalmInside = [false, false, false, false]
   }
 
   private createStageBackdrop(vw: number, vh: number) {
