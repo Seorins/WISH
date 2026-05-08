@@ -10,6 +10,8 @@ export type MusicResultRequest = {
   missCount: number
   totalNotes: number
   playedDurationMs: number
+  videoKey?: string
+  thumbKey?: string
 }
 
 export type MusicResult = {
@@ -25,8 +27,30 @@ export type MusicResult = {
   rank: string
   playedDurationMs: number
   playedAt: string
+  videoKey: string | null
+  thumbKey: string | null
   isNewBest: boolean
   previousBestScore: number | null
+}
+
+export type MusicResultDetail = {
+  id: number
+  chartId: string
+  chartTitle: string
+  score: number
+  maxCombo: number
+  perfectCount: number
+  goodCount: number
+  missCount: number
+  totalNotes: number
+  accuracy: number
+  rank: string
+  playedDurationMs: number
+  playedAt: string
+  videoKey: string | null
+  thumbKey: string | null
+  videoUrl: string | null
+  thumbUrl: string | null
 }
 
 export type MusicBestResult = {
@@ -40,6 +64,11 @@ export type MusicBestResult = {
 
 export async function saveMusicResult(request: MusicResultRequest) {
   const response = await apiClient.post<ApiResponse<MusicResult>>('/music/results', request)
+  return response.data
+}
+
+export async function getMusicResult(id: number) {
+  const response = await apiClient.get<ApiResponse<MusicResultDetail>>(`/music/results/${id}`)
   return response.data
 }
 
