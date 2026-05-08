@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { pickSupportedMimeType, recordCanvas } from '../game/motion/canvasRecorder'
+import { extractThumbnailFromVideoBlob } from '../game/motion/extractThumbnail'
 
 const CANVAS_WIDTH = 640
 const CANVAS_HEIGHT = 360
@@ -17,6 +18,10 @@ function CanvasRecorderDebugPage() {
   const [resultUrl, setResultUrl] = useState<string | null>(null)
   const [resultMime, setResultMime] = useState<string | null>(null)
   const [resultSizeKb, setResultSizeKb] = useState<number | null>(null)
+  const [thumbUrl, setThumbUrl] = useState<string | null>(null)
+  const [thumbSizeKb, setThumbSizeKb] = useState<number | null>(null)
+  const [thumbDimensions, setThumbDimensions] = useState<string | null>(null)
+  const [thumbError, setThumbError] = useState<string | null>(null)
   const [elapsedMs, setElapsedMs] = useState(0)
 
   useEffect(() => {
@@ -79,7 +84,14 @@ function CanvasRecorderDebugPage() {
       URL.revokeObjectURL(resultUrl)
       setResultUrl(null)
     }
+    if (thumbUrl) {
+      URL.revokeObjectURL(thumbUrl)
+      setThumbUrl(null)
+    }
     setErrorMessage(null)
+    setThumbError(null)
+    setThumbDimensions(null)
+    setThumbSizeKb(null)
     setState('recording')
     setElapsedMs(0)
 
@@ -90,6 +102,19 @@ function CanvasRecorderDebugPage() {
       setResultMime(result.mimeType)
       setResultSizeKb(Math.round(result.blob.size / 1024))
       setState('done')
+
+      // 영상 디코드 직후 첫 안정 프레임을 썸네일로 추출
+      try {
+        const thumb = await extractThumbnailFromVideoBlob(result.blob, {
+          atSec: 0.5,
+          maxWidth: 480,
+        })
+        setThumbUrl(URL.createObjectURL(thumb.blob))
+        setThumbSizeKb(Math.round(thumb.blob.size / 1024))
+        setThumbDimensions(`${thumb.width}×${thumb.height}`)
+      } catch (thumbErr) {
+        setThumbError(thumbErr instanceof Error ? thumbErr.message : String(thumbErr))
+      }
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : String(error))
       setState('error')
@@ -198,6 +223,36 @@ function CanvasRecorderDebugPage() {
             playsInline
             style={{ width: '100%', borderRadius: 12, border: '1px solid #2a2840' }}
           />
+
+          <div style={{ marginTop: 8, color: '#a8a4d0', fontSize: 14 }}>
+            <strong style={{ color: '#e7e5ff' }}>썸네일</strong>{' '}
+            {thumbDimensions && thumbSizeKb !== null && (
+              <span>
+                · {thumbDimensions} · <strong>{thumbSizeKb} KB</strong>
+              </span>
+            )}
+          </div>
+          {thumbError && (
+            <div style={{ color: '#fca5a5', fontSize: 14 }}>
+              <strong>썸네일 오류:</strong> {thumbError}
+            </div>
+          )}
+          {thumbUrl && (
+            <img
+              src={thumbUrl}
+              alt="추출된 썸네일"
+              style={{
+                width: '100%',
+                maxWidth: 480,
+                borderRadius: 12,
+                border: '1px solid #2a2840',
+              }}
+            />
+          )}
+          {!thumbUrl && !thumbError && (
+            <div style={{ color: '#a8a4d0', fontSize: 14 }}>썸네일 추출 중...</div>
+          )}
+
           <button
             onClick={handleDownload}
             style={{
