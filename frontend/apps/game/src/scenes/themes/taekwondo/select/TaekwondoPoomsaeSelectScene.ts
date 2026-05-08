@@ -50,6 +50,10 @@ type TaekwondoPoomsaeSelectData = {
   beltColor?: TaekwondoBeltColor
 }
 
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error)
+}
+
 const ASSET_KEYS = {
   background: 'taekwondo-room-background',
   guideArrow: 'taekwondo-guide-arrow',
@@ -265,7 +269,9 @@ export class TaekwondoPoomsaeSelectScene extends Phaser.Scene {
         )
       }
     } catch (error) {
-      console.warn('[TaekwondoPoomsaeSelectScene] Failed to load poomsae readiness.', error)
+      console.warn('[TaekwondoPoomsaeSelectScene] Failed to load poomsae readiness.', {
+        message: getErrorMessage(error),
+      })
       if (this.canUpdatePoomsaeCards()) {
         this.poomsaeOptions = this.poomsaeOptions.map(option => ({
           ...option,
@@ -298,6 +304,10 @@ export class TaekwondoPoomsaeSelectScene extends Phaser.Scene {
 
   private canUpdatePoomsaeCards() {
     return !this.isSceneShuttingDown && this.scene.isActive() && this.optionCards.length > 0
+  }
+
+  private getLatestOption(optionId: string) {
+    return this.poomsaeOptions.find(option => option.id === optionId)
   }
 
   private createHorizontalOptionList(vw: number, vh: number) {
@@ -433,10 +443,11 @@ export class TaekwondoPoomsaeSelectScene extends Phaser.Scene {
 
     hitArea.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       this.startDrag(pointer)
-      this.updateSelection(card.option.id)
+      this.updateSelection(card.container.getData('optionId'))
     })
     hitArea.on('pointerup', () => {
-      if (this.selectedOptionId !== card.option.id) {
+      const optionId = card.container.getData('optionId')
+      if (this.selectedOptionId !== optionId) {
         return
       }
 
@@ -446,11 +457,14 @@ export class TaekwondoPoomsaeSelectScene extends Phaser.Scene {
       }
 
       this.clearSelection()
-      void this.startPoomsaePractice(card.option)
+      const latestOption = this.getLatestOption(optionId)
+      if (latestOption) {
+        this.startPoomsaePractice(latestOption)
+      }
     })
     hitArea.on('pointerupoutside', () => this.clearSelection())
     hitArea.on('pointerout', () => {
-      if (this.selectedOptionId === card.option.id) {
+      if (this.selectedOptionId === card.container.getData('optionId')) {
         this.clearSelection()
         return
       }
