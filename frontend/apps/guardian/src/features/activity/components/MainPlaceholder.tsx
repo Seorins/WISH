@@ -32,37 +32,26 @@ const TONE_CLASS = {
 export function MainPlaceholder() {
   return (
     <>
-      <h2 className={styles.pageTitle}>활동 결과</h2>
-
       <section className={styles.heroCard}>
-        <div className={styles.media} aria-label="활동 영상 영역" />
-        <div className={styles.heroMeta}>
-          <span className={styles.tag}>음악실</span>
-          <h3 className={styles.songTitle}>리듬 따라치기</h3>
-          <div className={styles.timeRow}>
-            <span aria-hidden>🕐</span>
-            <span>오전 10:20</span>
-            <span aria-hidden className={styles.dot}>
-              ·
-            </span>
-            <span>8분</span>
-          </div>
-          <p className={styles.description}>노래를 고르고 리듬에 맞춰 실로폰을 연주했어요.</p>
-        </div>
-        <aside className={styles.gradePanel}>
-          <div className={styles.gradeRow}>
-            <span className={styles.gradeLabel}>선택한 노래</span>
-            <span className={styles.gradeSong}>♪ 반짝반짝 작은별</span>
-          </div>
-          <div className={styles.gradeDivider} aria-hidden />
-          <div className={styles.gradeRow}>
-            <span className={styles.gradeLabel}>활동 결과</span>
-            <div className={styles.gradeBadge}>
-              <span className={styles.gradeBig}>S 등급</span>
-              <span aria-hidden>🏅</span>
+        <header className={styles.heroHeader}>
+          <h2 className={styles.heroTitle}>활동 결과</h2>
+        </header>
+        <div className={styles.heroBody}>
+          <div className={styles.media} aria-label="활동 영상 영역" />
+          <div className={styles.heroMeta}>
+            <span className={styles.tag}>음악실</span>
+            <h3 className={styles.songTitle}>리듬 따라치기</h3>
+            <div className={styles.timeRow}>
+              <span aria-hidden>🕐</span>
+              <span>오전 10:20</span>
+              <span aria-hidden className={styles.dot}>
+                ·
+              </span>
+              <span>8분</span>
             </div>
+            <p className={styles.description}>노래를 고르고 리듬에 맞춰 실로폰을 연주했어요.</p>
           </div>
-        </aside>
+        </div>
       </section>
 
       <section className={styles.statRow}>

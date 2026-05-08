@@ -1,20 +1,36 @@
 /* 한 화면에 다 들어오게 — 패딩/폰트/간격 모두 콤팩트 톤 */
 
-.pageTitle {
-  font-size: 22px;
-  font-weight: 800;
-  color: var(--dash-color-text-strong);
-  margin: 0 0 0 4px;
-}
-
-/* ── Hero (3컬럼: 미디어 / 메타+설명 / 등급 패널) ── */
+/* ── Hero (제목 + 미디어 + 메타) — 한 카드. flex:1 로 사이드 높이까지 늘림 ── */
 .heroCard {
   background: var(--dash-color-surface);
   border-radius: var(--dash-radius-card);
   box-shadow: var(--dash-shadow-card);
   padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.heroHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.heroTitle {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--dash-color-text-strong);
+  margin: 0;
+}
+
+.heroBody {
+  flex: 1 1 auto;
+  min-height: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 0.85fr);
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
   gap: 16px;
   align-items: stretch;
 }
@@ -22,13 +38,13 @@
 .media {
   background: linear-gradient(135deg, #f1edff 0%, #ffeaf3 100%);
   border-radius: 18px;
-  min-height: 220px;
+  min-height: 200px;
 }
 
 .heroMeta {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
   justify-content: center;
   min-width: 0;
 }
@@ -70,57 +86,6 @@
   font-size: 13px;
   color: var(--dash-color-text-muted);
   line-height: 1.5;
-}
-
-/* ── Grade panel (선택한 노래 + S등급) ── */
-.gradePanel {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 14px;
-  border-radius: 18px;
-  background: linear-gradient(180deg, #f7f4ff 0%, #ffffff 100%);
-  border: 1.5px dashed var(--dash-color-border-strong, #ddd7ee);
-}
-
-.gradeRow {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.gradeLabel {
-  font-size: 11.5px;
-  font-weight: 700;
-  color: var(--dash-color-text-muted);
-}
-
-.gradeSong {
-  font-size: 13.5px;
-  font-weight: 700;
-  color: var(--dash-color-text-strong);
-}
-
-.gradeDivider {
-  height: 1px;
-  background: var(--dash-color-border, #ece9f5);
-  margin: 2px 0;
-}
-
-.gradeBadge {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.gradeBig {
-  display: inline-block;
-  padding: 6px 14px;
-  border-radius: 999px;
-  background: var(--dash-gradient-primary, linear-gradient(135deg, #a892ff, #7c5cff));
-  color: #fff;
-  font-size: 16px;
-  font-weight: 800;
 }
 
 /* ── Stat row (4 icon-cards) ── */
