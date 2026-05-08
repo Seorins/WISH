@@ -1,3 +1,6 @@
+import gisungImg from '@/assets/gisung.png'
+import rumiImg from '@/assets/rumi.png'
+import seokjaeImg from '@/assets/seokjae.png'
 import styles from './SidebarPlaceholder.module.css'
 
 type ActivityStatus = 'done' | 'planned'
@@ -6,8 +9,7 @@ type ActivityItem = {
   id: string
   name: string
   status: ActivityStatus
-  /** 후속 PR 에서 캐릭터 이미지 URL 로 교체 */
-  avatarPlaceholderColor: string
+  avatarUrl: string
 }
 
 const STATUS_LABEL: Record<ActivityStatus, string> = {
@@ -20,11 +22,10 @@ const STATUS_CLASS: Record<ActivityStatus, string> = {
   planned: 'statusPlanned',
 }
 
-// 활동별 캐릭터 이미지가 디자인에서 나오면 avatarUrl 로 교체
 const PLACEHOLDER_ITEMS: ActivityItem[] = [
-  { id: 'music', name: '음악', status: 'done', avatarPlaceholderColor: '#e3dcff' },
-  { id: 'art', name: '미술', status: 'planned', avatarPlaceholderColor: '#fff1e1' },
-  { id: 'pe', name: '체육', status: 'planned', avatarPlaceholderColor: '#d4f3e5' },
+  { id: 'music', name: '음악', status: 'done', avatarUrl: gisungImg },
+  { id: 'art', name: '미술', status: 'planned', avatarUrl: rumiImg },
+  { id: 'taekwondo', name: '태권도', status: 'planned', avatarUrl: seokjaeImg },
 ]
 
 /**
@@ -45,11 +46,9 @@ export function SidebarPlaceholder() {
               type="button"
               className={`${styles.item} ${isActive ? styles.itemActive : ''}`}
             >
-              <span
-                className={styles.avatar}
-                style={{ background: item.avatarPlaceholderColor }}
-                aria-hidden
-              />
+              <span className={styles.avatar} aria-hidden>
+                <img src={item.avatarUrl} alt="" className={styles.avatarImg} />
+              </span>
               <span className={styles.meta}>
                 <span className={styles.name}>{item.name}</span>
                 <span className={`${styles.status} ${styles[STATUS_CLASS[item.status]]}`}>
