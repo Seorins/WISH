@@ -4,9 +4,10 @@ import java.time.LocalDateTime;
 
 import com.comong.backend.domain.music.entity.MusicResult;
 
-public record MusicResultResponse(
+public record MusicResultDetailResponse(
         Long id,
         String chartId,
+        String chartTitle,
         int score,
         int maxCombo,
         int perfectCount,
@@ -19,14 +20,15 @@ public record MusicResultResponse(
         LocalDateTime playedAt,
         String videoKey,
         String thumbKey,
-        boolean isNewBest,
-        Integer previousBestScore) {
+        String videoUrl,
+        String thumbUrl) {
 
-    public static MusicResultResponse of(
-            MusicResult result, boolean isNewBest, Integer previousBestScore) {
-        return new MusicResultResponse(
+    public static MusicResultDetailResponse of(
+            MusicResult result, String videoUrl, String thumbUrl) {
+        return new MusicResultDetailResponse(
                 result.getId(),
                 result.getMusicChart().getChartId(),
+                result.getMusicChart().getTitle(),
                 result.getScore(),
                 result.getMaxCombo(),
                 result.getPerfectCount(),
@@ -39,7 +41,7 @@ public record MusicResultResponse(
                 result.getPlayedAt(),
                 result.getVideoKey(),
                 result.getThumbKey(),
-                isNewBest,
-                previousBestScore);
+                videoUrl,
+                thumbUrl);
     }
 }

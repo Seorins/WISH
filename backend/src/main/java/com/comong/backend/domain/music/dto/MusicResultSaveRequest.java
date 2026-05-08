@@ -4,6 +4,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
+import jakarta.validation.constraints.Size;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
@@ -17,6 +18,17 @@ public record MusicResultSaveRequest(
                 Integer goodCount,
         @Schema(description = "Miss 판정 개수", example = "10") @NotNull @PositiveOrZero
                 Integer missCount,
-        @Schema(description = "전체 노트 수", example = "175") @NotNull @Positive Integer totalNotes,
+        @Schema(description = "전체 노트 수", example = "175") @NotNull @Positive
+                Integer totalNotes,
         @Schema(description = "실제 플레이 시간(ms)", example = "96196") @NotNull @PositiveOrZero
-                Integer playedDurationMs) {}
+                Integer playedDurationMs,
+        @Schema(
+                        description = "음악 결과 영상 S3 object key",
+                        example = "dev/music/results/1/550e8400-e29b-41d4-a716-446655440000/video.webm")
+                @Size(max = 1024)
+                String videoKey,
+        @Schema(
+                        description = "음악 결과 썸네일 S3 object key",
+                        example = "dev/music/results/1/550e8400-e29b-41d4-a716-446655440000/thumb.jpg")
+                @Size(max = 1024)
+                String thumbKey) {}

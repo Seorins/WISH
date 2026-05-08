@@ -1,8 +1,5 @@
 package com.comong.backend.global.config;
 
-import java.util.Arrays;
-import java.util.stream.Stream;
-
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -94,15 +91,10 @@ public class SecurityConfig {
         // storage.type=s3 환경에서는 storage.local 자체가 null 일 수 있다 (로컬 정적 핸들러도 비활성).
         // 그 경우 storage prefix permit 자체가 의미 없으므로 정적 엔드포인트만 노출한다.
         StorageProperties.Local local = storageProperties.local();
-        String[] genericPublicEndpoints =
+        String[] localPublicUploadPatterns =
                 local == null
-                        ? STATIC_PUBLIC_ENDPOINTS
-                        : Stream.concat(
-                                        Arrays.stream(STATIC_PUBLIC_ENDPOINTS),
-                                        Stream.of(
-                                                stripTrailingSlash(local.publicUrlPrefix())
-                                                        + "/**"))
-                                .toArray(String[]::new);
+                        ? new String[0]
+                        : new String[] {stripTrailingSlash(local.publicUrlPrefix()) + "/**"};
 
         http.csrf(AbstractHttpConfigurer::disable)
                 .cors(Customizer.withDefaults())
@@ -113,8 +105,15 @@ public class SecurityConfig {
                 .authorizeHttpRequests(
                         auth ->
                                 auth
-                                        // 1. 인증/문서/헬스체크/스토리지 정적 서빙 — 모든 메서드 허용
-                                        .requestMatchers(genericPublicEndpoints)
+                                        // 1. 인증/문서/헬스체크 — 모든 메서드 허용
+                                        .requestMatchers(STATIC_PUBLIC_ENDPOINTS)
+                                        .permitAll()
+                                        // 1-1. 로컬 스토리지 정적 서빙 — 조회 메서드만 공개
+                                        .requestMatchers(
+                                                HttpMethod.GET, localPublicUploadPatterns)
+                                        .permitAll()
+                                        .requestMatchers(
+                                                HttpMethod.HEAD, localPublicUploadPatterns)
                                         .permitAll()
                                         // 2. 공개 갤러리 (목록/상세 분리 안 하고 GET 만 허용)
                                         .requestMatchers(

@@ -8,12 +8,14 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.comong.backend.domain.music.dto.MusicBestResultResponse;
+import com.comong.backend.domain.music.dto.MusicResultDetailResponse;
 import com.comong.backend.domain.music.dto.MusicResultResponse;
 import com.comong.backend.domain.music.dto.MusicResultSaveRequest;
 import com.comong.backend.domain.music.service.MusicResultService;
@@ -75,5 +77,24 @@ public class MusicResultController {
             @AuthenticationPrincipal AuthenticatedUser currentUser) {
         return ResponseEntity.ok(
                 ApiResponse.success(musicResultService.findMyBest(currentUser.userId())));
+    }
+
+    @Operation(summary = "음악 리듬게임 결과 상세 조회", description = "현재 로그인 사용자의 음악 리듬게임 결과 상세를 조회합니다.")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "200",
+                description = "조회 성공"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "401",
+                description = "인증 필요 (G-003)"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "404",
+                description = "음악 결과 없음 또는 본인 소유가 아님 (MU-004)")
+    })
+    @GetMapping("/{id}")
+    public ResponseEntity<ApiResponse<MusicResultDetailResponse>> findById(
+            @AuthenticationPrincipal AuthenticatedUser currentUser, @PathVariable Long id) {
+        return ResponseEntity.ok(
+                ApiResponse.success(musicResultService.findById(currentUser.userId(), id)));
     }
 }

@@ -72,6 +72,12 @@ public class MusicResult {
     @Column(name = "played_at", nullable = false, updatable = false)
     private LocalDateTime playedAt;
 
+    @Column(name = "video_key", length = 1024)
+    private String videoKey;
+
+    @Column(name = "thumb_key", length = 1024)
+    private String thumbKey;
+
     @Builder
     private MusicResult(
             PatientProfile patientProfile,
@@ -84,7 +90,9 @@ public class MusicResult {
             int totalNotes,
             double accuracy,
             MusicRank rank,
-            int playedDurationMs) {
+            int playedDurationMs,
+            String videoKey,
+            String thumbKey) {
         this.patientProfile =
                 Objects.requireNonNull(patientProfile, "patientProfile must not be null");
         this.musicChart = Objects.requireNonNull(musicChart, "musicChart must not be null");
@@ -105,6 +113,8 @@ public class MusicResult {
         this.accuracy = accuracy;
         this.rank = Objects.requireNonNull(rank, "rank must not be null");
         this.playedDurationMs = playedDurationMs;
+        this.videoKey = videoKey;
+        this.thumbKey = thumbKey;
     }
 
     @PrePersist
