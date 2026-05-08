@@ -26,8 +26,12 @@ export {
   createTaekwondoMotion,
   deleteTaekwondoMotion,
   getTaekwondoMotion,
+  getTaekwondoPoomsaeNumber,
+  getTaekwondoPoomsaeLabel,
+  listTaekwondoMotionsByPoomsae,
   listTaekwondoMotions,
   reorderTaekwondoMotions,
+  TAEKWONDO_POOMSAE_VALUES,
   updateTaekwondoMotion,
 } from './taekwondo-motions'
 export {
@@ -76,6 +80,7 @@ export type {
   CreateTaekwondoMotionRequest,
   Poomsae,
   TaekwondoMotion,
+  TaekwondoMotionsByPoomsaeResult,
   TaekwondoMotionReorderRequest,
   UpdateTaekwondoMotionParams,
   UpdateTaekwondoMotionRequest,

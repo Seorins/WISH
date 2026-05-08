@@ -1,7 +1,15 @@
 import Phaser from 'phaser'
 import { assetPath } from '@/game/assets/assetPath'
 import { fadeToScene } from '@/game/systems/sceneTransition'
-import { DEFAULT_TAEKWONDO_BELT_COLOR, type TaekwondoBeltColor } from '@wish/api-client'
+import {
+  DEFAULT_TAEKWONDO_BELT_COLOR,
+  getTaekwondoPoomsaeLabel,
+  getTaekwondoPoomsaeNumber,
+  listTaekwondoMotionsByPoomsae,
+  TAEKWONDO_POOMSAE_VALUES,
+  type Poomsae,
+  type TaekwondoBeltColor,
+} from '@wish/api-client'
 import {
   CUTE_CARD_PALETTES,
   drawCuteCardPanel,
@@ -12,11 +20,12 @@ import { addCoverBackground } from '@/game/world/background'
 
 type PoomsaeOption = {
   id: string
+  poomsae: Poomsae
   name: string
-  belt: string
-  estimatedMinutes: number
   difficulty: 'easy' | 'normal' | 'hard'
   imageKey: string
+  isReady: boolean
+  motionCount: number
 }
 
 type PoomsaeCard = {
@@ -29,6 +38,7 @@ type PoomsaeCard = {
   title: Phaser.GameObjects.Text
   selectLabel: Phaser.GameObjects.Text
   image: Phaser.GameObjects.Image
+  option: PoomsaeOption
   baseX: number
   baseY: number
   width: number
@@ -71,48 +81,47 @@ const CARD_LAYOUT = {
   buttonHeight: 0.085,
 } as const
 
-const TEST_POOMSAE_OPTIONS: PoomsaeOption[] = [
-  {
-    id: 'taegeuk-1',
-    name: '태극 1장',
-    belt: '흰띠',
-    estimatedMinutes: 3,
-    difficulty: 'easy',
-    imageKey: 'taekwondo-poomsae-1',
-  },
-  {
-    id: 'taegeuk-2',
-    name: '태극 2장',
-    belt: '노란띠',
-    estimatedMinutes: 4,
-    difficulty: 'easy',
-    imageKey: 'taekwondo-poomsae-2',
-  },
-  {
-    id: 'taegeuk-3',
-    name: '태극 3장',
-    belt: '초록띠',
-    estimatedMinutes: 5,
-    difficulty: 'normal',
-    imageKey: 'taekwondo-poomsae-3',
-  },
-  {
-    id: 'taegeuk-4',
-    name: '태극 4장',
-    belt: '파란띠',
-    estimatedMinutes: 6,
-    difficulty: 'normal',
-    imageKey: 'taekwondo-poomsae-4',
-  },
-  {
-    id: 'taegeuk-5',
-    name: '태극 5장',
-    belt: '빨간띠',
-    estimatedMinutes: 7,
-    difficulty: 'hard',
-    imageKey: 'taekwondo-poomsae-5',
-  },
-]
+const POOMSAE_IMAGE_FALLBACK_INDEX = 8
+// 임시 테스트용(태극 1장 동작 등록 후 수정 예정)
+const TEMP_UNLOCKED_POOMSAE: Poomsae = 'TAEGEUK_1'
+const POOMSAE_READY_ERROR_MESSAGE =
+  '\ud488\uc0c8 \uc815\ubcf4\ub97c \ubd88\ub7ec\uc624\uc9c0 \ubabb\ud588\uc5b4\uc694. \uc7a0\uc2dc \ud6c4 \ub2e4\uc2dc \uc2dc\ub3c4\ud574 \uc8fc\uc138\uc694.'
+const POOMSAE_PARTIAL_ERROR_MESSAGE =
+  '\uc77c\ubd80 \ud488\uc0c8 \uc815\ubcf4\ub97c \ubd88\ub7ec\uc624\uc9c0 \ubabb\ud588\uc5b4\uc694.'
+const POOMSAE_LOADING_MESSAGE =
+  '\ud488\uc0c8 \uc815\ubcf4\ub97c \ubd88\ub7ec\uc624\ub294 \uc911\uc774\uc5d0\uc694.'
+const POOMSAE_NOT_READY_SUFFIX = '\uc740 \uc544\uc9c1 \uc900\ube44\uc911\uc774\uc5d0\uc694.'
+
+function getPoomsaeNumber(poomsae: Poomsae) {
+  return getTaekwondoPoomsaeNumber(poomsae)
+}
+
+function getPoomsaeId(poomsae: Poomsae) {
+  return `taegeuk-${getPoomsaeNumber(poomsae)}`
+}
+
+function getPoomsaeDifficulty(poomsae: Poomsae): PoomsaeOption['difficulty'] {
+  const number = getPoomsaeNumber(poomsae)
+  if (number <= 2) return 'easy'
+  if (number <= 5) return 'normal'
+  return 'hard'
+}
+
+function getPoomsaeImageFileIndex(poomsae: Poomsae) {
+  return Math.min(getPoomsaeNumber(poomsae), POOMSAE_IMAGE_FALLBACK_INDEX)
+}
+
+function createInitialPoomsaeOptions(): PoomsaeOption[] {
+  return TAEKWONDO_POOMSAE_VALUES.map(poomsae => ({
+    id: getPoomsaeId(poomsae),
+    poomsae,
+    name: getTaekwondoPoomsaeLabel(poomsae),
+    difficulty: getPoomsaeDifficulty(poomsae),
+    imageKey: `taekwondo-poomsae-${getPoomsaeNumber(poomsae)}`,
+    isReady: poomsae === TEMP_UNLOCKED_POOMSAE,
+    motionCount: 0,
+  }))
+}
 
 const DIFFICULTY_CARD_PALETTE: Record<PoomsaeOption['difficulty'], CuteCardPalette> = {
   easy: CUTE_CARD_PALETTES.butter,
@@ -128,10 +137,13 @@ const DIFFICULTY_STARS: Record<PoomsaeOption['difficulty'], number> = {
 
 export class TaekwondoPoomsaeSelectScene extends Phaser.Scene {
   private beltColor: TaekwondoBeltColor = DEFAULT_TAEKWONDO_BELT_COLOR
+  private poomsaeOptions: PoomsaeOption[] = createInitialPoomsaeOptions()
   private selectedOptionId = ''
   private optionCards: PoomsaeCard[] = []
   private guideOverlay: Phaser.GameObjects.Container | null = null
   private guideDontShowAgain = false
+  private isPoomsaeLoading = false
+  private isSceneShuttingDown = false
   private rail!: Phaser.GameObjects.Container
   private scrollX = 0
   private maxScrollX = 0
@@ -183,6 +195,9 @@ export class TaekwondoPoomsaeSelectScene extends Phaser.Scene {
 
   init(data: TaekwondoPoomsaeSelectData = {}) {
     this.beltColor = data.beltColor ?? DEFAULT_TAEKWONDO_BELT_COLOR
+    this.poomsaeOptions = createInitialPoomsaeOptions()
+    this.isPoomsaeLoading = false
+    this.isSceneShuttingDown = false
   }
 
   preload() {
@@ -191,10 +206,12 @@ export class TaekwondoPoomsaeSelectScene extends Phaser.Scene {
       assetPath('images/themes/taekwondo/background/taekwondo_inside.png'),
     )
     this.load.image(ASSET_KEYS.guideArrow, assetPath('images/themes/taekwondo/ui/guide_arrow.png'))
-    TEST_POOMSAE_OPTIONS.forEach((option, index) => {
+    this.poomsaeOptions.forEach(option => {
       this.load.image(
         option.imageKey,
-        assetPath(`images/themes/taekwondo/characters/poomsae_${index + 1}.png`),
+        assetPath(
+          `images/themes/taekwondo/characters/poomsae_${getPoomsaeImageFileIndex(option.poomsae)}.png`,
+        ),
       )
     })
   }
@@ -206,13 +223,10 @@ export class TaekwondoPoomsaeSelectScene extends Phaser.Scene {
 
     this.createHorizontalOptionList(vw, vh)
 
-    if (TEST_POOMSAE_OPTIONS.length === 0) {
-      this.showEmptyState(vw, vh)
-    } else {
-      this.optionCards.forEach(card => this.updateCardStyle(card))
-      this.showCards()
-      this.showPoomsaeGuideIfNeeded(vw, vh)
-    }
+    this.optionCards.forEach(card => this.updateCardStyle(card))
+    this.showCards()
+    this.showPoomsaeGuideIfNeeded(vw, vh)
+    void this.loadPoomsaeReadiness()
 
     this.input.keyboard?.on('keydown-ESC', this.handleEscDown)
     this.input.on('wheel', this.handleWheel)
@@ -222,6 +236,69 @@ export class TaekwondoPoomsaeSelectScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.removeSceneListeners())
 
     this.cameras.main.fadeIn(FADE_DURATION, 0, 0, 0)
+  }
+
+  private async loadPoomsaeReadiness() {
+    this.isPoomsaeLoading = true
+    this.optionCards.forEach(card => this.updateCardStyle(card))
+
+    try {
+      const { motionsByPoomsae, failedPoomsae } = await listTaekwondoMotionsByPoomsae()
+
+      if (!this.canUpdatePoomsaeCards()) {
+        return
+      }
+
+      this.poomsaeOptions = this.poomsaeOptions.map(option => {
+        const motions = motionsByPoomsae[option.poomsae] ?? []
+        return {
+          ...option,
+          isReady: option.poomsae === TEMP_UNLOCKED_POOMSAE || motions.length > 0,
+          motionCount: motions.length,
+        }
+      })
+      this.syncCardsWithOptions()
+
+      if (failedPoomsae.length > 0) {
+        this.showTemporaryNotice(
+          failedPoomsae.length === TAEKWONDO_POOMSAE_VALUES.length
+            ? POOMSAE_READY_ERROR_MESSAGE
+            : POOMSAE_PARTIAL_ERROR_MESSAGE,
+        )
+      }
+    } catch {
+      if (this.canUpdatePoomsaeCards()) {
+        this.poomsaeOptions = this.poomsaeOptions.map(option => ({
+          ...option,
+          isReady: option.poomsae === TEMP_UNLOCKED_POOMSAE,
+          motionCount: 0,
+        }))
+        this.syncCardsWithOptions()
+        this.showTemporaryNotice(POOMSAE_READY_ERROR_MESSAGE)
+      }
+    } finally {
+      if (this.canUpdatePoomsaeCards()) {
+        this.isPoomsaeLoading = false
+        this.optionCards.forEach(card => this.updateCardStyle(card))
+      }
+    }
+  }
+
+  private syncCardsWithOptions() {
+    if (!this.canUpdatePoomsaeCards()) {
+      return
+    }
+
+    this.optionCards.forEach(card => {
+      const option = this.poomsaeOptions.find(item => item.id === card.option.id)
+      if (option) {
+        card.option = option
+      }
+    })
+  }
+
+  private canUpdatePoomsaeCards() {
+    return !this.isSceneShuttingDown && this.scene.isActive() && this.optionCards.length > 0
   }
 
   private createHorizontalOptionList(vw: number, vh: number) {
@@ -254,11 +331,11 @@ export class TaekwondoPoomsaeSelectScene extends Phaser.Scene {
     this.rail.setMask(mask)
 
     const contentWidth =
-      TEST_POOMSAE_OPTIONS.length * cardWidth +
-      Math.max(0, TEST_POOMSAE_OPTIONS.length - 1) * CARD_GAP
+      this.poomsaeOptions.length * cardWidth +
+      Math.max(0, this.poomsaeOptions.length - 1) * CARD_GAP
     this.maxScrollX = Math.max(0, contentWidth - this.viewportWidth)
 
-    this.optionCards = TEST_POOMSAE_OPTIONS.map((option, index) =>
+    this.optionCards = this.poomsaeOptions.map((option, index) =>
       this.createOptionCard(
         option,
         index * this.cardStep + cardWidth / 2,
@@ -347,6 +424,7 @@ export class TaekwondoPoomsaeSelectScene extends Phaser.Scene {
       title,
       selectLabel,
       image,
+      option,
       baseX: x,
       baseY: y,
       width,
@@ -427,11 +505,21 @@ export class TaekwondoPoomsaeSelectScene extends Phaser.Scene {
   private updateCardStyle(card: PoomsaeCard, animateScale = false) {
     const isSelected = card.container.getData('optionId') === this.selectedOptionId
     const { width, height } = card.container
+    const option = card.option
     const targetScale = isSelected ? CARD_SELECTED_SCALE : CARD_NORMAL_SCALE
 
     this.setCardScale(card, targetScale, animateScale)
     card.title.setColor(isSelected ? '#1f0e02' : '#2d1606')
+    card.selectLabel.setText(
+      this.isPoomsaeLoading
+        ? '\ud655\uc778\uc911'
+        : option.isReady
+          ? '\uc120\ud0dd'
+          : '\uc900\ube44\uc911',
+    )
     card.selectLabel.setColor('#ffffff')
+    card.image.setAlpha(option.isReady || this.isPoomsaeLoading ? 1 : 0.52)
+    card.starText.setAlpha(option.isReady || this.isPoomsaeLoading ? 1 : 0.45)
     drawCuteCardPanel(
       card.panel,
       width,
@@ -496,18 +584,25 @@ export class TaekwondoPoomsaeSelectScene extends Phaser.Scene {
   private startPoomsaePractice(option: PoomsaeOption) {
     this.isDragging = false
 
-    if (option.id === 'taegeuk-1') {
+    if (this.isPoomsaeLoading) {
+      this.showTemporaryNotice(POOMSAE_LOADING_MESSAGE)
+      return
+    }
+
+    if (option.isReady) {
       fadeToScene(this, 'TaekwondoPoomsaePracticeScene', {
         duration: FADE_DURATION,
         data: {
           poomsaeId: option.id,
           poomsaeName: option.name,
+          poomsae: option.poomsae,
           beltColor: this.beltColor,
         },
       })
       return
     }
-    this.showTemporaryNotice(`${option.name} 연습 화면은 곧 연결할게!`)
+
+    this.showTemporaryNotice(`${option.name}${POOMSAE_NOT_READY_SUFFIX}`)
   }
 
   private showTemporaryNotice(message: string) {
@@ -531,19 +626,6 @@ export class TaekwondoPoomsaeSelectScene extends Phaser.Scene {
       delay: 900,
       onComplete: () => notice.destroy(),
     })
-  }
-
-  private showEmptyState(vw: number, vh: number) {
-    this.add
-      .text(vw / 2, vh * 0.5, '아직 불러올 품새가 없어.', {
-        fontFamily: 'sans-serif',
-        fontSize: `${Math.round(Phaser.Math.Clamp(vh * 0.03, 20, 30))}px`,
-        color: '#fff3cf',
-        fontStyle: '700',
-      })
-      .setOrigin(0.5)
-      .setStroke('#3b1f08', 5)
-      .setDepth(4)
   }
 
   private showPoomsaeGuideIfNeeded(vw: number, vh: number) {
@@ -751,6 +833,7 @@ export class TaekwondoPoomsaeSelectScene extends Phaser.Scene {
   }
 
   private removeSceneListeners() {
+    this.isSceneShuttingDown = true
     this.isDragging = false
     this.didDrag = false
     this.guideOverlay?.destroy()

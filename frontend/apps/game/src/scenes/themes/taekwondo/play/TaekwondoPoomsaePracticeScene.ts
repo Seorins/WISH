@@ -6,11 +6,17 @@ import {
   CameraSuccessEffect,
   type CameraSuccessEffectOptions,
 } from '../effects/cameraSuccessEffect'
-import { DEFAULT_TAEKWONDO_BELT_COLOR, type TaekwondoBeltColor } from '@wish/api-client'
+import {
+  DEFAULT_TAEKWONDO_BELT_COLOR,
+  getTaekwondoPoomsaeNumber,
+  type Poomsae,
+  type TaekwondoBeltColor,
+} from '@wish/api-client'
 
 type TaekwondoPoomsaePracticeData = {
   poomsaeId?: string
   poomsaeName?: string
+  poomsae?: Poomsae
   beltColor?: TaekwondoBeltColor
 }
 
@@ -61,6 +67,7 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
   private hasDrawnCameraPlaceholder = false
   private lastVideoTime = -1
   private poomsaeId = 'taegeuk-1'
+  private poomsae?: Poomsae
   private poomsaeName = DEFAULT_POOMSAE_NAME
   private beltColor: TaekwondoBeltColor = DEFAULT_TAEKWONDO_BELT_COLOR
 
@@ -74,6 +81,7 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
 
   init(data: TaekwondoPoomsaePracticeData = {}) {
     this.poomsaeId = data.poomsaeId ?? 'taegeuk-1'
+    this.poomsae = data.poomsae
     this.poomsaeName = data.poomsaeName ?? DEFAULT_POOMSAE_NAME
     this.beltColor = data.beltColor ?? DEFAULT_TAEKWONDO_BELT_COLOR
   }
@@ -151,6 +159,10 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
   }
 
   private getPoomsaeNumber() {
+    if (this.poomsae) {
+      return String(getTaekwondoPoomsaeNumber(this.poomsae))
+    }
+
     const match = this.poomsaeId.match(/\d+$/)
     return match?.[0] ?? '1'
   }
