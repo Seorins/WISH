@@ -17,6 +17,8 @@ import SquatDebugPage from './debug/SquatDebugPage'
 import { ensureDemoAuthToken } from './auth/demoAuth'
 import { AuthOverlay } from './features/auth'
 import { ExerciseSessionListOverlay } from './features/exerciseSessions'
+import { resolvePatientProfileIdOrFetch } from './features/exerciseSessions/patientProfile'
+import { useLoginSession } from './features/loginSession'
 import { queryClient } from './queryClient'
 
 const DEBUG_MARCH_MODE = 'march'
@@ -39,6 +41,9 @@ function App() {
   const gameRef = useRef<Phaser.Game | null>(null)
   const [showAuth, setShowAuth] = useState(false)
   const [showExerciseSessions, setShowExerciseSessions] = useState(false)
+  const [patientProfileId, setPatientProfileId] = useState<number | undefined>(undefined)
+
+  useLoginSession(patientProfileId)
 
   useEffect(() => {
     if (
@@ -61,12 +66,16 @@ function App() {
 
     let isCancelled = false
 
-    void ensureDemoAuthToken().then(() => {
+    void ensureDemoAuthToken().then(async () => {
       if (isCancelled || !containerRef.current || gameRef.current) return
       const game = createGame(containerRef.current)
       gameRef.current = game
       game.events.on('auth:request', () => setShowAuth(true))
       game.events.on('exercise-sessions:open', () => setShowExerciseSessions(true))
+
+      const resolvedPatientProfileId = await resolvePatientProfileIdOrFetch()
+      if (isCancelled) return
+      setPatientProfileId(resolvedPatientProfileId)
     })
 
     return () => {
