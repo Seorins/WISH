@@ -2,6 +2,10 @@ import Phaser from 'phaser'
 import { assetPath } from '@/game/assets/assetPath'
 import { fadeToScene } from '@/game/systems/sceneTransition'
 import { addCoverBackground } from '@/game/world/background'
+import {
+  CameraSuccessEffect,
+  type CameraSuccessEffectOptions,
+} from '../effects/cameraSuccessEffect'
 
 type TaekwondoPoomsaePracticeData = {
   poomsaeId?: string
@@ -50,6 +54,7 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
   private cameraCanvas: HTMLCanvasElement | null = null
   private cameraContext: CanvasRenderingContext2D | null = null
   private cameraTexture: Phaser.Textures.CanvasTexture | null = null
+  private cameraSuccessEffect?: CameraSuccessEffect
   private feedbackText?: Phaser.GameObjects.Text
   private hasDrawnCameraPlaceholder = false
   private lastVideoTime = -1
@@ -249,8 +254,22 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
       )
       .setVisible(false)
     cameraImage.setMask(maskShape.createGeometryMask())
+    this.cameraSuccessEffect?.destroy()
+    this.cameraSuccessEffect = new CameraSuccessEffect(this, {
+      bounds: { x: cameraX, y: cameraY, width: cameraWidth, height: cameraHeight, radius },
+      depth: 5,
+      onSuccessFeedback: message => this.showFeedback(message),
+    })
 
     return frame
+  }
+
+  triggerSuccessEffect(options: CameraSuccessEffectOptions = {}) {
+    this.cameraSuccessEffect?.triggerSuccess(options)
+  }
+
+  spawnNextMotionEnemies() {
+    this.cameraSuccessEffect?.spawnNextMotionEnemies()
   }
 
   private createGuideVideoPanel(x: number, y: number, width: number, height: number) {
@@ -523,10 +542,16 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     this.hasDrawnCameraPlaceholder = false
   }
 
+  private cleanupCameraEffects() {
+    this.cameraSuccessEffect?.destroy()
+    this.cameraSuccessEffect = undefined
+  }
+
   private cleanup() {
     this.input.keyboard?.off('keydown-ESC', this.handleEscDown)
     this.feedbackText = undefined
     this.stopCamera()
+    this.cleanupCameraEffects()
 
     if (this.cameraTexture) {
       this.textures.remove(this.cameraTexture.key)
