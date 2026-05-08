@@ -197,6 +197,9 @@ default:
 
 .backend-base:
   image: gradle:9.4.1-jdk21
+  variables:
+    GRADLE_USER_HOME: "${CI_PROJECT_DIR}/.gradle"
+    GRADLE_OPTS: "-Dorg.gradle.caching=true"
   before_script:
     - cd backend
     - chmod +x ./gradlew
@@ -206,8 +209,9 @@ default:
         - backend/build.gradle
         - backend/settings.gradle
     paths:
-      - backend/.gradle/
       - .gradle/caches/
+      - .gradle/wrapper/
+      - backend/.gradle/
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
@@ -293,6 +297,9 @@ backend:image:
       fi
 
       /kaniko/executor \
+        --cache=true \
+        --cache-run-layers \
+        --cache-repo "${BACKEND_IMAGE_NAME}" \
         --context "${CI_PROJECT_DIR}/backend" \
         --dockerfile "${CI_PROJECT_DIR}/backend/Dockerfile" \
         ${DESTINATIONS}
@@ -414,6 +421,9 @@ ai:image:
       fi
 
       /kaniko/executor \
+        --cache=true \
+        --cache-run-layers \
+        --cache-repo "${AI_IMAGE_NAME}" \
         --context "${CI_PROJECT_DIR}/ai" \
         --dockerfile "${CI_PROJECT_DIR}/ai/Dockerfile" \
         ${DESTINATIONS}
@@ -524,16 +534,22 @@ ai:deploy-dev:
 .frontend-base:
   image: node:24-alpine
   variables:
-    PNPM_HOME: "${CI_PROJECT_DIR}/.pnpm-store"
+    COREPACK_HOME: "${CI_PROJECT_DIR}/.corepack"
+    PNPM_HOME: "${CI_PROJECT_DIR}/.pnpm-home"
+    PNPM_STORE_DIR: "${CI_PROJECT_DIR}/.pnpm-store"
   before_script:
-    - npm install -g pnpm@10.33.0
+    - corepack enable
+    - corepack prepare pnpm@10.33.0 --activate
     - cd frontend
-    - pnpm install --frozen-lockfile
+    - pnpm config set store-dir "${PNPM_STORE_DIR}"
+    - pnpm install --frozen-lockfile --prefer-offline
   cache:
     key:
       files:
         - frontend/pnpm-lock.yaml
     paths:
+      - .corepack/
+      - .pnpm-home/
       - .pnpm-store/
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
@@ -566,6 +582,15 @@ frontend:build:
     - frontend:test
   script:
     - pnpm build
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        - frontend/**/*
+        - .gitlab-ci.yml
+    - if: $CI_COMMIT_BRANCH == "master" || $CI_COMMIT_BRANCH == "main"
+      changes:
+        - frontend/**/*
+        - .gitlab-ci.yml
 
 frontend:image:game:
   stage: package
@@ -573,7 +598,8 @@ frontend:image:game:
     name: gcr.io/kaniko-project/executor:v1.23.2-debug
     entrypoint: [""]
   needs:
-    - frontend:build
+    - frontend:verify
+    - frontend:test
   variables:
     FRONTEND_IMAGE_NAME: ${DOCKER_HUB_IMAGE}
   before_script:
@@ -594,6 +620,9 @@ frontend:image:game:
       fi
 
       /kaniko/executor \
+        --cache=true \
+        --cache-run-layers \
+        --cache-repo "${FRONTEND_IMAGE_NAME}" \
         --context "${CI_PROJECT_DIR}/frontend" \
         --dockerfile "${CI_PROJECT_DIR}/frontend/Dockerfile" \
         --build-arg APP_NAME=game \
@@ -610,7 +639,8 @@ frontend:image:admin:
     name: gcr.io/kaniko-project/executor:v1.23.2-debug
     entrypoint: [""]
   needs:
-    - frontend:build
+    - frontend:verify
+    - frontend:test
   variables:
     FRONTEND_IMAGE_NAME: ${DOCKER_HUB_IMAGE}
   before_script:
@@ -631,6 +661,9 @@ frontend:image:admin:
       fi
 
       /kaniko/executor \
+        --cache=true \
+        --cache-run-layers \
+        --cache-repo "${FRONTEND_IMAGE_NAME}" \
         --context "${CI_PROJECT_DIR}/frontend" \
         --dockerfile "${CI_PROJECT_DIR}/frontend/Dockerfile" \
         --build-arg APP_NAME=admin \
@@ -645,7 +678,8 @@ frontend:image:guardian:
     name: gcr.io/kaniko-project/executor:v1.23.2-debug
     entrypoint: [""]
   needs:
-    - frontend:build
+    - frontend:verify
+    - frontend:test
   variables:
     FRONTEND_IMAGE_NAME: ${DOCKER_HUB_IMAGE}
   before_script:
@@ -666,6 +700,9 @@ frontend:image:guardian:
       fi
 
       /kaniko/executor \
+        --cache=true \
+        --cache-run-layers \
+        --cache-repo "${FRONTEND_IMAGE_NAME}" \
         --context "${CI_PROJECT_DIR}/frontend" \
         --dockerfile "${CI_PROJECT_DIR}/frontend/Dockerfile" \
         --build-arg APP_NAME=guardian \
