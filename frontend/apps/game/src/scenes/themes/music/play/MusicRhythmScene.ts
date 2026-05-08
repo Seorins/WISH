@@ -6,6 +6,7 @@ import { addCoverBackground } from '@/game/world/background'
 import { createCameraBackground, type CameraBackground } from '@/game/world/cameraBackground'
 import { HandTracker } from '@/game/motion/handTracker'
 import { OneEuroPointFilter } from '@/game/motion/oneEuroFilter'
+import { startMusicRecording, type MusicRecorderHandle } from '@/game/systems/musicRecorder'
 import {
   DEFAULT_RHYTHM_CHART,
   getRhythmChart,
@@ -88,6 +89,7 @@ export class MusicRhythmScene extends Phaser.Scene {
   private isStarted = false
   private isFinished = false
   private isLeaving = false
+  private recorder: MusicRecorderHandle | null = null
   private cameraBackground: CameraBackground | null = null
   private handTracker: HandTracker | null = null
   // 양손 손바닥 추적: handedness("Left"/"Right") 키로 손당 커서 + 필터 1개씩
@@ -190,6 +192,7 @@ export class MusicRhythmScene extends Phaser.Scene {
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.stopMusic()
+      this.cancelRecording()
       this.handTracker?.stop()
       this.handTracker = null
       this.cameraBackground?.destroy()
@@ -906,6 +909,7 @@ export class MusicRhythmScene extends Phaser.Scene {
     this.music = this.sound.add(this.chart.audioKey, { volume: 0.78 }) as SeekableSound
     this.music.once('complete', () => this.finishRound())
     this.music.play()
+    this.recorder = startMusicRecording({ scene: this })
   }
 
   private spawnDueNotes(elapsedMs: number) {
@@ -1327,7 +1331,27 @@ export class MusicRhythmScene extends Phaser.Scene {
     this.updateProgress(this.chart.durationMs)
     this.stopMusic()
     this.submitResult()
+    this.finalizeRecording()
     this.showResultOverlay()
+  }
+
+  private finalizeRecording() {
+    const handle = this.recorder
+    if (!handle) return
+    this.recorder = null
+    handle
+      .stop()
+      .then(rec => {
+        console.log('[MusicRhythmScene] recording captured', {
+          videoBytes: rec.videoBlob.size,
+          videoMime: rec.videoMimeType,
+          thumbBytes: rec.thumbBlob.size,
+          thumbMime: rec.thumbMimeType,
+        })
+      })
+      .catch(err => {
+        console.warn('[MusicRhythmScene] recording finalize failed', err)
+      })
   }
 
   private submitResult() {
@@ -1602,6 +1626,7 @@ export class MusicRhythmScene extends Phaser.Scene {
     }
 
     this.stopMusic()
+    this.cancelRecording()
     this.scene.restart({ chartId: this.chartId } satisfies MusicRhythmSceneData)
   }
 
@@ -1612,7 +1637,15 @@ export class MusicRhythmScene extends Phaser.Scene {
 
     this.isLeaving = true
     this.stopMusic()
+    this.cancelRecording()
     fadeToScene(this, 'MusicSongSelectScene', { duration: 220 })
+  }
+
+  private cancelRecording() {
+    const handle = this.recorder
+    if (!handle) return
+    this.recorder = null
+    handle.cancel()
   }
 
   private stopMusic() {
