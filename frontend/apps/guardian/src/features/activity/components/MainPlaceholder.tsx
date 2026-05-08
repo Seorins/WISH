@@ -1,8 +1,9 @@
-import type { MusicResultDetail } from '@wish/api-client'
+import type { ChartStats, MusicResultDetail } from '@wish/api-client'
 import styles from './MainPlaceholder.module.css'
 
 type Props = {
   result: MusicResultDetail
+  chartStats?: ChartStats
 }
 
 const TONE_CLASS = {
@@ -48,9 +49,9 @@ function accuracyMessage(accuracy: number): { headline: string; sub: string; emo
   return { headline: '리듬에 익숙해지는 중.', sub: '함께 한 번 더 도전해봐요.', emoji: '🤍' }
 }
 
-export function MainPlaceholder({ result }: Props) {
+export function MainPlaceholder({ result, chartStats }: Props) {
   const playedDurationLabel = formatDuration(result.playedDurationMs)
-  const othersAvgMs = result.othersAveragePlayedDurationMs ?? 0
+  const othersAvgMs = chartStats?.averagePlayedDurationMs ?? 0
   const hasOthersAvg = othersAvgMs > 0
   const othersAvgLabel = hasOthersAvg ? formatDuration(othersAvgMs) : '집계 중'
   const maxBarMs = Math.max(result.playedDurationMs, othersAvgMs, 1)

@@ -47,12 +47,17 @@ export type MusicResultDetail = {
   accuracy: number
   rank: string
   playedDurationMs: number
-  othersAveragePlayedDurationMs?: number
   playedAt: string
   videoKey: string | null
   thumbKey: string | null
   videoUrl: string | null
   thumbUrl: string | null
+}
+
+export type ChartStats = {
+  chartId: string
+  averagePlayedDurationMs: number
+  totalPlays: number
 }
 
 export type MusicBestResult = {
@@ -76,5 +81,12 @@ export async function getMusicResult(id: number) {
 
 export async function getMyBestMusicResults() {
   const response = await apiClient.get<ApiResponse<MusicBestResult[]>>('/music/results/me/best')
+  return response.data
+}
+
+export async function getChartStats(chartId: string) {
+  const response = await apiClient.get<ApiResponse<ChartStats>>(
+    `/music/charts/${encodeURIComponent(chartId)}/stats`,
+  )
   return response.data
 }

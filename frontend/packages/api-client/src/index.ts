@@ -20,7 +20,12 @@ export {
   getExerciseSessions,
   validateCreateExerciseSessionRequest,
 } from './exercise-sessions'
-export { getMusicResult, getMyBestMusicResults, saveMusicResult } from './music-results'
+export {
+  getChartStats,
+  getMusicResult,
+  getMyBestMusicResults,
+  saveMusicResult,
+} from './music-results'
 export { requestPresignedUploadUrls, uploadToPresignedUrl } from './uploads'
 export { createPatientProfile, listPatientProfiles } from './patient-profiles'
 export {
@@ -71,6 +76,7 @@ export type {
   ExerciseSessionType,
 } from './exercise-sessions'
 export type {
+  ChartStats,
   MusicBestResult,
   MusicResult,
   MusicResultDetail,
