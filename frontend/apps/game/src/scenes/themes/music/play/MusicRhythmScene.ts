@@ -1,11 +1,17 @@
 import Phaser from 'phaser'
-import { saveMusicResult } from '@wish/api-client'
+import {
+  requestPresignedUploadUrls,
+  saveMusicResult,
+  uploadToPresignedUrl,
+  type MusicResultRequest,
+} from '@wish/api-client'
 import { assetPath } from '@/game/assets/assetPath'
 import { fadeToScene } from '@/game/systems/sceneTransition'
 import { addCoverBackground } from '@/game/world/background'
 import { createCameraBackground, type CameraBackground } from '@/game/world/cameraBackground'
 import { HandTracker } from '@/game/motion/handTracker'
 import { OneEuroPointFilter } from '@/game/motion/oneEuroFilter'
+import { startMusicRecording, type MusicRecorderHandle } from '@/game/systems/musicRecorder'
 import {
   DEFAULT_RHYTHM_CHART,
   getRhythmChart,
@@ -88,6 +94,7 @@ export class MusicRhythmScene extends Phaser.Scene {
   private isStarted = false
   private isFinished = false
   private isLeaving = false
+  private recorder: MusicRecorderHandle | null = null
   private cameraBackground: CameraBackground | null = null
   private handTracker: HandTracker | null = null
   // 양손 손바닥 추적: handedness("Left"/"Right") 키로 손당 커서 + 필터 1개씩
@@ -190,6 +197,7 @@ export class MusicRhythmScene extends Phaser.Scene {
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.stopMusic()
+      this.cancelRecording()
       this.handTracker?.stop()
       this.handTracker = null
       this.cameraBackground?.destroy()
@@ -906,6 +914,7 @@ export class MusicRhythmScene extends Phaser.Scene {
     this.music = this.sound.add(this.chart.audioKey, { volume: 0.78 }) as SeekableSound
     this.music.once('complete', () => this.finishRound())
     this.music.play()
+    this.recorder = startMusicRecording({ scene: this })
   }
 
   private spawnDueNotes(elapsedMs: number) {
@@ -1323,15 +1332,16 @@ export class MusicRhythmScene extends Phaser.Scene {
     }
 
     this.isFinished = true
+    const playedDurationMs = Math.round(this.getSongTimeMs())
     this.resolvePendingNotesAsMisses()
     this.updateProgress(this.chart.durationMs)
     this.stopMusic()
-    this.submitResult()
     this.showResultOverlay()
+    void this.finalizeAndSubmit(playedDurationMs)
   }
 
-  private submitResult() {
-    saveMusicResult({
+  private async finalizeAndSubmit(playedDurationMs: number) {
+    const baseRequest: MusicResultRequest = {
       chartId: this.chart.id,
       score: this.score,
       maxCombo: this.maxCombo,
@@ -1339,10 +1349,41 @@ export class MusicRhythmScene extends Phaser.Scene {
       goodCount: this.goodCount,
       missCount: this.missCount,
       totalNotes: this.chart.notes.length,
-      playedDurationMs: Math.round(this.getSongTimeMs()),
-    }).catch(error => {
-      console.warn('[MusicRhythmScene] failed to save result', error)
-    })
+      playedDurationMs,
+    }
+
+    const handle = this.recorder
+    this.recorder = null
+
+    if (!handle) {
+      await saveMusicResult(baseRequest).catch(err => {
+        console.warn('[MusicRhythmScene] saveMusicResult failed', err)
+      })
+      return
+    }
+
+    try {
+      const rec = await handle.stop()
+      const presigned = await requestPresignedUploadUrls({
+        videoContentType: rec.videoMimeType,
+        thumbContentType: rec.thumbMimeType,
+      })
+      const { video, thumb } = presigned.data
+      await Promise.all([
+        uploadToPresignedUrl(video, rec.videoBlob),
+        uploadToPresignedUrl(thumb, rec.thumbBlob),
+      ])
+      await saveMusicResult({
+        ...baseRequest,
+        videoKey: video.key,
+        thumbKey: thumb.key,
+      })
+    } catch (err) {
+      console.warn('[MusicRhythmScene] upload+save failed, retrying without video', err)
+      await saveMusicResult(baseRequest).catch(saveErr => {
+        console.warn('[MusicRhythmScene] saveMusicResult fallback failed', saveErr)
+      })
+    }
   }
 
   private resolvePendingNotesAsMisses() {
@@ -1602,6 +1643,7 @@ export class MusicRhythmScene extends Phaser.Scene {
     }
 
     this.stopMusic()
+    this.cancelRecording()
     this.scene.restart({ chartId: this.chartId } satisfies MusicRhythmSceneData)
   }
 
@@ -1612,7 +1654,15 @@ export class MusicRhythmScene extends Phaser.Scene {
 
     this.isLeaving = true
     this.stopMusic()
+    this.cancelRecording()
     fadeToScene(this, 'MusicSongSelectScene', { duration: 220 })
+  }
+
+  private cancelRecording() {
+    const handle = this.recorder
+    if (!handle) return
+    this.recorder = null
+    handle.cancel()
   }
 
   private stopMusic() {

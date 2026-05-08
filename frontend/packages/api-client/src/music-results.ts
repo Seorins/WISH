@@ -10,6 +10,8 @@ export type MusicResultRequest = {
   missCount: number
   totalNotes: number
   playedDurationMs: number
+  videoKey?: string
+  thumbKey?: string
 }
 
 export type MusicResult = {
@@ -25,8 +27,37 @@ export type MusicResult = {
   rank: string
   playedDurationMs: number
   playedAt: string
+  videoKey: string | null
+  thumbKey: string | null
   isNewBest: boolean
   previousBestScore: number | null
+}
+
+export type MusicResultDetail = {
+  id: number
+  chartId: string
+  chartTitle: string
+  score: number
+  maxCombo: number
+  perfectCount: number
+  greatCount?: number
+  goodCount: number
+  missCount: number
+  totalNotes: number
+  accuracy: number
+  rank: string
+  playedDurationMs: number
+  playedAt: string
+  videoKey: string | null
+  thumbKey: string | null
+  videoUrl: string | null
+  thumbUrl: string | null
+}
+
+export type ChartStats = {
+  chartId: string
+  averagePlayedDurationMs: number
+  totalPlays: number
 }
 
 export type MusicBestResult = {
@@ -43,7 +74,19 @@ export async function saveMusicResult(request: MusicResultRequest) {
   return response.data
 }
 
+export async function getMusicResult(id: number) {
+  const response = await apiClient.get<ApiResponse<MusicResultDetail>>(`/music/results/${id}`)
+  return response.data
+}
+
 export async function getMyBestMusicResults() {
   const response = await apiClient.get<ApiResponse<MusicBestResult[]>>('/music/results/me/best')
+  return response.data
+}
+
+export async function getChartStats(chartId: string) {
+  const response = await apiClient.get<ApiResponse<ChartStats>>(
+    `/music/charts/${encodeURIComponent(chartId)}/stats`,
+  )
   return response.data
 }

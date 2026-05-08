@@ -20,7 +20,13 @@ export {
   getExerciseSessions,
   validateCreateExerciseSessionRequest,
 } from './exercise-sessions'
-export { getMyBestMusicResults, saveMusicResult } from './music-results'
+export {
+  getChartStats,
+  getMusicResult,
+  getMyBestMusicResults,
+  saveMusicResult,
+} from './music-results'
+export { requestPresignedUploadUrls, uploadToPresignedUrl } from './uploads'
 export { createPatientProfile, listPatientProfiles } from './patient-profiles'
 export {
   createTaekwondoMotion,
@@ -73,7 +79,18 @@ export type {
   ExerciseSessionSummary,
   ExerciseSessionType,
 } from './exercise-sessions'
-export type { MusicBestResult, MusicResult, MusicResultRequest } from './music-results'
+export type {
+  ChartStats,
+  MusicBestResult,
+  MusicResult,
+  MusicResultDetail,
+  MusicResultRequest,
+} from './music-results'
+export type {
+  PresignedUploadItem,
+  PresignedUploadRequest,
+  PresignedUploadResponse,
+} from './uploads'
 export type { Gender, PatientProfile, PatientProfileCreateRequest } from './patient-profiles'
 export type {
   CreateTaekwondoMotionParams,
