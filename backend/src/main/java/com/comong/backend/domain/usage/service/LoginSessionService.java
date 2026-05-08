@@ -46,21 +46,25 @@ public class LoginSessionService {
 
     @Transactional
     public LoginSessionResponse heartbeat(Long userId, Long sessionId) {
-        LoginSession session = findOwnedOrThrow(userId, sessionId);
+        LoginSession session = findOwnedForUpdateOrThrow(userId, sessionId);
         session.heartbeat(LocalDateTime.now());
         return LoginSessionResponse.from(session);
     }
 
     @Transactional
     public LoginSessionResponse end(Long userId, Long sessionId) {
-        LoginSession session = findOwnedOrThrow(userId, sessionId);
+        LoginSession session = findOwnedForUpdateOrThrow(userId, sessionId);
         session.end(LocalDateTime.now());
         return LoginSessionResponse.from(session);
     }
 
-    private LoginSession findOwnedOrThrow(Long userId, Long sessionId) {
+    /**
+     * heartbeat / end 가 사용. {@code FOR UPDATE} 로 row 락을 잡고 가져와, 두 요청이 동시에 들어왔을 때 lost update 를
+     * 차단한다. 소유자 검증 시 {@code patient.user} 가 lazy 로딩되어 추가 SELECT 1~2 회가 발생하지만 같은 트랜잭션 안이라 race-free.
+     */
+    private LoginSession findOwnedForUpdateOrThrow(Long userId, Long sessionId) {
         return loginSessionRepository
-                .findByIdWithPatientAndUser(sessionId)
+                .findByIdForUpdate(sessionId)
                 .filter(s -> s.isOwnedBy(userId))
                 .orElseThrow(() -> new BusinessException(UsageErrorCode.LOGIN_SESSION_NOT_FOUND));
     }

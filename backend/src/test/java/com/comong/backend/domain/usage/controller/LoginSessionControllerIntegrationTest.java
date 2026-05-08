@@ -7,6 +7,12 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -153,6 +159,64 @@ class LoginSessionControllerIntegrationTest extends IntegrationTestSupport {
                                 .content("{\"patientProfileId\":1}"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("G-003"));
+    }
+
+    /**
+     * heartbeat 와 end 가 동시에 들어와도 종료 상태가 유실되지 않아야 한다 (lost update 방지). PESSIMISTIC_WRITE 락이 두 요청을
+     * 직렬화해 어느 쪽이 먼저 와도 결과는 ended=true 로 수렴.
+     */
+    @Test
+    void heartbeatAndEndConcurrent_endStatePersists() throws Exception {
+        String token = setupUserWithProfile("login-race@example.com", "login-race");
+        long sessionId = startSession(token);
+
+        CountDownLatch start = new CountDownLatch(1);
+        CountDownLatch done = new CountDownLatch(2);
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            executor.submit(
+                    () -> {
+                        try {
+                            start.await();
+                            mockMvc.perform(
+                                            patch("/login-sessions/{id}/heartbeat", sessionId)
+                                                    .header("Authorization", "Bearer " + token))
+                                    .andExpect(status().isOk());
+                        } catch (Throwable t) {
+                            failure.compareAndSet(null, t);
+                        } finally {
+                            done.countDown();
+                        }
+                    });
+            executor.submit(
+                    () -> {
+                        try {
+                            start.await();
+                            mockMvc.perform(
+                                            patch("/login-sessions/{id}/end", sessionId)
+                                                    .header("Authorization", "Bearer " + token))
+                                    .andExpect(status().isOk());
+                        } catch (Throwable t) {
+                            failure.compareAndSet(null, t);
+                        } finally {
+                            done.countDown();
+                        }
+                    });
+
+            start.countDown();
+            assertThat(done.await(10, TimeUnit.SECONDS)).isTrue();
+        } finally {
+            executor.shutdownNow();
+        }
+
+        if (failure.get() != null) {
+            throw new AssertionError("concurrent request failed", failure.get());
+        }
+
+        LoginSession session = loginSessionRepository.findById(sessionId).orElseThrow();
+        assertThat(session.getEndedAt()).isNotNull();
+        assertThat(session.isEnded()).isTrue();
     }
 
     @Test
