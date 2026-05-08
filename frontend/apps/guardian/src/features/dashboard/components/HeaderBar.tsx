@@ -20,7 +20,7 @@ type TabId = 'exercise' | 'chat' | 'activity' | 'reports'
 const TABS: ReadonlyArray<{ id: TabId; label: string; Icon: typeof HomeIcon; to?: string }> = [
   { id: 'exercise', label: '운동', Icon: ExerciseIcon, to: '/' },
   { id: 'chat', label: '대화', Icon: ChatIcon, to: '/chat' },
-  { id: 'activity', label: '활동', Icon: ActivityIcon },
+  { id: 'activity', label: '활동', Icon: ActivityIcon, to: '/activity' },
   { id: 'reports', label: '리포트', Icon: ClipboardIcon },
 ]
 

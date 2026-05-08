@@ -1,0 +1,129 @@
+/* 대화 페이지 CharacterSidebar 와 동일한 카드/아이템 패턴 */
+
+.card {
+  background: var(--dash-color-surface, #fff);
+  border-radius: 22px;
+  padding: 18px 16px;
+  box-shadow: var(--dash-shadow-soft, 0 2px 12px rgba(60, 50, 120, 0.06));
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 100%;
+  min-height: 0;
+}
+
+.title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--dash-color-text-strong, #1f1b3a);
+  margin: 0 4px 4px;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.list::-webkit-scrollbar {
+  display: none;
+}
+
+.item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border-radius: 20px;
+  border: 2px solid transparent;
+  background: #fff;
+  box-shadow: 0 3px 12px rgba(60, 50, 120, 0.09);
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    background 0.15s ease;
+}
+
+.item:hover {
+  box-shadow: 0 5px 16px rgba(60, 50, 120, 0.12);
+}
+
+.itemActive {
+  border-color: var(--dash-color-primary, #7c5cff);
+  background: var(--dash-color-primary-50, #f1edff);
+}
+
+.avatar {
+  position: relative;
+  width: 84px;
+  height: 84px;
+  border-radius: 20px;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.avatarImg {
+  display: block;
+  width: 100%;
+  height: auto;
+  transform: scale(var(--thumb-scale, 1.25)) translateY(var(--thumb-offset-y, 0));
+  transform-origin: top center;
+}
+
+.meta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+
+.name {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--dash-color-text-strong, #1f1b3a);
+}
+
+.status {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  width: fit-content;
+}
+
+.statusDone {
+  background: #efeaff;
+  color: #6a4ee0;
+}
+
+.statusPlanned {
+  background: #e6f7ec;
+  color: #1f9a55;
+}
+
+.check {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--dash-color-primary, #7c5cff);
+  color: #fff;
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+}
