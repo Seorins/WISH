@@ -82,8 +82,6 @@ const CARD_LAYOUT = {
 } as const
 
 const POOMSAE_IMAGE_FALLBACK_INDEX = 8
-// 임시 테스트용(태극 1장 동작 등록 후 수정 예정)
-const TEMP_UNLOCKED_POOMSAE: Poomsae = 'TAEGEUK_1'
 const POOMSAE_READY_ERROR_MESSAGE =
   '\ud488\uc0c8 \uc815\ubcf4\ub97c \ubd88\ub7ec\uc624\uc9c0 \ubabb\ud588\uc5b4\uc694. \uc7a0\uc2dc \ud6c4 \ub2e4\uc2dc \uc2dc\ub3c4\ud574 \uc8fc\uc138\uc694.'
 const POOMSAE_PARTIAL_ERROR_MESSAGE =
@@ -118,7 +116,7 @@ function createInitialPoomsaeOptions(): PoomsaeOption[] {
     name: getTaekwondoPoomsaeLabel(poomsae),
     difficulty: getPoomsaeDifficulty(poomsae),
     imageKey: `taekwondo-poomsae-${getPoomsaeNumber(poomsae)}`,
-    isReady: poomsae === TEMP_UNLOCKED_POOMSAE,
+    isReady: false,
     motionCount: 0,
   }))
 }
@@ -253,7 +251,7 @@ export class TaekwondoPoomsaeSelectScene extends Phaser.Scene {
         const motions = motionsByPoomsae[option.poomsae] ?? []
         return {
           ...option,
-          isReady: option.poomsae === TEMP_UNLOCKED_POOMSAE || motions.length > 0,
+          isReady: motions.length > 0,
           motionCount: motions.length,
         }
       })
@@ -266,11 +264,12 @@ export class TaekwondoPoomsaeSelectScene extends Phaser.Scene {
             : POOMSAE_PARTIAL_ERROR_MESSAGE,
         )
       }
-    } catch {
+    } catch (error) {
+      console.warn('[TaekwondoPoomsaeSelectScene] Failed to load poomsae readiness.', error)
       if (this.canUpdatePoomsaeCards()) {
         this.poomsaeOptions = this.poomsaeOptions.map(option => ({
           ...option,
-          isReady: option.poomsae === TEMP_UNLOCKED_POOMSAE,
+          isReady: false,
           motionCount: 0,
         }))
         this.syncCardsWithOptions()
@@ -434,10 +433,10 @@ export class TaekwondoPoomsaeSelectScene extends Phaser.Scene {
 
     hitArea.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       this.startDrag(pointer)
-      this.updateSelection(option.id)
+      this.updateSelection(card.option.id)
     })
     hitArea.on('pointerup', () => {
-      if (this.selectedOptionId !== option.id) {
+      if (this.selectedOptionId !== card.option.id) {
         return
       }
 
@@ -447,11 +446,11 @@ export class TaekwondoPoomsaeSelectScene extends Phaser.Scene {
       }
 
       this.clearSelection()
-      this.startPoomsaePractice(option)
+      void this.startPoomsaePractice(card.option)
     })
     hitArea.on('pointerupoutside', () => this.clearSelection())
     hitArea.on('pointerout', () => {
-      if (this.selectedOptionId === option.id) {
+      if (this.selectedOptionId === card.option.id) {
         this.clearSelection()
         return
       }
@@ -580,7 +579,6 @@ export class TaekwondoPoomsaeSelectScene extends Phaser.Scene {
     graphics.lineStyle(1.5, palette.accent, isSelected ? 1 : 0.55)
     graphics.strokeRoundedRect(cx - width / 2, cy - height / 2, width, height, radius)
   }
-
   private startPoomsaePractice(option: PoomsaeOption) {
     this.isDragging = false
 
@@ -664,13 +662,18 @@ export class TaekwondoPoomsaeSelectScene extends Phaser.Scene {
       .setDisplaySize(vw * 0.35, vw * 0.35 * (1086 / 1448))
 
     const guideText = this.add
-      .text(vw * 0.52, vh * 0.72, '옆으로 쓸어넘겨\n더 많은 품새를 볼 수 있어요.', {
-        fontFamily: 'sans-serif',
-        fontSize: `${Math.round(Phaser.Math.Clamp(vh * 0.032, 20, 30))}px`,
-        color: '#ffffff',
-        fontStyle: '700',
-        lineSpacing: 8,
-      })
+      .text(
+        vw * 0.52,
+        vh * 0.72,
+        '\uC606\uC73C\uB85C \uC4F8\uC5B4\uB118\uACA8\n\uB354 \uB9CE\uC740 \uD488\uC0C8\uB97C \uBCFC \uC218 \uC788\uC5B4\uC694.',
+        {
+          fontFamily: 'sans-serif',
+          fontSize: `${Math.round(Phaser.Math.Clamp(vh * 0.032, 20, 30))}px`,
+          color: '#ffffff',
+          fontStyle: '700',
+          lineSpacing: 8,
+        },
+      )
       .setOrigin(0, 0.5)
       .setShadow(0, 2, '#3a3027', 4, false, true)
 
