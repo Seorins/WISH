@@ -380,6 +380,46 @@ backend:notify-failure:
       when: on_failure
 
 # ----------------------------------------------------------------------------
+# AI
+# ----------------------------------------------------------------------------
+
+.ai-dev-rules: &ai_dev_rules
+  - if: $CI_COMMIT_BRANCH == "develop"
+    changes:
+      - ai/**/*
+      - .gitlab-ci.yml
+
+ai:image:
+  stage: package
+  image:
+    name: gcr.io/kaniko-project/executor:v1.23.2-debug
+    entrypoint: [""]
+  variables:
+    AI_IMAGE_NAME: ${DOCKER_HUB_IMAGE}
+  before_script:
+    - echo "DOCKER_HUB_IMAGE=${DOCKER_HUB_IMAGE:-<empty>}"
+    - if [ -n "${DOCKER_HUB_USER}" ]; then echo "DOCKER_HUB_USER=set"; else echo "DOCKER_HUB_USER=<empty>"; fi
+    - if [ -n "${DOCKER_HUB_TOKEN}" ]; then echo "DOCKER_HUB_TOKEN=set"; else echo "DOCKER_HUB_TOKEN=<empty>"; fi
+    - test -n "${DOCKER_HUB_IMAGE}" || (echo "DOCKER_HUB_IMAGE is empty" && exit 1)
+    - test -n "${DOCKER_HUB_USER}" || (echo "DOCKER_HUB_USER is empty" && exit 1)
+    - test -n "${DOCKER_HUB_TOKEN}" || (echo "DOCKER_HUB_TOKEN is empty" && exit 1)
+    - mkdir -p /kaniko/.docker
+    - echo "{\"auths\":{\"https://index.docker.io/v1/\":{\"username\":\"${DOCKER_HUB_USER}\",\"password\":\"${DOCKER_HUB_TOKEN}\"}}}" > /kaniko/.docker/config.json
+  script:
+    - |
+      echo "AI_IMAGE_NAME=${AI_IMAGE_NAME:-<empty>}"
+      DESTINATIONS="--destination ${AI_IMAGE_NAME}:ai-${CI_COMMIT_SHORT_SHA}"
+      if [ -n "${CI_COMMIT_BRANCH}" ]; then
+        DESTINATIONS="${DESTINATIONS} --destination ${AI_IMAGE_NAME}:ai-${CI_COMMIT_REF_SLUG}-latest"
+      fi
+
+      /kaniko/executor \
+        --context "${CI_PROJECT_DIR}/ai" \
+        --dockerfile "${CI_PROJECT_DIR}/ai/Dockerfile" \
+        ${DESTINATIONS}
+  rules: *ai_dev_rules
+
+# ----------------------------------------------------------------------------
 # Frontend
 # ----------------------------------------------------------------------------
 
