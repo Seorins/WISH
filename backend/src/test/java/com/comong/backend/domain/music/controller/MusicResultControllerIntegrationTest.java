@@ -93,8 +93,60 @@ class MusicResultControllerIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
-    void createMusicResult_persistsMediaKeysAndFindByIdReturnsDetail() throws Exception {
+    void createMusicResult_persistsMediaKeys() throws Exception {
         String token = setupUserWithProfile("music-media@example.com", "music-media-user");
+        String videoKey = "local/music/results/1/test-upload/video.webm";
+        String thumbKey = "local/music/results/1/test-upload/thumb.jpg";
+
+        mockMvc.perform(
+                        post("/music/results")
+                                .header("Authorization", "Bearer " + token)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(
+                                        saveRequest(
+                                                "baby-shark",
+                                                24830,
+                                                87,
+                                                142,
+                                                23,
+                                                10,
+                                                175,
+                                                96196,
+                                                videoKey,
+                                                thumbKey)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.videoKey").value(videoKey))
+                .andExpect(jsonPath("$.data.thumbKey").value(thumbKey));
+    }
+
+    @Test
+    void findById_returnsNullMediaUrlsWhenMediaKeysAreMissing() throws Exception {
+        String token = setupUserWithProfile("music-detail-empty@example.com", "music-detail-empty");
+        long resultId = saveMusicResultReturningId(token, validSaveRequest(24830));
+
+        String detailBody =
+                mockMvc.perform(
+                                get("/music/results/{id}", resultId)
+                                        .header("Authorization", "Bearer " + token))
+                        .andExpect(status().isOk())
+                        .andExpect(jsonPath("$.code").value("SUCCESS"))
+                        .andExpect(jsonPath("$.data.id").value(resultId))
+                        .andExpect(jsonPath("$.data.chartId").value("baby-shark"))
+                        .andExpect(jsonPath("$.data.score").value(24830))
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString();
+
+        JsonNode detail = objectMapper.readTree(detailBody).get("data");
+        assertThat(detail.path("videoUrl").isMissingNode() || detail.path("videoUrl").isNull())
+                .isTrue();
+        assertThat(detail.path("thumbUrl").isMissingNode() || detail.path("thumbUrl").isNull())
+                .isTrue();
+    }
+
+    @Test
+    void findById_failsWhenMediaKeysExistButS3IsDisabled() throws Exception {
+        String token = setupUserWithProfile("music-detail-s3@example.com", "music-detail-s3");
         String videoKey = "local/music/results/1/test-upload/video.webm";
         String thumbKey = "local/music/results/1/test-upload/thumb.jpg";
 
@@ -116,34 +168,17 @@ class MusicResultControllerIntegrationTest extends IntegrationTestSupport {
                                                         videoKey,
                                                         thumbKey)))
                         .andExpect(status().isCreated())
-                        .andExpect(jsonPath("$.data.videoKey").value(videoKey))
-                        .andExpect(jsonPath("$.data.thumbKey").value(thumbKey))
                         .andReturn()
                         .getResponse()
                         .getContentAsString();
 
         long resultId = objectMapper.readTree(createBody).get("data").get("id").asLong();
 
-        String detailBody =
-                mockMvc.perform(
-                                get("/music/results/{id}", resultId)
-                                        .header("Authorization", "Bearer " + token))
-                        .andExpect(status().isOk())
-                        .andExpect(jsonPath("$.code").value("SUCCESS"))
-                        .andExpect(jsonPath("$.data.id").value(resultId))
-                        .andExpect(jsonPath("$.data.chartId").value("baby-shark"))
-                        .andExpect(jsonPath("$.data.score").value(24830))
-                        .andExpect(jsonPath("$.data.videoKey").value(videoKey))
-                        .andExpect(jsonPath("$.data.thumbKey").value(thumbKey))
-                        .andReturn()
-                        .getResponse()
-                        .getContentAsString();
-
-        JsonNode detail = objectMapper.readTree(detailBody).get("data");
-        assertThat(detail.path("videoUrl").isMissingNode() || detail.path("videoUrl").isNull())
-                .isTrue();
-        assertThat(detail.path("thumbUrl").isMissingNode() || detail.path("thumbUrl").isNull())
-                .isTrue();
+        mockMvc.perform(
+                        get("/music/results/{id}", resultId)
+                                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.code").value("S-002"));
     }
 
     @Test

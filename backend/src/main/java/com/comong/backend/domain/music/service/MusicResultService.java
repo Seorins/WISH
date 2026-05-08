@@ -26,9 +26,11 @@ import com.comong.backend.domain.patient.entity.PatientProfile;
 import com.comong.backend.domain.patient.exception.PatientErrorCode;
 import com.comong.backend.domain.patient.service.PatientProfileService;
 import com.comong.backend.global.exception.BusinessException;
+import com.comong.backend.global.storage.StorageErrorCode;
 import com.comong.backend.global.storage.StorageProperties;
 
 import lombok.RequiredArgsConstructor;
+import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
@@ -169,7 +171,7 @@ public class MusicResultService {
         StorageProperties.S3 s3 = storageProperties.s3();
         S3Presigner s3Presigner = s3PresignerProvider.getIfAvailable();
         if (s3 == null || s3Presigner == null) {
-            return null;
+            throw new BusinessException(StorageErrorCode.STORAGE_FAILURE);
         }
         GetObjectPresignRequest request =
                 GetObjectPresignRequest.builder()
@@ -177,6 +179,10 @@ public class MusicResultService {
                         .getObjectRequest(
                                 GetObjectRequest.builder().bucket(s3.bucket()).key(key).build())
                         .build();
-        return s3Presigner.presignGetObject(request).url().toString();
+        try {
+            return s3Presigner.presignGetObject(request).url().toString();
+        } catch (SdkException e) {
+            throw new BusinessException(StorageErrorCode.STORAGE_FAILURE);
+        }
     }
 }

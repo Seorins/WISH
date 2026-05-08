@@ -19,6 +19,7 @@ import com.comong.backend.global.storage.StorageErrorCode;
 import com.comong.backend.global.storage.StorageProperties;
 
 import lombok.RequiredArgsConstructor;
+import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
@@ -98,8 +99,12 @@ public class PresignedUploadService {
                                         .build())
                         .build();
 
-        String putUrl = s3Presigner.presignPutObject(request).url().toString();
-        return new PresignedUploadItem(key, putUrl, "PUT", contentType, expiresInSeconds);
+        try {
+            String putUrl = s3Presigner.presignPutObject(request).url().toString();
+            return new PresignedUploadItem(key, putUrl, "PUT", contentType, expiresInSeconds);
+        } catch (SdkException e) {
+            throw new BusinessException(StorageErrorCode.STORAGE_FAILURE);
+        }
     }
 
     private String buildObjectPrefix(String storagePrefix, Long patientProfileId, String uploadId) {
