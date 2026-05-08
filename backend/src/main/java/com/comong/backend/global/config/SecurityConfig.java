@@ -109,11 +109,9 @@ public class SecurityConfig {
                                         .requestMatchers(STATIC_PUBLIC_ENDPOINTS)
                                         .permitAll()
                                         // 1-1. 로컬 스토리지 정적 서빙 — 조회 메서드만 공개
-                                        .requestMatchers(
-                                                HttpMethod.GET, localPublicUploadPatterns)
+                                        .requestMatchers(HttpMethod.GET, localPublicUploadPatterns)
                                         .permitAll()
-                                        .requestMatchers(
-                                                HttpMethod.HEAD, localPublicUploadPatterns)
+                                        .requestMatchers(HttpMethod.HEAD, localPublicUploadPatterns)
                                         .permitAll()
                                         // 2. 공개 갤러리 (목록/상세 분리 안 하고 GET 만 허용)
                                         .requestMatchers(
