@@ -3,13 +3,21 @@ import { assetPath } from '@/game/assets/assetPath'
 import { fadeToScene } from '@/game/systems/sceneTransition'
 import { addCoverBackground } from '@/game/world/background'
 import {
+  resolvePatientProfileId,
+  resolvePatientProfileIdOrFetch,
+} from '@/features/exerciseSessions/patientProfile'
+import {
   CameraSuccessEffect,
   type CameraSuccessEffectOptions,
 } from '../effects/cameraSuccessEffect'
 import {
+  calculateTaekwondoAverageAccuracy,
+  createTaekwondoSession,
   DEFAULT_TAEKWONDO_BELT_COLOR,
   getTaekwondoPoomsaeNumber,
   listTaekwondoMotions,
+  type CreateTaekwondoSessionMotionRequest,
+  type CreateTaekwondoSessionRequest,
   type Poomsae,
   type TaekwondoBeltColor,
   type TaekwondoMotion,
@@ -41,6 +49,7 @@ const TEXT_COLOR = '#3a2110'
 const TEMP_TOTAL_STEP_COUNT = 9
 const TEMP_ACTIVE_STEP_COUNT = 4
 const DEFAULT_CURRENT_MOTION_NAME = '동작 준비중'
+const DEFAULT_MOTION_COMPLETE_FEEDBACK = '동작 완료'
 const DEFAULT_FEEDBACK_MESSAGE = '실시간 피드백'
 const CAMERA_DENIED_MESSAGE = '카메라를 아직 준비 중입니다.'
 const PROGRESS_VISIBLE_HEIGHT_RATIO = 274 / 725
@@ -65,7 +74,12 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
   private feedbackText?: Phaser.GameObjects.Text
   private currentMotionText?: Phaser.GameObjects.Text
   private motions: TaekwondoMotion[] = []
+  private motionResults: CreateTaekwondoSessionMotionRequest[] = []
   private currentMotionIndex = 0
+  private practiceStartedAtMs = 0
+  private motionStartedAtMs = 0
+  private hasSubmittedSession = false
+  private isSavingSession = false
   private isSceneShuttingDown = false
   private hasDrawnCameraPlaceholder = false
   private lastVideoTime = -1
@@ -74,7 +88,7 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
   private beltColor: TaekwondoBeltColor = DEFAULT_TAEKWONDO_BELT_COLOR
 
   private readonly handleEscDown = () => {
-    this.returnToPoomsaeSelect()
+    void this.finishPracticeSession(false)
   }
 
   private readonly handleNextMotionTestDown = () => {
@@ -90,7 +104,12 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     this.poomsae = data.poomsae
     this.beltColor = data.beltColor ?? DEFAULT_TAEKWONDO_BELT_COLOR
     this.motions = []
+    this.motionResults = []
     this.currentMotionIndex = 0
+    this.practiceStartedAtMs = 0
+    this.motionStartedAtMs = 0
+    this.hasSubmittedSession = false
+    this.isSavingSession = false
     this.isSceneShuttingDown = false
   }
 
@@ -124,6 +143,8 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
 
     addCoverBackground(this, ASSET_KEYS.background)
     this.add.rectangle(vw / 2, vh / 2, vw, vh, 0x120d08, OVERLAY_ALPHA).setDepth(1)
+    this.practiceStartedAtMs = Date.now()
+    this.motionStartedAtMs = this.practiceStartedAtMs
 
     this.createCameraTexture()
     this.createTopStatus(vw, vh)
@@ -186,7 +207,11 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     this.setCurrentMotionName(DEFAULT_CURRENT_MOTION_NAME)
 
     try {
-      const response = await listTaekwondoMotions(this.getPoomsaeForApi())
+      const poomsae = this.getPoomsaeForApi()
+      console.log('[TaekwondoPoomsaePracticeScene] 동작 목록 조회 요청', { poomsae })
+
+      const response = await listTaekwondoMotions(poomsae)
+      console.log('[TaekwondoPoomsaePracticeScene] 동작 목록 조회 응답', response)
 
       if (this.isSceneShuttingDown) {
         return
@@ -195,9 +220,20 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
       this.motions = [...(response.data ?? [])].sort(
         (left, right) => left.routineOrder - right.routineOrder,
       )
+      console.log('[TaekwondoPoomsaePracticeScene] 정렬된 동작 목록', {
+        poomsae,
+        motionCount: this.motions.length,
+        motions: this.motions.map(motion => ({
+          id: motion.id,
+          name: motion.name,
+          routineOrder: motion.routineOrder,
+        })),
+      })
       this.currentMotionIndex = 0
+      this.motionStartedAtMs = Date.now()
       this.setCurrentMotionName(this.getCurrentMotionName())
-    } catch {
+    } catch (error) {
+      console.warn('[TaekwondoPoomsaePracticeScene] 동작 목록 조회 실패', error)
       if (!this.isSceneShuttingDown) {
         this.motions = []
         this.currentMotionIndex = 0
@@ -220,14 +256,123 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
       return
     }
 
+    this.recordCurrentMotionResult()
+
     const nextMotionIndex = this.currentMotionIndex + 1
     if (nextMotionIndex >= this.motions.length) {
-      this.stopPractice()
+      void this.finishPracticeSession(false)
       return
     }
 
     this.currentMotionIndex = nextMotionIndex
+    this.motionStartedAtMs = Date.now()
     this.setCurrentMotionName(this.getCurrentMotionName())
+  }
+
+  private recordCurrentMotionResult() {
+    const motion = this.motions[this.currentMotionIndex]
+    if (!motion || this.motionResults.some(result => result.taekwondoMotionId === motion.id)) {
+      return
+    }
+
+    const now = Date.now()
+    const durationSec = Math.max(1, Math.round((now - this.motionStartedAtMs) / 1000))
+    this.motionResults.push({
+      taekwondoMotionId: motion.id,
+      durationSec,
+      accuracy: 1,
+      completedReps: motion.targetReps,
+      feedback: DEFAULT_MOTION_COMPLETE_FEEDBACK,
+    })
+  }
+
+  private async buildTaekwondoSessionPayload(): Promise<CreateTaekwondoSessionRequest | null> {
+    const patientProfileId = await resolvePatientProfileIdOrFetch()
+    if (!patientProfileId) {
+      console.warn(
+        '[TaekwondoPoomsaePracticeScene] Skip taekwondo session save: missing patientProfileId.',
+        {
+          search: window.location.search,
+          storedPatientProfileId: window.localStorage.getItem('wish_patient_profile_id'),
+          envPatientProfileId: import.meta.env.VITE_PATIENT_PROFILE_ID,
+        },
+      )
+      return null
+    }
+
+    if (this.motionResults.length === 0) {
+      console.warn(
+        '[TaekwondoPoomsaePracticeScene] Skip taekwondo session save: no motion results.',
+        {
+          loadedMotionCount: this.motions.length,
+          currentMotionIndex: this.currentMotionIndex,
+        },
+      )
+      return null
+    }
+
+    const durationSec = Math.max(
+      1,
+      this.motionResults.reduce((total, result) => total + result.durationSec, 0),
+    )
+
+    return {
+      patientProfileId,
+      poomsae: this.getPoomsaeForApi(),
+      durationSec,
+      averageAccuracy: calculateTaekwondoAverageAccuracy(this.motionResults),
+      monstersDefeated: this.motionResults.length,
+      motions: this.motionResults,
+    }
+  }
+
+  private async finishPracticeSession(recordCurrentMotion: boolean) {
+    console.log('[TaekwondoPoomsaePracticeScene] Finish practice requested.', {
+      recordCurrentMotion,
+      hasSubmittedSession: this.hasSubmittedSession,
+      isSavingSession: this.isSavingSession,
+      currentMotionIndex: this.currentMotionIndex,
+      loadedMotionCount: this.motions.length,
+      recordedMotionCount: this.motionResults.length,
+      patientProfileId: resolvePatientProfileId(),
+    })
+
+    if (this.hasSubmittedSession || this.isSavingSession) {
+      return
+    }
+
+    if (recordCurrentMotion) {
+      this.recordCurrentMotionResult()
+    }
+
+    const payload = await this.buildTaekwondoSessionPayload()
+    if (!payload) {
+      this.stopPractice()
+      return
+    }
+
+    this.isSavingSession = true
+    this.hasSubmittedSession = true
+    this.showFeedback('저장 중')
+
+    try {
+      console.log('[TaekwondoPoomsaePracticeScene] Saving taekwondo session.', payload)
+      await createTaekwondoSession(payload)
+      console.log('[TaekwondoPoomsaePracticeScene] Saved taekwondo session.')
+      this.showFeedback('저장 완료')
+    } catch (error) {
+      console.warn('[TaekwondoPoomsaePracticeScene] Failed to save taekwondo session.', {
+        error,
+        apiBaseUrl: import.meta.env.VITE_API_BASE_URL,
+        hasAccessToken: Boolean(window.localStorage.getItem('wish_access_token')),
+        patientProfileId: resolvePatientProfileId(),
+        motionResults: this.motionResults,
+      })
+      this.showFeedback('저장 실패')
+    } finally {
+      this.isSavingSession = false
+      this.stopPractice()
+    }
   }
 
   private createTopStatus(vw: number, vh: number) {
@@ -263,7 +408,9 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
       TEMP_ACTIVE_STEP_COUNT,
     )
 
-    this.createDeleteButton(vw * 0.885, visualTopY, deleteSize, () => this.stopPractice())
+    this.createDeleteButton(vw * 0.885, visualTopY, deleteSize, () => {
+      void this.finishPracticeSession(false)
+    })
   }
 
   private createCurrentMotionPanel(x: number, y: number, width: number, height: number) {
@@ -656,6 +803,7 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     this.feedbackText = undefined
     this.currentMotionText = undefined
     this.motions = []
+    this.motionResults = []
     this.stopCamera()
     this.cleanupCameraEffects()
 

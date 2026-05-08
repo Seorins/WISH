@@ -47,6 +47,7 @@ export {
   normalizeTaekwondoBeltColor,
   TAEKWONDO_BELT_COLORS,
 } from './taekwondo-belt-history'
+export { calculateTaekwondoAverageAccuracy, createTaekwondoSession } from './taekwondo-sessions'
 export { listUsers } from './users'
 export type { LoginRequest, SignupRequest, TokenResponse, UserResponse, UserRole } from './auth'
 export type {
@@ -103,3 +104,9 @@ export type {
   UpdateTaekwondoMotionRequest,
 } from './taekwondo-motions'
 export type { TaekwondoBeltColor, TaekwondoBeltHistory } from './taekwondo-belt-history'
+export type {
+  CreateTaekwondoSessionMotionRequest,
+  CreateTaekwondoSessionRequest,
+  TaekwondoSessionDetail,
+  TaekwondoSessionMotionResult,
+} from './taekwondo-sessions'
