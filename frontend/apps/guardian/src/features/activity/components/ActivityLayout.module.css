@@ -11,19 +11,26 @@
 }
 
 .headerSlot {
-  flex-shrink: 0;
-  z-index: 5;
-  height: var(--dash-header-height);
-  padding: var(--dash-space-4) var(--dash-space-7) 0;
+  flex: 0 0 auto;
+  padding: 14px 32px 0;
 }
 
 .body {
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 0;
   display: grid;
-  grid-template-columns: 320px minmax(0, 1fr);
-  gap: var(--dash-space-5);
-  padding: var(--dash-space-3) var(--dash-space-7) var(--dash-space-5);
+  grid-template-columns: 280px minmax(0, 1fr);
+  gap: 20px;
+  padding: 16px 32px 20px;
+  align-items: stretch;
+}
+
+@media (max-width: 1280px) {
+  .body {
+    grid-template-columns: 240px minmax(0, 1fr);
+    gap: 16px;
+    padding: 14px 20px 16px;
+  }
 }
 
 .sidebar {
