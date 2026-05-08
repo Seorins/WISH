@@ -26,8 +26,7 @@ type CameraSuccessEffectConfig = {
 }
 
 const DEFAULT_IDLE_ENEMY_COUNT = 4
-const SUCCESS_FEEDBACK_MESSAGE =
-  '\uc88b\uc544\uc694! \uc815\ud655\ud55c \ub3d9\uc791\uc774\uc5d0\uc694.'
+const SUCCESS_FEEDBACK_MESSAGE = '좋아요! 정확한 동작이에요.'
 
 export class CameraSuccessEffect {
   private readonly layer: Phaser.GameObjects.Container

@@ -86,13 +86,10 @@ const CARD_LAYOUT = {
 } as const
 
 const POOMSAE_IMAGE_FALLBACK_INDEX = 8
-const POOMSAE_READY_ERROR_MESSAGE =
-  '\ud488\uc0c8 \uc815\ubcf4\ub97c \ubd88\ub7ec\uc624\uc9c0 \ubabb\ud588\uc5b4\uc694. \uc7a0\uc2dc \ud6c4 \ub2e4\uc2dc \uc2dc\ub3c4\ud574 \uc8fc\uc138\uc694.'
-const POOMSAE_PARTIAL_ERROR_MESSAGE =
-  '\uc77c\ubd80 \ud488\uc0c8 \uc815\ubcf4\ub97c \ubd88\ub7ec\uc624\uc9c0 \ubabb\ud588\uc5b4\uc694.'
-const POOMSAE_LOADING_MESSAGE =
-  '\ud488\uc0c8 \uc815\ubcf4\ub97c \ubd88\ub7ec\uc624\ub294 \uc911\uc774\uc5d0\uc694.'
-const POOMSAE_NOT_READY_SUFFIX = '\uc740 \uc544\uc9c1 \uc900\ube44\uc911\uc774\uc5d0\uc694.'
+const POOMSAE_READY_ERROR_MESSAGE = '품새 정보를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.'
+const POOMSAE_PARTIAL_ERROR_MESSAGE = '일부 품새 정보를 불러오지 못했어요.'
+const POOMSAE_LOADING_MESSAGE = '품새 정보를 불러오는 중이에요.'
+const POOMSAE_NOT_READY_SUFFIX = '은 아직 준비중이에요.'
 
 function getPoomsaeNumber(poomsae: Poomsae) {
   return getTaekwondoPoomsaeNumber(poomsae)
@@ -382,7 +379,7 @@ export class TaekwondoPoomsaeSelectScene extends Phaser.Scene {
       .text(
         0,
         height * CARD_LAYOUT.starBoxY,
-        Array.from({ length: DIFFICULTY_STARS[option.difficulty] }, () => '\u2605').join('  '),
+        Array.from({ length: DIFFICULTY_STARS[option.difficulty] }, () => '★').join('  '),
         {
           fontFamily: 'sans-serif',
           fontSize: `${Math.round(width * 0.065)}px`,
@@ -407,7 +404,7 @@ export class TaekwondoPoomsaeSelectScene extends Phaser.Scene {
 
     const selectButton = this.add.graphics()
     const selectLabel = this.add
-      .text(0, height * CARD_LAYOUT.buttonY, '\uc120\ud0dd', {
+      .text(0, height * CARD_LAYOUT.buttonY, '선택', {
         fontFamily: 'sans-serif',
         fontSize: `${Math.round(width * 0.06)}px`,
         color: '#303030',
@@ -523,13 +520,7 @@ export class TaekwondoPoomsaeSelectScene extends Phaser.Scene {
 
     this.setCardScale(card, targetScale, animateScale)
     card.title.setColor(isSelected ? '#1f0e02' : '#2d1606')
-    card.selectLabel.setText(
-      this.isPoomsaeLoading
-        ? '\ud655\uc778\uc911'
-        : option.isReady
-          ? '\uc120\ud0dd'
-          : '\uc900\ube44\uc911',
-    )
+    card.selectLabel.setText(this.isPoomsaeLoading ? '확인중' : option.isReady ? '선택' : '준비중')
     card.selectLabel.setColor('#ffffff')
     card.image.setAlpha(option.isReady || this.isPoomsaeLoading ? 1 : 0.52)
     card.starText.setAlpha(option.isReady || this.isPoomsaeLoading ? 1 : 0.45)
@@ -676,24 +667,19 @@ export class TaekwondoPoomsaeSelectScene extends Phaser.Scene {
       .setDisplaySize(vw * 0.35, vw * 0.35 * (1086 / 1448))
 
     const guideText = this.add
-      .text(
-        vw * 0.52,
-        vh * 0.72,
-        '\uC606\uC73C\uB85C \uC4F8\uC5B4\uB118\uACA8\n\uB354 \uB9CE\uC740 \uD488\uC0C8\uB97C \uBCFC \uC218 \uC788\uC5B4\uC694.',
-        {
-          fontFamily: 'sans-serif',
-          fontSize: `${Math.round(Phaser.Math.Clamp(vh * 0.032, 20, 30))}px`,
-          color: '#ffffff',
-          fontStyle: '700',
-          lineSpacing: 8,
-        },
-      )
+      .text(vw * 0.52, vh * 0.72, '옆으로 쓸어넘겨\n더 많은 품새를 볼 수 있어요.', {
+        fontFamily: 'sans-serif',
+        fontSize: `${Math.round(Phaser.Math.Clamp(vh * 0.032, 20, 30))}px`,
+        color: '#ffffff',
+        fontStyle: '700',
+        lineSpacing: 8,
+      })
       .setOrigin(0, 0.5)
       .setShadow(0, 2, '#3a3027', 4, false, true)
 
     const checkbox = this.add.graphics()
     const checkboxLabel = this.add
-      .text(vw * 0.52 + 38, vh * 0.84, '\ub2e4\uc2dc \ubcf4\uc9c0 \uc54a\uae30', {
+      .text(vw * 0.52 + 38, vh * 0.84, '다시 보지 않기', {
         fontFamily: 'sans-serif',
         fontSize: `${Math.round(Phaser.Math.Clamp(vh * 0.022, 16, 21))}px`,
         color: '#ffffff',
@@ -729,7 +715,7 @@ export class TaekwondoPoomsaeSelectScene extends Phaser.Scene {
 
     const confirmButton = this.add.graphics()
     const confirmLabel = this.add
-      .text(vw * 0.82, vh * 0.84, '\ud655\uc778', {
+      .text(vw * 0.82, vh * 0.84, '확인', {
         fontFamily: 'sans-serif',
         fontSize: `${Math.round(Phaser.Math.Clamp(vh * 0.023, 17, 22))}px`,
         color: '#ffffff',
