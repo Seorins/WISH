@@ -419,6 +419,59 @@ ai:image:
         ${DESTINATIONS}
   rules: *ai_dev_rules
 
+ai:deploy-dev:
+  stage: deploy
+  image: python:3.12-alpine
+  needs:
+    - ai:image
+  script:
+    - test -n "${JENKINS_BASE_URL}" || (echo "JENKINS_BASE_URL is empty" && exit 1)
+    - test -n "${JENKINS_USER}" || (echo "JENKINS_USER is empty" && exit 1)
+    - test -n "${JENKINS_API_TOKEN}" || (echo "JENKINS_API_TOKEN is empty" && exit 1)
+    - |
+      IMAGE_TAG="ai-${CI_COMMIT_REF_SLUG}-latest"
+      export IMAGE_TAG
+    - *resolve_backend_metadata
+    - |
+      BUILD_URL="${JENKINS_BASE_URL%/}/job/deploy-dev-ai/buildWithParameters"
+      export BUILD_URL
+
+      echo "Triggering Jenkins deploy job: ${BUILD_URL}"
+      echo "IMAGE_TAG=${IMAGE_TAG}"
+      echo "CHANGE_ORIGIN=${CHANGE_ORIGIN}"
+
+      python - <<'PY'
+      import base64
+      import os
+      import urllib.parse
+      import urllib.request
+
+      build_url = os.environ["BUILD_URL"]
+      credentials = f"{os.environ['JENKINS_USER']}:{os.environ['JENKINS_API_TOKEN']}".encode()
+      headers = {
+          "Authorization": "Basic " + base64.b64encode(credentials).decode(),
+          "Content-Type": "application/x-www-form-urlencoded",
+      }
+      payload = urllib.parse.urlencode(
+          {
+              "IMAGE_TAG": os.environ["IMAGE_TAG"],
+              "CHANGE_ORIGIN": os.environ.get("CHANGE_ORIGIN", ""),
+              "MR_IID": os.environ.get("MR_IID", ""),
+              "MR_TITLE": os.environ.get("MR_TITLE", ""),
+              "MR_URL": os.environ.get("MR_URL", ""),
+              "MR_AUTHOR_NAME": os.environ.get("MR_AUTHOR_NAME", ""),
+              "MR_AUTHOR_USERNAME": os.environ.get("MR_AUTHOR_USERNAME", ""),
+              "MERGE_USER_NAME": os.environ.get("MERGE_USER_NAME", ""),
+              "MERGE_USER_USERNAME": os.environ.get("MERGE_USER_USERNAME", ""),
+          }
+      ).encode()
+      request = urllib.request.Request(build_url, data=payload, headers=headers, method="POST")
+
+      with urllib.request.urlopen(request, timeout=20) as response:
+          response.read()
+      PY
+  rules: *ai_dev_rules
+
 # ----------------------------------------------------------------------------
 # Frontend
 # ----------------------------------------------------------------------------
