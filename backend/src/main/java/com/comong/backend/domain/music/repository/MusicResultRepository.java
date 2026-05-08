@@ -21,4 +21,13 @@ public interface MusicResultRepository extends JpaRepository<MusicResult, Long> 
                     + "where r.patientProfile.id = :patientProfileId")
     List<MusicResult> findAllByPatientProfileIdWithMusicChart(
             @Param("patientProfileId") Long patientProfileId);
+
+    @Query(
+            "select r from MusicResult r "
+                    + "join fetch r.musicChart "
+                    + "join r.patientProfile p "
+                    + "where r.id = :resultId "
+                    + "and p.user.id = :userId")
+    Optional<MusicResult> findByIdAndPatientProfileUserIdWithMusicChart(
+            @Param("resultId") Long resultId, @Param("userId") Long userId);
 }

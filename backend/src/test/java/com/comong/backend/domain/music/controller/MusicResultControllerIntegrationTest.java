@@ -93,6 +93,95 @@ class MusicResultControllerIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
+    void createMusicResult_persistsMediaKeys() throws Exception {
+        String token = setupUserWithProfile("music-media@example.com", "music-media-user");
+        String videoKey = "local/music/results/1/test-upload/video.webm";
+        String thumbKey = "local/music/results/1/test-upload/thumb.jpg";
+
+        mockMvc.perform(
+                        post("/music/results")
+                                .header("Authorization", "Bearer " + token)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(
+                                        saveRequest(
+                                                "baby-shark",
+                                                24830,
+                                                87,
+                                                142,
+                                                23,
+                                                10,
+                                                175,
+                                                96196,
+                                                videoKey,
+                                                thumbKey)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.videoKey").value(videoKey))
+                .andExpect(jsonPath("$.data.thumbKey").value(thumbKey));
+    }
+
+    @Test
+    void findById_returnsNullMediaUrlsWhenMediaKeysAreMissing() throws Exception {
+        String token = setupUserWithProfile("music-detail-empty@example.com", "music-detail-empty");
+        long resultId = saveMusicResultReturningId(token, validSaveRequest(24830));
+
+        String detailBody =
+                mockMvc.perform(
+                                get("/music/results/{id}", resultId)
+                                        .header("Authorization", "Bearer " + token))
+                        .andExpect(status().isOk())
+                        .andExpect(jsonPath("$.code").value("SUCCESS"))
+                        .andExpect(jsonPath("$.data.id").value(resultId))
+                        .andExpect(jsonPath("$.data.chartId").value("baby-shark"))
+                        .andExpect(jsonPath("$.data.score").value(24830))
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString();
+
+        JsonNode detail = objectMapper.readTree(detailBody).get("data");
+        assertThat(detail.path("videoUrl").isMissingNode() || detail.path("videoUrl").isNull())
+                .isTrue();
+        assertThat(detail.path("thumbUrl").isMissingNode() || detail.path("thumbUrl").isNull())
+                .isTrue();
+    }
+
+    @Test
+    void findById_failsWhenMediaKeysExistButS3IsDisabled() throws Exception {
+        String token = setupUserWithProfile("music-detail-s3@example.com", "music-detail-s3");
+        String videoKey = "local/music/results/1/test-upload/video.webm";
+        String thumbKey = "local/music/results/1/test-upload/thumb.jpg";
+
+        String createBody =
+                mockMvc.perform(
+                                post("/music/results")
+                                        .header("Authorization", "Bearer " + token)
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .content(
+                                                saveRequest(
+                                                        "baby-shark",
+                                                        24830,
+                                                        87,
+                                                        142,
+                                                        23,
+                                                        10,
+                                                        175,
+                                                        96196,
+                                                        videoKey,
+                                                        thumbKey)))
+                        .andExpect(status().isCreated())
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString();
+
+        long resultId = objectMapper.readTree(createBody).get("data").get("id").asLong();
+
+        mockMvc.perform(
+                        get("/music/results/{id}", resultId)
+                                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.code").value("S-002"));
+    }
+
+    @Test
     void createMusicResult_higherScoreReturnsNewBest() throws Exception {
         String token = setupUserWithProfile("music-high@example.com", "music-high-user");
         saveMusicResult(token, 21000);
@@ -262,6 +351,21 @@ class MusicResultControllerIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
+    void findById_hidesOtherUsersResult() throws Exception {
+        String ownerToken =
+                setupUserWithProfile("music-detail-owner@example.com", "music-detail-owner-user");
+        String otherToken =
+                setupUserWithProfile("music-detail-other@example.com", "music-detail-other-user");
+        long resultId = saveMusicResultReturningId(ownerToken, validSaveRequest(12000));
+
+        mockMvc.perform(
+                        get("/music/results/{id}", resultId)
+                                .header("Authorization", "Bearer " + otherToken))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("MU-004"));
+    }
+
+    @Test
     void findMyBest_requiresAuthentication() throws Exception {
         mockMvc.perform(get("/music/results/me/best"))
                 .andExpect(status().isUnauthorized())
@@ -273,12 +377,21 @@ class MusicResultControllerIntegrationTest extends IntegrationTestSupport {
     }
 
     private void saveMusicResult(String token, String requestBody) throws Exception {
-        mockMvc.perform(
-                        post("/music/results")
-                                .header("Authorization", "Bearer " + token)
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(requestBody))
-                .andExpect(status().isCreated());
+        saveMusicResultReturningId(token, requestBody);
+    }
+
+    private long saveMusicResultReturningId(String token, String requestBody) throws Exception {
+        String body =
+                mockMvc.perform(
+                                post("/music/results")
+                                        .header("Authorization", "Bearer " + token)
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .content(requestBody))
+                        .andExpect(status().isCreated())
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString();
+        return objectMapper.readTree(body).get("data").get("id").asLong();
     }
 
     private String validSaveRequest(int score) {
@@ -315,6 +428,44 @@ class MusicResultControllerIntegrationTest extends IntegrationTestSupport {
                         missCount,
                         totalNotes,
                         playedDurationMs);
+    }
+
+    private String saveRequest(
+            String chartId,
+            int score,
+            int maxCombo,
+            int perfectCount,
+            int goodCount,
+            int missCount,
+            int totalNotes,
+            int playedDurationMs,
+            String videoKey,
+            String thumbKey) {
+        return """
+                {
+                  "chartId": "%s",
+                  "score": %d,
+                  "maxCombo": %d,
+                  "perfectCount": %d,
+                  "goodCount": %d,
+                  "missCount": %d,
+                  "totalNotes": %d,
+                  "playedDurationMs": %d,
+                  "videoKey": "%s",
+                  "thumbKey": "%s"
+                }
+                """
+                .formatted(
+                        chartId,
+                        score,
+                        maxCombo,
+                        perfectCount,
+                        goodCount,
+                        missCount,
+                        totalNotes,
+                        playedDurationMs,
+                        videoKey,
+                        thumbKey);
     }
 
     private double expectedAccuracy(int perfectCount, int goodCount, int totalNotes) {
