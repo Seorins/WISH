@@ -2,9 +2,7 @@ package com.comong.backend.domain.admin.service;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -35,9 +33,11 @@ import lombok.RequiredArgsConstructor;
 @Transactional(readOnly = true)
 public class AdminDashboardService {
 
-    private static final ZoneId DASHBOARD_ZONE = ZoneId.of("Asia/Seoul");
     private static final int DEFAULT_RANGE_DAYS = 7;
+    private static final int RISK_INACTIVE_DAYS = 7;
     private static final long ACTIVE_PERIOD_SECONDS_THRESHOLD = 60L * 60L;
+    private static final long CONTENT_SKEW_MIN_SECONDS = 600L;
+    private static final long CONTENT_SKEW_PERCENT_THRESHOLD = 80L;
 
     private final UserRepository userRepository;
     private final PatientProfileRepository patientProfileRepository;
@@ -45,7 +45,7 @@ public class AdminDashboardService {
     private final UsageAggregationQuery usageAggregationQuery;
 
     public AdminDashboardResponse getDashboard(LocalDate from, LocalDate to) {
-        LocalDate today = LocalDate.now(DASHBOARD_ZONE);
+        LocalDate today = LocalDate.now();
         LocalDate effectiveTo = to != null ? to : today;
         LocalDate effectiveFrom =
                 from != null ? from : effectiveTo.minusDays(DEFAULT_RANGE_DAYS - 1L);
@@ -59,6 +59,7 @@ public class AdminDashboardService {
         Map<Long, PatientUsage> usageByPatient = new HashMap<>();
         UsageTotals periodTotals = new UsageTotals();
 
+        // TODO: pilot 규모를 넘기면 기간/환자 전체 조회를 집계 쿼리나 페이징으로 전환한다.
         List<DailyUsageStat> cachedRows =
                 dailyUsageStatRepository.findAllWithPatientByStatDateBetween(
                         effectiveFrom, effectiveTo);
@@ -81,7 +82,7 @@ public class AdminDashboardService {
         for (Map.Entry<Long, UsageTotals> entry : todayLive.entrySet()) {
             PatientUsage patientUsage =
                     usageByPatient.computeIfAbsent(entry.getKey(), id -> new PatientUsage());
-            patientUsage.todaySeconds = entry.getValue().total();
+            patientUsage.todaySeconds = entry.getValue().appUsageSeconds();
         }
 
         if (!today.isBefore(effectiveFrom) && !today.isAfter(effectiveTo)) {
@@ -105,19 +106,12 @@ public class AdminDashboardService {
         List<AdminDashboardResponse.PatientActivity> patientActivities =
                 patients.stream()
                         .map(
-                                patient ->
-                                        toPatientActivity(
-                                                patient,
-                                                usageByPatient.computeIfAbsent(
-                                                        patient.getId(), id -> new PatientUsage()),
-                                                effectiveTo))
-                        .sorted(
-                                Comparator.comparingLong(
-                                                AdminDashboardResponse.PatientActivity
-                                                        ::periodSeconds)
-                                        .reversed()
-                                        .thenComparing(
-                                                AdminDashboardResponse.PatientActivity::patientId))
+                                patient -> {
+                                    PatientUsage usage =
+                                            usageByPatient.getOrDefault(
+                                                    patient.getId(), new PatientUsage());
+                                    return toPatientActivity(patient, usage, effectiveTo);
+                                })
                         .toList();
 
         long atRiskPatients =
@@ -126,7 +120,8 @@ public class AdminDashboardService {
                         .count();
         long contentSkewedPatients =
                 usageByPatient.values().stream().filter(PatientUsage::isContentSkewed).count();
-        long todayTotalSeconds = todayLive.values().stream().mapToLong(UsageTotals::total).sum();
+        long todayTotalSeconds =
+                todayLive.values().stream().mapToLong(UsageTotals::appUsageSeconds).sum();
         long todayActivePatients =
                 todayLive.values().stream().filter(totals -> totals.total() > 0).count();
         long guardianUsers = userRepository.countByRole(UserRole.USER);
@@ -143,8 +138,8 @@ public class AdminDashboardService {
                         patientProfileRepository.count(),
                         todayActivePatients,
                         todayTotalSeconds,
-                        periodTotals.total(),
-                        dayCount > 0 ? periodTotals.total() / dayCount : 0,
+                        periodTotals.appUsageSeconds(),
+                        dayCount > 0 ? periodTotals.appUsageSeconds() / dayCount : 0,
                         atRiskPatients,
                         userRepository.countByCreatedAtBetween(todayStart, tomorrowStart),
                         patientProfileRepository.countByCreatedAtBetween(
@@ -247,7 +242,7 @@ public class AdminDashboardService {
                 patient.getNickname(),
                 patient.getUser().getEmail(),
                 usage.todaySeconds,
-                usage.total.total(),
+                usage.total.appUsageSeconds(),
                 usage.favoriteContentLabel(),
                 usage.lastActiveDate,
                 usage.status(periodTo));
@@ -267,7 +262,7 @@ public class AdminDashboardService {
                             totals.music,
                             totals.taekwondo,
                             totals.gymnastics,
-                            totals.total(),
+                            totals.appUsageSeconds(),
                             activePatientsByDate.get(entry.getKey()).size()));
         }
         return responses;
@@ -298,7 +293,7 @@ public class AdminDashboardService {
                 new AdminDashboardResponse.DashboardAlert(
                         "RISK_PATIENT",
                         "이탈 위험 환자",
-                        "최근 기간 활동이 없는 환자입니다.",
+                        "최근 7일 동안 활동이 없는 환자입니다.",
                         summary.atRiskPatients() > 0 ? "warning" : "normal",
                         summary.atRiskPatients()),
                 new AdminDashboardResponse.DashboardAlert(
@@ -348,13 +343,13 @@ public class AdminDashboardService {
         }
 
         private String status(LocalDate periodTo) {
-            if (lastActiveDate == null || total.total() == 0) {
+            if (lastActiveDate == null || !total.hasAnyUsage()) {
                 return "RISK";
             }
-            if (lastActiveDate.isBefore(periodTo.minusDays(DEFAULT_RANGE_DAYS - 1L))) {
+            if (lastActiveDate.isBefore(periodTo.minusDays(RISK_INACTIVE_DAYS - 1L))) {
                 return "RISK";
             }
-            if (todaySeconds > 0 || total.total() >= ACTIVE_PERIOD_SECONDS_THRESHOLD) {
+            if (todaySeconds > 0 || total.appUsageSeconds() >= ACTIVE_PERIOD_SECONDS_THRESHOLD) {
                 return "ACTIVE";
             }
             return "NORMAL";
@@ -362,14 +357,14 @@ public class AdminDashboardService {
 
         private boolean isContentSkewed() {
             long contentTotal = total.contentTotal();
-            if (contentTotal < 600) {
+            if (contentTotal < CONTENT_SKEW_MIN_SECONDS) {
                 return false;
             }
             long max =
                     Math.max(
                             Math.max(total.art, total.music),
                             Math.max(total.taekwondo, total.gymnastics));
-            return max * 100 >= contentTotal * 80;
+            return max * 100 >= contentTotal * CONTENT_SKEW_PERCENT_THRESHOLD;
         }
     }
 
@@ -406,8 +401,16 @@ public class AdminDashboardService {
             return login + art + music + taekwondo + gymnastics;
         }
 
+        private long appUsageSeconds() {
+            return login;
+        }
+
         private long contentTotal() {
             return art + music + taekwondo + gymnastics;
+        }
+
+        private boolean hasAnyUsage() {
+            return total() > 0;
         }
 
         private ContentType favoriteContent() {

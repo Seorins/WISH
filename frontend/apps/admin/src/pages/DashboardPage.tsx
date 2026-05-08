@@ -9,13 +9,13 @@ import type {
   AdminDashboardPatientStatus,
 } from '@wish/api-client'
 import {
-  Area,
-  AreaChart,
   Bar,
   BarChart,
   CartesianGrid,
   Cell,
+  ComposedChart,
   Legend,
+  Line,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -154,17 +154,17 @@ export function DashboardPage() {
             <KpiCard
               label="오늘 활성 환자"
               value={`${formatNumber(dashboard.summary.todayActivePatients)}명`}
-              detail={`오늘 사용 ${formatDuration(dashboard.summary.todayTotalSeconds)}`}
+              detail={`앱 사용 ${formatDuration(dashboard.summary.todayTotalSeconds)}`}
             />
             <KpiCard
-              label="기간 총 사용"
+              label="기간 앱 사용"
               value={formatDuration(dashboard.summary.periodTotalSeconds)}
-              detail={`일 평균 ${formatDuration(dashboard.summary.averageDailySeconds)}`}
+              detail={`일 평균 앱 사용 ${formatDuration(dashboard.summary.averageDailySeconds)}`}
             />
             <KpiCard
               label="이탈 위험"
               value={`${formatNumber(dashboard.summary.atRiskPatients)}명`}
-              detail={`${formatDateRange(dashboard.from, dashboard.to)} 기준`}
+              detail="최근 7일 비활동 기준"
               tone={dashboard.summary.atRiskPatients > 0 ? 'risk' : 'normal'}
             />
             <KpiCard
@@ -179,7 +179,9 @@ export function DashboardPage() {
               <div style={styles.panelHeader}>
                 <div>
                   <h2 style={styles.panelTitle}>일별 사용시간</h2>
-                  <p style={styles.panelDescription}>접속과 콘텐츠 활동을 일자별로 합산했습니다.</p>
+                  <p style={styles.panelDescription}>
+                    앱 사용시간은 선으로, 콘텐츠별 활동 시간은 막대로 표시합니다.
+                  </p>
                 </div>
                 <span style={styles.periodBadge}>
                   {formatDateRange(dashboard.from, dashboard.to)}
@@ -187,7 +189,7 @@ export function DashboardPage() {
               </div>
               <div style={styles.chartFrame}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart
+                  <ComposedChart
                     data={usageChartData}
                     margin={{ top: 8, right: 10, left: 0, bottom: 0 }}
                   >
@@ -211,47 +213,19 @@ export function DashboardPage() {
                       ]}
                     />
                     <Legend formatter={value => usageMetricLabel(String(value))} />
-                    <Area
+                    <Bar dataKey="art" stackId="content" fill={CONTENT_COLORS.art} />
+                    <Bar dataKey="music" stackId="content" fill={CONTENT_COLORS.music} />
+                    <Bar dataKey="taekwondo" stackId="content" fill={CONTENT_COLORS.taekwondo} />
+                    <Bar dataKey="gymnastics" stackId="content" fill={CONTENT_COLORS.gymnastics} />
+                    <Line
                       type="monotone"
                       dataKey="login"
-                      stackId="usage"
                       stroke={CONTENT_COLORS.login}
-                      fill={CONTENT_COLORS.login}
-                      fillOpacity={0.24}
+                      strokeWidth={2}
+                      dot={{ r: 2 }}
+                      activeDot={{ r: 4 }}
                     />
-                    <Area
-                      type="monotone"
-                      dataKey="art"
-                      stackId="usage"
-                      stroke={CONTENT_COLORS.art}
-                      fill={CONTENT_COLORS.art}
-                      fillOpacity={0.32}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="music"
-                      stackId="usage"
-                      stroke={CONTENT_COLORS.music}
-                      fill={CONTENT_COLORS.music}
-                      fillOpacity={0.3}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="taekwondo"
-                      stackId="usage"
-                      stroke={CONTENT_COLORS.taekwondo}
-                      fill={CONTENT_COLORS.taekwondo}
-                      fillOpacity={0.3}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="gymnastics"
-                      stackId="usage"
-                      stroke={CONTENT_COLORS.gymnastics}
-                      fill={CONTENT_COLORS.gymnastics}
-                      fillOpacity={0.26}
-                    />
-                  </AreaChart>
+                  </ComposedChart>
                 </ResponsiveContainer>
               </div>
             </div>
@@ -325,7 +299,7 @@ export function DashboardPage() {
               <div>
                 <h2 style={styles.panelTitle}>관심 환자 활동 현황</h2>
                 <p style={styles.panelDescription}>
-                  위험 상태를 우선 정렬하고 기간 사용시간을 함께 표시합니다.
+                  위험 상태를 우선 정렬하고 기간 앱 사용시간을 함께 표시합니다.
                 </p>
               </div>
               <span style={styles.periodBadge}>상위 {formatNumber(patientRows.length)}명</span>
@@ -336,8 +310,8 @@ export function DashboardPage() {
                   <tr>
                     <th style={styles.th}>환자</th>
                     <th style={styles.th}>보호자</th>
-                    <th style={styles.th}>오늘</th>
-                    <th style={styles.th}>기간 합계</th>
+                    <th style={styles.th}>오늘 앱 사용</th>
+                    <th style={styles.th}>앱 사용 합계</th>
                     <th style={styles.th}>선호 콘텐츠</th>
                     <th style={styles.th}>마지막 활동</th>
                     <th style={styles.th}>상태</th>
@@ -515,7 +489,7 @@ function formatCompactDuration(seconds: number) {
 function usageMetricLabel(metric: string) {
   switch (metric) {
     case 'login':
-      return '접속'
+      return '앱 사용'
     case 'art':
       return '미술'
     case 'music':
