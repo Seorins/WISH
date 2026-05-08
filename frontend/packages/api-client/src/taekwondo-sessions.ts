@@ -71,9 +71,10 @@ export async function createTaekwondoSession(
     },
   )
 
-  if (!response.data.data) {
+  const session = response.data.data
+  if (!session) {
     throw new Error(response.data.message || 'Failed to save taekwondo session.')
   }
 
-  return response.data.data
+  return session
 }

@@ -75,6 +75,7 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
   private currentMotionText?: Phaser.GameObjects.Text
   private motions: TaekwondoMotion[] = []
   private motionResults: CreateTaekwondoSessionMotionRequest[] = []
+  private recordedMotionIndexes = new Set<number>()
   private currentMotionIndex = 0
   private practiceStartedAtMs = 0
   private motionStartedAtMs = 0
@@ -105,6 +106,7 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     this.beltColor = data.beltColor ?? DEFAULT_TAEKWONDO_BELT_COLOR
     this.motions = []
     this.motionResults = []
+    this.recordedMotionIndexes.clear()
     this.currentMotionIndex = 0
     this.practiceStartedAtMs = 0
     this.motionStartedAtMs = 0
@@ -271,12 +273,13 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
 
   private recordCurrentMotionResult() {
     const motion = this.motions[this.currentMotionIndex]
-    if (!motion || this.motionResults.some(result => result.taekwondoMotionId === motion.id)) {
+    if (!motion || this.recordedMotionIndexes.has(this.currentMotionIndex)) {
       return
     }
 
     const now = Date.now()
     const durationSec = Math.max(1, Math.round((now - this.motionStartedAtMs) / 1000))
+    this.recordedMotionIndexes.add(this.currentMotionIndex)
     this.motionResults.push({
       taekwondoMotionId: motion.id,
       durationSec,
@@ -361,6 +364,7 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
       console.log('[TaekwondoPoomsaePracticeScene] Saved taekwondo session.')
       this.showFeedback('저장 완료')
     } catch (error) {
+      this.hasSubmittedSession = false
       console.warn('[TaekwondoPoomsaePracticeScene] Failed to save taekwondo session.', {
         error,
         apiBaseUrl: import.meta.env.VITE_API_BASE_URL,

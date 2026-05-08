@@ -23,11 +23,16 @@ export async function resolvePatientProfileIdOrFetch() {
     return resolved
   }
 
-  const response = await listPatientProfiles()
-  const patientProfileId = response.data?.[0]?.id
-  if (patientProfileId) {
-    window.localStorage.setItem(PATIENT_PROFILE_STORAGE_KEY, String(patientProfileId))
-  }
+  try {
+    const response = await listPatientProfiles()
+    const patientProfileId = response.data?.[0]?.id
+    if (patientProfileId) {
+      window.localStorage.setItem(PATIENT_PROFILE_STORAGE_KEY, String(patientProfileId))
+    }
 
-  return patientProfileId
+    return patientProfileId
+  } catch (error) {
+    console.warn('patient profile id를 API에서 가져오는데 실패함.', error)
+    return undefined
+  }
 }
