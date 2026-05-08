@@ -23,7 +23,7 @@ export function createPoomsaeProgressView(
   const container = scene.add.container(options.x, options.y).setDepth(4)
 
   const update = (totalStepCount: number, activeStepCount: number) => {
-    const stepCount = totalStepCount || options.defaultTotalStepCount
+    const stepCount = totalStepCount > 0 ? totalStepCount : options.defaultTotalStepCount
     container.removeAll(true)
     container.add(
       createTaekwondoRoundedPanel(scene, 0, 0, options.width, options.height, {

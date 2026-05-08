@@ -51,7 +51,8 @@ const DEFAULT_TOTAL_STEP_COUNT = 9
 const DEFAULT_CURRENT_MOTION_NAME = '동작 준비중'
 const DEFAULT_MOTION_COMPLETE_FEEDBACK = '동작 완료'
 const DEFAULT_FEEDBACK_MESSAGE = '실시간 피드백'
-const CAMERA_DENIED_MESSAGE = '카메라를 아직 준비 중입니다.'
+const MOTION_LOAD_ERROR_MESSAGE = '품새 동작 정보를 불러오지 못했어요.'
+const CAMERA_DENIED_MESSAGE = '카메라를 사용할 수 없어요.'
 const IMAGE_ASPECT = {
   deleteButton: 344 / 336,
   feedback: 852 / 330,
@@ -206,10 +207,10 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
 
     try {
       const poomsae = this.getPoomsaeForApi()
-      console.log('[TaekwondoPoomsaePracticeScene] 동작 목록 조회 요청', { poomsae })
+      console.log('[TaekwondoPoomsaePracticeScene] Loading taekwondo motions.', { poomsae })
 
       const response = await listTaekwondoMotions(poomsae)
-      console.log('[TaekwondoPoomsaePracticeScene] 동작 목록 조회 응답', response)
+      console.log('[TaekwondoPoomsaePracticeScene] Loaded taekwondo motions.', response)
 
       if (this.isSceneShuttingDown) {
         return
@@ -218,7 +219,7 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
       this.motions = [...(response.data ?? [])].sort(
         (left, right) => left.routineOrder - right.routineOrder,
       )
-      console.log('[TaekwondoPoomsaePracticeScene] 정렬된 동작 목록', {
+      console.log('[TaekwondoPoomsaePracticeScene] Sorted taekwondo motions.', {
         poomsae,
         motionCount: this.motions.length,
         motions: this.motions.map(motion => ({
@@ -232,11 +233,12 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
       this.setCurrentMotionName(this.getCurrentMotionName())
       this.updatePoomsaeProgress()
     } catch (error) {
-      console.warn('[TaekwondoPoomsaePracticeScene] 동작 목록 조회 실패', error)
+      console.warn('[TaekwondoPoomsaePracticeScene] Failed to load taekwondo motions.', error)
       if (!this.isSceneShuttingDown) {
         this.motions = []
         this.currentMotionIndex = 0
-        this.setCurrentMotionName(DEFAULT_CURRENT_MOTION_NAME)
+        this.setCurrentMotionName(MOTION_LOAD_ERROR_MESSAGE)
+        this.showFeedback(MOTION_LOAD_ERROR_MESSAGE)
         this.updatePoomsaeProgress()
       }
     }
@@ -487,7 +489,7 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     createTaekwondoRoundedPanel(this, x, y, width, height, { radius })
 
     this.add
-      .text(x, y - height * 0.36, '\uac00\uc774\ub4dc \uc601\uc0c1', {
+      .text(x, y - height * 0.36, '가이드 영상', {
         fontFamily: 'sans-serif',
         fontSize: `${Math.round(Phaser.Math.Clamp(height * 0.085, 24, 38))}px`,
         color: TEXT_COLOR,
@@ -677,7 +679,7 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
       this.cameraContext.textAlign = 'center'
       this.cameraContext.textBaseline = 'middle'
       this.cameraContext.fillText(
-        '\uce74\uba54\ub77c\ub97c \uc900\ube44\ud558\ub294 \uc911\uc774\uc5d0\uc694.',
+        '카메라를 준비하는 중이에요.',
         this.cameraCanvas.width / 2,
         this.cameraCanvas.height / 2,
       )
