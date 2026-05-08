@@ -2,7 +2,6 @@ package com.comong.backend.domain.dialogue.entity;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 
 import jakarta.persistence.Column;
@@ -28,9 +27,10 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 /**
- * 대화 세션 내 한 턴(질문 + 아이의 선택). EmotionTaggingService 가 {@code choiceIntentId} 기반 고정 매핑으로 {@link
- * #emotionWeights} / {@link #intensity} / {@link #concernFlags} / {@link #protectiveFactors} 를 부여한
- * 결과를 함께 저장한다 (LLM 의 임의 점수 생성 차단).
+ * 대화 세션 내 한 턴(질문 + 아이의 선택).
+ *
+ * <p>FE 가 choice 정의에 박은 {@code intensity} / {@code concernFlags} / {@code protectiveFactors} 를 그대로
+ * 받아 적재한다. 태그의 의미 해석은 BE 가 하지 않으며, 향후 LLM 보고서 시점에 turns 의 raw 데이터를 read 하여 처리한다.
  */
 @Entity
 @Getter
@@ -63,10 +63,6 @@ public class DialogueTurn {
     @Column(name = "choice_text", nullable = false, columnDefinition = "text")
     private String choiceText;
 
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "emotion_weights", nullable = false, columnDefinition = "jsonb")
-    private Map<String, Integer> emotionWeights;
-
     @Column(nullable = false)
     private short intensity;
 
@@ -92,7 +88,6 @@ public class DialogueTurn {
             String questionText,
             String choiceIntentId,
             String choiceText,
-            Map<String, Integer> emotionWeights,
             short intensity,
             List<String> concernFlags,
             List<String> protectiveFactors,
@@ -105,8 +100,6 @@ public class DialogueTurn {
         this.choiceIntentId =
                 Objects.requireNonNull(choiceIntentId, "choiceIntentId must not be null");
         this.choiceText = Objects.requireNonNull(choiceText, "choiceText must not be null");
-        this.emotionWeights =
-                Objects.requireNonNull(emotionWeights, "emotionWeights must not be null");
         if (intensity < 0 || intensity > 3) {
             throw new IllegalArgumentException("intensity must be in [0, 3]");
         }
