@@ -421,9 +421,6 @@ ai:image:
       fi
 
       /kaniko/executor \
-        --cache=true \
-        --cache-run-layers \
-        --cache-repo "${AI_IMAGE_NAME}" \
         --context "${CI_PROJECT_DIR}/ai" \
         --dockerfile "${CI_PROJECT_DIR}/ai/Dockerfile" \
         ${DESTINATIONS}
