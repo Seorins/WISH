@@ -33,6 +33,7 @@ type CreateSimpleDialogOptions = {
 export type SimpleDialogUi = {
   frame: Phaser.GameObjects.Image
   text: Phaser.GameObjects.Text
+  extras: Phaser.GameObjects.GameObject[]
   textBaseX: number
   textBaseY: number
   textBoxHeight: number
@@ -61,7 +62,7 @@ export function createSimpleDialogUi(
     nameLetterSpacing = 0,
     opticalOffsets,
   }: CreateSimpleDialogOptions,
-) {
+): SimpleDialogUi {
   const resolvedOffsets = {
     single: opticalOffsets?.single ?? 34,
     double: opticalOffsets?.double ?? 28,
@@ -111,6 +112,7 @@ export function createSimpleDialogUi(
   return {
     frame,
     text,
+    extras: [],
     textBaseX,
     textBaseY,
     textBoxHeight,
@@ -145,7 +147,7 @@ export function fadeSimpleDialog(
   alpha: number,
   duration: number,
 ) {
-  const targets: Phaser.GameObjects.GameObject[] = [dialog.frame, dialog.text]
+  const targets: Phaser.GameObjects.GameObject[] = [dialog.frame, dialog.text, ...dialog.extras]
   if (dialog.nameLabel) targets.push(dialog.nameLabel)
   scene.tweens.killTweensOf(targets)
   scene.tweens.add({
