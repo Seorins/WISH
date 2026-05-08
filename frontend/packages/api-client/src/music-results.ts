@@ -40,12 +40,14 @@ export type MusicResultDetail = {
   score: number
   maxCombo: number
   perfectCount: number
+  greatCount?: number
   goodCount: number
   missCount: number
   totalNotes: number
   accuracy: number
   rank: string
   playedDurationMs: number
+  othersAveragePlayedDurationMs?: number
   playedAt: string
   videoKey: string | null
   thumbKey: string | null
