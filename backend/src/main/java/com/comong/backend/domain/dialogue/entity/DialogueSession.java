@@ -46,8 +46,8 @@ public class DialogueSession {
     private PatientProfile patientProfile;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "npc_type", nullable = false, length = 32)
-    private NpcType npcType;
+    @Column(name = "npc_name", nullable = false, length = 32)
+    private NpcName npcName;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 16)
@@ -70,10 +70,10 @@ public class DialogueSession {
     private LocalDateTime endedAt;
 
     @Builder
-    private DialogueSession(PatientProfile patientProfile, NpcType npcType, Integer maxSteps) {
+    private DialogueSession(PatientProfile patientProfile, NpcName npcName, Integer maxSteps) {
         this.patientProfile =
                 Objects.requireNonNull(patientProfile, "patientProfile must not be null");
-        this.npcType = Objects.requireNonNull(npcType, "npcType must not be null");
+        this.npcName = Objects.requireNonNull(npcName, "npcName must not be null");
         int resolvedMaxSteps = maxSteps != null ? maxSteps : DEFAULT_MAX_STEPS;
         if (resolvedMaxSteps <= 0) {
             throw new IllegalArgumentException("maxSteps must be positive");

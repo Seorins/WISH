@@ -1,7 +1,7 @@
 -- V21: Add dialogue domain schema (NPC dialogue sessions + turn-level events).
 --
 -- 핵심 결정:
---   - npc_type 으로 LIGHTHOUSE (Claude 생성) / NURSE_RABBIT 등 마을 주민 5인 (정적 스크립트) 분기.
+--   - npc_name 으로 등대지기 영철 (Claude 생성) / 마을 주민 5인 (정적 스크립트) 분기.
 --     같은 turns 테이블에 generated_by 로 출처를 기록하므로 향후 보고서 집계가 1쿼리로 가능.
 --   - emotion_weights / concern_flags / protective_factors 는 JSONB. EmotionTaggingService 가
 --     choice_intent_id → 서버 고정 매핑으로 부여하며, LLM 의 임의 점수 생성을 차단한다.
@@ -13,7 +13,7 @@
 CREATE TABLE dialogue_sessions (
     id                  BIGSERIAL    PRIMARY KEY,
     patient_profile_id  BIGINT       NOT NULL,
-    npc_type            VARCHAR(32)  NOT NULL,
+    npc_name            VARCHAR(32)  NOT NULL,
     status              VARCHAR(16)  NOT NULL,
     step_count          INTEGER      NOT NULL DEFAULT 0,
     max_steps           INTEGER      NOT NULL DEFAULT 3,
