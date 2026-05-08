@@ -1,5 +1,10 @@
 import Phaser from 'phaser'
-import { saveMusicResult } from '@wish/api-client'
+import {
+  requestPresignedUploadUrls,
+  saveMusicResult,
+  uploadToPresignedUrl,
+  type MusicResultRequest,
+} from '@wish/api-client'
 import { assetPath } from '@/game/assets/assetPath'
 import { fadeToScene } from '@/game/systems/sceneTransition'
 import { addCoverBackground } from '@/game/world/background'
@@ -1327,35 +1332,16 @@ export class MusicRhythmScene extends Phaser.Scene {
     }
 
     this.isFinished = true
+    const playedDurationMs = Math.round(this.getSongTimeMs())
     this.resolvePendingNotesAsMisses()
     this.updateProgress(this.chart.durationMs)
     this.stopMusic()
-    this.submitResult()
-    this.finalizeRecording()
     this.showResultOverlay()
+    void this.finalizeAndSubmit(playedDurationMs)
   }
 
-  private finalizeRecording() {
-    const handle = this.recorder
-    if (!handle) return
-    this.recorder = null
-    handle
-      .stop()
-      .then(rec => {
-        console.log('[MusicRhythmScene] recording captured', {
-          videoBytes: rec.videoBlob.size,
-          videoMime: rec.videoMimeType,
-          thumbBytes: rec.thumbBlob.size,
-          thumbMime: rec.thumbMimeType,
-        })
-      })
-      .catch(err => {
-        console.warn('[MusicRhythmScene] recording finalize failed', err)
-      })
-  }
-
-  private submitResult() {
-    saveMusicResult({
+  private async finalizeAndSubmit(playedDurationMs: number) {
+    const baseRequest: MusicResultRequest = {
       chartId: this.chart.id,
       score: this.score,
       maxCombo: this.maxCombo,
@@ -1363,10 +1349,41 @@ export class MusicRhythmScene extends Phaser.Scene {
       goodCount: this.goodCount,
       missCount: this.missCount,
       totalNotes: this.chart.notes.length,
-      playedDurationMs: Math.round(this.getSongTimeMs()),
-    }).catch(error => {
-      console.warn('[MusicRhythmScene] failed to save result', error)
-    })
+      playedDurationMs,
+    }
+
+    const handle = this.recorder
+    this.recorder = null
+
+    if (!handle) {
+      await saveMusicResult(baseRequest).catch(err => {
+        console.warn('[MusicRhythmScene] saveMusicResult failed', err)
+      })
+      return
+    }
+
+    try {
+      const rec = await handle.stop()
+      const presigned = await requestPresignedUploadUrls({
+        videoContentType: rec.videoMimeType,
+        thumbContentType: rec.thumbMimeType,
+      })
+      const { video, thumb } = presigned.data
+      await Promise.all([
+        uploadToPresignedUrl(video, rec.videoBlob),
+        uploadToPresignedUrl(thumb, rec.thumbBlob),
+      ])
+      await saveMusicResult({
+        ...baseRequest,
+        videoKey: video.key,
+        thumbKey: thumb.key,
+      })
+    } catch (err) {
+      console.warn('[MusicRhythmScene] upload+save failed, retrying without video', err)
+      await saveMusicResult(baseRequest).catch(saveErr => {
+        console.warn('[MusicRhythmScene] saveMusicResult fallback failed', saveErr)
+      })
+    }
   }
 
   private resolvePendingNotesAsMisses() {
