@@ -6,10 +6,12 @@ import {
   CameraSuccessEffect,
   type CameraSuccessEffectOptions,
 } from '../effects/cameraSuccessEffect'
+import { DEFAULT_TAEKWONDO_BELT_COLOR, type TaekwondoBeltColor } from '@wish/api-client'
 
 type TaekwondoPoomsaePracticeData = {
   poomsaeId?: string
   poomsaeName?: string
+  beltColor?: TaekwondoBeltColor
 }
 
 const ASSET_KEYS = {
@@ -60,6 +62,7 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
   private lastVideoTime = -1
   private poomsaeId = 'taegeuk-1'
   private poomsaeName = DEFAULT_POOMSAE_NAME
+  private beltColor: TaekwondoBeltColor = DEFAULT_TAEKWONDO_BELT_COLOR
 
   private readonly handleEscDown = () => {
     this.returnToPoomsaeSelect()
@@ -72,6 +75,7 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
   init(data: TaekwondoPoomsaePracticeData = {}) {
     this.poomsaeId = data.poomsaeId ?? 'taegeuk-1'
     this.poomsaeName = data.poomsaeName ?? DEFAULT_POOMSAE_NAME
+    this.beltColor = data.beltColor ?? DEFAULT_TAEKWONDO_BELT_COLOR
   }
 
   preload() {
@@ -521,7 +525,10 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
   }
 
   private returnToPoomsaeSelect() {
-    fadeToScene(this, 'TaekwondoPoomsaeSelectScene', { duration: FADE_DURATION })
+    fadeToScene(this, 'TaekwondoPoomsaeSelectScene', {
+      duration: FADE_DURATION,
+      data: { beltColor: this.beltColor },
+    })
   }
 
   private stopPractice() {

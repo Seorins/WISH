@@ -4,11 +4,19 @@ import {
   createClickTargetMarker,
   createPlayer,
   ensurePlayerWalkAnimations,
+  getTaekwondoBeltPlayerTextureKey,
   loadPlayerSpritesheet,
+  loadTaekwondoBeltPlayerSpritesheets,
   type PlayerDirection,
   type PlayerSprite,
   updatePlayerMovement,
 } from '@/game/entities/player'
+import { resolvePatientProfileId } from '@/features/exerciseSessions/patientProfile'
+import {
+  DEFAULT_TAEKWONDO_BELT_COLOR,
+  getLatestTaekwondoBeltColor,
+  type TaekwondoBeltColor,
+} from '@wish/api-client'
 import { fadeToScene } from '@/game/systems/sceneTransition'
 import { getPlayerMoveSpeed } from '@/game/settings/gameSettings'
 import {
@@ -38,6 +46,10 @@ const RANDOM_POSE_DELAY = 500
 const DIALOG_TEXT_BOX = { x: 580, y: 180, width: 1500, height: 400 }
 const DIALOG_NAME_BOX = { x: 505, y: 109, width: 390, height: 150 }
 
+type TaekwondoSelectData = {
+  beltColor?: TaekwondoBeltColor
+}
+
 export class TaekwondoSelectScene extends Phaser.Scene {
   private player!: PlayerSprite
   private seokjaeNpc!: Phaser.GameObjects.Sprite
@@ -50,6 +62,9 @@ export class TaekwondoSelectScene extends Phaser.Scene {
   private randomPoseTimer?: Phaser.Time.TimerEvent
   private seokjaePoseIndex = 0
   private isTransitioning = false
+  private isSceneShuttingDown = false
+  private beltColor: TaekwondoBeltColor = DEFAULT_TAEKWONDO_BELT_COLOR
+  private initialBeltColor: TaekwondoBeltColor = DEFAULT_TAEKWONDO_BELT_COLOR
 
   private dialog!: SimpleDialogUi
   private isDialogVisible = false
@@ -90,6 +105,10 @@ export class TaekwondoSelectScene extends Phaser.Scene {
     super({ key: 'TaekwondoSelectScene' })
   }
 
+  init(data: TaekwondoSelectData = {}) {
+    this.initialBeltColor = data.beltColor ?? DEFAULT_TAEKWONDO_BELT_COLOR
+  }
+
   preload() {
     this.load.image(
       'taekwondo-room-background',
@@ -108,11 +127,14 @@ export class TaekwondoSelectScene extends Phaser.Scene {
       },
     )
     loadPlayerSpritesheet(this)
+    loadTaekwondoBeltPlayerSpritesheets(this)
   }
 
   create() {
     const { width: vw, height: vh } = this.scale
     this.isTransitioning = false
+    this.isSceneShuttingDown = false
+    this.beltColor = this.initialBeltColor
     this.seokjaePoseIndex = 0
     this.target = null
     this.isDialogVisible = false
@@ -123,18 +145,22 @@ export class TaekwondoSelectScene extends Phaser.Scene {
       Math.min(background.displayWidth, background.displayHeight) * SEOKJAE_INTERACTION.radiusRatio
 
     this.physics.world.setBounds(0, 0, vw, vh)
-    ensurePlayerWalkAnimations(this)
+    ensurePlayerWalkAnimations(this, getTaekwondoBeltPlayerTextureKey(this.beltColor))
     this.createSeokjaeNpc(vw, vh)
     this.createDialogUi()
 
-    this.player = createPlayer(this, vw * ROOM_SPAWN.xRatio, vh * ROOM_SPAWN.yRatio)
+    this.player = createPlayer(this, vw * ROOM_SPAWN.xRatio, vh * ROOM_SPAWN.yRatio, {
+      textureKey: getTaekwondoBeltPlayerTextureKey(this.beltColor),
+    })
     this.exitPortal = createRatioRectangle(vw, vh, EXIT_PORTAL)
+    void this.loadLatestBeltColor()
 
     this.cursors = this.input.keyboard!.createCursorKeys()
     this.input.on('pointerdown', this.handlePointerDown)
     this.input.keyboard!.on('keydown-ENTER', this.handleEnterDown)
     this.input.keyboard!.on('keydown-ESC', this.handleEscDown)
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.isSceneShuttingDown = true
       this.input.off('pointerdown', this.handlePointerDown)
       this.input.keyboard?.off('keydown-ENTER', this.handleEnterDown)
       this.input.keyboard?.off('keydown-ESC', this.handleEscDown)
@@ -143,6 +169,29 @@ export class TaekwondoSelectScene extends Phaser.Scene {
     })
 
     this.cameras.main.fadeIn(250, 0, 0, 0)
+  }
+
+  private async loadLatestBeltColor() {
+    const beltColor = await getLatestTaekwondoBeltColor(resolvePatientProfileId())
+
+    if (this.isSceneShuttingDown || !this.player?.active) {
+      return
+    }
+
+    this.beltColor = beltColor
+    this.applyPlayerBeltColor()
+  }
+
+  private applyPlayerBeltColor() {
+    const textureKey = getTaekwondoBeltPlayerTextureKey(this.beltColor)
+    ensurePlayerWalkAnimations(this, textureKey)
+
+    if (this.player.texture.key === textureKey) {
+      return
+    }
+
+    this.player.anims.stop()
+    this.player.setTexture(textureKey, 0)
   }
 
   update() {
@@ -274,7 +323,10 @@ export class TaekwondoSelectScene extends Phaser.Scene {
     this.target = null
     this.player.setVelocity(0, 0)
     this.closeDialog(false)
-    fadeToScene(this, 'TaekwondoPoomsaeSelectScene', { duration: 220 })
+    fadeToScene(this, 'TaekwondoPoomsaeSelectScene', {
+      duration: 220,
+      data: { beltColor: this.beltColor },
+    })
   }
 
   private returnToVillage() {
