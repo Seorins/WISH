@@ -19,10 +19,12 @@ RUN test -n "$APP_NAME"
 RUN corepack enable
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json .npmrc tsconfig.base.json eslint.config.js ./
+RUN pnpm fetch --frozen-lockfile
+
 COPY apps ./apps
 COPY packages ./packages
 
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile --offline
 RUN pnpm --filter "@wish/${APP_NAME}" build
 RUN mkdir -p /out && cp -R "apps/${APP_NAME}/dist/." /out/
 
