@@ -1,0 +1,201 @@
+.title {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--dash-color-text-strong);
+  margin: 0;
+  padding: 0 var(--dash-space-2);
+}
+
+/* ── Hero (미디어 + 메타) ── */
+.heroCard {
+  background: var(--dash-color-surface);
+  border-radius: var(--dash-radius-card);
+  box-shadow: var(--dash-shadow-card);
+  padding: var(--dash-space-5);
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  gap: var(--dash-space-5);
+  align-items: stretch;
+}
+
+.media {
+  background: var(--dash-gradient-card-tint);
+  border-radius: var(--dash-radius-md);
+  min-height: 280px;
+}
+
+.heroMeta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dash-space-3);
+  justify-content: center;
+}
+
+.tag {
+  display: inline-block;
+  width: fit-content;
+  padding: 4px 12px;
+  border-radius: var(--dash-radius-pill);
+  background: var(--dash-color-primary-50);
+  color: var(--dash-color-primary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.songTitle {
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--dash-color-text-strong);
+  margin: 0;
+}
+
+.songMeta {
+  margin: 0;
+  font-size: 14px;
+  color: var(--dash-color-text-muted);
+}
+
+.gradeChip {
+  margin-top: var(--dash-space-3);
+  padding: var(--dash-space-4);
+  border-radius: var(--dash-radius-md);
+  background: var(--dash-color-surface-muted);
+  display: flex;
+  flex-direction: column;
+  gap: var(--dash-space-1);
+}
+
+.gradeLabel {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--dash-color-text-muted);
+}
+
+.gradeValue {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--dash-color-primary);
+}
+
+/* ── Stat row ── */
+.statRow {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--dash-space-3);
+}
+
+.statCard {
+  background: var(--dash-color-surface);
+  border-radius: var(--dash-radius-md);
+  box-shadow: var(--dash-shadow-soft);
+  padding: var(--dash-space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--dash-space-1);
+}
+
+.statTitle {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--dash-color-text-muted);
+}
+
+.statValue {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--dash-color-text-strong);
+}
+
+/* ── Accuracy ── */
+.accuracyCard {
+  background: var(--dash-color-surface);
+  border-radius: var(--dash-radius-card);
+  box-shadow: var(--dash-shadow-card);
+  padding: var(--dash-space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--dash-space-4);
+}
+
+.accuracyHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.accuracyTitle {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--dash-color-text-strong);
+}
+
+.accuracyMessage {
+  font-size: 13px;
+  color: var(--dash-color-text-muted);
+}
+
+.chips {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--dash-space-3);
+}
+
+.chip {
+  background: var(--dash-color-surface-muted);
+  border-radius: var(--dash-radius-md);
+  padding: var(--dash-space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--dash-space-1);
+  align-items: center;
+}
+
+.chipLabel {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--dash-color-text-muted);
+}
+
+.chipValue {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--dash-color-text-strong);
+}
+
+/* ── Peer ── */
+.peerCard {
+  background: var(--dash-color-surface);
+  border-radius: var(--dash-radius-card);
+  box-shadow: var(--dash-shadow-card);
+  padding: var(--dash-space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--dash-space-3);
+}
+
+.peerHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.peerTitle {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--dash-color-text-strong);
+}
+
+.peerCaption {
+  font-size: 13px;
+  color: var(--dash-color-text-muted);
+}
+
+.peerBar {
+  height: 12px;
+  border-radius: var(--dash-radius-pill);
+  background: linear-gradient(
+    90deg,
+    var(--dash-color-primary-100) 60%,
+    var(--dash-color-primary) 60%
+  );
+}
