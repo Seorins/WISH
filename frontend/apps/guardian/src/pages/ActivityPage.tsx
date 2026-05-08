@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   getChartStats,
   getMusicResult,
@@ -11,16 +12,22 @@ import { SidebarPlaceholder } from '@/features/activity/components/SidebarPlaceh
 import { HeaderBar } from '@/features/dashboard/components/HeaderBar'
 import '@/features/dashboard/tokens.css'
 
-const TEMP_RESULT_ID = 12
-
 export function ActivityPage() {
+  const [searchParams] = useSearchParams()
+  const resultIdParam = searchParams.get('id')
+  const resultId = resultIdParam ? Number(resultIdParam) : null
+
   const [result, setResult] = useState<MusicResultDetail | null>(null)
   const [chartStats, setChartStats] = useState<ChartStats | undefined>(undefined)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    if (resultId == null || Number.isNaN(resultId)) {
+      setError('활동 ID가 지정되지 않았어요')
+      return
+    }
     let cancelled = false
-    getMusicResult(TEMP_RESULT_ID)
+    getMusicResult(resultId)
       .then(response => {
         if (cancelled) return
         setResult(response.data)
@@ -38,7 +45,7 @@ export function ActivityPage() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [resultId])
 
   return (
     <ActivityLayout
