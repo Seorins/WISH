@@ -28,6 +28,7 @@ export {
 } from './music-results'
 export { requestPresignedUploadUrls, uploadToPresignedUrl } from './uploads'
 export { createPatientProfile, listPatientProfiles } from './patient-profiles'
+export { endLoginSession, heartbeatLoginSession, startLoginSession } from './login-sessions'
 export {
   createTaekwondoMotion,
   deleteTaekwondoMotion,
@@ -93,6 +94,7 @@ export type {
   PresignedUploadResponse,
 } from './uploads'
 export type { Gender, PatientProfile, PatientProfileCreateRequest } from './patient-profiles'
+export type { LoginSession, LoginSessionStartRequest } from './login-sessions'
 export type {
   CreateTaekwondoMotionParams,
   CreateTaekwondoMotionRequest,
