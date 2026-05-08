@@ -8,6 +8,7 @@ import {
 } from '../effects/cameraSuccessEffect'
 import {
   DEFAULT_TAEKWONDO_BELT_COLOR,
+  getTaekwondoPoomsaeNumber,
   type Poomsae,
   type TaekwondoBeltColor,
 } from '@wish/api-client'
@@ -159,7 +160,7 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
 
   private getPoomsaeNumber() {
     if (this.poomsae) {
-      return this.poomsae.replace('TAEGEUK_', '')
+      return String(getTaekwondoPoomsaeNumber(this.poomsae))
     }
 
     const match = this.poomsaeId.match(/\d+$/)

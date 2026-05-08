@@ -35,6 +35,11 @@ export type TaekwondoMotion = {
   updatedAt: string
 }
 
+export type TaekwondoMotionsByPoomsaeResult = {
+  motionsByPoomsae: Record<Poomsae, TaekwondoMotion[]>
+  failedPoomsae: Poomsae[]
+}
+
 export type CreateTaekwondoMotionRequest = {
   poomsae: Poomsae
   name: string
@@ -77,18 +82,43 @@ export async function listTaekwondoMotions(poomsae: Poomsae) {
 }
 
 export function getTaekwondoPoomsaeLabel(poomsae: Poomsae) {
-  return `태극 ${poomsae.replace('TAEGEUK_', '')}장`
+  return `태극 ${getTaekwondoPoomsaeNumber(poomsae)}장`
+}
+
+export function getTaekwondoPoomsaeNumber(poomsae: Poomsae) {
+  return Number(poomsae.replace('TAEGEUK_', ''))
 }
 
 export async function listTaekwondoMotionsByPoomsae() {
-  const entries = await Promise.all(
+  const settledEntries = await Promise.allSettled(
     TAEKWONDO_POOMSAE_VALUES.map(async poomsae => {
       const response = await listTaekwondoMotions(poomsae)
       return [poomsae, response.data ?? []] as const
     }),
   )
 
-  return Object.fromEntries(entries) as Record<Poomsae, TaekwondoMotion[]>
+  const motionsByPoomsae = TAEKWONDO_POOMSAE_VALUES.reduce(
+    (acc, poomsae) => {
+      acc[poomsae] = []
+      return acc
+    },
+    {} as Record<Poomsae, TaekwondoMotion[]>,
+  )
+  const failedPoomsae: Poomsae[] = []
+
+  settledEntries.forEach((entry, index) => {
+    const poomsae = TAEKWONDO_POOMSAE_VALUES[index]
+
+    if (entry.status === 'fulfilled') {
+      const [key, motions] = entry.value
+      motionsByPoomsae[key] = motions
+      return
+    }
+
+    failedPoomsae.push(poomsae)
+  })
+
+  return { motionsByPoomsae, failedPoomsae } satisfies TaekwondoMotionsByPoomsaeResult
 }
 
 export async function getTaekwondoMotion(id: number) {
