@@ -1,17 +1,28 @@
-.title {
-  font-size: 22px;
-  font-weight: 800;
-  color: var(--dash-color-text-strong);
-  margin: 0;
-  padding: 0 var(--dash-space-2);
-}
-
-/* ── Hero (미디어 + 메타) ── */
+/* ── Hero (제목 + 미디어 + 메타) — 대화 페이지와 동일하게 한 카드에 묶음 ── */
 .heroCard {
   background: var(--dash-color-surface);
   border-radius: var(--dash-radius-card);
   box-shadow: var(--dash-shadow-card);
   padding: var(--dash-space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--dash-space-5);
+}
+
+.heroHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.title {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--dash-color-text-strong);
+  margin: 0;
+}
+
+.heroBody {
   display: grid;
   grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
   gap: var(--dash-space-5);

@@ -19,17 +19,20 @@ const ACCURACY_SLOTS = ['Perfect', 'Great', 'Good', 'Miss']
 export function MainPlaceholder() {
   return (
     <>
-      <h1 className={styles.title}>활동 결과</h1>
-
       <section className={styles.heroCard}>
-        <div className={styles.media} aria-label="활동 영상 영역" />
-        <div className={styles.heroMeta}>
-          <span className={styles.tag}>음악실</span>
-          <h2 className={styles.songTitle}>리듬 따라치기</h2>
-          <p className={styles.songMeta}>곡명 · 플레이 시간</p>
-          <div className={styles.gradeChip}>
-            <span className={styles.gradeLabel}>활동 결과</span>
-            <span className={styles.gradeValue}>S 등급</span>
+        <header className={styles.heroHeader}>
+          <h2 className={styles.title}>활동 결과</h2>
+        </header>
+        <div className={styles.heroBody}>
+          <div className={styles.media} aria-label="활동 영상 영역" />
+          <div className={styles.heroMeta}>
+            <span className={styles.tag}>음악실</span>
+            <h3 className={styles.songTitle}>리듬 따라치기</h3>
+            <p className={styles.songMeta}>곡명 · 플레이 시간</p>
+            <div className={styles.gradeChip}>
+              <span className={styles.gradeLabel}>활동 결과</span>
+              <span className={styles.gradeValue}>S 등급</span>
+            </div>
           </div>
         </div>
       </section>
