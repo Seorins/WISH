@@ -27,7 +27,7 @@ export function LoginPage() {
 
   useEffect(() => {
     if (token && isAdmin) {
-      navigate('/motions', { replace: true })
+      navigate('/dashboard', { replace: true })
     }
   }, [token, isAdmin, navigate])
 
@@ -45,7 +45,7 @@ export function LoginPage() {
         return
       }
       setToken(newToken)
-      navigate('/motions', { replace: true })
+      navigate('/dashboard', { replace: true })
     } catch (err: unknown) {
       const message =
         err && typeof err === 'object' && 'response' in err

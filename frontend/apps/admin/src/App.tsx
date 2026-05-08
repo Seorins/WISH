@@ -1,4 +1,5 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { DashboardPage } from './pages/DashboardPage'
 import { LoginPage } from './pages/LoginPage'
 import { MotionsPage } from './pages/MotionsPage'
 import { TaekwondoMotionsPage } from './pages/TaekwondoMotionsPage'
@@ -11,6 +12,14 @@ function App() {
     <BrowserRouter basename={basename}>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        <Route
+          path="/dashboard"
+          element={
+            <RequireAdmin>
+              <DashboardPage />
+            </RequireAdmin>
+          }
+        />
         <Route
           path="/motions"
           element={
@@ -35,7 +44,7 @@ function App() {
             </RequireAdmin>
           }
         />
-        <Route path="*" element={<Navigate to="/motions" replace />} />
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </BrowserRouter>
   )
