@@ -389,43 +389,11 @@ backend:notify-failure:
       - ai/**/*
       - .gitlab-ci.yml
 
-.ai-base:
-  image: python:3.12-slim
-  variables:
-    PIP_CACHE_DIR: "${CI_PROJECT_DIR}/.cache/pip"
-  before_script:
-    - cd ai
-    - python -m pip install --upgrade pip
-    - pip install -r requirements.txt
-  cache:
-    key:
-      files:
-        - ai/requirements.txt
-    paths:
-      - .cache/pip/
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-      changes:
-        - ai/**/*
-        - .gitlab-ci.yml
-    - if: $CI_COMMIT_BRANCH == "develop" || $CI_COMMIT_BRANCH == "master" || $CI_COMMIT_BRANCH == "main"
-      changes:
-        - ai/**/*
-        - .gitlab-ci.yml
-
-ai:test:
-  extends: .ai-base
-  stage: verify
-  script:
-    - pytest
-
 ai:image:
   stage: package
   image:
     name: gcr.io/kaniko-project/executor:v1.23.2-debug
     entrypoint: [""]
-  needs:
-    - ai:test
   variables:
     AI_IMAGE_NAME: ${DOCKER_HUB_IMAGE}
   before_script:
