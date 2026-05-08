@@ -11,6 +11,17 @@ export type Poomsae =
   | 'TAEGEUK_7'
   | 'TAEGEUK_8'
 
+export const TAEKWONDO_POOMSAE_VALUES: Poomsae[] = [
+  'TAEGEUK_1',
+  'TAEGEUK_2',
+  'TAEGEUK_3',
+  'TAEGEUK_4',
+  'TAEGEUK_5',
+  'TAEGEUK_6',
+  'TAEGEUK_7',
+  'TAEGEUK_8',
+]
+
 export type TaekwondoMotion = {
   id: number
   poomsae: Poomsae
@@ -63,6 +74,21 @@ export async function listTaekwondoMotions(poomsae: Poomsae) {
     params: { poomsae },
   })
   return response.data
+}
+
+export function getTaekwondoPoomsaeLabel(poomsae: Poomsae) {
+  return `태극 ${poomsae.replace('TAEGEUK_', '')}장`
+}
+
+export async function listTaekwondoMotionsByPoomsae() {
+  const entries = await Promise.all(
+    TAEKWONDO_POOMSAE_VALUES.map(async poomsae => {
+      const response = await listTaekwondoMotions(poomsae)
+      return [poomsae, response.data ?? []] as const
+    }),
+  )
+
+  return Object.fromEntries(entries) as Record<Poomsae, TaekwondoMotion[]>
 }
 
 export async function getTaekwondoMotion(id: number) {
