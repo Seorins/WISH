@@ -159,6 +159,107 @@ public class UsageAggregationQuery {
         return new ArtAggregate(totals, activeIds.stream().map(Number::longValue).toList());
     }
 
+    /** 단일 환자 × 단일 날짜 LOGIN 합산. 543 통계 조회 API 의 today fallback 경로에서 호출. row 가 없으면 0. */
+    public long aggregateLoginForPatient(Long patientProfileId, LocalDate statDate) {
+        LocalDateTime start = statDate.atStartOfDay();
+        LocalDateTime end = statDate.plusDays(1).atStartOfDay();
+        Number value =
+                (Number)
+                        em.createNativeQuery(
+                                        """
+                                        SELECT COALESCE(SUM(
+                                                  CASE
+                                                      WHEN ended_at IS NOT NULL THEN duration_seconds
+                                                      ELSE GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (
+                                                          LEAST(NOW(), last_heartbeat_at + (INTERVAL '1 minute' * :grace))
+                                                          - started_at
+                                                      )))::int)
+                                                  END
+                                              ), 0)::bigint
+                                        FROM user_login_session
+                                        WHERE patient_profile_id = :patientId
+                                          AND started_at >= :start AND started_at < :end
+                                        """)
+                                .setParameter("patientId", patientProfileId)
+                                .setParameter("start", start)
+                                .setParameter("end", end)
+                                .setParameter("grace", ZOMBIE_SESSION_GRACE_MINUTES)
+                                .getSingleResult();
+        return value.longValue();
+    }
+
+    public long aggregateMusicForPatient(Long patientProfileId, LocalDate statDate) {
+        LocalDateTime start = statDate.atStartOfDay();
+        LocalDateTime end = statDate.plusDays(1).atStartOfDay();
+        Number value =
+                (Number)
+                        em.createNativeQuery(
+                                        """
+                                        SELECT COALESCE(SUM(played_duration_ms) / 1000, 0)::bigint
+                                        FROM music_result
+                                        WHERE patient_profile_id = :patientId
+                                          AND played_at >= :start AND played_at < :end
+                                        """)
+                                .setParameter("patientId", patientProfileId)
+                                .setParameter("start", start)
+                                .setParameter("end", end)
+                                .getSingleResult();
+        return value.longValue();
+    }
+
+    public long aggregateTaekwondoForPatient(Long patientProfileId, LocalDate statDate) {
+        LocalDateTime start = statDate.atStartOfDay();
+        LocalDateTime end = statDate.plusDays(1).atStartOfDay();
+        Number value =
+                (Number)
+                        em.createNativeQuery(
+                                        """
+                                        SELECT COALESCE(SUM(duration_sec), 0)::bigint
+                                        FROM taekwondo_session
+                                        WHERE patient_id = :patientId
+                                          AND created_at >= :start AND created_at < :end
+                                        """)
+                                .setParameter("patientId", patientProfileId)
+                                .setParameter("start", start)
+                                .setParameter("end", end)
+                                .getSingleResult();
+        return value.longValue();
+    }
+
+    public long aggregateGymnasticsForPatient(Long patientProfileId, LocalDate statDate) {
+        LocalDateTime start = statDate.atStartOfDay();
+        LocalDateTime end = statDate.plusDays(1).atStartOfDay();
+        Number value =
+                (Number)
+                        em.createNativeQuery(
+                                        """
+                                        SELECT COALESCE(SUM(duration_sec), 0)::bigint
+                                        FROM exercise_session
+                                        WHERE patient_id = :patientId
+                                          AND created_at >= :start AND created_at < :end
+                                        """)
+                                .setParameter("patientId", patientProfileId)
+                                .setParameter("start", start)
+                                .setParameter("end", end)
+                                .getSingleResult();
+        return value.longValue();
+    }
+
+    /** ART 누적합 (현재 시점) — 단일 환자. ART today/cumulative 계산의 공통 재료. */
+    public long aggregateArtCumulativeForPatient(Long patientProfileId) {
+        Number value =
+                (Number)
+                        em.createNativeQuery(
+                                        """
+                                        SELECT COALESCE(SUM(play_duration_seconds), 0)::bigint
+                                        FROM artworks
+                                        WHERE patient_profile_id = :patientId
+                                        """)
+                                .setParameter("patientId", patientProfileId)
+                                .getSingleResult();
+        return value.longValue();
+    }
+
     /** (patient_id, total_seconds) 쌍. 5종 source 일별 집계의 공통 형태. */
     public record PatientAggregate(long patientProfileId, long totalSeconds) {
         static PatientAggregate from(Object[] row) {
