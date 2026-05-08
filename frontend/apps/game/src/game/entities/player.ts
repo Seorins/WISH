@@ -1,6 +1,7 @@
 import Phaser from 'phaser'
 
 import { assetPath } from '@/game/assets/assetPath'
+import type { TaekwondoBeltColor } from '@wish/api-client'
 
 export const PLAYER_FRAME_SIZE = 313
 export const PLAYER_WALK_SPEED = 180
@@ -33,6 +34,29 @@ type PlayerMovementResult = {
 }
 
 const CHARACTER_SHEET_PATH = assetPath('images/common/player/character_sheet.png')
+const TAEKWONDO_BELT_PLAYER_SHEET_PATHS: Record<TaekwondoBeltColor, string> = {
+  WHITE: assetPath('images/common/player/character_white.png'),
+  YELLOW: assetPath('images/common/player/character_yellow.png'),
+  ORANGE: assetPath('images/common/player/character_orange.png'),
+  GREEN: assetPath('images/common/player/character_green.png'),
+  BLUE: assetPath('images/common/player/character_blue.png'),
+  PURPLE: assetPath('images/common/player/character_purple.png'),
+  BROWN: assetPath('images/common/player/character_brown.png'),
+  RED: assetPath('images/common/player/character_red.png'),
+  BLACK: assetPath('images/common/player/character_black.png'),
+}
+
+export const TAEKWONDO_BELT_PLAYER_TEXTURE_KEYS: Record<TaekwondoBeltColor, string> = {
+  WHITE: 'character-white',
+  YELLOW: 'character-yellow',
+  ORANGE: 'character-orange',
+  GREEN: 'character-green',
+  BLUE: 'character-blue',
+  PURPLE: 'character-purple',
+  BROWN: 'character-brown',
+  RED: 'character-red',
+  BLACK: 'character-black',
+}
 
 const PLAYER_WALK_ANIMATIONS: Array<{
   key: `walk-${PlayerDirection}`
@@ -45,8 +69,20 @@ const PLAYER_WALK_ANIMATIONS: Array<{
   { key: 'walk-up', start: 12, end: 15 },
 ]
 
-export function loadPlayerSpritesheet(scene: Phaser.Scene, textureKey = PLAYER_TEXTURE_KEY) {
-  scene.load.spritesheet(textureKey, CHARACTER_SHEET_PATH, {
+function getPlayerWalkAnimationKey(direction: PlayerDirection, textureKey = PLAYER_TEXTURE_KEY) {
+  return textureKey === PLAYER_TEXTURE_KEY ? `walk-${direction}` : `walk-${direction}-${textureKey}`
+}
+
+export function getTaekwondoBeltPlayerTextureKey(beltColor: TaekwondoBeltColor) {
+  return TAEKWONDO_BELT_PLAYER_TEXTURE_KEYS[beltColor]
+}
+
+export function loadPlayerSpritesheet(
+  scene: Phaser.Scene,
+  textureKey = PLAYER_TEXTURE_KEY,
+  sheetPath = CHARACTER_SHEET_PATH,
+) {
+  scene.load.spritesheet(textureKey, sheetPath, {
     frameWidth: PLAYER_FRAME_SIZE,
     frameHeight: PLAYER_FRAME_SIZE,
     margin: 0,
@@ -54,14 +90,27 @@ export function loadPlayerSpritesheet(scene: Phaser.Scene, textureKey = PLAYER_T
   })
 }
 
+export function loadTaekwondoBeltPlayerSpritesheets(scene: Phaser.Scene) {
+  Object.entries(TAEKWONDO_BELT_PLAYER_SHEET_PATHS).forEach(([beltColor, sheetPath]) => {
+    loadPlayerSpritesheet(
+      scene,
+      getTaekwondoBeltPlayerTextureKey(beltColor as TaekwondoBeltColor),
+      sheetPath,
+    )
+  })
+}
+
 export function ensurePlayerWalkAnimations(scene: Phaser.Scene, textureKey = PLAYER_TEXTURE_KEY) {
   PLAYER_WALK_ANIMATIONS.forEach(({ key, start, end }) => {
-    if (scene.anims.exists(key)) {
+    const direction = key.replace('walk-', '') as PlayerDirection
+    const animationKey = getPlayerWalkAnimationKey(direction, textureKey)
+
+    if (scene.anims.exists(animationKey)) {
       return
     }
 
     scene.anims.create({
-      key,
+      key: animationKey,
       frames: scene.anims.generateFrameNumbers(textureKey, { start, end }),
       frameRate: 8,
       repeat: -1,
@@ -151,7 +200,7 @@ export function updatePlayerMovement({
 
   const moving = vx !== 0 || vy !== 0
   if (moving) {
-    const anim = `walk-${nextDirection}`
+    const anim = getPlayerWalkAnimationKey(nextDirection, player.texture.key)
     if (player.anims.currentAnim?.key !== anim || !player.anims.isPlaying) {
       player.anims.play(anim)
     }

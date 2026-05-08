@@ -1,6 +1,7 @@
 import Phaser from 'phaser'
 import { assetPath } from '@/game/assets/assetPath'
 import { fadeToScene } from '@/game/systems/sceneTransition'
+import { DEFAULT_TAEKWONDO_BELT_COLOR, type TaekwondoBeltColor } from '@wish/api-client'
 import {
   CUTE_CARD_PALETTES,
   drawCuteCardPanel,
@@ -33,6 +34,10 @@ type PoomsaeCard = {
   width: number
   height: number
   palette: CuteCardPalette
+}
+
+type TaekwondoPoomsaeSelectData = {
+  beltColor?: TaekwondoBeltColor
 }
 
 const ASSET_KEYS = {
@@ -122,6 +127,7 @@ const DIFFICULTY_STARS: Record<PoomsaeOption['difficulty'], number> = {
 }
 
 export class TaekwondoPoomsaeSelectScene extends Phaser.Scene {
+  private beltColor: TaekwondoBeltColor = DEFAULT_TAEKWONDO_BELT_COLOR
   private selectedOptionId = ''
   private optionCards: PoomsaeCard[] = []
   private guideOverlay: Phaser.GameObjects.Container | null = null
@@ -173,6 +179,10 @@ export class TaekwondoPoomsaeSelectScene extends Phaser.Scene {
 
   constructor() {
     super({ key: 'TaekwondoPoomsaeSelectScene' })
+  }
+
+  init(data: TaekwondoPoomsaeSelectData = {}) {
+    this.beltColor = data.beltColor ?? DEFAULT_TAEKWONDO_BELT_COLOR
   }
 
   preload() {
@@ -492,6 +502,7 @@ export class TaekwondoPoomsaeSelectScene extends Phaser.Scene {
         data: {
           poomsaeId: option.id,
           poomsaeName: option.name,
+          beltColor: this.beltColor,
         },
       })
       return
@@ -733,7 +744,10 @@ export class TaekwondoPoomsaeSelectScene extends Phaser.Scene {
 
   private returnToDojang() {
     this.isDragging = false
-    fadeToScene(this, 'TaekwondoSelectScene', { duration: FADE_DURATION })
+    fadeToScene(this, 'TaekwondoSelectScene', {
+      duration: FADE_DURATION,
+      data: { beltColor: this.beltColor },
+    })
   }
 
   private removeSceneListeners() {

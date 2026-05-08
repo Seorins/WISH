@@ -30,6 +30,13 @@ export {
   reorderTaekwondoMotions,
   updateTaekwondoMotion,
 } from './taekwondo-motions'
+export {
+  DEFAULT_TAEKWONDO_BELT_COLOR,
+  getLatestTaekwondoBeltColor,
+  getTaekwondoBeltHistory,
+  normalizeTaekwondoBeltColor,
+  TAEKWONDO_BELT_COLORS,
+} from './taekwondo-belt-history'
 export { listUsers } from './users'
 export type { LoginRequest, SignupRequest, TokenResponse, UserResponse, UserRole } from './auth'
 export type {
@@ -73,3 +80,4 @@ export type {
   UpdateTaekwondoMotionParams,
   UpdateTaekwondoMotionRequest,
 } from './taekwondo-motions'
+export type { TaekwondoBeltColor, TaekwondoBeltHistory } from './taekwondo-belt-history'
