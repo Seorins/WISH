@@ -9,8 +9,10 @@ import {
 import {
   DEFAULT_TAEKWONDO_BELT_COLOR,
   getTaekwondoPoomsaeNumber,
+  listTaekwondoMotions,
   type Poomsae,
   type TaekwondoBeltColor,
+  type TaekwondoMotion,
 } from '@wish/api-client'
 
 type TaekwondoPoomsaePracticeData = {
@@ -22,7 +24,6 @@ type TaekwondoPoomsaePracticeData = {
 
 const ASSET_KEYS = {
   background: 'taekwondo-practice-background',
-  currentPoomsae: 'taekwondo-practice-current-poomsae',
   deleteButton: 'taekwondo-practice-delete-button',
   feedback: 'taekwondo-practice-feedback',
   guide: 'taekwondo-practice-guide',
@@ -39,15 +40,13 @@ const OVERLAY_ALPHA = 0.08
 const TEXT_COLOR = '#3a2110'
 const TEMP_TOTAL_STEP_COUNT = 9
 const TEMP_ACTIVE_STEP_COUNT = 4
-const DEFAULT_POOMSAE_NAME = '태극 1장'
+const DEFAULT_CURRENT_MOTION_NAME = '동작 준비중'
 const DEFAULT_FEEDBACK_MESSAGE = '실시간 피드백'
 const CAMERA_DENIED_MESSAGE = '카메라를 아직 준비 중입니다.'
-const CURRENT_POOMSAE_VISIBLE_HEIGHT_RATIO = 397 / 724
 const PROGRESS_VISIBLE_HEIGHT_RATIO = 274 / 725
 const PROGRESS_VISIBLE_CENTER_OFFSET_RATIO = (725 / 2 - (193 + 466) / 2) / 725
 
 const IMAGE_ASPECT = {
-  currentPoomsae: 2173 / 724,
   deleteButton: 344 / 336,
   feedback: 852 / 330,
   guide: 1086 / 1449,
@@ -64,15 +63,22 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
   private cameraTexture: Phaser.Textures.CanvasTexture | null = null
   private cameraSuccessEffect?: CameraSuccessEffect
   private feedbackText?: Phaser.GameObjects.Text
+  private currentMotionText?: Phaser.GameObjects.Text
+  private motions: TaekwondoMotion[] = []
+  private currentMotionIndex = 0
+  private isSceneShuttingDown = false
   private hasDrawnCameraPlaceholder = false
   private lastVideoTime = -1
   private poomsaeId = 'taegeuk-1'
   private poomsae?: Poomsae
-  private poomsaeName = DEFAULT_POOMSAE_NAME
   private beltColor: TaekwondoBeltColor = DEFAULT_TAEKWONDO_BELT_COLOR
 
   private readonly handleEscDown = () => {
     this.returnToPoomsaeSelect()
+  }
+
+  private readonly handleNextMotionTestDown = () => {
+    this.advanceToNextMotion()
   }
 
   constructor() {
@@ -82,18 +88,16 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
   init(data: TaekwondoPoomsaePracticeData = {}) {
     this.poomsaeId = data.poomsaeId ?? 'taegeuk-1'
     this.poomsae = data.poomsae
-    this.poomsaeName = data.poomsaeName ?? DEFAULT_POOMSAE_NAME
     this.beltColor = data.beltColor ?? DEFAULT_TAEKWONDO_BELT_COLOR
+    this.motions = []
+    this.currentMotionIndex = 0
+    this.isSceneShuttingDown = false
   }
 
   preload() {
     this.load.image(
       ASSET_KEYS.background,
       assetPath('images/themes/taekwondo/background/taekwondo_inside.png'),
-    )
-    this.load.image(
-      ASSET_KEYS.currentPoomsae,
-      assetPath('images/themes/taekwondo/ui/current_poomsae.png'),
     )
     this.load.image(ASSET_KEYS.deleteButton, assetPath('images/themes/taekwondo/ui/delete_btn.png'))
     this.load.image(ASSET_KEYS.feedback, assetPath('images/themes/taekwondo/ui/feedback.png'))
@@ -125,8 +129,10 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     this.createTopStatus(vw, vh)
     this.createPracticeLayout(vw, vh)
     this.startCamera()
+    void this.loadPracticeMotions()
 
     this.input.keyboard?.on('keydown-ESC', this.handleEscDown)
+    this.input.keyboard?.on('keydown-N', this.handleNextMotionTestDown)
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.cleanup())
     this.cameras.main.fadeIn(FADE_DURATION, 0, 0, 0)
   }
@@ -167,28 +173,83 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     return match?.[0] ?? '1'
   }
 
+  private getPoomsaeForApi(): Poomsae {
+    if (this.poomsae) {
+      return this.poomsae
+    }
+
+    const poomsaeNumber = Phaser.Math.Clamp(Number(this.getPoomsaeNumber()), 1, 8)
+    return `TAEGEUK_${poomsaeNumber}` as Poomsae
+  }
+
+  private async loadPracticeMotions() {
+    this.setCurrentMotionName(DEFAULT_CURRENT_MOTION_NAME)
+
+    try {
+      const response = await listTaekwondoMotions(this.getPoomsaeForApi())
+
+      if (this.isSceneShuttingDown) {
+        return
+      }
+
+      this.motions = [...(response.data ?? [])].sort(
+        (left, right) => left.routineOrder - right.routineOrder,
+      )
+      this.currentMotionIndex = 0
+      this.setCurrentMotionName(this.getCurrentMotionName())
+    } catch {
+      if (!this.isSceneShuttingDown) {
+        this.motions = []
+        this.currentMotionIndex = 0
+        this.setCurrentMotionName(DEFAULT_CURRENT_MOTION_NAME)
+      }
+    }
+  }
+
+  private getCurrentMotionName() {
+    return this.motions[this.currentMotionIndex]?.name ?? DEFAULT_CURRENT_MOTION_NAME
+  }
+
+  private setCurrentMotionName(name: string) {
+    this.currentMotionText?.setText(name)
+  }
+
+  private advanceToNextMotion() {
+    if (this.motions.length === 0) {
+      this.setCurrentMotionName(DEFAULT_CURRENT_MOTION_NAME)
+      return
+    }
+
+    const nextMotionIndex = this.currentMotionIndex + 1
+    if (nextMotionIndex >= this.motions.length) {
+      this.stopPractice()
+      return
+    }
+
+    this.currentMotionIndex = nextMotionIndex
+    this.setCurrentMotionName(this.getCurrentMotionName())
+  }
+
   private createTopStatus(vw: number, vh: number) {
     const topY = vh * 0.116
     const progressWidth = vw * 0.49
     const progressHeight = vh * 0.25
-    const currentHeight =
-      progressHeight * (PROGRESS_VISIBLE_HEIGHT_RATIO / CURRENT_POOMSAE_VISIBLE_HEIGHT_RATIO)
+    const currentHeight = progressHeight * PROGRESS_VISIBLE_HEIGHT_RATIO
     const visualTopY = topY - progressHeight * PROGRESS_VISIBLE_CENTER_OFFSET_RATIO
     const currentY = topY - progressHeight * 0.032
-    const currentWidth = currentHeight * IMAGE_ASPECT.currentPoomsae
+    const currentWidth = vw * 0.3
     const deleteSize = vh * 0.073
 
-    this.add
-      .image(vw * 0.203, currentY, ASSET_KEYS.currentPoomsae)
-      .setDisplaySize(currentWidth, currentHeight)
-      .setDepth(4)
+    this.createCurrentMotionPanel(vw * 0.23, currentY, currentWidth, currentHeight)
 
-    this.add
-      .text(vw * 0.203, currentY - currentHeight * 0.02, `${this.poomsaeName}`, {
+    this.currentMotionText = this.add
+      .text(vw * 0.23, currentY - currentHeight * 0.02, DEFAULT_CURRENT_MOTION_NAME, {
         fontFamily: 'sans-serif',
-        fontSize: `${Math.round(Phaser.Math.Clamp(currentHeight * 0.34, 24, 34))}px`,
+        fontSize: `${Math.round(Phaser.Math.Clamp(currentHeight * 0.3, 22, 32))}px`,
         color: TEXT_COLOR,
         fontStyle: '700',
+        align: 'center',
+        wordWrap: { width: currentWidth * 0.78, useAdvancedWrap: true },
       })
       .setOrigin(0.5)
       .setDepth(5)
@@ -202,7 +263,29 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
       TEMP_ACTIVE_STEP_COUNT,
     )
 
-    this.createDeleteButton(vw * 0.843, visualTopY, deleteSize, () => this.stopPractice())
+    this.createDeleteButton(vw * 0.885, visualTopY, deleteSize, () => this.stopPractice())
+  }
+
+  private createCurrentMotionPanel(x: number, y: number, width: number, height: number) {
+    const borderSize = 5
+    const radius = Math.round(height * 0.48)
+    const frame = this.add.graphics().setDepth(4)
+    frame.fillStyle(0xfff8eb, 0.96)
+    frame.fillRoundedRect(
+      x - width / 2 - borderSize,
+      y - height / 2 - borderSize,
+      width + borderSize * 2,
+      height + borderSize * 2,
+      radius + borderSize,
+    )
+    frame.lineStyle(2, 0xe5c58f, 0.9)
+    frame.strokeRoundedRect(
+      x - width / 2 - borderSize,
+      y - height / 2 - borderSize,
+      width + borderSize * 2,
+      height + borderSize * 2,
+      radius + borderSize,
+    )
   }
 
   private createPracticeLayout(vw: number, vh: number) {
@@ -567,8 +650,12 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
   }
 
   private cleanup() {
+    this.isSceneShuttingDown = true
     this.input.keyboard?.off('keydown-ESC', this.handleEscDown)
+    this.input.keyboard?.off('keydown-N', this.handleNextMotionTestDown)
     this.feedbackText = undefined
+    this.currentMotionText = undefined
+    this.motions = []
     this.stopCamera()
     this.cleanupCameraEffects()
 
