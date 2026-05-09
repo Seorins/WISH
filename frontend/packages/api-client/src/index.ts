@@ -25,6 +25,7 @@ export {
   getChartStats,
   getMusicResult,
   getMyBestMusicResults,
+  getMyMusicResults,
   saveMusicResult,
 } from './music-results'
 export { requestPresignedUploadUrls, uploadToPresignedUrl } from './uploads'
@@ -99,9 +100,11 @@ export type {
 } from './exercise-sessions'
 export type {
   ChartStats,
+  GetMyMusicResultsParams,
   MusicBestResult,
   MusicResult,
   MusicResultDetail,
+  MusicResultPage,
   MusicResultRequest,
 } from './music-results'
 export type {
