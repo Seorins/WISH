@@ -9,31 +9,28 @@ function parsePositiveInteger(value: string | null | undefined) {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined
 }
 
-function readCachedPatientProfileId() {
-  if (!window.localStorage.getItem(ACCESS_TOKEN_STORAGE_KEY)) {
-    return undefined
-  }
-  return parsePositiveInteger(window.localStorage.getItem(PATIENT_PROFILE_STORAGE_KEY))
+function hasAuthToken() {
+  return !!window.localStorage.getItem(ACCESS_TOKEN_STORAGE_KEY)
 }
 
 export function resolvePatientProfileId() {
   const params = new URLSearchParams(window.location.search)
-  return (
-    parsePositiveInteger(params.get('patientProfileId')) ??
-    readCachedPatientProfileId() ??
-    parsePositiveInteger(import.meta.env.VITE_PATIENT_PROFILE_ID)
-  )
-}
+  const fromQuery = parsePositiveInteger(params.get('patientProfileId'))
+  if (fromQuery) return fromQuery
 
-export function clearPatientProfileId() {
-  window.localStorage.removeItem(PATIENT_PROFILE_STORAGE_KEY)
+  if (hasAuthToken()) {
+    const fromCache = parsePositiveInteger(window.localStorage.getItem(PATIENT_PROFILE_STORAGE_KEY))
+    if (fromCache) return fromCache
+  }
+
+  return parsePositiveInteger(import.meta.env.VITE_PATIENT_PROFILE_ID)
 }
 
 export async function resolvePatientProfileIdOrFetch() {
   const resolved = resolvePatientProfileId()
-  if (resolved) {
-    return resolved
-  }
+  if (resolved) return resolved
+
+  if (!hasAuthToken()) return undefined
 
   try {
     const response = await listPatientProfiles()
@@ -41,10 +38,13 @@ export async function resolvePatientProfileIdOrFetch() {
     if (patientProfileId) {
       window.localStorage.setItem(PATIENT_PROFILE_STORAGE_KEY, String(patientProfileId))
     }
-
     return patientProfileId
   } catch (error) {
     console.warn('patient profile id를 API에서 가져오는데 실패함.', error)
     return undefined
   }
+}
+
+export function clearPatientProfileId() {
+  window.localStorage.removeItem(PATIENT_PROFILE_STORAGE_KEY)
 }
