@@ -485,6 +485,7 @@ export class VillageScene extends Phaser.Scene {
 
   private logout() {
     clearDemoAuthToken()
+    this.game.events.emit('auth:logout')
     this.settingsMenu.close()
     this.isTransitioning = true
     this.target = null
