@@ -10,24 +10,30 @@ import {
   ChevronDownIcon,
   ClipboardIcon,
   ExerciseIcon,
+  FuelIcon,
+  LiveIcon,
   LogoutIcon,
   type HomeIcon,
 } from './icons'
 import styles from './HeaderBar.module.css'
 
-type TabId = 'exercise' | 'chat' | 'activity' | 'reports'
+type TabId = 'exercise' | 'chat' | 'activity' | 'reports' | 'live' | 'fuel'
 
 const TABS: ReadonlyArray<{ id: TabId; label: string; Icon: typeof HomeIcon; to?: string }> = [
-  { id: 'exercise', label: '운동', Icon: ExerciseIcon, to: '/' },
-  { id: 'chat', label: '대화', Icon: ChatIcon, to: '/chat' },
+  { id: 'exercise', label: '신체', Icon: ExerciseIcon, to: '/' },
+  { id: 'chat', label: '감정', Icon: ChatIcon, to: '/chat' },
   { id: 'activity', label: '활동', Icon: ActivityIcon, to: '/activity' },
   { id: 'reports', label: '리포트', Icon: ClipboardIcon },
+  { id: 'live', label: '실시간', Icon: LiveIcon },
+  { id: 'fuel', label: '연료', Icon: FuelIcon },
 ]
 
 function activeTabFromPath(pathname: string): TabId {
   if (pathname.startsWith('/chat')) return 'chat'
   if (pathname.startsWith('/activity')) return 'activity'
   if (pathname.startsWith('/reports')) return 'reports'
+  if (pathname.startsWith('/live')) return 'live'
+  if (pathname.startsWith('/fuel')) return 'fuel'
   return 'exercise'
 }
 

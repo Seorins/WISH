@@ -254,6 +254,29 @@ export function StarFilledIcon(props: SVGProps<SVGSVGElement>) {
   )
 }
 
+export function LiveIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <circle cx="12" cy="12" r="2.5" fill="currentColor" stroke="none" />
+      <path d="M7.4 7.4a6.5 6.5 0 0 0 0 9.2" />
+      <path d="M16.6 7.4a6.5 6.5 0 0 1 0 9.2" />
+      <path d="M4 4a11 11 0 0 0 0 16" />
+      <path d="M20 4a11 11 0 0 1 0 16" />
+    </svg>
+  )
+}
+
+export function FuelIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <rect x="3.5" y="4" width="10" height="16" rx="1.8" />
+      <path d="M5.5 8.5h6" />
+      <path d="M13.5 9h2.5a1.5 1.5 0 0 1 1.5 1.5V18a1.5 1.5 0 0 0 3 0V9.5l-2-2.5" />
+      <path d="M16.5 5l2 2.5" />
+    </svg>
+  )
+}
+
 export function LogoutIcon(props: IconProps) {
   return (
     <svg {...base} {...props}>

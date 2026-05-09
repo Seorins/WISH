@@ -1,5 +1,5 @@
 import { apiClient } from './client'
-import type { ApiResponse } from './artworks'
+import type { ApiResponse, PageResponse } from './artworks'
 
 export type MusicResultRequest = {
   chartId: string
@@ -83,6 +83,25 @@ export async function getMusicResult(id: number) {
 
 export async function getMyBestMusicResults() {
   const response = await apiClient.get<ApiResponse<MusicBestResult[]>>('/music/results/me/best')
+  return response.data
+}
+
+export type MusicResultPage = PageResponse<MusicResultDetail>
+
+export type GetMyMusicResultsParams = {
+  page?: number
+  size?: number
+  sort?: string
+}
+
+export async function getMyMusicResults({
+  page = 0,
+  size = 50,
+  sort = 'playedAt,desc',
+}: GetMyMusicResultsParams = {}) {
+  const response = await apiClient.get<ApiResponse<MusicResultPage>>('/music/results/me', {
+    params: { page, size, sort },
+  })
   return response.data
 }
 
