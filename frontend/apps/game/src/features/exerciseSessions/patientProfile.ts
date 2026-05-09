@@ -1,6 +1,7 @@
 import { listPatientProfiles } from '@wish/api-client'
 
 const PATIENT_PROFILE_STORAGE_KEY = 'wish_patient_profile_id'
+const ACCESS_TOKEN_STORAGE_KEY = 'wish_access_token'
 
 function parsePositiveInteger(value: string | null | undefined) {
   if (!value) return undefined
@@ -8,11 +9,18 @@ function parsePositiveInteger(value: string | null | undefined) {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined
 }
 
+function readCachedPatientProfileId() {
+  if (!window.localStorage.getItem(ACCESS_TOKEN_STORAGE_KEY)) {
+    return undefined
+  }
+  return parsePositiveInteger(window.localStorage.getItem(PATIENT_PROFILE_STORAGE_KEY))
+}
+
 export function resolvePatientProfileId() {
   const params = new URLSearchParams(window.location.search)
   return (
     parsePositiveInteger(params.get('patientProfileId')) ??
-    parsePositiveInteger(window.localStorage.getItem(PATIENT_PROFILE_STORAGE_KEY)) ??
+    readCachedPatientProfileId() ??
     parsePositiveInteger(import.meta.env.VITE_PATIENT_PROFILE_ID)
   )
 }

@@ -78,6 +78,11 @@ function App() {
         clearPatientProfileId()
         setPatientProfileId(undefined)
       })
+      game.events.on('auth:completed', async () => {
+        const id = await resolvePatientProfileIdOrFetch()
+        if (isCancelled) return
+        setPatientProfileId(id)
+      })
       game.events.on('exercise-sessions:open', () => setShowExerciseSessions(true))
 
       const resolvedPatientProfileId = await resolvePatientProfileIdOrFetch()
