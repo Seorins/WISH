@@ -25,6 +25,14 @@ function formatDurationSec(seconds: number): string {
   return `${m}분 ${s}초`
 }
 
+function formatShortDateKst(createdAt: string): string {
+  const kst = new Date(createdAt).toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' })
+  const [, mm, dd] = kst.split('-')
+  return `${parseInt(mm, 10)}/${parseInt(dd, 10)}`
+}
+
+const PAST_VISIBLE_COUNT = 3
+
 // 색 추적은 Phase 2 (백엔드 colors_used 컬럼) 에서 실제값으로 교체.
 const PLACEHOLDER_COLORS_USED = 8
 
@@ -40,6 +48,11 @@ export function ArtMain() {
   const todayArtworks = useMemo<Artwork[]>(() => {
     if (!data?.content) return []
     return data.content.filter(a => isCreatedTodayKst(a.createdAt))
+  }, [data])
+
+  const pastArtworks = useMemo<Artwork[]>(() => {
+    if (!data?.content) return []
+    return data.content.filter(a => !isCreatedTodayKst(a.createdAt))
   }, [data])
 
   if (isLoading) {
@@ -111,8 +124,61 @@ export function ArtMain() {
       </div>
       <aside className={styles.sideColumn}>
         <ArtInfoCard artwork={current} />
+        <ArtPastCarousel artworks={pastArtworks} />
       </aside>
     </div>
+  )
+}
+
+function ArtPastCarousel({ artworks }: { artworks: Artwork[] }) {
+  const [offset, setOffset] = useState(0)
+  const safeOffset = Math.min(offset, Math.max(0, artworks.length - PAST_VISIBLE_COUNT))
+  const visible = artworks.slice(safeOffset, safeOffset + PAST_VISIBLE_COUNT)
+  const hasPrev = safeOffset > 0
+  const hasNext = safeOffset + PAST_VISIBLE_COUNT < artworks.length
+
+  return (
+    <section className={styles.pastCard}>
+      <h3 className={styles.pastTitle}>지난 그림 보기</h3>
+      {artworks.length === 0 ? (
+        <div className={styles.pastEmpty}>아직 지난 그림이 없어요</div>
+      ) : (
+        <div className={styles.pastRow}>
+          <button
+            type="button"
+            className={`${styles.pastNavBtn} ${styles.pastNavPrev}`}
+            onClick={() => setOffset(o => Math.max(0, o - 1))}
+            disabled={!hasPrev}
+            aria-label="이전 그림 묶음"
+          >
+            ‹
+          </button>
+          <div className={styles.pastThumbs}>
+            {visible.map(a => (
+              <div key={a.id} className={styles.pastThumb}>
+                <div className={styles.pastThumbFrame}>
+                  <img
+                    src={a.imageUrl}
+                    alt={a.title?.trim() || '지난 그림'}
+                    className={styles.pastThumbImg}
+                  />
+                </div>
+                <span className={styles.pastThumbDate}>{formatShortDateKst(a.createdAt)}</span>
+              </div>
+            ))}
+          </div>
+          <button
+            type="button"
+            className={`${styles.pastNavBtn} ${styles.pastNavNext}`}
+            onClick={() => setOffset(o => Math.min(artworks.length - PAST_VISIBLE_COUNT, o + 1))}
+            disabled={!hasNext}
+            aria-label="다음 그림 묶음"
+          >
+            ›
+          </button>
+        </div>
+      )}
+    </section>
   )
 }
 
