@@ -57,6 +57,25 @@ from app.services.gymnastics.features.daniel_upward_press_features import (
 router = APIRouter()
 
 
+def _resolve_daniel_response_frame_label(result: object) -> str:
+    frame_label = getattr(result, "frame_label", None)
+    if frame_label is not None:
+        return frame_label
+    if getattr(result, "tracking", None) != "tracking_ok":
+        return "tracking_low"
+    if getattr(result, "state", None) in {"holding", "complete"}:
+        return "motion_present"
+    return "guidance_needed"
+
+
+def _resolve_daniel_response_guidance_code(result: object) -> str | None:
+    return getattr(result, "guidance_code", None) or getattr(result, "displayed_feedback_code", None)
+
+
+def _resolve_daniel_response_guidance_text(result: object) -> str | None:
+    return getattr(result, "guidance_text", None) or getattr(result, "displayed_feedback_text", None)
+
+
 @router.post("/daniel-forward-press/evaluate", response_model=DanielForwardPressEvaluationResponse)
 def evaluate_daniel_forward_press(
     payload: DanielForwardPressEvaluationRequest,
@@ -108,9 +127,9 @@ def evaluate_daniel_forward_press(
         accuracy=result.accuracy,
         feedback=result.feedback,
         tracking=result.tracking,
-        frame_label=result.frame_label,
-        guidance_code=result.guidance_code,
-        guidance_text=result.guidance_text,
+        frame_label=_resolve_daniel_response_frame_label(result),
+        guidance_code=_resolve_daniel_response_guidance_code(result),
+        guidance_text=_resolve_daniel_response_guidance_text(result),
         hold_duration_ms=result.hold_duration_ms,
         hold_completed=result.hold_completed,
         hold_last_timestamp_ms=result.hold_last_timestamp_ms,
@@ -204,9 +223,9 @@ def evaluate_daniel_forward_bend(
         accuracy=result.accuracy,
         feedback=result.feedback,
         tracking=result.tracking,
-        frame_label=result.frame_label,
-        guidance_code=result.guidance_code,
-        guidance_text=result.guidance_text,
+        frame_label=_resolve_daniel_response_frame_label(result),
+        guidance_code=_resolve_daniel_response_guidance_code(result),
+        guidance_text=_resolve_daniel_response_guidance_text(result),
         hold_duration_ms=result.hold_duration_ms,
         hold_completed=result.hold_completed,
         hold_last_timestamp_ms=result.hold_last_timestamp_ms,
@@ -292,9 +311,9 @@ def evaluate_daniel_upward_press(
         accuracy=result.accuracy,
         feedback=result.feedback,
         tracking=result.tracking,
-        frame_label=result.frame_label,
-        guidance_code=result.guidance_code,
-        guidance_text=result.guidance_text,
+        frame_label=_resolve_daniel_response_frame_label(result),
+        guidance_code=_resolve_daniel_response_guidance_code(result),
+        guidance_text=_resolve_daniel_response_guidance_text(result),
         hold_duration_ms=result.hold_duration_ms,
         hold_completed=result.hold_completed,
         hold_last_timestamp_ms=result.hold_last_timestamp_ms,
@@ -381,9 +400,9 @@ def evaluate_daniel_left_side_bend(
         accuracy=result.accuracy,
         feedback=result.feedback,
         tracking=result.tracking,
-        frame_label=result.frame_label,
-        guidance_code=result.guidance_code,
-        guidance_text=result.guidance_text,
+        frame_label=_resolve_daniel_response_frame_label(result),
+        guidance_code=_resolve_daniel_response_guidance_code(result),
+        guidance_text=_resolve_daniel_response_guidance_text(result),
         hold_duration_ms=result.hold_duration_ms,
         hold_completed=result.hold_completed,
         hold_last_timestamp_ms=result.hold_last_timestamp_ms,
@@ -469,9 +488,9 @@ def evaluate_daniel_right_side_bend(
         accuracy=result.accuracy,
         feedback=result.feedback,
         tracking=result.tracking,
-        frame_label=result.frame_label,
-        guidance_code=result.guidance_code,
-        guidance_text=result.guidance_text,
+        frame_label=_resolve_daniel_response_frame_label(result),
+        guidance_code=_resolve_daniel_response_guidance_code(result),
+        guidance_text=_resolve_daniel_response_guidance_text(result),
         hold_duration_ms=result.hold_duration_ms,
         hold_completed=result.hold_completed,
         hold_last_timestamp_ms=result.hold_last_timestamp_ms,
