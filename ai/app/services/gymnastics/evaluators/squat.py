@@ -4,6 +4,7 @@ from app.services.gymnastics.constants import (
     DEFAULT_FEEDBACK_CLEAR_FRAMES,
     DEFAULT_FEEDBACK_DISPLAY_FRAMES,
     DEFAULT_FEEDBACK_STREAK_THRESHOLD,
+    DEFAULT_GYMNASTICS_BASELINE_TARGET_FRAMES,
     DEFAULT_SQUAT_BOTTOM_THRESHOLD,
     DEFAULT_SQUAT_DESCEND_THRESHOLD,
     DEFAULT_SQUAT_LATERAL_SHIFT_MAX,
@@ -55,6 +56,9 @@ class SquatEvaluator(BaseEvaluator):
         reference_hip_x: float | None = None,
         reference_hip_y: float | None = None,
         reference_scale: float | None = None,
+        baseline_status: str = "ready",
+        baseline_frames: int = 0,
+        baseline_target_frames: int = DEFAULT_GYMNASTICS_BASELINE_TARGET_FRAMES,
         displayed_feedback_code: str | None = None,
         displayed_feedback_text: str | None = None,
         displayed_feedback_frames: int = 0,
@@ -84,6 +88,9 @@ class SquatEvaluator(BaseEvaluator):
         next_reference_hip_x = reference_hip_x
         next_reference_hip_y = reference_hip_y
         next_reference_scale = reference_scale
+        next_baseline_status = baseline_status
+        next_baseline_frames = self._normalize_baseline_frames(baseline_frames)
+        next_baseline_target_frames = self._normalize_baseline_target_frames(baseline_target_frames)
 
         if frame.tracking == "tracking_ok" and reference_hip_x is None:
             next_reference_hip_x = frame.hip_center.x
@@ -123,6 +130,9 @@ class SquatEvaluator(BaseEvaluator):
                 reference_hip_x=next_reference_hip_x,
                 reference_hip_y=next_reference_hip_y,
                 reference_scale=next_reference_scale,
+                baseline_status=next_baseline_status,
+                baseline_frames=next_baseline_frames,
+                baseline_target_frames=next_baseline_target_frames,
                 feedback_state=next_feedback_state,
                 representative_state=next_representative_state,
                 frame_label=self._resolve_frame_label(
@@ -130,6 +140,45 @@ class SquatEvaluator(BaseEvaluator):
                     motion_present=False,
                     attempting=False,
                 ),
+            )
+
+        if self._is_collecting_baseline(next_baseline_status):
+            sample_count = next_baseline_frames
+            next_reference_hip_x = self._update_baseline_average(
+                reference_hip_x,
+                frame.hip_center.x,
+                sample_count,
+            )
+            next_reference_hip_y = self._update_baseline_average(
+                reference_hip_y,
+                frame.hip_center.y,
+                sample_count,
+            )
+            next_reference_scale = self._update_baseline_average(
+                reference_scale,
+                frame.scale_reference,
+                sample_count,
+            )
+            next_baseline_status, next_baseline_frames = self._advance_baseline_collection(
+                baseline_frames=next_baseline_frames,
+                baseline_target_frames=next_baseline_target_frames,
+            )
+            next_feedback_state = self._stabilize_feedback(features, "idle", frame.tracking, previous_feedback_state)
+            next_representative_state = self._update_representative_feedback(next_feedback_state, previous_representative_state)
+            return self._make_result(
+                state="idle",
+                step_count=normalized_step_count,
+                accuracy=0.0,
+                tracking=frame.tracking,
+                reference_hip_x=next_reference_hip_x,
+                reference_hip_y=next_reference_hip_y,
+                reference_scale=next_reference_scale,
+                baseline_status=next_baseline_status,
+                baseline_frames=next_baseline_frames,
+                baseline_target_frames=next_baseline_target_frames,
+                feedback_state=next_feedback_state,
+                representative_state=next_representative_state,
+                frame_label=self._resolve_top_frame_label(features, frame.tracking, "idle"),
             )
 
         if next_reference_hip_x is None or next_reference_hip_y is None or next_reference_scale is None:
@@ -143,6 +192,9 @@ class SquatEvaluator(BaseEvaluator):
                 reference_hip_x=next_reference_hip_x,
                 reference_hip_y=next_reference_hip_y,
                 reference_scale=next_reference_scale,
+                baseline_status=next_baseline_status,
+                baseline_frames=next_baseline_frames,
+                baseline_target_frames=next_baseline_target_frames,
                 feedback_state=next_feedback_state,
                 representative_state=next_representative_state,
                 frame_label=self._resolve_top_frame_label(features, frame.tracking, "idle"),
@@ -171,6 +223,9 @@ class SquatEvaluator(BaseEvaluator):
             reference_hip_x=next_reference_hip_x,
             reference_hip_y=next_reference_hip_y,
             reference_scale=next_reference_scale,
+            baseline_status=next_baseline_status,
+            baseline_frames=next_baseline_frames,
+            baseline_target_frames=next_baseline_target_frames,
             feedback_state=next_feedback_state,
             representative_state=next_representative_state,
             frame_label=frame_label,
@@ -268,6 +323,9 @@ class SquatEvaluator(BaseEvaluator):
         reference_hip_x: float | None,
         reference_hip_y: float | None,
         reference_scale: float | None,
+        baseline_status: str,
+        baseline_frames: int,
+        baseline_target_frames: int,
         feedback_state: FeedbackStabilizerState,
         representative_state: RepresentativeFeedbackState,
         frame_label: str,
@@ -282,6 +340,9 @@ class SquatEvaluator(BaseEvaluator):
             reference_hip_x=reference_hip_x,
             reference_hip_y=reference_hip_y,
             reference_scale=reference_scale,
+            baseline_status=baseline_status,
+            baseline_frames=baseline_frames,
+            baseline_target_frames=baseline_target_frames,
             displayed_feedback_code=feedback_state.displayed_code,
             displayed_feedback_text=feedback_state.displayed_text,
             displayed_feedback_frames=feedback_state.displayed_frames,

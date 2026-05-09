@@ -2,6 +2,42 @@ from app.services.gymnastics.evaluators.diagonal_body_punch import DiagonalBodyP
 from app.services.gymnastics.types import HipCenter, NormalizedLandmark, NormalizedPoseFrame
 
 
+def test_diagonal_body_punch_collecting_baseline_blocks_count_until_ready() -> None:
+    evaluator = DiagonalBodyPunchEvaluator()
+
+    first = evaluator.evaluate(
+        frame=build_diagonal_body_punch_frame(left_wrist_x=-1.70, stance_span=2.30),
+        previous_state="idle",
+        step_count=0,
+        target_steps=8,
+        baseline_status="collecting",
+        baseline_target_frames=1,
+    )
+
+    assert first.baseline_status == "ready"
+    assert first.baseline_frames == 1
+    assert first.step_count == 0
+
+    result = evaluator.evaluate(
+        frame=build_diagonal_body_punch_frame(left_wrist_x=-2.40, left_elbow_x=-1.80, stance_span=2.30),
+        previous_state=first.state,
+        step_count=first.step_count,
+        target_steps=8,
+        reference_hip_x=first.reference_hip_x,
+        reference_hip_y=first.reference_hip_y,
+        reference_scale=first.reference_scale,
+        baseline_status=first.baseline_status,
+        baseline_frames=first.baseline_frames,
+        baseline_target_frames=first.baseline_target_frames,
+        baseline_left_wrist_forward=first.baseline_left_wrist_forward,
+        baseline_right_wrist_forward=first.baseline_right_wrist_forward,
+        baseline_stance_span=first.baseline_stance_span,
+    )
+
+    assert result.state == "left_punch"
+    assert result.step_count == 1
+
+
 def test_diagonal_body_punch_counts_alternating_punches() -> None:
     evaluator = DiagonalBodyPunchEvaluator()
 

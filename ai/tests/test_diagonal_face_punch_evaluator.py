@@ -2,6 +2,75 @@ from app.services.gymnastics.evaluators.diagonal_face_punch import DiagonalFaceP
 from app.services.gymnastics.types import HipCenter, NormalizedLandmark, NormalizedPoseFrame
 
 
+def test_diagonal_face_punch_uses_baseline_relative_hand_height() -> None:
+    evaluator = DiagonalFacePunchEvaluator()
+
+    baseline = evaluator.evaluate(
+        frame=build_diagonal_face_punch_frame(left_wrist_y=-1.20),
+        previous_state="idle",
+        step_count=0,
+        target_steps=8,
+        baseline_status="collecting",
+        baseline_target_frames=1,
+    )
+
+    assert baseline.baseline_status == "ready"
+    assert baseline.baseline_left_wrist_height is not None
+    assert baseline.step_count == 0
+
+    near_baseline = evaluator.evaluate(
+        frame=build_diagonal_face_punch_frame(
+            left_wrist_x=-1.70,
+            left_wrist_y=-1.25,
+            left_elbow_x=-1.20,
+            left_elbow_y=-1.12,
+        ),
+        previous_state=baseline.state,
+        step_count=baseline.step_count,
+        target_steps=8,
+        reference_hip_x=baseline.reference_hip_x,
+        reference_hip_y=baseline.reference_hip_y,
+        reference_scale=baseline.reference_scale,
+        baseline_status=baseline.baseline_status,
+        baseline_frames=baseline.baseline_frames,
+        baseline_target_frames=baseline.baseline_target_frames,
+        baseline_left_wrist_forward=baseline.baseline_left_wrist_forward,
+        baseline_right_wrist_forward=baseline.baseline_right_wrist_forward,
+        baseline_left_wrist_height=baseline.baseline_left_wrist_height,
+        baseline_right_wrist_height=baseline.baseline_right_wrist_height,
+        baseline_stance_span=baseline.baseline_stance_span,
+    )
+
+    assert near_baseline.state == "idle"
+    assert near_baseline.step_count == 0
+
+    result = evaluator.evaluate(
+        frame=build_diagonal_face_punch_frame(
+            left_wrist_x=-1.70,
+            left_wrist_y=-1.32,
+            left_elbow_x=-1.20,
+            left_elbow_y=-1.12,
+        ),
+        previous_state=near_baseline.state,
+        step_count=near_baseline.step_count,
+        target_steps=8,
+        reference_hip_x=near_baseline.reference_hip_x,
+        reference_hip_y=near_baseline.reference_hip_y,
+        reference_scale=near_baseline.reference_scale,
+        baseline_status=near_baseline.baseline_status,
+        baseline_frames=near_baseline.baseline_frames,
+        baseline_target_frames=near_baseline.baseline_target_frames,
+        baseline_left_wrist_forward=near_baseline.baseline_left_wrist_forward,
+        baseline_right_wrist_forward=near_baseline.baseline_right_wrist_forward,
+        baseline_left_wrist_height=near_baseline.baseline_left_wrist_height,
+        baseline_right_wrist_height=near_baseline.baseline_right_wrist_height,
+        baseline_stance_span=near_baseline.baseline_stance_span,
+    )
+
+    assert result.state == "left_punch"
+    assert result.step_count == 1
+
+
 def test_diagonal_face_punch_counts_alternating_punches() -> None:
     evaluator = DiagonalFacePunchEvaluator()
 

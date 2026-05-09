@@ -22,11 +22,15 @@ class MarchFeatureSet:
     # (hip is at normalized origin 0,0 so this equals -knee.y)
     left_knee_lift: float
     right_knee_lift: float
+    raw_left_knee_lift: float
+    raw_right_knee_lift: float
 
     # Angle of hip→knee vector from vertical downward direction (degrees)
     # 0° = straight down (standing), 90° = horizontal, >90° = above hip
     left_thigh_angle: float
     right_thigh_angle: float
+    raw_left_thigh_angle: float
+    raw_right_thigh_angle: float
 
     # Knee joint flexion angle: hip–knee–ankle (degrees); None if landmarks missing
     left_knee_angle: float | None
@@ -45,15 +49,23 @@ def extract_march_features(
     reference_hip_x: float | None = None,
     reference_hip_y: float | None = None,
     reference_scale: float | None = None,
+    baseline_left_knee_lift: float | None = None,
+    baseline_right_knee_lift: float | None = None,
+    baseline_left_thigh_angle: float | None = None,
+    baseline_right_thigh_angle: float | None = None,
 ) -> MarchFeatureSet:
     left_knee = frame.landmarks.get(LEFT_KNEE)
     right_knee = frame.landmarks.get(RIGHT_KNEE)
 
-    left_knee_lift = (-left_knee.y) if left_knee is not None else 0.0
-    right_knee_lift = (-right_knee.y) if right_knee is not None else 0.0
+    raw_left_knee_lift = (-left_knee.y) if left_knee is not None else 0.0
+    raw_right_knee_lift = (-right_knee.y) if right_knee is not None else 0.0
+    left_knee_lift = max(raw_left_knee_lift - (baseline_left_knee_lift or 0.0), 0.0)
+    right_knee_lift = max(raw_right_knee_lift - (baseline_right_knee_lift or 0.0), 0.0)
 
-    left_thigh_angle = _compute_thigh_angle(left_knee)
-    right_thigh_angle = _compute_thigh_angle(right_knee)
+    raw_left_thigh_angle = _compute_thigh_angle(left_knee)
+    raw_right_thigh_angle = _compute_thigh_angle(right_knee)
+    left_thigh_angle = max(raw_left_thigh_angle - (baseline_left_thigh_angle or 0.0), 0.0)
+    right_thigh_angle = max(raw_right_thigh_angle - (baseline_right_thigh_angle or 0.0), 0.0)
 
     left_knee_angle = _compute_joint_angle(frame, LEFT_HIP, LEFT_KNEE, LEFT_ANKLE)
     right_knee_angle = _compute_joint_angle(frame, RIGHT_HIP, RIGHT_KNEE, RIGHT_ANKLE)
@@ -70,8 +82,12 @@ def extract_march_features(
     return MarchFeatureSet(
         left_knee_lift=left_knee_lift,
         right_knee_lift=right_knee_lift,
+        raw_left_knee_lift=raw_left_knee_lift,
+        raw_right_knee_lift=raw_right_knee_lift,
         left_thigh_angle=left_thigh_angle,
         right_thigh_angle=right_thigh_angle,
+        raw_left_thigh_angle=raw_left_thigh_angle,
+        raw_right_thigh_angle=raw_right_thigh_angle,
         left_knee_angle=left_knee_angle,
         right_knee_angle=right_knee_angle,
         torso_tilt=torso_tilt,

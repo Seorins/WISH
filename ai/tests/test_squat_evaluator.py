@@ -3,6 +3,52 @@ from app.services.gymnastics.evaluators.squat import SquatEvaluator
 from app.services.gymnastics.types import HipCenter, NormalizedLandmark, NormalizedPoseFrame
 
 
+def test_squat_collects_average_reference_before_counting() -> None:
+    evaluator = SquatEvaluator()
+
+    first = evaluator.evaluate(
+        frame=build_squat_frame(hip_y=0.50),
+        previous_state="idle",
+        step_count=0,
+        target_steps=8,
+        baseline_status="collecting",
+        baseline_target_frames=2,
+    )
+    second = evaluator.evaluate(
+        frame=build_squat_frame(hip_y=0.52),
+        previous_state=first.state,
+        step_count=first.step_count,
+        target_steps=8,
+        reference_hip_x=first.reference_hip_x,
+        reference_hip_y=first.reference_hip_y,
+        reference_scale=first.reference_scale,
+        baseline_status=first.baseline_status,
+        baseline_frames=first.baseline_frames,
+        baseline_target_frames=first.baseline_target_frames,
+    )
+
+    assert second.baseline_status == "ready"
+    assert second.baseline_frames == 2
+    assert round(second.reference_hip_y or 0.0, 2) == 0.51
+    assert second.step_count == 0
+
+    result = evaluator.evaluate(
+        frame=build_squat_frame(hip_y=0.60),
+        previous_state=second.state,
+        step_count=second.step_count,
+        target_steps=8,
+        reference_hip_x=second.reference_hip_x,
+        reference_hip_y=second.reference_hip_y,
+        reference_scale=second.reference_scale,
+        baseline_status=second.baseline_status,
+        baseline_frames=second.baseline_frames,
+        baseline_target_frames=second.baseline_target_frames,
+    )
+
+    assert result.state == "descending"
+    assert result.step_count == 0
+
+
 def test_squat_counts_rep_on_full_cycle() -> None:
     """idle → descending → bottom → ascending → idle 사이클이 1회 카운트."""
     evaluator = SquatEvaluator()
