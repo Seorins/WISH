@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import type { Artwork } from '@wish/api-client'
 import artIconImg from '@/assets/art_icon.png'
 import { useMyPatientId } from '@/features/auth/hooks/useMyPatientId'
+import { PaletteColorIcon, StarFilledIcon } from '@/features/dashboard/components/icons'
 import { useDailyUsageStats, useMyArtworks } from '../hooks'
 import styles from './ArtMain.module.css'
 
@@ -96,37 +97,46 @@ export function ArtMain() {
         <section className={styles.heroCard}>
           <h2 className={styles.title}>미술 결과</h2>
           <div className={styles.carousel}>
-            <button
-              type="button"
-              className={`${styles.navBtn} ${styles.navPrev}`}
-              onClick={() => setIndex(i => Math.max(0, i - 1))}
-              disabled={!hasPrev}
-              aria-label="이전 그림"
-            >
-              ‹
-            </button>
             <div className={styles.imageFrame}>
               <img
                 src={current.imageUrl}
                 alt={artworkDisplayTitle(current, safeIndex)}
                 className={styles.image}
               />
-              <div className={styles.captionBar}>
+              {todayArtworks.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    className={`${styles.navBtn} ${styles.navPrev}`}
+                    onClick={() => setIndex(i => Math.max(0, i - 1))}
+                    disabled={!hasPrev}
+                    aria-label="이전 그림"
+                  >
+                    ‹
+                  </button>
+                  <button
+                    type="button"
+                    className={`${styles.navBtn} ${styles.navNext}`}
+                    onClick={() => setIndex(i => Math.min(todayArtworks.length - 1, i + 1))}
+                    disabled={!hasNext}
+                    aria-label="다음 그림"
+                  >
+                    ›
+                  </button>
+                </>
+              )}
+            </div>
+            <div className={styles.captionBar}>
+              <span className={styles.captionMascot} aria-hidden>
+                <PaletteColorIcon width={26} height={26} />
+              </span>
+              <div className={styles.captionText}>
                 <span className={styles.captionLabel}>오늘의 작품</span>
                 <strong className={styles.captionTitle}>
                   {artworkDisplayTitle(current, safeIndex)}
                 </strong>
               </div>
             </div>
-            <button
-              type="button"
-              className={`${styles.navBtn} ${styles.navNext}`}
-              onClick={() => setIndex(i => Math.min(todayArtworks.length - 1, i + 1))}
-              disabled={!hasNext}
-              aria-label="다음 그림"
-            >
-              ›
-            </button>
           </div>
           {todayArtworks.length > 1 && (
             <div className={styles.indexPill}>
@@ -159,9 +169,7 @@ function ArtSummaryCard() {
       </span>
       <div className={styles.summaryBody}>
         <h3 className={styles.summaryTitle}>
-          <span aria-hidden className={styles.summaryStar}>
-            ★
-          </span>
+          <StarFilledIcon width={22} height={22} aria-hidden className={styles.summaryStar} />
           오늘의 미술 활동 요약
         </h3>
         <p className={styles.summaryText}>{SUMMARY_PLACEHOLDER_TEXT}</p>
@@ -190,7 +198,7 @@ function ArtPeerCompareCard({ mineSeconds }: { mineSeconds: number }) {
 
   return (
     <section className={styles.peerCard}>
-      <h3 className={styles.peerCardTitle}>아이와 평균 비교</h3>
+      <h3 className={styles.peerCardTitle}>다른 사용자들과 비교</h3>
       <div className={styles.peerRows}>
         <div className={styles.peerRow}>
           <div className={styles.peerRowHead}>
@@ -284,20 +292,16 @@ function ArtInfoCard({ artwork }: { artwork: Artwork }) {
   const stats = [
     {
       id: 'time',
-      icon: '⏱',
       label: '그리기 시간',
       value: formatDurationSec(artwork.playDurationSeconds),
-      accent: true,
     },
     {
       id: 'colors',
-      icon: '🎨',
       label: '사용한 색',
       value: `${PLACEHOLDER_COLORS_USED}가지`,
     },
     {
       id: 'kind',
-      icon: '✏️',
       label: '활동 종류',
       value: kindLabel,
     },
@@ -306,18 +310,11 @@ function ArtInfoCard({ artwork }: { artwork: Artwork }) {
   return (
     <section className={styles.infoCard}>
       <h3 className={styles.infoCardTitle}>그림 정보</h3>
-      <div className={styles.infoRows}>
+      <div className={styles.infoStatsRow}>
         {stats.map(stat => (
-          <div key={stat.id} className={styles.infoRow}>
-            <span className={styles.infoIcon} aria-hidden>
-              {stat.icon}
-            </span>
-            <div className={styles.infoMeta}>
-              <span className={styles.infoLabel}>{stat.label}</span>
-              <span className={`${styles.infoValue} ${stat.accent ? styles.infoValueAccent : ''}`}>
-                {stat.value}
-              </span>
-            </div>
+          <div key={stat.id} className={styles.infoStat}>
+            <span className={styles.infoStatValue}>{stat.value}</span>
+            <span className={styles.infoStatLabel}>{stat.label}</span>
           </div>
         ))}
       </div>

@@ -37,8 +37,8 @@
   position: relative;
   flex: 1 1 auto;
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  gap: 12px;
   min-height: 0;
 }
 
@@ -50,67 +50,90 @@
   background: #f6f4ff;
   box-shadow: inset 0 0 0 1px rgba(124, 92, 255, 0.08);
   min-height: 0;
-  height: 100%;
 }
 
 .image {
   display: block;
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  object-fit: cover;
   background: #ffffff;
 }
 
 .captionBar {
-  position: absolute;
-  left: 14px;
-  bottom: 14px;
-  display: inline-flex;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 4px 2px;
+  flex-shrink: 0;
+}
+
+.captionMascot {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #efe7ff 0%, #e0d3ff 100%);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--dash-color-primary, #7c5cff);
+}
+
+.captionText {
+  display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 10px 16px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: 0 4px 14px rgba(60, 50, 120, 0.15);
-  backdrop-filter: blur(6px);
+  min-width: 0;
 }
 
 .captionLabel {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   color: #8a7fb3;
 }
 
 .captionTitle {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 700;
   color: var(--dash-color-text-strong, #1f1b3a);
 }
 
 .navBtn {
-  flex-shrink: 0;
-  width: 40px;
-  height: 40px;
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 2;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   border: none;
-  background: var(--dash-color-primary-50, #f1edff);
+  background: rgba(255, 255, 255, 0.92);
   color: var(--dash-color-primary, #7c5cff);
-  font-size: 22px;
+  font-size: 20px;
   font-weight: 700;
   line-height: 1;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 2px 8px rgba(124, 92, 255, 0.18);
+  box-shadow: 0 2px 8px rgba(124, 92, 255, 0.22);
   transition:
     transform 0.12s ease,
     box-shadow 0.12s ease,
     opacity 0.12s ease;
 }
 
+.navPrev {
+  left: 10px;
+}
+
+.navNext {
+  right: 10px;
+}
+
 .navBtn:hover:not(:disabled) {
-  transform: scale(1.08);
+  transform: translateY(-50%) scale(1.08);
   box-shadow: 0 4px 12px rgba(124, 92, 255, 0.28);
 }
 
@@ -161,18 +184,19 @@
   background: linear-gradient(135deg, #efeaff 0%, #f5f0ff 50%, #efe7fc 100%);
   border-radius: var(--dash-radius-card, 22px);
   box-shadow: var(--dash-shadow-card, 0 2px 12px rgba(60, 50, 120, 0.06));
-  padding: 18px 20px;
+  padding: 22px 24px;
   display: flex;
   align-items: center;
   gap: 16px;
   overflow: hidden;
+  flex-shrink: 0;
 }
 
 .summaryBody {
   flex: 1 1 auto;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
   min-width: 0;
   position: relative;
   z-index: 1;
@@ -182,20 +206,20 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 700;
   color: var(--dash-color-text-strong, #1f1b3a);
   margin: 0;
 }
 
 .summaryStar {
-  color: #f5b932;
-  font-size: 16px;
+  flex-shrink: 0;
+  filter: drop-shadow(0 1px 2px rgba(245, 165, 36, 0.35));
 }
 
 .summaryText {
   margin: 0;
-  font-size: 13px;
+  font-size: 14px;
   color: #4a4561;
   line-height: 1.5;
 }
@@ -203,13 +227,13 @@
 .summaryTags {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 8px;
 }
 
 .summaryTag {
-  padding: 5px 12px;
+  padding: 6px 14px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.85);
   font-size: 12px;
   font-weight: 600;
   color: var(--dash-color-primary, #7c5cff);
@@ -218,11 +242,12 @@
 
 .summaryMascot {
   flex-shrink: 0;
-  width: 110px;
-  height: 110px;
+  width: 150px;
+  height: 150px;
   object-fit: contain;
   position: relative;
   z-index: 1;
+  margin: -12px -6px -12px 0;
 }
 
 .summarySparkleA,
@@ -231,27 +256,28 @@
   position: absolute;
   color: #c9bff5;
   pointer-events: none;
+  z-index: 0;
 }
 
 .summarySparkleA {
-  top: 14px;
-  right: 130px;
-  font-size: 12px;
-  opacity: 0.6;
+  top: 18px;
+  right: 150px;
+  font-size: 14px;
+  opacity: 0.65;
 }
 
 .summarySparkleB {
-  top: 8px;
-  right: 38px;
-  font-size: 14px;
-  opacity: 0.7;
+  top: 14px;
+  right: 30px;
+  font-size: 16px;
+  opacity: 0.75;
 }
 
 .summarySparkleC {
-  bottom: 12px;
-  right: 100px;
-  font-size: 10px;
-  opacity: 0.55;
+  bottom: 18px;
+  right: 120px;
+  font-size: 12px;
+  opacity: 0.6;
 }
 
 /* ── 그림 정보 카드 ─────────────────────────────────────── */
@@ -273,53 +299,35 @@
   margin: 0;
 }
 
-.infoRows {
+.infoStatsRow {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.infoStat {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-}
-
-.infoRow {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.infoIcon {
-  width: 40px;
-  height: 40px;
-  border-radius: 14px;
-  background: linear-gradient(135deg, #f1edff 0%, #e7defe 100%);
-  color: var(--dash-color-primary, #7c5cff);
-  font-size: 18px;
-  display: flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
+  gap: 6px;
+  padding: 18px 10px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #f9f7ff 0%, #f1edff 100%);
+  text-align: center;
 }
 
-.infoMeta {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
+.infoStatValue {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--dash-color-text-strong, #1f1b3a);
+  line-height: 1.2;
 }
 
-.infoLabel {
+.infoStatLabel {
   font-size: 12px;
   font-weight: 600;
   color: #7a7891;
-}
-
-.infoValue {
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--dash-color-text-strong, #1f1b3a);
-}
-
-.infoValueAccent {
-  color: var(--dash-color-primary, #7c5cff);
-  font-size: 20px;
 }
 
 /* ── 아이와 평균 비교 ─────────────────────────────────────── */
@@ -416,6 +424,8 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .pastTitle {
@@ -423,19 +433,24 @@
   font-weight: 700;
   color: var(--dash-color-text-strong, #1f1b3a);
   margin: 0;
+  flex-shrink: 0;
 }
 
 .pastEmpty {
   color: #9a93b3;
   font-size: 13px;
-  padding: 16px 4px;
   text-align: center;
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .pastRow {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex: 1 1 auto;
 }
 
 .pastThumbs {
