@@ -44,6 +44,9 @@ class EvaluatorResult:
     hold_duration_ms: int = 0
     hold_completed: bool = False
     hold_last_timestamp_ms: int | None = None
+    frame_label: str | None = None
+    guidance_code: str | None = None
+    guidance_text: str | None = None
 
 
 class BaseEvaluator(ABC):
@@ -153,3 +156,74 @@ class BaseHoldEvaluator(BaseEvaluator):
             hold_last_timestamp_ms=frame_timestamp_ms,
             hold_completed=hold_completed,
         )
+
+    def _update_session_progress(
+        self,
+        *,
+        previous_hold_duration_ms: int,
+        previous_hold_last_timestamp_ms: int | None,
+        frame_timestamp_ms: int,
+        target_hold_ms: int | None = None,
+    ) -> HoldProgress:
+        effective_target = target_hold_ms or self.hold_config.target_hold_ms
+        clamped_hold_ms = max(previous_hold_duration_ms, 0)
+
+        additional_ms = 0
+        if previous_hold_last_timestamp_ms is not None:
+            frame_gap_ms = max(frame_timestamp_ms - previous_hold_last_timestamp_ms, 0)
+            additional_ms = min(frame_gap_ms, self.hold_config.max_frame_gap_ms)
+
+        next_hold_ms = min(clamped_hold_ms + additional_ms, effective_target)
+        hold_completed = next_hold_ms >= effective_target
+
+        return HoldProgress(
+            state="complete" if hold_completed else "holding",
+            hold_duration_ms=next_hold_ms,
+            hold_last_timestamp_ms=frame_timestamp_ms,
+            hold_completed=hold_completed,
+        )
+
+    @staticmethod
+    def _is_attempting_metric(
+        value: float | None,
+        threshold: float,
+        *,
+        ratio: float = 0.75,
+    ) -> bool:
+        return value is not None and value >= threshold * ratio
+
+    @staticmethod
+    def _is_relaxed_within_limit(
+        value: float | None,
+        limit: float,
+        *,
+        ratio: float = 1.25,
+    ) -> bool:
+        return value is not None and value <= limit * ratio
+
+    @staticmethod
+    def _resolve_frame_label(
+        *,
+        tracking: str,
+        motion_present: bool,
+        attempting: bool,
+    ) -> str:
+        if tracking != "tracking_ok":
+            return "tracking_low"
+        if motion_present:
+            return "motion_present"
+        if attempting:
+            return "attempting"
+        return "guidance_needed"
+
+    @staticmethod
+    def _resolve_session_state(
+        *,
+        hold_completed: bool,
+        motion_present: bool,
+    ) -> str:
+        if hold_completed:
+            return "complete"
+        if motion_present:
+            return "holding"
+        return "idle"

@@ -55,6 +55,14 @@ class FeedbackTtsResponse(BaseModel):
     priority: Literal["tracking", "posture"] | None = None
 
 
+DanielFrameLabel = Literal[
+    "tracking_low",
+    "guidance_needed",
+    "attempting",
+    "motion_present",
+]
+
+
 class MarchEvaluationRequest(BaseModel):
     frame: PoseFrameRequest
     previous_state: str = Field(default="idle", description="Previous evaluator state")
@@ -244,6 +252,9 @@ class StretchHoldEvaluationResponseBase(BaseModel):
     accuracy: float
     feedback: str | None = None
     tracking: str
+    frame_label: DanielFrameLabel | None = None
+    guidance_code: str | None = None
+    guidance_text: str | None = None
     hold_duration_ms: int = 0
     hold_completed: bool = False
     hold_last_timestamp_ms: int | None = None
