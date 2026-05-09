@@ -34,7 +34,7 @@ function formatShortDateKst(createdAt: string): string {
   return `${parseInt(mm, 10)}/${parseInt(dd, 10)}`
 }
 
-const PAST_VISIBLE_COUNT = 3
+const PAST_VISIBLE_COUNT = 1
 
 // 색 추적은 Phase 2 (백엔드 colors_used 컬럼) 에서 실제값으로 교체.
 const PLACEHOLDER_COLORS_USED = 8
@@ -254,7 +254,7 @@ function ArtPastCarousel({ artworks }: { artworks: Artwork[] }) {
             className={`${styles.pastNavBtn} ${styles.pastNavPrev}`}
             onClick={() => setOffset(o => Math.max(0, o - 1))}
             disabled={!hasPrev}
-            aria-label="이전 그림 묶음"
+            aria-label="이전 그림"
           >
             ‹
           </button>
@@ -277,7 +277,7 @@ function ArtPastCarousel({ artworks }: { artworks: Artwork[] }) {
             className={`${styles.pastNavBtn} ${styles.pastNavNext}`}
             onClick={() => setOffset(o => Math.min(artworks.length - PAST_VISIBLE_COUNT, o + 1))}
             disabled={!hasNext}
-            aria-label="다음 그림 묶음"
+            aria-label="다음 그림"
           >
             ›
           </button>
