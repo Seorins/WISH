@@ -17,6 +17,10 @@ export function resolvePatientProfileId() {
   )
 }
 
+export function clearPatientProfileId() {
+  window.localStorage.removeItem(PATIENT_PROFILE_STORAGE_KEY)
+}
+
 export async function resolvePatientProfileIdOrFetch() {
   const resolved = resolvePatientProfileId()
   if (resolved) {

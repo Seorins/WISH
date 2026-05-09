@@ -17,7 +17,10 @@ import SquatDebugPage from './debug/SquatDebugPage'
 import { ensureDemoAuthToken } from './auth/demoAuth'
 import { AuthOverlay } from './features/auth'
 import { ExerciseSessionListOverlay } from './features/exerciseSessions'
-import { resolvePatientProfileIdOrFetch } from './features/exerciseSessions/patientProfile'
+import {
+  clearPatientProfileId,
+  resolvePatientProfileIdOrFetch,
+} from './features/exerciseSessions/patientProfile'
 import { useLoginSession } from './features/loginSession'
 import { queryClient } from './queryClient'
 
@@ -71,7 +74,10 @@ function App() {
       const game = createGame(containerRef.current)
       gameRef.current = game
       game.events.on('auth:request', () => setShowAuth(true))
-      game.events.on('auth:logout', () => setPatientProfileId(undefined))
+      game.events.on('auth:logout', () => {
+        clearPatientProfileId()
+        setPatientProfileId(undefined)
+      })
       game.events.on('exercise-sessions:open', () => setShowExerciseSessions(true))
 
       const resolvedPatientProfileId = await resolvePatientProfileIdOrFetch()
