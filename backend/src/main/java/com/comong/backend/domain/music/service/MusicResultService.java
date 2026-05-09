@@ -9,11 +9,14 @@ import java.util.TreeMap;
 import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.comong.backend.domain.music.dto.MusicBestResultResponse;
 import com.comong.backend.domain.music.dto.MusicResultDetailResponse;
+import com.comong.backend.domain.music.dto.MusicResultListItemResponse;
 import com.comong.backend.domain.music.dto.MusicResultResponse;
 import com.comong.backend.domain.music.dto.MusicResultSaveRequest;
 import com.comong.backend.domain.music.entity.MusicChart;
@@ -119,6 +122,12 @@ public class MusicResultService {
                                         Collectors.toList()));
 
         return resultsByChart.values().stream().map(this::toBestResultResponse).toList();
+    }
+
+    public Page<MusicResultListItemResponse> findMine(Long userId, Pageable pageable) {
+        return musicResultRepository
+                .findPageByPatientProfileUserIdWithMusicChart(userId, pageable)
+                .map(MusicResultListItemResponse::of);
     }
 
     public MusicResultDetailResponse findById(Long userId, Long resultId) {
