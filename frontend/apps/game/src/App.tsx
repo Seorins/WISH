@@ -71,6 +71,7 @@ function App() {
       const game = createGame(containerRef.current)
       gameRef.current = game
       game.events.on('auth:request', () => setShowAuth(true))
+      game.events.on('auth:logout', () => setPatientProfileId(undefined))
       game.events.on('exercise-sessions:open', () => setShowExerciseSessions(true))
 
       const resolvedPatientProfileId = await resolvePatientProfileIdOrFetch()
