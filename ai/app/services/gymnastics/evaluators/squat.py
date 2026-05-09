@@ -125,6 +125,11 @@ class SquatEvaluator(BaseEvaluator):
                 reference_scale=next_reference_scale,
                 feedback_state=next_feedback_state,
                 representative_state=next_representative_state,
+                frame_label=self._resolve_frame_label(
+                    tracking=frame.tracking,
+                    motion_present=False,
+                    attempting=False,
+                ),
             )
 
         if next_reference_hip_x is None or next_reference_hip_y is None or next_reference_scale is None:
@@ -140,6 +145,7 @@ class SquatEvaluator(BaseEvaluator):
                 reference_scale=next_reference_scale,
                 feedback_state=next_feedback_state,
                 representative_state=next_representative_state,
+                frame_label=self._resolve_top_frame_label(features, frame.tracking, "idle"),
             )
 
         next_state = self._resolve_next_state(features, previous_state)
@@ -149,6 +155,7 @@ class SquatEvaluator(BaseEvaluator):
             if next_step_count < effective_target:
                 next_step_count += 1
 
+        frame_label = self._resolve_top_frame_label(features, frame.tracking, next_state)
         if next_step_count >= effective_target:
             next_state = "complete"
 
@@ -166,6 +173,7 @@ class SquatEvaluator(BaseEvaluator):
             reference_scale=next_reference_scale,
             feedback_state=next_feedback_state,
             representative_state=next_representative_state,
+            frame_label=frame_label,
         )
 
     def _resolve_next_state(self, features: SquatFeatureSet, previous_state: str) -> str:
@@ -188,6 +196,23 @@ class SquatEvaluator(BaseEvaluator):
             return "ascending"
 
         return "idle"
+
+    def _resolve_top_frame_label(
+        self,
+        features: SquatFeatureSet,
+        tracking: str,
+        state: str,
+    ) -> str:
+        return self._resolve_frame_label(
+            tracking=tracking,
+            motion_present=state in {"bottom", "ascending"},
+            attempting=self._is_attempting_squat(features, state),
+        )
+
+    def _is_attempting_squat(self, features: SquatFeatureSet, state: str) -> bool:
+        if state == "descending":
+            return True
+        return features.hip_drop >= self.config.descend_threshold
 
     def _compute_accuracy(self, features: SquatFeatureSet) -> float:
         depth_score = min(features.hip_drop / max(self.config.bottom_threshold, 1e-6), 1.0)
@@ -245,6 +270,7 @@ class SquatEvaluator(BaseEvaluator):
         reference_scale: float | None,
         feedback_state: FeedbackStabilizerState,
         representative_state: RepresentativeFeedbackState,
+        frame_label: str,
     ) -> EvaluatorResult:
         return EvaluatorResult(
             motion_id=self.motion_id,
@@ -266,4 +292,7 @@ class SquatEvaluator(BaseEvaluator):
             representative_feedback_code=representative_state.representative_code,
             representative_feedback_text=representative_state.representative_text,
             representative_feedback_frames=representative_state.representative_frames,
+            frame_label=frame_label,
+            guidance_code=feedback_state.displayed_code,
+            guidance_text=feedback_state.displayed_text,
         )
