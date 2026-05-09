@@ -3,7 +3,6 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import gisungImg from '@/assets/gisung.png'
 import rumiImg from '@/assets/rumi.png'
 import seokjaeImg from '@/assets/seokjae.png'
-import { DEMO_MUSIC_RESULT_ID } from '../constants'
 import styles from './SidebarPlaceholder.module.css'
 
 type ActivityStatus = 'done' | 'planned'
@@ -42,7 +41,7 @@ const PLACEHOLDER_ITEMS: ActivityItem[] = [
     avatarUrl: gisungImg,
     thumbScale: '1.5',
     thumbOffsetY: '-6%',
-    to: `/activity?id=${DEMO_MUSIC_RESULT_ID}`,
+    to: '/activity',
   },
   {
     id: 'art',
@@ -67,9 +66,8 @@ function resolveActiveItemId(searchParams: URLSearchParams): ActivityItemId | nu
   const tab = searchParams.get('tab')
   if (tab === 'art') return 'art'
   if (tab === 'taekwondo') return 'taekwondo'
-  // 음악은 ?id= 단독 진입을 유지 (구버전 링크 호환)
-  if (searchParams.get('id') != null) return 'music'
-  return null
+  // 기본 진입(/activity)과 ?id= 딥링크 모두 음악으로 간주.
+  return 'music'
 }
 
 /**
