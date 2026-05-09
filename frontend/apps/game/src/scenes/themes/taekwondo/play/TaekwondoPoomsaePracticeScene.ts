@@ -1,4 +1,4 @@
-import Phaser from 'phaser'
+﻿import Phaser from 'phaser'
 import { assetPath } from '@/game/assets/assetPath'
 import { fadeToScene } from '@/game/systems/sceneTransition'
 import { addCoverBackground } from '@/game/world/background'
@@ -37,6 +37,7 @@ const ASSET_KEYS = {
   deleteButton: 'taekwondo-practice-delete-button',
   feedback: 'taekwondo-practice-feedback',
   guide: 'taekwondo-practice-guide',
+  guideMagnifier: 'taekwondo-practice-guide-magnifier',
   guidePose: 'taekwondo-practice-guide-pose',
   seokjae: 'taekwondo-practice-seokjae',
   seokjaeProgress: 'taekwondo-practice-seokjae-progress',
@@ -55,6 +56,7 @@ const MOTION_LOAD_ERROR_MESSAGE = '품새 동작 정보를 불러오지 못했�
 const CAMERA_DENIED_MESSAGE = '카메라를 사용할 수 없어요.'
 const GUIDE_VIDEO_PENDING_MESSAGE = '영상을 준비 중입니다.'
 const MOTION_INTRO_START_LABEL = '시작하기'
+const GUIDE_VIDEO_TITLE = '가이드 영상'
 const IMAGE_ASPECT = {
   deleteButton: 344 / 336,
   feedback: 852 / 330,
@@ -74,6 +76,7 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
   private currentMotionText?: Phaser.GameObjects.Text
   private progressView?: PoomsaeProgressView
   private motionIntroOverlay?: Phaser.GameObjects.Container
+  private guideVideoExpandOverlay?: Phaser.GameObjects.Container
   private motions: TaekwondoMotion[] = []
   private motionResults: CreateTaekwondoSessionMotionRequest[] = []
   private recordedMotionIndexes = new Set<number>()
@@ -81,6 +84,7 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
   private practiceStartedAtMs = 0
   private motionStartedAtMs = 0
   private isWaitingMotionStart = false
+  private isAiJudgementPaused = false
   private hasSubmittedSession = false
   private isSavingSession = false
   private isSceneShuttingDown = false
@@ -91,6 +95,11 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
   private beltColor: TaekwondoBeltColor = DEFAULT_TAEKWONDO_BELT_COLOR
 
   private readonly handleEscDown = () => {
+    if (this.guideVideoExpandOverlay) {
+      this.hideGuideVideoExpandOverlay()
+      return
+    }
+
     void this.finishPracticeSession(false)
   }
 
@@ -113,6 +122,7 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     this.practiceStartedAtMs = 0
     this.motionStartedAtMs = 0
     this.isWaitingMotionStart = false
+    this.isAiJudgementPaused = false
     this.hasSubmittedSession = false
     this.isSavingSession = false
     this.isSceneShuttingDown = false
@@ -126,6 +136,10 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     this.load.image(ASSET_KEYS.deleteButton, assetPath('images/themes/taekwondo/ui/delete_btn.png'))
     this.load.image(ASSET_KEYS.feedback, assetPath('images/themes/taekwondo/ui/feedback.png'))
     this.load.image(ASSET_KEYS.guide, assetPath('images/themes/taekwondo/ui/guide.png'))
+    this.load.image(
+      ASSET_KEYS.guideMagnifier,
+      assetPath('images/themes/taekwondo/ui/magnifier.png'),
+    )
     this.load.image(
       ASSET_KEYS.guidePose,
       assetPath(`images/themes/taekwondo/characters/poomsae_${this.getPoomsaeNumber()}.png`),
@@ -243,7 +257,7 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
         this.motions = []
         this.currentMotionIndex = 0
         this.setCurrentMotionName(MOTION_LOAD_ERROR_MESSAGE)
-        this.showFeedback('저장 중')
+        this.showFeedback(MOTION_LOAD_ERROR_MESSAGE)
         this.updatePoomsaeProgress()
       }
     }
@@ -611,10 +625,18 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
   }
 
   triggerSuccessEffect(options: CameraSuccessEffectOptions = {}) {
+    if (this.isAiJudgementPaused) {
+      return
+    }
+
     this.cameraSuccessEffect?.triggerSuccess(options)
   }
 
   spawnNextMotionEnemies() {
+    if (this.isAiJudgementPaused) {
+      return
+    }
+
     this.cameraSuccessEffect?.spawnNextMotionEnemies()
   }
 
@@ -623,7 +645,7 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     createTaekwondoRoundedPanel(this, x, y, width, height, { radius })
 
     this.add
-      .text(x, y - height * 0.36, '가이드 영상', {
+      .text(x, y - height * 0.36, GUIDE_VIDEO_TITLE, {
         fontFamily: 'sans-serif',
         fontSize: `${Math.round(Phaser.Math.Clamp(height * 0.085, 24, 38))}px`,
         color: TEXT_COLOR,
@@ -633,9 +655,141 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
       .setDepth(5)
 
     this.add
-      .image(x, y + height * 0.08, ASSET_KEYS.guidePose)
-      .setDisplaySize(width * 0.38, height * 0.52)
+      .text(x, y + height * 0.08, GUIDE_VIDEO_PENDING_MESSAGE, {
+        fontFamily: 'sans-serif',
+        fontSize: `${Math.round(Phaser.Math.Clamp(height * 0.055, 18, 26))}px`,
+        color: TEXT_COLOR,
+        fontStyle: '700',
+        align: 'center',
+        wordWrap: { width: width * 0.72, useAdvancedWrap: true },
+      })
+      .setOrigin(0.5)
       .setDepth(5)
+
+    const buttonSize = Math.round(Phaser.Math.Clamp(width * 0.11, 34, 48))
+    const buttonX = x + width / 2 - buttonSize * 0.72
+    const buttonY = y - height / 2 + buttonSize * 0.72
+    const expandIcon = this.add
+      .image(buttonX, buttonY, ASSET_KEYS.guideMagnifier)
+      .setDisplaySize(buttonSize, buttonSize)
+      .setDepth(6)
+    const hitArea = this.add
+      .rectangle(buttonX, buttonY, buttonSize, buttonSize, 0xffffff, 0)
+      .setDepth(7)
+      .setInteractive({ useHandCursor: true })
+
+    hitArea.on('pointerdown', () => this.showGuideVideoExpandOverlay())
+    hitArea.on('pointerover', () => {
+      expandIcon.setDisplaySize(buttonSize * 1.08, buttonSize * 1.08)
+    })
+    hitArea.on('pointerout', () => {
+      expandIcon.setDisplaySize(buttonSize, buttonSize)
+    })
+  }
+
+  private showGuideVideoExpandOverlay() {
+    if (this.guideVideoExpandOverlay || this.isSceneShuttingDown) {
+      return
+    }
+
+    this.pauseAiJudgement()
+
+    const { width: vw, height: vh } = this.scale
+    const overlay = this.add.container(vw / 2, vh / 2).setDepth(30)
+    const dim = this.add.rectangle(0, 0, vw, vh, 0x000000, 0.45).setInteractive()
+    const panelWidth = vw * 0.8
+    const panelHeight = vh * 0.78
+    const panel = createTaekwondoRoundedPanel(this, 0, 0, panelWidth, panelHeight, {
+      depth: 0,
+      radius: Math.round(Math.min(panelWidth, panelHeight) * 0.08),
+    })
+    const motionName = this.add
+      .text(0, -panelHeight * 0.36, this.getCurrentMotionName(), {
+        fontFamily: 'sans-serif',
+        fontSize: `${Math.round(Phaser.Math.Clamp(panelHeight * 0.1, 44, 74))}px`,
+        color: TEXT_COLOR,
+        fontStyle: '700',
+        align: 'center',
+        wordWrap: { width: panelWidth * 0.76, useAdvancedWrap: true },
+      })
+      .setOrigin(0.5)
+    const videoBoxWidth = panelWidth * 0.72
+    const videoBoxHeight = panelHeight * 0.56
+    const videoBoxY = panelHeight * 0.05
+    const videoBox = createTaekwondoRoundedPanel(
+      this,
+      0,
+      videoBoxY,
+      videoBoxWidth,
+      videoBoxHeight,
+      {
+        depth: 0,
+        fillColor: 0xfffbf1,
+        fillAlpha: 0.96,
+        strokeColor: 0xe6c47f,
+        strokeAlpha: 0.85,
+        strokeWidth: 3,
+        radius: Math.round(videoBoxHeight * 0.14),
+      },
+    )
+    const pendingText = this.add
+      .text(0, videoBoxY, GUIDE_VIDEO_PENDING_MESSAGE, {
+        fontFamily: 'sans-serif',
+        fontSize: `${Math.round(Phaser.Math.Clamp(panelHeight * 0.055, 28, 40))}px`,
+        color: TEXT_COLOR,
+        fontStyle: '700',
+        align: 'center',
+      })
+      .setOrigin(0.5)
+    const closeSize = Math.round(Phaser.Math.Clamp(vh * 0.075, 54, 72))
+    const closeX = panelWidth / 2 - closeSize * 0.95
+    const closeY = -panelHeight / 2 + closeSize * 0.95
+    const closeButton = this.add
+      .image(closeX, closeY, ASSET_KEYS.deleteButton)
+      .setDisplaySize(closeSize * IMAGE_ASPECT.deleteButton, closeSize)
+    const closeHitArea = this.add
+      .rectangle(closeX, closeY, closeSize * IMAGE_ASPECT.deleteButton, closeSize, 0xffffff, 0)
+      .setInteractive({ useHandCursor: true })
+    closeHitArea.on('pointerdown', () => this.hideGuideVideoExpandOverlay())
+    closeHitArea.on('pointerover', () => closeButton.setTint(0xffefc4))
+    closeHitArea.on('pointerout', () => closeButton.clearTint())
+
+    overlay.add([dim, panel, motionName, videoBox, pendingText, closeButton, closeHitArea])
+    overlay.setAlpha(0)
+    this.tweens.add({
+      targets: overlay,
+      alpha: 1,
+      duration: 160,
+      ease: 'Sine.easeOut',
+    })
+
+    this.guideVideoExpandOverlay = overlay
+  }
+
+  private hideGuideVideoExpandOverlay() {
+    const overlay = this.guideVideoExpandOverlay
+    this.guideVideoExpandOverlay = undefined
+    this.resumeAiJudgement()
+
+    if (!overlay) {
+      return
+    }
+
+    this.tweens.add({
+      targets: overlay,
+      alpha: 0,
+      duration: 120,
+      ease: 'Sine.easeIn',
+      onComplete: () => overlay.destroy(true),
+    })
+  }
+
+  private pauseAiJudgement() {
+    this.isAiJudgementPaused = true
+  }
+
+  private resumeAiJudgement() {
+    this.isAiJudgementPaused = false
   }
 
   private createFeedbackPanel(x: number, y: number, width: number, height: number) {
@@ -861,7 +1015,10 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     this.currentMotionText = undefined
     this.motionIntroOverlay?.destroy(true)
     this.motionIntroOverlay = undefined
+    this.guideVideoExpandOverlay?.destroy(true)
+    this.guideVideoExpandOverlay = undefined
     this.isWaitingMotionStart = false
+    this.isAiJudgementPaused = false
     this.progressView?.destroy()
     this.progressView = undefined
     this.motions = []
