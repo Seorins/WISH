@@ -6,6 +6,7 @@ export type MusicResultRequest = {
   score: number
   maxCombo: number
   perfectCount: number
+  greatCount?: number
   goodCount: number
   missCount: number
   totalNotes: number
@@ -20,6 +21,7 @@ export type MusicResult = {
   score: number
   maxCombo: number
   perfectCount: number
+  greatCount?: number
   goodCount: number
   missCount: number
   totalNotes: number
