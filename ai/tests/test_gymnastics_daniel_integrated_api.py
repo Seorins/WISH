@@ -22,6 +22,7 @@ from app.services.gymnastics.constants import (
     DANIEL_RIGHT_SIDE_BEND_MOTION_NAME,
     DANIEL_UPWARD_PRESS_MOTION_NAME,
 )
+from app.services.gymnastics.feedback.common import BEND_FORWARD_MORE
 
 
 def _build_request(motion_id: str) -> DanielStretchEvaluationRequest:
@@ -141,11 +142,11 @@ def _build_forward_bend_response() -> DanielForwardBendEvaluationResponse:
         motion_id="daniel_forward_bend",
         state="idle",
         accuracy=0.61,
-        feedback="상체를 더 숙여요",
+        feedback=BEND_FORWARD_MORE.text,
         tracking="tracking_ok",
         frame_label="guidance_needed",
-        guidance_code="BEND_FORWARD_MORE",
-        guidance_text="상체를 더 숙여요",
+        guidance_code=BEND_FORWARD_MORE.code,
+        guidance_text=BEND_FORWARD_MORE.text,
         hold_duration_ms=900,
         hold_completed=False,
         features=DanielForwardBendFeaturesResponse(
