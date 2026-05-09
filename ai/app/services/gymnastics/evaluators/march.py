@@ -260,13 +260,6 @@ class MarchEvaluator(BaseEvaluator):
             return "right"
         return None
 
-    def _is_in_place(self, features: MarchFeatureSet) -> bool:
-        return (
-            abs(features.pelvis_shift_x) <= self.config.pelvis_shift_max
-            and abs(features.pelvis_shift_y) <= self.config.pelvis_shift_max
-            and abs(features.pelvis_depth_shift) <= self.config.depth_shift_max
-        )
-
     def _resolve_top_frame_label(
         self,
         features: MarchFeatureSet,
