@@ -15,7 +15,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.comong.backend.domain.admin.dto.AdminDashboardResponse;
+import com.comong.backend.domain.admin.dto.AdminPatientDashboardResponse;
 import com.comong.backend.domain.patient.entity.PatientProfile;
+import com.comong.backend.domain.patient.exception.PatientErrorCode;
 import com.comong.backend.domain.patient.repository.PatientProfileRepository;
 import com.comong.backend.domain.usage.entity.ContentType;
 import com.comong.backend.domain.usage.entity.DailyUsageStat;
@@ -45,13 +47,10 @@ public class AdminDashboardService {
     private final UsageAggregationQuery usageAggregationQuery;
 
     public AdminDashboardResponse getDashboard(LocalDate from, LocalDate to) {
-        LocalDate today = LocalDate.now();
-        LocalDate effectiveTo = to != null ? to : today;
-        LocalDate effectiveFrom =
-                from != null ? from : effectiveTo.minusDays(DEFAULT_RANGE_DAYS - 1L);
-        if (effectiveFrom.isAfter(effectiveTo)) {
-            throw new BusinessException(GlobalErrorCode.INVALID_INPUT);
-        }
+        DateRange range = resolveDateRange(from, to);
+        LocalDate today = range.today();
+        LocalDate effectiveTo = range.to();
+        LocalDate effectiveFrom = range.from();
 
         Map<LocalDate, UsageTotals> dailyTotals = createDailyMap(effectiveFrom, effectiveTo);
         Map<LocalDate, Set<Long>> activePatientsByDate =
@@ -155,6 +154,92 @@ public class AdminDashboardService {
                 toAlerts(summary, guardianUsers, contentSkewedPatients));
     }
 
+    public AdminPatientDashboardResponse getPatientDashboard(
+            Long patientId, LocalDate from, LocalDate to) {
+        DateRange range = resolveDateRange(from, to);
+        PatientProfile patient =
+                patientProfileRepository
+                        .findByIdWithUser(patientId)
+                        .orElseThrow(
+                                () ->
+                                        new BusinessException(
+                                                PatientErrorCode.PATIENT_PROFILE_NOT_FOUND));
+
+        Map<LocalDate, UsageTotals> dailyTotals = createDailyMap(range.from(), range.to());
+        UsageTotals periodTotals = new UsageTotals();
+
+        List<DailyUsageStat> cachedRows =
+                dailyUsageStatRepository.findAllByPatientProfileIdAndStatDateBetween(
+                        patientId, range.from(), range.to());
+        for (DailyUsageStat row : cachedRows) {
+            if (row.getStatDate().equals(range.today())) {
+                continue;
+            }
+            addUsage(
+                    dailyTotals,
+                    periodTotals,
+                    row.getStatDate(),
+                    row.getContentType(),
+                    row.getTotalSeconds());
+        }
+
+        Map<Long, UsageTotals> todayLive = computeLiveForDate(range.today());
+        UsageTotals todayTotals = todayLive.getOrDefault(patientId, new UsageTotals());
+        if (range.includes(range.today())) {
+            for (ContentType type : ContentType.values()) {
+                addUsage(dailyTotals, periodTotals, range.today(), type, todayTotals.get(type));
+            }
+        }
+
+        LocalDate lastActiveDate = findLastActiveDate(dailyTotals);
+        long dayCount = range.to().toEpochDay() - range.from().toEpochDay() + 1L;
+        long activeDays = dailyTotals.values().stream().filter(UsageTotals::hasAnyUsage).count();
+        long todaySeconds = todayTotals.appUsageSeconds();
+
+        AdminPatientDashboardResponse.Summary summary =
+                new AdminPatientDashboardResponse.Summary(
+                        todaySeconds,
+                        periodTotals.appUsageSeconds(),
+                        periodTotals.contentTotal(),
+                        dayCount > 0 ? periodTotals.appUsageSeconds() / dayCount : 0,
+                        activeDays,
+                        lastActiveDate,
+                        usageStatus(
+                                periodTotals,
+                                range.includes(range.today()) ? todaySeconds : 0,
+                                lastActiveDate,
+                                range.to()),
+                        favoriteContentLabel(periodTotals),
+                        isContentSkewed(periodTotals),
+                        RISK_INACTIVE_DAYS);
+
+        return new AdminPatientDashboardResponse(
+                range.from(),
+                range.to(),
+                new AdminPatientDashboardResponse.Patient(
+                        patient.getId(),
+                        patient.getName(),
+                        patient.getNickname(),
+                        patient.getGender(),
+                        patient.getBirthDate(),
+                        patient.getCreatedAt(),
+                        patient.getUser().getEmail()),
+                summary,
+                toPatientDailyResponses(dailyTotals),
+                toContentShares(periodTotals));
+    }
+
+    private DateRange resolveDateRange(LocalDate from, LocalDate to) {
+        LocalDate today = LocalDate.now();
+        LocalDate effectiveTo = to != null ? to : today;
+        LocalDate effectiveFrom =
+                from != null ? from : effectiveTo.minusDays(DEFAULT_RANGE_DAYS - 1L);
+        if (effectiveFrom.isAfter(effectiveTo)) {
+            throw new BusinessException(GlobalErrorCode.INVALID_INPUT);
+        }
+        return new DateRange(effectiveFrom, effectiveTo, today);
+    }
+
     private Map<LocalDate, UsageTotals> createDailyMap(LocalDate from, LocalDate to) {
         Map<LocalDate, UsageTotals> dailyTotals = new LinkedHashMap<>();
         for (LocalDate date = from; !date.isAfter(to); date = date.plusDays(1)) {
@@ -192,6 +277,20 @@ public class AdminDashboardService {
                 usageByPatient.computeIfAbsent(patientId, id -> new PatientUsage());
         patientUsage.add(type, seconds);
         patientUsage.markActive(date);
+    }
+
+    private void addUsage(
+            Map<LocalDate, UsageTotals> dailyTotals,
+            UsageTotals periodTotals,
+            LocalDate date,
+            ContentType type,
+            long seconds) {
+        if (seconds <= 0) {
+            return;
+        }
+
+        dailyTotals.get(date).add(type, seconds);
+        periodTotals.add(type, seconds);
     }
 
     private Map<Long, UsageTotals> computeLiveForDate(LocalDate date) {
@@ -246,6 +345,25 @@ public class AdminDashboardService {
                 usage.favoriteContentLabel(),
                 usage.lastActiveDate,
                 usage.status(periodTo));
+    }
+
+    private List<AdminPatientDashboardResponse.DailyUsage> toPatientDailyResponses(
+            Map<LocalDate, UsageTotals> dailyTotals) {
+        List<AdminPatientDashboardResponse.DailyUsage> responses = new ArrayList<>();
+        for (Map.Entry<LocalDate, UsageTotals> entry : dailyTotals.entrySet()) {
+            UsageTotals totals = entry.getValue();
+            responses.add(
+                    new AdminPatientDashboardResponse.DailyUsage(
+                            entry.getKey(),
+                            totals.login,
+                            totals.art,
+                            totals.music,
+                            totals.taekwondo,
+                            totals.gymnastics,
+                            totals.appUsageSeconds(),
+                            totals.hasAnyUsage()));
+        }
+        return responses;
     }
 
     private List<AdminDashboardResponse.DailyUsage> toDailyResponses(
@@ -320,6 +438,53 @@ public class AdminDashboardService {
         };
     }
 
+    private static String favoriteContentLabel(UsageTotals totals) {
+        ContentType favorite = totals.favoriteContent();
+        return favorite != null ? contentLabel(favorite) : "없음";
+    }
+
+    private static String usageStatus(
+            UsageTotals totals, long todaySeconds, LocalDate lastActiveDate, LocalDate periodTo) {
+        if (lastActiveDate == null || !totals.hasAnyUsage()) {
+            return "RISK";
+        }
+        if (lastActiveDate.isBefore(periodTo.minusDays(RISK_INACTIVE_DAYS - 1L))) {
+            return "RISK";
+        }
+        if (todaySeconds > 0 || totals.appUsageSeconds() >= ACTIVE_PERIOD_SECONDS_THRESHOLD) {
+            return "ACTIVE";
+        }
+        return "NORMAL";
+    }
+
+    private static boolean isContentSkewed(UsageTotals totals) {
+        long contentTotal = totals.contentTotal();
+        if (contentTotal < CONTENT_SKEW_MIN_SECONDS) {
+            return false;
+        }
+        long max =
+                Math.max(
+                        Math.max(totals.art, totals.music),
+                        Math.max(totals.taekwondo, totals.gymnastics));
+        return max * 100 >= contentTotal * CONTENT_SKEW_PERCENT_THRESHOLD;
+    }
+
+    private static LocalDate findLastActiveDate(Map<LocalDate, UsageTotals> dailyTotals) {
+        LocalDate lastActiveDate = null;
+        for (Map.Entry<LocalDate, UsageTotals> entry : dailyTotals.entrySet()) {
+            if (entry.getValue().hasAnyUsage()) {
+                lastActiveDate = entry.getKey();
+            }
+        }
+        return lastActiveDate;
+    }
+
+    private record DateRange(LocalDate from, LocalDate to, LocalDate today) {
+        private boolean includes(LocalDate date) {
+            return !date.isBefore(from) && !date.isAfter(to);
+        }
+    }
+
     private static final class PatientUsage {
         private final UsageTotals total = new UsageTotals();
         private long todaySeconds;
@@ -338,33 +503,15 @@ public class AdminDashboardService {
         }
 
         private String favoriteContentLabel() {
-            ContentType favorite = total.favoriteContent();
-            return favorite != null ? contentLabel(favorite) : "없음";
+            return AdminDashboardService.favoriteContentLabel(total);
         }
 
         private String status(LocalDate periodTo) {
-            if (lastActiveDate == null || !total.hasAnyUsage()) {
-                return "RISK";
-            }
-            if (lastActiveDate.isBefore(periodTo.minusDays(RISK_INACTIVE_DAYS - 1L))) {
-                return "RISK";
-            }
-            if (todaySeconds > 0 || total.appUsageSeconds() >= ACTIVE_PERIOD_SECONDS_THRESHOLD) {
-                return "ACTIVE";
-            }
-            return "NORMAL";
+            return usageStatus(total, todaySeconds, lastActiveDate, periodTo);
         }
 
         private boolean isContentSkewed() {
-            long contentTotal = total.contentTotal();
-            if (contentTotal < CONTENT_SKEW_MIN_SECONDS) {
-                return false;
-            }
-            long max =
-                    Math.max(
-                            Math.max(total.art, total.music),
-                            Math.max(total.taekwondo, total.gymnastics));
-            return max * 100 >= contentTotal * CONTENT_SKEW_PERCENT_THRESHOLD;
+            return AdminDashboardService.isContentSkewed(total);
         }
     }
 
