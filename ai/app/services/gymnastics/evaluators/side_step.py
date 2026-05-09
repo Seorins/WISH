@@ -4,6 +4,7 @@ from app.services.gymnastics.constants import (
     DEFAULT_FEEDBACK_CLEAR_FRAMES,
     DEFAULT_FEEDBACK_DISPLAY_FRAMES,
     DEFAULT_FEEDBACK_STREAK_THRESHOLD,
+    DEFAULT_GYMNASTICS_BASELINE_TARGET_FRAMES,
     DEFAULT_SIDE_STEP_ANKLE_SPAN_THRESHOLD,
     DEFAULT_SIDE_STEP_DEPTH_SHIFT_MAX,
     DEFAULT_SIDE_STEP_DOMINANCE_MARGIN,
@@ -57,6 +58,9 @@ class SideStepEvaluator(BaseEvaluator):
         reference_hip_x: float | None = None,
         reference_hip_y: float | None = None,
         reference_scale: float | None = None,
+        baseline_status: str = "ready",
+        baseline_frames: int = 0,
+        baseline_target_frames: int = DEFAULT_GYMNASTICS_BASELINE_TARGET_FRAMES,
         displayed_feedback_code: str | None = None,
         displayed_feedback_text: str | None = None,
         displayed_feedback_frames: int = 0,
@@ -77,6 +81,9 @@ class SideStepEvaluator(BaseEvaluator):
         next_reference_hip_x = reference_hip_x
         next_reference_hip_y = reference_hip_y
         next_reference_scale = reference_scale
+        next_baseline_status = baseline_status
+        next_baseline_frames = self._normalize_baseline_frames(baseline_frames)
+        next_baseline_target_frames = self._normalize_baseline_target_frames(baseline_target_frames)
         next_baseline_left_step_extent = baseline_left_step_extent
         next_baseline_right_step_extent = baseline_right_step_extent
         next_baseline_ankle_span = baseline_ankle_span
@@ -142,6 +149,9 @@ class SideStepEvaluator(BaseEvaluator):
                 reference_hip_x=next_reference_hip_x,
                 reference_hip_y=next_reference_hip_y,
                 reference_scale=next_reference_scale,
+                baseline_status=next_baseline_status,
+                baseline_frames=next_baseline_frames,
+                baseline_target_frames=next_baseline_target_frames,
                 baseline_left_step_extent=next_baseline_left_step_extent,
                 baseline_right_step_extent=next_baseline_right_step_extent,
                 baseline_ankle_span=next_baseline_ankle_span,
@@ -152,6 +162,75 @@ class SideStepEvaluator(BaseEvaluator):
                     motion_present=False,
                     attempting=False,
                 ),
+            )
+
+        if self._is_collecting_baseline(next_baseline_status):
+            sample_count = next_baseline_frames
+            next_reference_hip_x = self._update_baseline_average(
+                reference_hip_x,
+                frame.hip_center.x,
+                sample_count,
+            )
+            next_reference_hip_y = self._update_baseline_average(
+                reference_hip_y,
+                frame.hip_center.y,
+                sample_count,
+            )
+            next_reference_scale = self._update_baseline_average(
+                reference_scale,
+                frame.scale_reference,
+                sample_count,
+            )
+            next_baseline_left_step_extent = self._update_baseline_average(
+                next_baseline_left_step_extent,
+                features.raw_left_step_extent,
+                sample_count,
+            )
+            next_baseline_right_step_extent = self._update_baseline_average(
+                next_baseline_right_step_extent,
+                features.raw_right_step_extent,
+                sample_count,
+            )
+            next_baseline_ankle_span = self._update_baseline_average(
+                next_baseline_ankle_span,
+                features.raw_ankle_span,
+                sample_count,
+            )
+            next_baseline_status, next_baseline_frames = self._advance_baseline_collection(
+                baseline_frames=next_baseline_frames,
+                baseline_target_frames=next_baseline_target_frames,
+            )
+            next_feedback_state = self._stabilize_feedback(
+                features=features,
+                state="idle",
+                tracking=frame.tracking,
+                previous_feedback_state=previous_feedback_state,
+            )
+            next_representative_state = self._update_representative_feedback(
+                feedback_state=next_feedback_state,
+                previous_representative_state=previous_representative_state,
+            )
+            return self._make_result(
+                state="idle",
+                step_count=normalized_step_count,
+                accuracy=0.0,
+                tracking=frame.tracking,
+                last_counted_side=last_counted_side,
+                last_seen_side=last_seen_side,
+                left_armed=True,
+                right_armed=True,
+                reference_hip_x=next_reference_hip_x,
+                reference_hip_y=next_reference_hip_y,
+                reference_scale=next_reference_scale,
+                baseline_status=next_baseline_status,
+                baseline_frames=next_baseline_frames,
+                baseline_target_frames=next_baseline_target_frames,
+                baseline_left_step_extent=next_baseline_left_step_extent,
+                baseline_right_step_extent=next_baseline_right_step_extent,
+                baseline_ankle_span=next_baseline_ankle_span,
+                feedback_state=next_feedback_state,
+                representative_state=next_representative_state,
+                frame_label=self._resolve_top_frame_label(features, frame.tracking, "idle"),
             )
 
         if next_reference_hip_x is None or next_reference_hip_y is None or next_reference_scale is None:
@@ -177,6 +256,9 @@ class SideStepEvaluator(BaseEvaluator):
                 reference_hip_x=next_reference_hip_x,
                 reference_hip_y=next_reference_hip_y,
                 reference_scale=next_reference_scale,
+                baseline_status=next_baseline_status,
+                baseline_frames=next_baseline_frames,
+                baseline_target_frames=next_baseline_target_frames,
                 baseline_left_step_extent=next_baseline_left_step_extent,
                 baseline_right_step_extent=next_baseline_right_step_extent,
                 baseline_ankle_span=next_baseline_ankle_span,
@@ -216,6 +298,9 @@ class SideStepEvaluator(BaseEvaluator):
                 reference_hip_x=next_reference_hip_x,
                 reference_hip_y=next_reference_hip_y,
                 reference_scale=next_reference_scale,
+                baseline_status=next_baseline_status,
+                baseline_frames=next_baseline_frames,
+                baseline_target_frames=next_baseline_target_frames,
                 baseline_left_step_extent=next_baseline_left_step_extent,
                 baseline_right_step_extent=next_baseline_right_step_extent,
                 baseline_ankle_span=next_baseline_ankle_span,
@@ -273,6 +358,9 @@ class SideStepEvaluator(BaseEvaluator):
             reference_hip_x=next_reference_hip_x,
             reference_hip_y=next_reference_hip_y,
             reference_scale=next_reference_scale,
+            baseline_status=next_baseline_status,
+            baseline_frames=next_baseline_frames,
+            baseline_target_frames=next_baseline_target_frames,
             baseline_left_step_extent=next_baseline_left_step_extent,
             baseline_right_step_extent=next_baseline_right_step_extent,
             baseline_ankle_span=next_baseline_ankle_span,
@@ -394,6 +482,9 @@ class SideStepEvaluator(BaseEvaluator):
         reference_hip_x: float | None,
         reference_hip_y: float | None,
         reference_scale: float | None,
+        baseline_status: str,
+        baseline_frames: int,
+        baseline_target_frames: int,
         baseline_left_step_extent: float | None,
         baseline_right_step_extent: float | None,
         baseline_ankle_span: float | None,
@@ -415,6 +506,9 @@ class SideStepEvaluator(BaseEvaluator):
             reference_hip_x=reference_hip_x,
             reference_hip_y=reference_hip_y,
             reference_scale=reference_scale,
+            baseline_status=baseline_status,
+            baseline_frames=baseline_frames,
+            baseline_target_frames=baseline_target_frames,
             displayed_feedback_code=feedback_state.displayed_code,
             displayed_feedback_text=feedback_state.displayed_text,
             displayed_feedback_frames=feedback_state.displayed_frames,

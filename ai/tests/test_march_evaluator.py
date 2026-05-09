@@ -2,6 +2,64 @@ from app.services.gymnastics.evaluators.march import MarchEvaluator
 from app.services.gymnastics.types import HipCenter, NormalizedLandmark, NormalizedPoseFrame
 
 
+def test_march_collects_baseline_before_progress_counting() -> None:
+    evaluator = MarchEvaluator()
+
+    first = evaluator.evaluate(
+        frame=build_march_frame(),
+        previous_state="idle",
+        step_count=0,
+        target_steps=8,
+        baseline_status="collecting",
+        baseline_target_frames=2,
+    )
+
+    assert first.baseline_status == "collecting"
+    assert first.baseline_frames == 1
+    assert first.step_count == 0
+
+    second = evaluator.evaluate(
+        frame=build_march_frame(left_knee_x=-0.10, right_knee_x=0.10),
+        previous_state=first.state,
+        step_count=first.step_count,
+        target_steps=8,
+        reference_hip_x=first.reference_hip_x,
+        reference_hip_y=first.reference_hip_y,
+        reference_scale=first.reference_scale,
+        baseline_status=first.baseline_status,
+        baseline_frames=first.baseline_frames,
+        baseline_target_frames=first.baseline_target_frames,
+        baseline_left_knee_lift=first.baseline_left_knee_lift,
+        baseline_right_knee_lift=first.baseline_right_knee_lift,
+        baseline_left_thigh_angle=first.baseline_left_thigh_angle,
+        baseline_right_thigh_angle=first.baseline_right_thigh_angle,
+    )
+
+    assert second.baseline_status == "ready"
+    assert second.baseline_frames == 2
+    assert second.step_count == 0
+
+    result = evaluator.evaluate(
+        frame=build_march_frame(left_knee_x=0.65, left_knee_y=1.0),
+        previous_state=second.state,
+        step_count=second.step_count,
+        target_steps=8,
+        reference_hip_x=second.reference_hip_x,
+        reference_hip_y=second.reference_hip_y,
+        reference_scale=second.reference_scale,
+        baseline_status=second.baseline_status,
+        baseline_frames=second.baseline_frames,
+        baseline_target_frames=second.baseline_target_frames,
+        baseline_left_knee_lift=second.baseline_left_knee_lift,
+        baseline_right_knee_lift=second.baseline_right_knee_lift,
+        baseline_left_thigh_angle=second.baseline_left_thigh_angle,
+        baseline_right_thigh_angle=second.baseline_right_thigh_angle,
+    )
+
+    assert result.state == "left_peak"
+    assert result.step_count == 1
+
+
 def test_march_counts_progress_even_when_child_drifts_from_place() -> None:
     evaluator = MarchEvaluator()
 

@@ -1,77 +1,13 @@
-from datetime import datetime
-from typing import Literal
-
 from pydantic import BaseModel, Field
 
-from app.services.gymnastics.constants import DEFAULT_STRETCH_HOLD_TARGET_MS
-
-
-class PoseLandmarkRequest(BaseModel):
-    name: str = Field(..., description="Pose landmark name")
-    x: float = Field(..., description="Normalized x coordinate")
-    y: float = Field(..., description="Normalized y coordinate")
-    z: float | None = Field(default=None, description="Optional z coordinate")
-    visibility: float | None = Field(default=None, description="Landmark confidence")
-
-
-class PoseFrameRequest(BaseModel):
-    timestamp_ms: int = Field(..., ge=0, description="Frame timestamp in milliseconds")
-    landmarks: list[PoseLandmarkRequest] = Field(
-        ...,
-        min_length=1,
-        description="Pose landmarks for one frame",
-    )
-    mirrored: bool = Field(
-        default=True,
-        description="Whether the source frame is mirrored like a front camera preview",
-    )
-
-
-class NormalizedLandmarkResponse(BaseModel):
-    name: str
-    x: float | None = None
-    y: float | None = None
-    z: float | None = None
-    confidence: float | None = None
-
-
-class HipCenterResponse(BaseModel):
-    x: float
-    y: float
-
-
-class NormalizedPoseResponse(BaseModel):
-    tracking: str = Field(..., description="Tracking quality status")
-    timestamp_ms: int
-    scale_reference: float = Field(..., description="Reference body scale used for normalization")
-    hip_center: HipCenterResponse
-    landmarks: list[NormalizedLandmarkResponse]
-
-
-class FeedbackTtsResponse(BaseModel):
-    should_play: bool = False
-    key: str | None = None
-    text: str | None = None
-    priority: Literal["tracking", "posture"] | None = None
-
-
-# Gymnastics frame labels are the primary per-frame interpretation values for
-# FE/guardian consumers.
-# - tracking_low: the frame is not reliable enough to interpret because core
-#   landmarks are missing or unstable.
-# - guidance_needed: tracking is usable, but the target motion pattern is not
-#   yet sufficiently present and guidance can be shown.
-# - attempting: the child is starting to move toward the target pattern, but
-#   the motion is not yet strong enough to treat as present.
-# - motion_present: the target motion pattern is sufficiently visible on the
-#   current frame.
-GymnasticsFrameLabel = Literal[
-    "tracking_low",
-    "guidance_needed",
-    "attempting",
-    "motion_present",
-]
-DanielFrameLabel = GymnasticsFrameLabel
+from app.schemas.gymnastics.common import (
+    FeedbackTtsResponse,
+    GymnasticsBaselineStatus,
+    GymnasticsFrameLabel,
+    NormalizedPoseResponse,
+    PoseFrameRequest,
+)
+from app.services.gymnastics.constants import DEFAULT_GYMNASTICS_BASELINE_TARGET_FRAMES
 
 
 class MarchEvaluationRequest(BaseModel):
@@ -95,7 +31,6 @@ class MarchEvaluationRequest(BaseModel):
         default=True,
         description="Whether the right side can count a new peak",
     )
-    # Reference position captured on the first valid frame — used for in-place check
     reference_hip_x: float | None = Field(
         default=None,
         description="Raw hip center X captured at session start",
@@ -108,7 +43,16 @@ class MarchEvaluationRequest(BaseModel):
         default=None,
         description="Shoulder-width scale captured at session start",
     )
-    # Feedback stabilizer state (round-tripped to avoid flicker)
+    baseline_status: GymnasticsBaselineStatus = Field(
+        default="ready",
+        description="Set to collecting during pre-motion baseline capture; ready evaluates normally.",
+    )
+    baseline_frames: int = Field(default=0, ge=0)
+    baseline_target_frames: int = Field(default=DEFAULT_GYMNASTICS_BASELINE_TARGET_FRAMES, ge=1)
+    baseline_left_knee_lift: float | None = Field(default=None)
+    baseline_right_knee_lift: float | None = Field(default=None)
+    baseline_left_thigh_angle: float | None = Field(default=None)
+    baseline_right_thigh_angle: float | None = Field(default=None)
     displayed_feedback_code: str | None = Field(default=None)
     displayed_feedback_text: str | None = Field(default=None)
     displayed_feedback_frames: int = Field(default=0, ge=0)
@@ -160,6 +104,13 @@ class MarchEvaluationResponse(BaseModel):
     reference_hip_x: float | None = None
     reference_hip_y: float | None = None
     reference_scale: float | None = None
+    baseline_status: GymnasticsBaselineStatus = "ready"
+    baseline_frames: int = 0
+    baseline_target_frames: int = DEFAULT_GYMNASTICS_BASELINE_TARGET_FRAMES
+    baseline_left_knee_lift: float | None = None
+    baseline_right_knee_lift: float | None = None
+    baseline_left_thigh_angle: float | None = None
+    baseline_right_thigh_angle: float | None = None
     displayed_feedback_code: str | None = None
     displayed_feedback_text: str | None = None
     displayed_feedback_frames: int = 0
@@ -175,264 +126,6 @@ class MarchEvaluationResponse(BaseModel):
     features: MarchFeaturesResponse
 
 
-class MarchSummaryRequest(BaseModel):
-    started_at: datetime = Field(..., description="Motion start time in ISO 8601 format")
-    ended_at: datetime = Field(..., description="Motion end time in ISO 8601 format")
-    step_count: int = Field(..., ge=0, description="Final accumulated march step count")
-    accuracy: float = Field(..., ge=0.0, le=1.0, description="Final accuracy score")
-    representative_feedback: str | None = Field(
-        default=None,
-        description="Representative corrective feedback for this motion",
-    )
-    tracking: str = Field(..., description="Final tracking quality status")
-    state: str = Field(..., description="Final evaluator state")
-
-
-class MarchSummaryResponse(BaseModel):
-    motionId: str
-    motionName: str
-    durationSec: float
-    stepCount: int
-    accuracy: float
-    representativeFeedback: str | None = None
-    tracking: str
-    state: str
-
-
-class StretchMotionSummaryRequest(BaseModel):
-    started_at: datetime = Field(..., description="Motion start time in ISO 8601 format")
-    ended_at: datetime = Field(..., description="Motion end time in ISO 8601 format")
-    accuracy: float = Field(..., ge=0.0, le=1.0, description="Final accuracy score")
-    hold_completed: bool = Field(..., description="Whether the user reached the target hold time")
-    representative_feedback: str | None = Field(
-        default=None,
-        description="Representative corrective feedback for this motion",
-    )
-    tracking: str = Field(..., description="Final tracking quality status")
-    state: str = Field(..., description="Final evaluator state")
-
-
-class StretchMotionSummaryResponse(BaseModel):
-    motionId: str
-    motionName: str
-    durationSec: float
-    accuracy: float
-    holdCompleted: bool
-    representativeFeedback: str | None = None
-    tracking: str
-    state: str
-
-
-DanielStretchMotionId = Literal[
-    "daniel_forward_press",
-    "daniel_upward_press",
-    "daniel_side_bend_left",
-    "daniel_side_bend_right",
-    "daniel_forward_bend",
-]
-
-
-class DanielStretchSummaryRequest(StretchMotionSummaryRequest):
-    motion_id: DanielStretchMotionId = Field(..., description="Daniel stretch motion identifier")
-
-
-class StretchHoldEvaluationRequestBase(BaseModel):
-    frame: PoseFrameRequest
-    previous_state: str = Field(default="idle", description="Previous hold evaluator state")
-    target_hold_ms: int = Field(
-        default=DEFAULT_STRETCH_HOLD_TARGET_MS,
-        ge=1,
-        description="Target hold duration in milliseconds",
-    )
-    hold_duration_ms: int = Field(
-        default=0,
-        ge=0,
-        description=(
-            "Legacy FE compatibility field. Daniel uses this as accumulated "
-            "session elapsed time and expects FE to reset it to 0 when a new "
-            "session starts."
-        ),
-    )
-    hold_last_timestamp_ms: int | None = Field(
-        default=None,
-        ge=0,
-        description=(
-            "Legacy FE compatibility field. Timestamp of the last Daniel "
-            "session progress frame; FE should reset it to null for a new session."
-        ),
-    )
-    reference_hip_x: float | None = Field(default=None)
-    reference_hip_y: float | None = Field(default=None)
-    reference_scale: float | None = Field(default=None)
-    displayed_feedback_code: str | None = Field(default=None)
-    displayed_feedback_text: str | None = Field(default=None)
-    displayed_feedback_frames: int = Field(default=0, ge=0)
-    candidate_feedback_code: str | None = Field(default=None)
-    candidate_feedback_text: str | None = Field(default=None)
-    candidate_feedback_streak: int = Field(default=0, ge=0)
-    representative_feedback_totals: dict[str, int] = Field(default_factory=dict)
-    representative_feedback_code: str | None = Field(default=None)
-    representative_feedback_text: str | None = Field(default=None)
-    representative_feedback_frames: int = Field(default=0, ge=0)
-
-
-class StretchHoldEvaluationResponseBase(BaseModel):
-    motion_id: str
-    state: str = Field(
-        ...,
-        description=(
-            "Legacy FE compatibility state. For Daniel, consumers should prefer "
-            "`frame_label` for per-frame interpretation."
-        ),
-    )
-    accuracy: float
-    feedback: str | None = None
-    tracking: str
-    frame_label: DanielFrameLabel | None = Field(
-        default=None,
-        description="Primary Daniel per-frame classification label.",
-    )
-    guidance_code: str | None = Field(
-        default=None,
-        description="Displayed guidance code for the current frame, when any.",
-    )
-    guidance_text: str | None = Field(
-        default=None,
-        description="Displayed guidance text for the current frame, when any.",
-    )
-    hold_duration_ms: int = 0
-    hold_completed: bool = False
-    hold_last_timestamp_ms: int | None = None
-    reference_hip_x: float | None = None
-    reference_hip_y: float | None = None
-    reference_scale: float | None = None
-    displayed_feedback_code: str | None = None
-    displayed_feedback_text: str | None = None
-    displayed_feedback_frames: int = 0
-    candidate_feedback_code: str | None = None
-    candidate_feedback_text: str | None = None
-    candidate_feedback_streak: int = 0
-    representative_feedback_totals: dict[str, int] = Field(default_factory=dict)
-    representative_feedback_code: str | None = None
-    representative_feedback_text: str | None = None
-    representative_feedback_frames: int = 0
-    tts: FeedbackTtsResponse = Field(default_factory=FeedbackTtsResponse)
-    normalized_pose: NormalizedPoseResponse | None = None
-
-
-class DanielForwardPressEvaluationRequest(StretchHoldEvaluationRequestBase):
-    baseline_left_wrist_forward: float | None = Field(default=None)
-    baseline_right_wrist_forward: float | None = Field(default=None)
-
-
-class DanielForwardPressFeaturesResponse(BaseModel):
-    wrist_forward: float | None = None
-    wrist_extension: float | None = None
-    left_wrist_forward: float | None = None
-    right_wrist_forward: float | None = None
-    wrist_gap: float | None = None
-    wrist_height_error: float | None = None
-    wrist_shoulder_offset: float | None = None
-    left_elbow_angle: float | None = None
-    right_elbow_angle: float | None = None
-    torso_tilt: float
-    pelvis_shift_x: float
-    pelvis_shift_y: float
-    pelvis_depth_shift: float
-
-
-class DanielForwardPressEvaluationResponse(StretchHoldEvaluationResponseBase):
-    baseline_left_wrist_forward: float | None = None
-    baseline_right_wrist_forward: float | None = None
-    features: DanielForwardPressFeaturesResponse
-
-
-class DanielUpwardPressEvaluationRequest(StretchHoldEvaluationRequestBase):
-    pass
-
-
-class DanielUpwardPressFeaturesResponse(BaseModel):
-    wrist_height: float | None = None
-    wrist_height_balance: float | None = None
-    left_elbow_angle: float | None = None
-    right_elbow_angle: float | None = None
-    torso_tilt: float
-    pelvis_shift_x: float
-    pelvis_shift_y: float
-    pelvis_depth_shift: float
-
-
-class DanielUpwardPressEvaluationResponse(StretchHoldEvaluationResponseBase):
-    features: DanielUpwardPressFeaturesResponse
-
-
-class DanielLeftSideBendEvaluationRequest(StretchHoldEvaluationRequestBase):
-    pass
-
-
-class DanielLeftSideBendFeaturesResponse(BaseModel):
-    torso_tilt: float
-    wrist_height: float | None = None
-    left_elbow_angle: float | None = None
-    right_elbow_angle: float | None = None
-    pelvis_shift_x: float
-    pelvis_shift_y: float
-    pelvis_depth_shift: float
-
-
-class DanielLeftSideBendEvaluationResponse(StretchHoldEvaluationResponseBase):
-    features: DanielLeftSideBendFeaturesResponse
-
-
-class DanielRightSideBendEvaluationRequest(StretchHoldEvaluationRequestBase):
-    pass
-
-
-class DanielRightSideBendFeaturesResponse(BaseModel):
-    torso_tilt: float
-    wrist_height: float | None = None
-    left_elbow_angle: float | None = None
-    right_elbow_angle: float | None = None
-    pelvis_shift_x: float
-    pelvis_shift_y: float
-    pelvis_depth_shift: float
-
-
-class DanielRightSideBendEvaluationResponse(StretchHoldEvaluationResponseBase):
-    features: DanielRightSideBendFeaturesResponse
-
-
-class DanielForwardBendEvaluationRequest(StretchHoldEvaluationRequestBase):
-    pass
-
-
-class DanielForwardBendFeaturesResponse(BaseModel):
-    forward_bend_angle: float
-    wrist_drop: float | None = None
-    left_knee_angle: float | None = None
-    right_knee_angle: float | None = None
-    pelvis_shift_x: float
-    pelvis_shift_y: float
-    pelvis_depth_shift: float
-
-
-class DanielForwardBendEvaluationResponse(StretchHoldEvaluationResponseBase):
-    features: DanielForwardBendFeaturesResponse
-
-
-class DanielStretchEvaluationRequest(StretchHoldEvaluationRequestBase):
-    motion_id: DanielStretchMotionId = Field(..., description="Daniel stretch motion identifier")
-    baseline_left_wrist_forward: float | None = Field(default=None)
-    baseline_right_wrist_forward: float | None = Field(default=None)
-
-
-class DanielStretchEvaluationResponse(StretchHoldEvaluationResponseBase):
-    motion_name: str
-    baseline_left_wrist_forward: float | None = None
-    baseline_right_wrist_forward: float | None = None
-    features: dict[str, float | int | None]
-
-
 class SideStepEvaluationRequest(BaseModel):
     frame: PoseFrameRequest
     previous_state: str = Field(default="idle", description="Previous evaluator state")
@@ -445,6 +138,9 @@ class SideStepEvaluationRequest(BaseModel):
     reference_hip_x: float | None = Field(default=None)
     reference_hip_y: float | None = Field(default=None)
     reference_scale: float | None = Field(default=None)
+    baseline_status: GymnasticsBaselineStatus = Field(default="ready")
+    baseline_frames: int = Field(default=0, ge=0)
+    baseline_target_frames: int = Field(default=DEFAULT_GYMNASTICS_BASELINE_TARGET_FRAMES, ge=1)
     displayed_feedback_code: str | None = Field(default=None)
     displayed_feedback_text: str | None = Field(default=None)
     displayed_feedback_frames: int = Field(default=0, ge=0)
@@ -496,6 +192,9 @@ class SideStepEvaluationResponse(BaseModel):
     reference_hip_x: float | None = None
     reference_hip_y: float | None = None
     reference_scale: float | None = None
+    baseline_status: GymnasticsBaselineStatus = "ready"
+    baseline_frames: int = 0
+    baseline_target_frames: int = DEFAULT_GYMNASTICS_BASELINE_TARGET_FRAMES
     displayed_feedback_code: str | None = None
     displayed_feedback_text: str | None = None
     displayed_feedback_frames: int = 0
@@ -526,6 +225,9 @@ class DiagonalBodyPunchEvaluationRequest(BaseModel):
     reference_hip_x: float | None = Field(default=None)
     reference_hip_y: float | None = Field(default=None)
     reference_scale: float | None = Field(default=None)
+    baseline_status: GymnasticsBaselineStatus = Field(default="ready")
+    baseline_frames: int = Field(default=0, ge=0)
+    baseline_target_frames: int = Field(default=DEFAULT_GYMNASTICS_BASELINE_TARGET_FRAMES, ge=1)
     displayed_feedback_code: str | None = Field(default=None)
     displayed_feedback_text: str | None = Field(default=None)
     displayed_feedback_frames: int = Field(default=0, ge=0)
@@ -581,6 +283,9 @@ class DiagonalBodyPunchEvaluationResponse(BaseModel):
     reference_hip_x: float | None = None
     reference_hip_y: float | None = None
     reference_scale: float | None = None
+    baseline_status: GymnasticsBaselineStatus = "ready"
+    baseline_frames: int = 0
+    baseline_target_frames: int = DEFAULT_GYMNASTICS_BASELINE_TARGET_FRAMES
     displayed_feedback_code: str | None = None
     displayed_feedback_text: str | None = None
     displayed_feedback_frames: int = 0
@@ -611,6 +316,9 @@ class DiagonalFacePunchEvaluationRequest(BaseModel):
     reference_hip_x: float | None = Field(default=None)
     reference_hip_y: float | None = Field(default=None)
     reference_scale: float | None = Field(default=None)
+    baseline_status: GymnasticsBaselineStatus = Field(default="ready")
+    baseline_frames: int = Field(default=0, ge=0)
+    baseline_target_frames: int = Field(default=DEFAULT_GYMNASTICS_BASELINE_TARGET_FRAMES, ge=1)
     displayed_feedback_code: str | None = Field(default=None)
     displayed_feedback_text: str | None = Field(default=None)
     displayed_feedback_frames: int = Field(default=0, ge=0)
@@ -623,6 +331,8 @@ class DiagonalFacePunchEvaluationRequest(BaseModel):
     representative_feedback_frames: int = Field(default=0, ge=0)
     baseline_left_wrist_forward: float | None = Field(default=None)
     baseline_right_wrist_forward: float | None = Field(default=None)
+    baseline_left_wrist_height: float | None = Field(default=None)
+    baseline_right_wrist_height: float | None = Field(default=None)
     baseline_stance_span: float | None = Field(default=None)
 
 
@@ -668,6 +378,9 @@ class DiagonalFacePunchEvaluationResponse(BaseModel):
     reference_hip_x: float | None = None
     reference_hip_y: float | None = None
     reference_scale: float | None = None
+    baseline_status: GymnasticsBaselineStatus = "ready"
+    baseline_frames: int = 0
+    baseline_target_frames: int = DEFAULT_GYMNASTICS_BASELINE_TARGET_FRAMES
     displayed_feedback_code: str | None = None
     displayed_feedback_text: str | None = None
     displayed_feedback_frames: int = 0
@@ -680,6 +393,8 @@ class DiagonalFacePunchEvaluationResponse(BaseModel):
     representative_feedback_frames: int = 0
     baseline_left_wrist_forward: float | None = None
     baseline_right_wrist_forward: float | None = None
+    baseline_left_wrist_height: float | None = None
+    baseline_right_wrist_height: float | None = None
     baseline_stance_span: float | None = None
     tts: FeedbackTtsResponse = Field(default_factory=FeedbackTtsResponse)
     normalized_pose: NormalizedPoseResponse | None = None
@@ -694,6 +409,9 @@ class SquatEvaluationRequest(BaseModel):
     reference_hip_x: float | None = Field(default=None)
     reference_hip_y: float | None = Field(default=None)
     reference_scale: float | None = Field(default=None)
+    baseline_status: GymnasticsBaselineStatus = Field(default="ready")
+    baseline_frames: int = Field(default=0, ge=0)
+    baseline_target_frames: int = Field(default=DEFAULT_GYMNASTICS_BASELINE_TARGET_FRAMES, ge=1)
     displayed_feedback_code: str | None = Field(default=None)
     displayed_feedback_text: str | None = Field(default=None)
     displayed_feedback_frames: int = Field(default=0, ge=0)
@@ -738,6 +456,9 @@ class SquatEvaluationResponse(BaseModel):
     reference_hip_x: float | None = None
     reference_hip_y: float | None = None
     reference_scale: float | None = None
+    baseline_status: GymnasticsBaselineStatus = "ready"
+    baseline_frames: int = 0
+    baseline_target_frames: int = DEFAULT_GYMNASTICS_BASELINE_TARGET_FRAMES
     displayed_feedback_code: str | None = None
     displayed_feedback_text: str | None = None
     displayed_feedback_frames: int = 0

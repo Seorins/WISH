@@ -2,6 +2,74 @@ from app.services.gymnastics.evaluators.side_step import SideStepEvaluator
 from app.services.gymnastics.types import HipCenter, NormalizedLandmark, NormalizedPoseFrame
 
 
+def test_side_step_collecting_baseline_blocks_count_until_ready() -> None:
+    evaluator = SideStepEvaluator()
+
+    first = evaluator.evaluate(
+        frame=build_side_step_frame(
+            hip_center_x=0.45,
+            left_ankle_raw_x=0.15,
+            right_ankle_raw_x=0.58,
+        ),
+        previous_state="idle",
+        step_count=0,
+        target_steps=8,
+        baseline_status="collecting",
+        baseline_target_frames=2,
+    )
+
+    assert first.baseline_status == "collecting"
+    assert first.baseline_frames == 1
+    assert first.step_count == 0
+
+    second = evaluator.evaluate(
+        frame=build_side_step_frame(
+            hip_center_x=0.5,
+            left_ankle_raw_x=0.40,
+            right_ankle_raw_x=0.60,
+        ),
+        previous_state=first.state,
+        step_count=first.step_count,
+        target_steps=8,
+        reference_hip_x=first.reference_hip_x,
+        reference_hip_y=first.reference_hip_y,
+        reference_scale=first.reference_scale,
+        baseline_status=first.baseline_status,
+        baseline_frames=first.baseline_frames,
+        baseline_target_frames=first.baseline_target_frames,
+        baseline_left_step_extent=first.baseline_left_step_extent,
+        baseline_right_step_extent=first.baseline_right_step_extent,
+        baseline_ankle_span=first.baseline_ankle_span,
+    )
+
+    assert second.baseline_status == "ready"
+    assert second.baseline_frames == 2
+    assert second.step_count == 0
+
+    result = evaluator.evaluate(
+        frame=build_side_step_frame(
+            hip_center_x=0.45,
+            left_ankle_raw_x=0.15,
+            right_ankle_raw_x=0.58,
+        ),
+        previous_state=second.state,
+        step_count=second.step_count,
+        target_steps=8,
+        reference_hip_x=second.reference_hip_x,
+        reference_hip_y=second.reference_hip_y,
+        reference_scale=second.reference_scale,
+        baseline_status=second.baseline_status,
+        baseline_frames=second.baseline_frames,
+        baseline_target_frames=second.baseline_target_frames,
+        baseline_left_step_extent=second.baseline_left_step_extent,
+        baseline_right_step_extent=second.baseline_right_step_extent,
+        baseline_ankle_span=second.baseline_ankle_span,
+    )
+
+    assert result.state == "left_open"
+    assert result.step_count == 1
+
+
 def test_side_step_counts_alternating_open_positions() -> None:
     evaluator = SideStepEvaluator()
 
