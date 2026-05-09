@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { DashboardPage } from './pages/DashboardPage'
 import { LoginPage } from './pages/LoginPage'
 import { MotionsPage } from './pages/MotionsPage'
+import { PatientDashboardPage } from './pages/PatientDashboardPage'
 import { TaekwondoMotionsPage } from './pages/TaekwondoMotionsPage'
 import { UsersPage } from './pages/UsersPage'
 import { RequireAdmin } from './routes/RequireAdmin'
@@ -17,6 +18,14 @@ function App() {
           element={
             <RequireAdmin>
               <DashboardPage />
+            </RequireAdmin>
+          }
+        />
+        <Route
+          path="/dashboard/patients/:patientId"
+          element={
+            <RequireAdmin>
+              <PatientDashboardPage />
             </RequireAdmin>
           }
         />

@@ -1,17 +1,11 @@
 import { useMemo, useState } from 'react'
 import type { CSSProperties } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { getAdminDashboard } from '@wish/api-client'
-import type {
-  AdminDashboardAlert,
-  AdminDashboardContentShare,
-  AdminDashboardPatientActivity,
-  AdminDashboardPatientStatus,
-} from '@wish/api-client'
+import { getAdminPatientDashboard } from '@wish/api-client'
+import type { AdminDashboardContentShare, AdminDashboardPatientStatus } from '@wish/api-client'
 import {
   Bar,
-  BarChart,
   CartesianGrid,
   Cell,
   ComposedChart,
@@ -69,19 +63,22 @@ const fullDateFormat = new Intl.DateTimeFormat('ko-KR', {
   day: '2-digit',
 })
 
-export function DashboardPage() {
+export function PatientDashboardPage() {
   const navigate = useNavigate()
+  const params = useParams()
+  const patientId = Number(params.patientId)
   const [rangeDays, setRangeDays] = useState<RangeDays>(7)
   const dateRange = useMemo(() => createDateRange(rangeDays), [rangeDays])
 
-  const dashboardQuery = useQuery({
-    queryKey: ['admin-dashboard', dateRange.from, dateRange.to],
-    queryFn: () => getAdminDashboard(dateRange).then(response => response.data),
+  const patientQuery = useQuery({
+    queryKey: ['admin-patient-dashboard', patientId, dateRange.from, dateRange.to],
+    queryFn: () => getAdminPatientDashboard(patientId, dateRange).then(response => response.data),
+    enabled: Number.isFinite(patientId) && patientId > 0,
     refetchInterval: 60_000,
   })
 
-  const dashboard = dashboardQuery.data
-  const usageChartData = useMemo(
+  const dashboard = patientQuery.data
+  const chartData = useMemo(
     () =>
       dashboard?.dailyUsage.map(day => ({
         date: formatShortDate(day.date),
@@ -90,17 +87,15 @@ export function DashboardPage() {
         music: day.music,
         taekwondo: day.taekwondo,
         gymnastics: day.gymnastics,
-        activePatients: day.activePatients,
       })) ?? [],
-    [dashboard],
-  )
-  const patientRows = useMemo(
-    () => sortPatientActivities(dashboard?.patientActivities ?? []).slice(0, 12),
     [dashboard],
   )
 
   const actions = (
     <div style={styles.headerActions}>
+      <button type="button" onClick={() => navigate('/dashboard')} style={styles.secondaryButton}>
+        대시보드
+      </button>
       <div style={styles.segmented} role="group" aria-label="조회 기간">
         {RANGE_OPTIONS.map(option => (
           <button
@@ -118,61 +113,84 @@ export function DashboardPage() {
       </div>
       <button
         type="button"
-        onClick={() => void dashboardQuery.refetch()}
+        onClick={() => void patientQuery.refetch()}
         style={styles.refreshButton}
-        disabled={dashboardQuery.isFetching}
+        disabled={patientQuery.isFetching || !Number.isFinite(patientId)}
       >
-        {dashboardQuery.isFetching ? '갱신 중' : '새로고침'}
+        {patientQuery.isFetching ? '갱신 중' : '새로고침'}
       </button>
     </div>
   )
 
   return (
     <AdminShell
-      title="운영 대시보드"
-      description="사용시간 집계 기반으로 오늘의 활동, 콘텐츠 편중, 위험 환자를 확인합니다."
+      title={dashboard ? `${dashboard.patient.patientName} 활동 상세` : '환자 활동 상세'}
+      description="환자별 앱 사용시간, 콘텐츠 활동 비중, 위험 상태를 확인합니다."
       actions={actions}
     >
-      {dashboardQuery.isLoading && <div style={styles.loading}>대시보드를 불러오는 중</div>}
-      {dashboardQuery.isError && (
-        <div style={styles.errorBox}>
-          대시보드 조회 실패: {extractMessage(dashboardQuery.error)}
-        </div>
+      {!Number.isFinite(patientId) && (
+        <div style={styles.errorBox}>환자 ID가 올바르지 않습니다.</div>
+      )}
+      {patientQuery.isLoading && <div style={styles.loading}>환자 활동을 불러오는 중</div>}
+      {patientQuery.isError && (
+        <div style={styles.errorBox}>환자 활동 조회 실패: {extractMessage(patientQuery.error)}</div>
       )}
 
       {dashboard && (
         <div style={styles.dashboard}>
+          <section style={styles.profilePanel}>
+            <div style={styles.profileMain}>
+              <div style={styles.avatar}>{dashboard.patient.patientName.slice(0, 1)}</div>
+              <div>
+                <h2 style={styles.profileName}>{dashboard.patient.patientName}</h2>
+                <div style={styles.profileMeta}>
+                  <span>{dashboard.patient.patientNickname}</span>
+                  <span>{genderLabel(dashboard.patient.gender)}</span>
+                  <span>{formatFullDate(dashboard.patient.birthDate)} 출생</span>
+                </div>
+              </div>
+            </div>
+            <div style={styles.profileSide}>
+              <span style={styles.metaLabel}>보호자</span>
+              <strong style={styles.guardianEmail}>{dashboard.patient.guardianEmail}</strong>
+              <span style={styles.metaLabel}>
+                등록일 {formatFullDate(dashboard.patient.createdAt)}
+              </span>
+            </div>
+          </section>
+
           <section style={styles.kpiGrid}>
             <KpiCard
-              label="총 보호자"
-              value={`${formatNumber(dashboard.summary.guardianUsers)}명`}
-              detail={`관리자 ${formatNumber(dashboard.summary.adminUsers)}명`}
-            />
-            <KpiCard
-              label="환자 프로필"
-              value={`${formatNumber(dashboard.summary.totalPatients)}명`}
-              detail={`오늘 신규 ${formatNumber(dashboard.summary.newPatientsToday)}명`}
-            />
-            <KpiCard
-              label="오늘 활성 환자"
-              value={`${formatNumber(dashboard.summary.todayActivePatients)}명`}
-              detail={`앱 사용 ${formatDuration(dashboard.summary.todayTotalSeconds)}`}
+              label="상태"
+              value={STATUS_VIEW[dashboard.summary.status].label}
+              detail={`최근 ${dashboard.summary.riskInactiveDays}일 비활동 기준`}
+              tone={dashboard.summary.status === 'RISK' ? 'risk' : 'normal'}
             />
             <KpiCard
               label="기간 앱 사용"
-              value={formatDuration(dashboard.summary.periodTotalSeconds)}
-              detail={`일 평균 앱 사용 ${formatDuration(dashboard.summary.averageDailySeconds)}`}
+              value={formatDuration(dashboard.summary.periodSeconds)}
+              detail={`일 평균 ${formatDuration(dashboard.summary.averageDailySeconds)}`}
             />
             <KpiCard
-              label="이탈 위험"
-              value={`${formatNumber(dashboard.summary.atRiskPatients)}명`}
-              detail="최근 7일 비활동 기준"
-              tone={dashboard.summary.atRiskPatients > 0 ? 'risk' : 'normal'}
+              label="오늘 앱 사용"
+              value={formatDuration(dashboard.summary.todaySeconds)}
+              detail={`조회 기간 ${formatDateRange(dashboard.from, dashboard.to)}`}
             />
             <KpiCard
-              label="오늘 신규 계정"
-              value={`${formatNumber(dashboard.summary.newUsersToday)}명`}
-              detail="보호자/관리자 포함"
+              label="활동일"
+              value={`${formatNumber(dashboard.summary.activeDays)}일`}
+              detail={`마지막 활동 ${formatLastActiveDate(dashboard.summary.lastActiveDate)}`}
+            />
+            <KpiCard
+              label="선호 콘텐츠"
+              value={dashboard.summary.favoriteContent}
+              detail={`콘텐츠 활동 ${formatDuration(dashboard.summary.contentSeconds)}`}
+            />
+            <KpiCard
+              label="편중 여부"
+              value={dashboard.summary.contentSkewed ? '주의' : '정상'}
+              detail="단일 콘텐츠 80% 이상 여부"
+              tone={dashboard.summary.contentSkewed ? 'risk' : 'normal'}
             />
           </section>
 
@@ -180,7 +198,7 @@ export function DashboardPage() {
             <div style={styles.panelLarge}>
               <div style={styles.panelHeader}>
                 <div>
-                  <h2 style={styles.panelTitle}>일별 사용시간</h2>
+                  <h2 style={styles.panelTitle}>일별 활동 추이</h2>
                   <p style={styles.panelDescription}>
                     앱 사용시간은 선으로, 콘텐츠별 활동 시간은 막대로 표시합니다.
                   </p>
@@ -192,7 +210,7 @@ export function DashboardPage() {
               <div style={styles.chartFrame}>
                 <ResponsiveContainer width="100%" height="100%">
                   <ComposedChart
-                    data={usageChartData}
+                    data={chartData}
                     margin={{ top: 8, right: 10, left: 0, bottom: 0 }}
                   >
                     <CartesianGrid stroke="#edf2f7" vertical={false} />
@@ -236,121 +254,53 @@ export function DashboardPage() {
               <div style={styles.panelHeader}>
                 <div>
                   <h2 style={styles.panelTitle}>콘텐츠 비중</h2>
-                  <p style={styles.panelDescription}>접속 시간을 제외한 활동 분포입니다.</p>
+                  <p style={styles.panelDescription}>조회 기간 내 콘텐츠 활동 분포입니다.</p>
                 </div>
               </div>
               <ContentSharePanel shares={dashboard.contentShares} />
             </div>
           </section>
 
-          <section style={styles.chartGrid}>
-            <div style={styles.panel}>
-              <div style={styles.panelHeader}>
-                <div>
-                  <h2 style={styles.panelTitle}>활성 환자 추이</h2>
-                  <p style={styles.panelDescription}>하루 1초 이상 사용한 환자 수입니다.</p>
-                </div>
-              </div>
-              <div style={styles.smallChartFrame}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={usageChartData}
-                    margin={{ top: 8, right: 10, left: 0, bottom: 0 }}
-                  >
-                    <CartesianGrid stroke="#edf2f7" vertical={false} />
-                    <XAxis
-                      dataKey="date"
-                      tickLine={false}
-                      axisLine={false}
-                      tick={{ fontSize: 12 }}
-                    />
-                    <YAxis
-                      tickLine={false}
-                      axisLine={false}
-                      allowDecimals={false}
-                      tick={{ fontSize: 12 }}
-                    />
-                    <Tooltip
-                      formatter={value => [`${formatNumber(Number(value))}명`, '활성 환자']}
-                    />
-                    <Bar dataKey="activePatients" fill="#0b7285" radius={[6, 6, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            <div style={styles.panel}>
-              <div style={styles.panelHeader}>
-                <div>
-                  <h2 style={styles.panelTitle}>운영 알림</h2>
-                  <p style={styles.panelDescription}>
-                    발표에서 바로 말할 수 있는 관리 포인트입니다.
-                  </p>
-                </div>
-              </div>
-              <div style={styles.alertList}>
-                {dashboard.alerts.map(alert => (
-                  <AlertItem key={alert.type} alert={alert} />
-                ))}
-              </div>
-            </div>
-          </section>
-
           <section style={styles.tableSection}>
             <div style={styles.panelHeader}>
               <div>
-                <h2 style={styles.panelTitle}>관심 환자 활동 현황</h2>
+                <h2 style={styles.panelTitle}>일별 활동 기록</h2>
                 <p style={styles.panelDescription}>
-                  위험 상태를 우선 정렬하고 기간 앱 사용시간을 함께 표시합니다.
+                  날짜별 앱 사용과 콘텐츠 활동 시간을 확인합니다.
                 </p>
               </div>
-              <span style={styles.periodBadge}>상위 {formatNumber(patientRows.length)}명</span>
             </div>
             <div style={styles.tableWrap}>
               <table style={styles.table}>
                 <thead>
                   <tr>
-                    <th style={styles.th}>환자</th>
-                    <th style={styles.th}>보호자</th>
-                    <th style={styles.th}>오늘 앱 사용</th>
-                    <th style={styles.th}>앱 사용 합계</th>
-                    <th style={styles.th}>선호 콘텐츠</th>
-                    <th style={styles.th}>마지막 활동</th>
-                    <th style={styles.th}>상태</th>
+                    <th style={styles.th}>날짜</th>
+                    <th style={styles.th}>앱 사용</th>
+                    <th style={styles.th}>미술</th>
+                    <th style={styles.th}>음악</th>
+                    <th style={styles.th}>태권도</th>
+                    <th style={styles.th}>체조</th>
+                    <th style={styles.th}>활동</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {patientRows.length === 0 && (
-                    <tr>
-                      <td colSpan={7} style={styles.emptyRow}>
-                        표시할 환자 활동이 없습니다.
-                      </td>
-                    </tr>
-                  )}
-                  {patientRows.map(patient => (
-                    <tr
-                      key={patient.patientId}
-                      role="link"
-                      tabIndex={0}
-                      onClick={() => navigate(`/dashboard/patients/${patient.patientId}`)}
-                      onKeyDown={event => {
-                        if (event.key === 'Enter' || event.key === ' ') {
-                          navigate(`/dashboard/patients/${patient.patientId}`)
-                        }
-                      }}
-                      style={styles.clickableRow}
-                    >
-                      <td style={styles.nameCell}>
-                        <strong>{patient.patientName}</strong>
-                        <span style={styles.subText}>{patient.patientNickname}</span>
-                      </td>
-                      <td style={styles.emailCell}>{patient.guardianEmail}</td>
-                      <td style={styles.td}>{formatDuration(patient.todaySeconds)}</td>
-                      <td style={styles.td}>{formatDuration(patient.periodSeconds)}</td>
-                      <td style={styles.td}>{patient.favoriteContent}</td>
-                      <td style={styles.td}>{formatLastActiveDate(patient.lastActiveDate)}</td>
+                  {dashboard.dailyUsage.map(day => (
+                    <tr key={day.date}>
+                      <td style={styles.dateCell}>{formatFullDate(day.date)}</td>
+                      <td style={styles.td}>{formatDuration(day.login)}</td>
+                      <td style={styles.td}>{formatDuration(day.art)}</td>
+                      <td style={styles.td}>{formatDuration(day.music)}</td>
+                      <td style={styles.td}>{formatDuration(day.taekwondo)}</td>
+                      <td style={styles.td}>{formatDuration(day.gymnastics)}</td>
                       <td style={styles.td}>
-                        <StatusBadge status={patient.status} />
+                        <span
+                          style={{
+                            ...styles.activeBadge,
+                            ...(day.active ? styles.activeBadgeOn : styles.activeBadgeOff),
+                          }}
+                        >
+                          {day.active ? '있음' : '없음'}
+                        </span>
                       </td>
                     </tr>
                   ))}
@@ -430,23 +380,6 @@ function ContentSharePanel({ shares }: { shares: AdminDashboardContentShare[] })
   )
 }
 
-function AlertItem({ alert }: { alert: AdminDashboardAlert }) {
-  return (
-    <article style={{ ...styles.alertItem, ...alertSeverityStyle(alert.severity) }}>
-      <div style={styles.alertCount}>{formatNumber(alert.count)}</div>
-      <div style={styles.alertBody}>
-        <strong style={styles.alertTitle}>{alert.title}</strong>
-        <span style={styles.alertDescription}>{alert.description}</span>
-      </div>
-    </article>
-  )
-}
-
-function StatusBadge({ status }: { status: AdminDashboardPatientStatus }) {
-  const view = STATUS_VIEW[status]
-  return <span style={{ ...styles.statusBadge, ...view.style }}>{view.label}</span>
-}
-
 function createDateRange(days: RangeDays) {
   const to = new Date()
   const from = new Date(to)
@@ -462,12 +395,16 @@ function toIsoDate(date: Date) {
 }
 
 function parseIsoDate(value: string) {
-  const [year, month, day] = value.split('-').map(Number)
+  const [year, month, day] = value.slice(0, 10).split('-').map(Number)
   return new Date(year, month - 1, day)
 }
 
 function formatShortDate(value: string) {
   return shortDateFormat.format(parseIsoDate(value))
+}
+
+function formatFullDate(value: string) {
+  return fullDateFormat.format(parseIsoDate(value))
 }
 
 function formatDateRange(from: string, to: string) {
@@ -476,7 +413,7 @@ function formatDateRange(from: string, to: string) {
 
 function formatLastActiveDate(value: string | null) {
   if (!value) return '기록 없음'
-  return fullDateFormat.format(parseIsoDate(value))
+  return formatFullDate(value)
 }
 
 function formatNumber(value: number) {
@@ -516,36 +453,11 @@ function usageMetricLabel(metric: string) {
   }
 }
 
-function sortPatientActivities(patients: AdminDashboardPatientActivity[]) {
-  const priority: Record<AdminDashboardPatientStatus, number> = {
-    RISK: 0,
-    NORMAL: 1,
-    ACTIVE: 2,
-  }
-  return [...patients].sort((left, right) => {
-    const statusDiff = priority[left.status] - priority[right.status]
-    if (statusDiff !== 0) return statusDiff
-    return right.periodSeconds - left.periodSeconds
-  })
-}
-
-function alertSeverityStyle(severity: AdminDashboardAlert['severity']): CSSProperties {
-  if (severity === 'warning') {
-    return {
-      background: '#fff5f5',
-      borderColor: '#ffc9c9',
-    }
-  }
-  if (severity === 'info') {
-    return {
-      background: '#f3f0ff',
-      borderColor: '#d0bfff',
-    }
-  }
-  return {
-    background: '#f8fafc',
-    borderColor: '#d9e2ec',
-  }
+function genderLabel(gender: string) {
+  if (gender === 'MALE') return '남'
+  if (gender === 'FEMALE') return '여'
+  if (gender === 'OTHER') return '기타'
+  return gender
 }
 
 function extractMessage(error: unknown): string {
@@ -570,6 +482,28 @@ const styles: Record<string, CSSProperties> = {
     justifyContent: 'flex-end',
     gap: 8,
     flexWrap: 'wrap',
+  },
+  secondaryButton: {
+    height: 36,
+    padding: '0 12px',
+    background: '#fff',
+    color: '#334e68',
+    border: '1px solid #bcccdc',
+    borderRadius: 6,
+    cursor: 'pointer',
+    fontSize: 13,
+    fontWeight: 700,
+  },
+  refreshButton: {
+    height: 36,
+    padding: '0 12px',
+    background: '#0b7285',
+    color: '#fff',
+    border: '1px solid #0b7285',
+    borderRadius: 6,
+    cursor: 'pointer',
+    fontSize: 13,
+    fontWeight: 700,
   },
   segmented: {
     display: 'inline-flex',
@@ -596,16 +530,60 @@ const styles: Record<string, CSSProperties> = {
     borderColor: '#bcccdc',
     color: '#102a43',
   },
-  refreshButton: {
-    height: 36,
-    padding: '0 12px',
+  profilePanel: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 16,
+    flexWrap: 'wrap',
+    padding: 18,
+    background: '#fff',
+    border: '1px solid #d9e2ec',
+    borderRadius: 8,
+  },
+  profileMain: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 14,
+  },
+  avatar: {
+    width: 48,
+    height: 48,
+    display: 'grid',
+    placeItems: 'center',
+    borderRadius: 8,
     background: '#0b7285',
     color: '#fff',
-    border: '1px solid #0b7285',
-    borderRadius: 6,
-    cursor: 'pointer',
+    fontSize: 20,
+    fontWeight: 800,
+  },
+  profileName: {
+    margin: 0,
+    color: '#102a43',
+    fontSize: 20,
+    letterSpacing: 0,
+  },
+  profileMeta: {
+    display: 'flex',
+    gap: 8,
+    flexWrap: 'wrap',
+    marginTop: 6,
+    color: '#627d98',
     fontSize: 13,
-    fontWeight: 700,
+  },
+  profileSide: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'flex-end',
+    gap: 4,
+  },
+  metaLabel: {
+    color: '#829ab1',
+    fontSize: 12,
+  },
+  guardianEmail: {
+    color: '#102a43',
+    fontSize: 14,
   },
   kpiGrid: {
     display: 'grid',
@@ -696,10 +674,6 @@ const styles: Record<string, CSSProperties> = {
     width: '100%',
     height: 300,
   },
-  smallChartFrame: {
-    width: '100%',
-    height: 220,
-  },
   contentShareLayout: {
     display: 'grid',
     gridTemplateColumns: 'minmax(180px, 1fr) minmax(150px, 0.8fr)',
@@ -738,48 +712,6 @@ const styles: Record<string, CSSProperties> = {
     color: '#102a43',
     fontSize: 13,
   },
-  alertList: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 10,
-  },
-  alertItem: {
-    minHeight: 72,
-    display: 'grid',
-    gridTemplateColumns: '42px minmax(0, 1fr)',
-    alignItems: 'center',
-    gap: 12,
-    padding: 12,
-    border: '1px solid #d9e2ec',
-    borderRadius: 8,
-  },
-  alertCount: {
-    width: 42,
-    height: 42,
-    display: 'grid',
-    placeItems: 'center',
-    borderRadius: 8,
-    background: '#fff',
-    border: '1px solid rgba(16, 42, 67, 0.12)',
-    color: '#102a43',
-    fontWeight: 800,
-    fontSize: 15,
-  },
-  alertBody: {
-    minWidth: 0,
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 3,
-  },
-  alertTitle: {
-    color: '#102a43',
-    fontSize: 13,
-  },
-  alertDescription: {
-    color: '#627d98',
-    fontSize: 12,
-    lineHeight: 1.45,
-  },
   tableSection: {
     padding: 18,
     background: '#fff',
@@ -793,7 +725,7 @@ const styles: Record<string, CSSProperties> = {
   },
   table: {
     width: '100%',
-    minWidth: 920,
+    minWidth: 880,
     borderCollapse: 'separate',
     borderSpacing: 0,
   },
@@ -812,37 +744,16 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 13,
     verticalAlign: 'middle',
   },
-  clickableRow: {
-    cursor: 'pointer',
-  },
-  nameCell: {
-    width: 150,
+  dateCell: {
     padding: 12,
     borderBottom: '1px solid #edf2f7',
     color: '#102a43',
     fontSize: 13,
+    fontWeight: 700,
     verticalAlign: 'middle',
   },
-  subText: {
-    display: 'block',
-    marginTop: 3,
-    color: '#829ab1',
-    fontSize: 12,
-    fontWeight: 500,
-  },
-  emailCell: {
-    maxWidth: 230,
-    padding: 12,
-    borderBottom: '1px solid #edf2f7',
-    color: '#486581',
-    fontSize: 13,
-    verticalAlign: 'middle',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
-  },
-  statusBadge: {
-    minWidth: 54,
+  activeBadge: {
+    minWidth: 48,
     display: 'inline-flex',
     justifyContent: 'center',
     padding: '4px 8px',
@@ -851,11 +762,15 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 12,
     fontWeight: 800,
   },
-  emptyRow: {
-    padding: 28,
-    textAlign: 'center',
+  activeBadgeOn: {
+    color: '#0b7285',
+    background: '#e6f6ff',
+    borderColor: '#b3ecff',
+  },
+  activeBadgeOff: {
     color: '#829ab1',
-    fontSize: 13,
+    background: '#f8fafc',
+    borderColor: '#d9e2ec',
   },
   loading: {
     padding: 20,
