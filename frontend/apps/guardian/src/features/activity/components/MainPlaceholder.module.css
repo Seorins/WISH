@@ -5,25 +5,11 @@
   background: var(--dash-color-surface);
   border-radius: var(--dash-radius-card);
   box-shadow: var(--dash-shadow-card);
-  padding: 16px;
+  padding: 10px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
   flex: 1 1 auto;
   min-height: 0;
-}
-
-.heroHeader {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-}
-
-.heroTitle {
-  font-size: 22px;
-  font-weight: 800;
-  color: var(--dash-color-text-strong);
-  margin: 0;
 }
 
 .heroBody {
@@ -31,13 +17,13 @@
   min-height: 0;
   display: grid;
   grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
-  gap: 16px;
+  gap: 14px;
   align-items: stretch;
 }
 
 .media {
-  background: linear-gradient(135deg, #f1edff 0%, #ffeaf3 100%);
-  border-radius: 18px;
+  background: #1a1830;
+  border-radius: 14px;
   min-height: 200px;
   overflow: hidden;
   display: flex;
@@ -51,7 +37,7 @@
   max-height: 100%;
   object-fit: contain;
   background: #1a1830;
-  border-radius: 18px;
+  border-radius: 14px;
 }
 
 .heroMeta {
@@ -60,6 +46,7 @@
   gap: 10px;
   justify-content: center;
   min-width: 0;
+  padding: 8px 10px;
 }
 
 .tag {
@@ -167,47 +154,60 @@
 .accuracyMeta {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
 }
 
 .accuracyTitle {
-  font-size: 15px;
-  font-weight: 800;
-  color: var(--dash-color-text-strong);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--dash-color-text-muted);
+  letter-spacing: 0.02em;
   margin: 0;
 }
 
 .accuracySub {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--dash-color-text-strong);
-  margin-bottom: 2px;
+  font-size: 32px;
+  font-weight: 800;
+  color: var(--dash-color-primary, #7c5cff);
+  line-height: 1.1;
+  margin: 0 0 8px;
 }
 
 .accuracyMessage {
   display: flex;
-  gap: 8px;
-  align-items: flex-start;
-  margin: 4px 0 0;
-  font-size: 12px;
-  color: var(--dash-color-text-muted);
-  line-height: 1.45;
+  gap: 10px;
+  align-items: center;
+  margin: 0;
+  line-height: 1.4;
 }
 
-.accuracyMessage strong {
+.accuracyMessageText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.accuracyMessageText strong {
   color: var(--dash-color-text-strong);
   font-weight: 700;
+  font-size: 13px;
+}
+
+.accuracyMessageText > span {
+  font-size: 12px;
+  color: var(--dash-color-text-muted);
 }
 
 .accuracyIcon {
-  width: 22px;
-  height: 22px;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
-  background: #d4f3e5;
+  background: var(--dash-color-primary-50, #f1edff);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
+  font-size: 16px;
   flex-shrink: 0;
 }
 

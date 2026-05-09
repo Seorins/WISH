@@ -4,6 +4,8 @@ import styles from './MainPlaceholder.module.css'
 type Props = {
   result: MusicResultDetail
   chartStats?: ChartStats
+  /** 오늘 KST 기준 음악 카테고리 총 사용 시간 (초). usage-stats/daily 에서 옴. */
+  todayMusicSeconds?: number
 }
 
 const TONE_CLASS = {
@@ -27,39 +29,35 @@ function formatScore(score: number): string {
   return `${score.toLocaleString('ko-KR')}점`
 }
 
-function formatTimeOfDay(iso: string): string {
-  const date = new Date(iso)
-  if (Number.isNaN(date.getTime())) return ''
-  return date.toLocaleTimeString('ko-KR', { hour: 'numeric', minute: '2-digit' })
-}
-
 function rankLabel(rank: string): string {
   return rank === 'D' ? '연습 중' : `${rank}등급`
 }
 
 function accuracyMessage(accuracy: number): { headline: string; sub: string; emoji: string } {
   if (accuracy >= 0.95)
-    return { headline: '완벽한 박자였어요!', sub: '정확도가 매우 높아요.', emoji: '🤩' }
+    return { headline: '완벽한 박자였어요!', sub: '정확도가 매우 높아요.', emoji: '✨' }
   if (accuracy >= 0.85)
-    return { headline: '박자를 잘 맞췄어요!', sub: '정확도가 높아요.', emoji: '😊' }
+    return { headline: '박자를 잘 맞췄어요!', sub: '정확도가 높아요.', emoji: '🎵' }
   if (accuracy >= 0.7)
-    return { headline: '리듬을 잘 따라갔어요.', sub: '조금만 더 정확하게!', emoji: '🙂' }
+    return { headline: '리듬을 잘 따라갔어요.', sub: '조금만 더 정확하게!', emoji: '🎶' }
   if (accuracy >= 0.5)
-    return { headline: '꾸준히 따라갔어요.', sub: '연습하면 더 좋아져요.', emoji: '🙂' }
-  return { headline: '리듬에 익숙해지는 중.', sub: '함께 한 번 더 도전해봐요.', emoji: '🤍' }
+    return { headline: '꾸준히 따라갔어요.', sub: '연습하면 더 좋아져요.', emoji: '👏' }
+  return { headline: '리듬에 익숙해지는 중.', sub: '함께 한 번 더 도전해봐요.', emoji: '💜' }
 }
 
-export function MainPlaceholder({ result, chartStats }: Props) {
+export function MainPlaceholder({ result, chartStats, todayMusicSeconds = 0 }: Props) {
   const playedDurationLabel = formatDuration(result.playedDurationMs)
-  const othersAvgMs = chartStats?.averagePlayedDurationMs ?? 0
-  const hasOthersAvg = othersAvgMs > 0
-  const othersAvgLabel = hasOthersAvg ? formatDuration(othersAvgMs) : '집계 중'
-  const maxBarMs = Math.max(result.playedDurationMs, othersAvgMs, 1)
-  const mineBarPct = Math.round((result.playedDurationMs / maxBarMs) * 100)
-  const othersBarPct = hasOthersAvg ? Math.round((othersAvgMs / maxBarMs) * 100) : 0
-  const diffMinutes = hasOthersAvg
-    ? Math.round((result.playedDurationMs - othersAvgMs) / 60_000)
-    : 0
+  const todayMusicMs = todayMusicSeconds * 1000
+  const todayMusicLabel = formatDuration(todayMusicMs)
+  // peer-average API 가 아직 없음. chartStats.averagePlayedDurationMs 는 "곡 한 판" 평균이라
+  // "오늘 음악 총 시간" 과 차원이 달라 비교용으로 쓸 수 없음 → 항상 "집계 중" 으로 표시.
+  // 참고용으로 chartStats 는 prop 으로 남겨둠 (향후 다른 카드에서 사용 가능).
+  void chartStats
+  const hasOthersAvg = false
+  const othersAvgLabel = '집계 중'
+  const mineBarPct = todayMusicMs > 0 ? 100 : 0
+  const othersBarPct = 0
+  const diffMinutes = 0
 
   const message = accuracyMessage(result.accuracy)
 
@@ -90,9 +88,6 @@ export function MainPlaceholder({ result, chartStats }: Props) {
   return (
     <>
       <section className={styles.heroCard}>
-        <header className={styles.heroHeader}>
-          <h2 className={styles.heroTitle}>활동 결과</h2>
-        </header>
         <div className={styles.heroBody}>
           <div className={styles.media} aria-label="활동 영상 영역">
             {result.videoUrl ? (
@@ -109,14 +104,6 @@ export function MainPlaceholder({ result, chartStats }: Props) {
           <div className={styles.heroMeta}>
             <span className={styles.tag}>음악실</span>
             <h3 className={styles.songTitle}>{result.chartTitle}</h3>
-            <div className={styles.timeRow}>
-              <span aria-hidden>🕐</span>
-              <span>{formatTimeOfDay(result.playedAt)}</span>
-              <span aria-hidden className={styles.dot}>
-                ·
-              </span>
-              <span>{playedDurationLabel}</span>
-            </div>
             <p className={styles.description}>리듬에 맞춰 노트를 따라치며 연주했어요.</p>
           </div>
         </div>
@@ -144,10 +131,9 @@ export function MainPlaceholder({ result, chartStats }: Props) {
             <span aria-hidden className={styles.accuracyIcon}>
               {message.emoji}
             </span>
-            <span>
+            <span className={styles.accuracyMessageText}>
               <strong>{message.headline}</strong>
-              <br />
-              {message.sub}
+              <span>{message.sub}</span>
             </span>
           </p>
         </div>
@@ -194,8 +180,8 @@ export function MainPlaceholder({ result, chartStats }: Props) {
           </span>
           <div className={styles.peerSide}>
             <div className={styles.peerSideHead}>
-              <span className={styles.peerSideLabel}>우리 아이 플레이 시간</span>
-              <strong className={styles.peerSideValue}>{playedDurationLabel}</strong>
+              <span className={styles.peerSideLabel}>우리 아이 오늘 음악 시간</span>
+              <strong className={styles.peerSideValue}>{todayMusicLabel}</strong>
             </div>
             <div className={`${styles.peerBar} ${styles.peerBarMine}`} aria-hidden>
               <div className={styles.peerBarFill} style={{ width: `${mineBarPct}%` }} />
