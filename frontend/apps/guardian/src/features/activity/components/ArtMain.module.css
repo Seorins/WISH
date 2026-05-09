@@ -1,3 +1,19 @@
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+  gap: 16px;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.mainColumn,
+.sideColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+}
+
 .heroCard {
   background: var(--dash-color-surface, #fff);
   border-radius: var(--dash-radius-card, 22px);
@@ -114,9 +130,7 @@
   font-weight: 700;
 }
 
-.empty,
-.error,
-.emptyArt {
+.fullStatus {
   flex: 1 1 auto;
   display: flex;
   align-items: center;
@@ -128,4 +142,82 @@
 
 .error {
   color: #c43855;
+}
+
+.emptyArt {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #7a7891;
+  font-size: 14px;
+  padding: 40px 20px;
+}
+
+/* ── 그림 정보 카드 ─────────────────────────────────────── */
+
+.infoCard {
+  background: var(--dash-color-surface, #fff);
+  border-radius: var(--dash-radius-card, 22px);
+  box-shadow: var(--dash-shadow-card, 0 2px 12px rgba(60, 50, 120, 0.06));
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.infoCardTitle {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--dash-color-text-strong, #1f1b3a);
+  margin: 0;
+}
+
+.infoRows {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.infoRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.infoIcon {
+  width: 40px;
+  height: 40px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #f1edff 0%, #e7defe 100%);
+  color: var(--dash-color-primary, #7c5cff);
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.infoMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.infoLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: #7a7891;
+}
+
+.infoValue {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--dash-color-text-strong, #1f1b3a);
+}
+
+.infoValueAccent {
+  color: var(--dash-color-primary, #7c5cff);
+  font-size: 20px;
 }
