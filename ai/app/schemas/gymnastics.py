@@ -3,7 +3,10 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from app.services.gymnastics.constants import DEFAULT_STRETCH_HOLD_TARGET_MS
+from app.services.gymnastics.constants import (
+    DEFAULT_GYMNASTICS_BASELINE_TARGET_FRAMES,
+    DEFAULT_STRETCH_HOLD_TARGET_MS,
+)
 
 
 class PoseLandmarkRequest(BaseModel):
@@ -72,6 +75,7 @@ GymnasticsFrameLabel = Literal[
     "motion_present",
 ]
 DanielFrameLabel = GymnasticsFrameLabel
+GymnasticsBaselineStatus = Literal["collecting", "ready"]
 
 
 class MarchEvaluationRequest(BaseModel):
@@ -108,6 +112,16 @@ class MarchEvaluationRequest(BaseModel):
         default=None,
         description="Shoulder-width scale captured at session start",
     )
+    baseline_status: GymnasticsBaselineStatus = Field(
+        default="ready",
+        description="Set to collecting during pre-motion baseline capture; ready evaluates normally.",
+    )
+    baseline_frames: int = Field(default=0, ge=0)
+    baseline_target_frames: int = Field(default=DEFAULT_GYMNASTICS_BASELINE_TARGET_FRAMES, ge=1)
+    baseline_left_knee_lift: float | None = Field(default=None)
+    baseline_right_knee_lift: float | None = Field(default=None)
+    baseline_left_thigh_angle: float | None = Field(default=None)
+    baseline_right_thigh_angle: float | None = Field(default=None)
     # Feedback stabilizer state (round-tripped to avoid flicker)
     displayed_feedback_code: str | None = Field(default=None)
     displayed_feedback_text: str | None = Field(default=None)
@@ -160,6 +174,13 @@ class MarchEvaluationResponse(BaseModel):
     reference_hip_x: float | None = None
     reference_hip_y: float | None = None
     reference_scale: float | None = None
+    baseline_status: GymnasticsBaselineStatus = "ready"
+    baseline_frames: int = 0
+    baseline_target_frames: int = DEFAULT_GYMNASTICS_BASELINE_TARGET_FRAMES
+    baseline_left_knee_lift: float | None = None
+    baseline_right_knee_lift: float | None = None
+    baseline_left_thigh_angle: float | None = None
+    baseline_right_thigh_angle: float | None = None
     displayed_feedback_code: str | None = None
     displayed_feedback_text: str | None = None
     displayed_feedback_frames: int = 0
@@ -445,6 +466,9 @@ class SideStepEvaluationRequest(BaseModel):
     reference_hip_x: float | None = Field(default=None)
     reference_hip_y: float | None = Field(default=None)
     reference_scale: float | None = Field(default=None)
+    baseline_status: GymnasticsBaselineStatus = Field(default="ready")
+    baseline_frames: int = Field(default=0, ge=0)
+    baseline_target_frames: int = Field(default=DEFAULT_GYMNASTICS_BASELINE_TARGET_FRAMES, ge=1)
     displayed_feedback_code: str | None = Field(default=None)
     displayed_feedback_text: str | None = Field(default=None)
     displayed_feedback_frames: int = Field(default=0, ge=0)
@@ -496,6 +520,9 @@ class SideStepEvaluationResponse(BaseModel):
     reference_hip_x: float | None = None
     reference_hip_y: float | None = None
     reference_scale: float | None = None
+    baseline_status: GymnasticsBaselineStatus = "ready"
+    baseline_frames: int = 0
+    baseline_target_frames: int = DEFAULT_GYMNASTICS_BASELINE_TARGET_FRAMES
     displayed_feedback_code: str | None = None
     displayed_feedback_text: str | None = None
     displayed_feedback_frames: int = 0
@@ -526,6 +553,9 @@ class DiagonalBodyPunchEvaluationRequest(BaseModel):
     reference_hip_x: float | None = Field(default=None)
     reference_hip_y: float | None = Field(default=None)
     reference_scale: float | None = Field(default=None)
+    baseline_status: GymnasticsBaselineStatus = Field(default="ready")
+    baseline_frames: int = Field(default=0, ge=0)
+    baseline_target_frames: int = Field(default=DEFAULT_GYMNASTICS_BASELINE_TARGET_FRAMES, ge=1)
     displayed_feedback_code: str | None = Field(default=None)
     displayed_feedback_text: str | None = Field(default=None)
     displayed_feedback_frames: int = Field(default=0, ge=0)
@@ -581,6 +611,9 @@ class DiagonalBodyPunchEvaluationResponse(BaseModel):
     reference_hip_x: float | None = None
     reference_hip_y: float | None = None
     reference_scale: float | None = None
+    baseline_status: GymnasticsBaselineStatus = "ready"
+    baseline_frames: int = 0
+    baseline_target_frames: int = DEFAULT_GYMNASTICS_BASELINE_TARGET_FRAMES
     displayed_feedback_code: str | None = None
     displayed_feedback_text: str | None = None
     displayed_feedback_frames: int = 0
@@ -611,6 +644,9 @@ class DiagonalFacePunchEvaluationRequest(BaseModel):
     reference_hip_x: float | None = Field(default=None)
     reference_hip_y: float | None = Field(default=None)
     reference_scale: float | None = Field(default=None)
+    baseline_status: GymnasticsBaselineStatus = Field(default="ready")
+    baseline_frames: int = Field(default=0, ge=0)
+    baseline_target_frames: int = Field(default=DEFAULT_GYMNASTICS_BASELINE_TARGET_FRAMES, ge=1)
     displayed_feedback_code: str | None = Field(default=None)
     displayed_feedback_text: str | None = Field(default=None)
     displayed_feedback_frames: int = Field(default=0, ge=0)
@@ -623,6 +659,8 @@ class DiagonalFacePunchEvaluationRequest(BaseModel):
     representative_feedback_frames: int = Field(default=0, ge=0)
     baseline_left_wrist_forward: float | None = Field(default=None)
     baseline_right_wrist_forward: float | None = Field(default=None)
+    baseline_left_wrist_height: float | None = Field(default=None)
+    baseline_right_wrist_height: float | None = Field(default=None)
     baseline_stance_span: float | None = Field(default=None)
 
 
@@ -668,6 +706,9 @@ class DiagonalFacePunchEvaluationResponse(BaseModel):
     reference_hip_x: float | None = None
     reference_hip_y: float | None = None
     reference_scale: float | None = None
+    baseline_status: GymnasticsBaselineStatus = "ready"
+    baseline_frames: int = 0
+    baseline_target_frames: int = DEFAULT_GYMNASTICS_BASELINE_TARGET_FRAMES
     displayed_feedback_code: str | None = None
     displayed_feedback_text: str | None = None
     displayed_feedback_frames: int = 0
@@ -680,6 +721,8 @@ class DiagonalFacePunchEvaluationResponse(BaseModel):
     representative_feedback_frames: int = 0
     baseline_left_wrist_forward: float | None = None
     baseline_right_wrist_forward: float | None = None
+    baseline_left_wrist_height: float | None = None
+    baseline_right_wrist_height: float | None = None
     baseline_stance_span: float | None = None
     tts: FeedbackTtsResponse = Field(default_factory=FeedbackTtsResponse)
     normalized_pose: NormalizedPoseResponse | None = None
@@ -694,6 +737,9 @@ class SquatEvaluationRequest(BaseModel):
     reference_hip_x: float | None = Field(default=None)
     reference_hip_y: float | None = Field(default=None)
     reference_scale: float | None = Field(default=None)
+    baseline_status: GymnasticsBaselineStatus = Field(default="ready")
+    baseline_frames: int = Field(default=0, ge=0)
+    baseline_target_frames: int = Field(default=DEFAULT_GYMNASTICS_BASELINE_TARGET_FRAMES, ge=1)
     displayed_feedback_code: str | None = Field(default=None)
     displayed_feedback_text: str | None = Field(default=None)
     displayed_feedback_frames: int = Field(default=0, ge=0)
@@ -738,6 +784,9 @@ class SquatEvaluationResponse(BaseModel):
     reference_hip_x: float | None = None
     reference_hip_y: float | None = None
     reference_scale: float | None = None
+    baseline_status: GymnasticsBaselineStatus = "ready"
+    baseline_frames: int = 0
+    baseline_target_frames: int = DEFAULT_GYMNASTICS_BASELINE_TARGET_FRAMES
     displayed_feedback_code: str | None = None
     displayed_feedback_text: str | None = None
     displayed_feedback_frames: int = 0
