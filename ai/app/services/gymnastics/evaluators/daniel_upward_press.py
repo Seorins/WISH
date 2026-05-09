@@ -143,6 +143,7 @@ class DanielUpwardPressEvaluator(BaseHoldEvaluator):
             and self._is_relaxed_within_limit(features.torso_tilt, self.config.torso_tilt_max)
         )
         session_progress = self._update_session_progress(
+            previous_state=previous_state,
             previous_hold_duration_ms=hold_duration_ms,
             previous_hold_last_timestamp_ms=hold_last_timestamp_ms,
             frame_timestamp_ms=frame.timestamp_ms,

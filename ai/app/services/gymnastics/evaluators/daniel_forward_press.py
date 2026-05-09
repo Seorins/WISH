@@ -162,27 +162,14 @@ class DanielForwardPressEvaluator(BaseHoldEvaluator):
             and features.wrist_shoulder_offset >= self.config.wrist_below_shoulder_min
             and features.torso_tilt <= self.config.torso_tilt_max
         )
-        is_attempting = (
-            frame.tracking == "tracking_ok"
-            and not captured_baseline_this_frame
-            and (
-                self._is_attempting_metric(
-                    features.wrist_extension,
-                    self.config.wrist_extension_threshold,
-                )
-                or self._is_attempting_metric(
-                    mean_elbow_angle,
-                    self.config.arm_straight_threshold,
-                )
-            )
-            and self._is_relaxed_within_limit(features.torso_tilt, self.config.torso_tilt_max)
-            and self._is_relaxed_within_limit(features.wrist_gap, self.config.wrist_gap_max)
-            and self._is_relaxed_within_limit(
-                features.wrist_height_error,
-                self.config.wrist_height_error_max,
-            )
+        is_attempting = self._is_attempting_forward_press(
+            features=features,
+            mean_elbow_angle=mean_elbow_angle,
+            tracking=frame.tracking,
+            captured_baseline_this_frame=captured_baseline_this_frame,
         )
         session_progress = self._update_session_progress(
+            previous_state=previous_state,
             previous_hold_duration_ms=hold_duration_ms,
             previous_hold_last_timestamp_ms=hold_last_timestamp_ms,
             frame_timestamp_ms=frame.timestamp_ms,
@@ -253,6 +240,42 @@ class DanielForwardPressEvaluator(BaseHoldEvaluator):
             frame_label=frame_label,
             guidance_code=next_feedback_state.displayed_code,
             guidance_text=next_feedback_state.displayed_text,
+        )
+
+    def _is_attempting_forward_press(
+        self,
+        *,
+        features: DanielForwardPressFeatureSet,
+        mean_elbow_angle: float | None,
+        tracking: str,
+        captured_baseline_this_frame: bool,
+    ) -> bool:
+        if tracking != "tracking_ok" or captured_baseline_this_frame:
+            return False
+
+        has_forward_attempt = self._is_attempting_metric(
+            features.wrist_extension,
+            self.config.wrist_extension_threshold,
+        ) or self._is_attempting_metric(
+            mean_elbow_angle,
+            self.config.arm_straight_threshold,
+        )
+        if not has_forward_attempt:
+            return False
+
+        return self._has_relaxed_attempting_alignment(features)
+
+    def _has_relaxed_attempting_alignment(
+        self,
+        features: DanielForwardPressFeatureSet,
+    ) -> bool:
+        return (
+            self._is_relaxed_within_limit(features.torso_tilt, self.config.torso_tilt_max)
+            and self._is_relaxed_within_limit(features.wrist_gap, self.config.wrist_gap_max)
+            and self._is_relaxed_within_limit(
+                features.wrist_height_error,
+                self.config.wrist_height_error_max,
+            )
         )
 
     def _compute_accuracy(self, features: DanielForwardPressFeatureSet) -> float:
