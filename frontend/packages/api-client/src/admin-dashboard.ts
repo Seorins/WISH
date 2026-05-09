@@ -70,9 +70,63 @@ export type GetAdminDashboardParams = {
   to?: string
 }
 
+export type AdminPatientDashboardPatient = {
+  patientId: number
+  patientName: string
+  patientNickname: string
+  gender: 'MALE' | 'FEMALE' | 'OTHER'
+  birthDate: string
+  createdAt: string
+  guardianEmail: string
+}
+
+export type AdminPatientDashboardSummary = {
+  todaySeconds: number
+  periodSeconds: number
+  contentSeconds: number
+  averageDailySeconds: number
+  activeDays: number
+  lastActiveDate: string | null
+  status: AdminDashboardPatientStatus
+  favoriteContent: string
+  contentSkewed: boolean
+  riskInactiveDays: number
+}
+
+export type AdminPatientDashboardDailyUsage = {
+  date: string
+  login: number
+  art: number
+  music: number
+  taekwondo: number
+  gymnastics: number
+  total: number
+  active: boolean
+}
+
+export type AdminPatientDashboard = {
+  from: string
+  to: string
+  patient: AdminPatientDashboardPatient
+  summary: AdminPatientDashboardSummary
+  dailyUsage: AdminPatientDashboardDailyUsage[]
+  contentShares: AdminDashboardContentShare[]
+}
+
 export async function getAdminDashboard(params?: GetAdminDashboardParams) {
   const response = await apiClient.get<ApiResponse<AdminDashboard>>('/admin/dashboard', {
     params,
   })
+  return response.data
+}
+
+export async function getAdminPatientDashboard(
+  patientId: number,
+  params?: GetAdminDashboardParams,
+) {
+  const response = await apiClient.get<ApiResponse<AdminPatientDashboard>>(
+    `/admin/dashboard/patients/${patientId}`,
+    { params },
+  )
   return response.data
 }

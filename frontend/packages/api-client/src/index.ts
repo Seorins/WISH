@@ -1,5 +1,5 @@
 export { apiClient } from './client'
-export { getAdminDashboard } from './admin-dashboard'
+export { getAdminDashboard, getAdminPatientDashboard } from './admin-dashboard'
 export { authInterceptor } from './interceptors/auth'
 export { issueDemoToken, login, signup } from './auth'
 export { createArtwork, deleteArtwork, getArtwork, getMyArtworks, updateArtwork } from './artworks'
@@ -61,6 +61,10 @@ export type {
   AdminDashboardPatientActivity,
   AdminDashboardPatientStatus,
   AdminDashboardSummary,
+  AdminPatientDashboard,
+  AdminPatientDashboardDailyUsage,
+  AdminPatientDashboardPatient,
+  AdminPatientDashboardSummary,
   GetAdminDashboardParams,
 } from './admin-dashboard'
 export type {
