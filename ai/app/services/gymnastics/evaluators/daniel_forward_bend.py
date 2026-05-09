@@ -131,13 +131,27 @@ class DanielForwardBendEvaluator(BaseHoldEvaluator):
             and features.wrist_drop >= self.config.wrist_drop_threshold
             and (knee_condition_satisfied or can_keep_holding_without_knee_angle)
         )
-        hold_progress = self._update_hold_progress(
-            previous_state=previous_state,
+        is_attempting = (
+            motion_tracking == "tracking_ok"
+            and self._is_attempting_metric(
+                features.forward_bend_angle,
+                self.config.forward_bend_threshold,
+            )
+        )
+        session_progress = self._update_session_progress(
             previous_hold_duration_ms=hold_duration_ms,
             previous_hold_last_timestamp_ms=hold_last_timestamp_ms,
             frame_timestamp_ms=frame.timestamp_ms,
-            is_pose_valid=is_pose_valid,
             target_hold_ms=target_hold_ms,
+        )
+        session_state = self._resolve_session_state(
+            hold_completed=session_progress.hold_completed,
+            motion_present=is_pose_valid,
+        )
+        frame_label = self._resolve_frame_label(
+            tracking=motion_tracking,
+            motion_present=is_pose_valid,
+            attempting=is_attempting,
         )
 
         previous_feedback_state = FeedbackStabilizerState(
@@ -157,7 +171,7 @@ class DanielForwardBendEvaluator(BaseHoldEvaluator):
 
         next_feedback_state = self._stabilize_feedback(
             features=features,
-            state=hold_progress.state,
+            state=session_state,
             tracking=motion_tracking,
             previous_feedback_state=previous_feedback_state,
         )
@@ -168,7 +182,7 @@ class DanielForwardBendEvaluator(BaseHoldEvaluator):
 
         return EvaluatorResult(
             motion_id=self.motion_id,
-            state=hold_progress.state,
+            state=session_state,
             step_count=0,
             accuracy=self._compute_accuracy(features, knee_angle),
             feedback=next_feedback_state.displayed_text,
@@ -186,9 +200,12 @@ class DanielForwardBendEvaluator(BaseHoldEvaluator):
             representative_feedback_code=next_representative_state.representative_code,
             representative_feedback_text=next_representative_state.representative_text,
             representative_feedback_frames=next_representative_state.representative_frames,
-            hold_duration_ms=hold_progress.hold_duration_ms,
-            hold_completed=hold_progress.hold_completed,
-            hold_last_timestamp_ms=hold_progress.hold_last_timestamp_ms,
+            hold_duration_ms=session_progress.hold_duration_ms,
+            hold_completed=session_progress.hold_completed,
+            hold_last_timestamp_ms=session_progress.hold_last_timestamp_ms,
+            frame_label=frame_label,
+            guidance_code=next_feedback_state.displayed_code,
+            guidance_text=next_feedback_state.displayed_text,
         )
 
     def _compute_accuracy(

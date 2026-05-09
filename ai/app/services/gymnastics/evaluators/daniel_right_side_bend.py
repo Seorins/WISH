@@ -130,13 +130,24 @@ class DanielRightSideBendEvaluator(BaseHoldEvaluator):
             and features.wrist_height >= self.config.wrist_height_threshold
             and (arm_condition_satisfied or can_keep_holding_without_arm_angle)
         )
-        hold_progress = self._update_hold_progress(
-            previous_state=previous_state,
+        is_attempting = (
+            frame.tracking == "tracking_ok"
+            and self._is_attempting_metric(features.torso_tilt, self.config.tilt_threshold)
+        )
+        session_progress = self._update_session_progress(
             previous_hold_duration_ms=hold_duration_ms,
             previous_hold_last_timestamp_ms=hold_last_timestamp_ms,
             frame_timestamp_ms=frame.timestamp_ms,
-            is_pose_valid=is_pose_valid,
             target_hold_ms=target_hold_ms,
+        )
+        session_state = self._resolve_session_state(
+            hold_completed=session_progress.hold_completed,
+            motion_present=is_pose_valid,
+        )
+        frame_label = self._resolve_frame_label(
+            tracking=frame.tracking,
+            motion_present=is_pose_valid,
+            attempting=is_attempting,
         )
 
         previous_feedback_state = FeedbackStabilizerState(
@@ -156,7 +167,7 @@ class DanielRightSideBendEvaluator(BaseHoldEvaluator):
 
         next_feedback_state = self._stabilize_feedback(
             features=features,
-            state=hold_progress.state,
+            state=session_state,
             tracking=frame.tracking,
             previous_feedback_state=previous_feedback_state,
         )
@@ -167,7 +178,7 @@ class DanielRightSideBendEvaluator(BaseHoldEvaluator):
 
         return EvaluatorResult(
             motion_id=self.motion_id,
-            state=hold_progress.state,
+            state=session_state,
             step_count=0,
             accuracy=self._compute_accuracy(features, mean_elbow_angle),
             feedback=next_feedback_state.displayed_text,
@@ -185,9 +196,12 @@ class DanielRightSideBendEvaluator(BaseHoldEvaluator):
             representative_feedback_code=next_representative_state.representative_code,
             representative_feedback_text=next_representative_state.representative_text,
             representative_feedback_frames=next_representative_state.representative_frames,
-            hold_duration_ms=hold_progress.hold_duration_ms,
-            hold_completed=hold_progress.hold_completed,
-            hold_last_timestamp_ms=hold_progress.hold_last_timestamp_ms,
+            hold_duration_ms=session_progress.hold_duration_ms,
+            hold_completed=session_progress.hold_completed,
+            hold_last_timestamp_ms=session_progress.hold_last_timestamp_ms,
+            frame_label=frame_label,
+            guidance_code=next_feedback_state.displayed_code,
+            guidance_text=next_feedback_state.displayed_text,
         )
 
     def _compute_accuracy(
