@@ -1,0 +1,21 @@
+.placeholder {
+  background: var(--dash-color-surface, #fff);
+  border-radius: var(--dash-radius-card, 22px);
+  box-shadow: var(--dash-shadow-card, 0 2px 12px rgba(60, 50, 120, 0.06));
+  padding: 24px;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--dash-color-text-strong, #1f1b3a);
+  margin: 0 0 8px;
+}
+
+.body {
+  color: #7a7891;
+  margin: 0;
+  font-size: 14px;
+}
