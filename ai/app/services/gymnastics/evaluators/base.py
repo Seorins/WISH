@@ -7,6 +7,9 @@ from app.services.gymnastics.constants import (
 )
 from app.services.gymnastics.types import NormalizedPoseFrame
 
+DEFAULT_ATTEMPTING_THRESHOLD_RATIO = 0.75
+DEFAULT_RELAXED_LIMIT_RATIO = 1.25
+
 
 @dataclass(slots=True)
 class EvaluatorResult:
@@ -160,12 +163,23 @@ class BaseHoldEvaluator(BaseEvaluator):
     def _update_session_progress(
         self,
         *,
+        previous_state: str,
         previous_hold_duration_ms: int,
         previous_hold_last_timestamp_ms: int | None,
         frame_timestamp_ms: int,
         target_hold_ms: int | None = None,
     ) -> HoldProgress:
         effective_target = target_hold_ms or self.hold_config.target_hold_ms
+        reset_requested = previous_state == "complete"
+        timestamp_rewound = (
+            previous_hold_last_timestamp_ms is not None
+            and frame_timestamp_ms < previous_hold_last_timestamp_ms
+        )
+
+        if reset_requested or timestamp_rewound:
+            previous_hold_duration_ms = 0
+            previous_hold_last_timestamp_ms = None
+
         clamped_hold_ms = max(previous_hold_duration_ms, 0)
 
         additional_ms = 0
@@ -188,7 +202,7 @@ class BaseHoldEvaluator(BaseEvaluator):
         value: float | None,
         threshold: float,
         *,
-        ratio: float = 0.75,
+        ratio: float = DEFAULT_ATTEMPTING_THRESHOLD_RATIO,
     ) -> bool:
         return value is not None and value >= threshold * ratio
 
@@ -197,7 +211,7 @@ class BaseHoldEvaluator(BaseEvaluator):
         value: float | None,
         limit: float,
         *,
-        ratio: float = 1.25,
+        ratio: float = DEFAULT_RELAXED_LIMIT_RATIO,
     ) -> bool:
         return value is not None and value <= limit * ratio
 
@@ -222,6 +236,9 @@ class BaseHoldEvaluator(BaseEvaluator):
         hold_completed: bool,
         motion_present: bool,
     ) -> str:
+        # Daniel session state is kept for FE/backward compatibility only.
+        # `frame_label` is the primary per-frame interpretation field, while
+        # `state` stays in the legacy idle/holding/complete contract.
         if hold_completed:
             return "complete"
         if motion_present:
