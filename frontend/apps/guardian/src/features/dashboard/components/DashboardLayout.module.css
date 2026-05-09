@@ -11,10 +11,8 @@
 }
 
 .headerSlot {
-  flex-shrink: 0;
-  z-index: 5;
-  height: var(--dash-header-height);
-  padding: var(--dash-space-4) var(--dash-space-7) 0;
+  flex: 0 0 auto;
+  padding: 14px 32px 0;
 }
 
 .main {
