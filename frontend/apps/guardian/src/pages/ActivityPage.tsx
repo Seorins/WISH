@@ -7,6 +7,7 @@ import {
   type MusicResultDetail,
 } from '@wish/api-client'
 import { ActivityLayout } from '@/features/activity/components/ActivityLayout'
+import { ArtMain } from '@/features/activity/components/ArtMain'
 import { MainPlaceholder } from '@/features/activity/components/MainPlaceholder'
 import { SidebarPlaceholder } from '@/features/activity/components/SidebarPlaceholder'
 import { DEMO_MUSIC_RESULT_ID } from '@/features/activity/constants'
@@ -22,6 +23,7 @@ function todayKst(): string {
 
 export function ActivityPage() {
   const [searchParams] = useSearchParams()
+  const tab = searchParams.get('tab')
   const resultIdParam = searchParams.get('id')
   const resultId = resultIdParam ? Number(resultIdParam) : null
 
@@ -38,6 +40,7 @@ export function ActivityPage() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    if (tab === 'art') return
     if (resultIdParam == null) return
     if (resultId == null || Number.isNaN(resultId)) {
       setError('활동 ID가 지정되지 않았어요')
@@ -62,9 +65,15 @@ export function ActivityPage() {
     return () => {
       cancelled = true
     }
-  }, [resultId, resultIdParam])
+  }, [tab, resultId, resultIdParam])
 
-  // id 미지정 진입 시 기본 활동(음악)으로 리다이렉트.
+  if (tab === 'art') {
+    return (
+      <ActivityLayout header={<HeaderBar />} sidebar={<SidebarPlaceholder />} main={<ArtMain />} />
+    )
+  }
+
+  // id·tab 미지정 진입 시 기본 활동(음악)으로 리다이렉트.
   // 추후 latest 조회 API가 생기면 그 결과 id로 대체.
   if (resultIdParam == null) {
     return <Navigate to={`/activity?id=${DEMO_MUSIC_RESULT_ID}`} replace />
