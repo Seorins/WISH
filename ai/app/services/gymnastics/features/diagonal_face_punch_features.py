@@ -26,6 +26,8 @@ class DiagonalFacePunchFeatureSet:
     raw_right_wrist_forward: float
     left_wrist_height: float
     right_wrist_height: float
+    raw_left_wrist_height: float
+    raw_right_wrist_height: float
     left_arm_extension: float
     right_arm_extension: float
     left_elbow_angle: float | None
@@ -45,6 +47,8 @@ def extract_diagonal_face_punch_features(
     reference_scale: float | None = None,
     baseline_left_wrist_forward: float | None = None,
     baseline_right_wrist_forward: float | None = None,
+    baseline_left_wrist_height: float | None = None,
+    baseline_right_wrist_height: float | None = None,
     baseline_stance_span: float | None = None,
 ) -> DiagonalFacePunchFeatureSet:
     left_shoulder = frame.landmarks.get(LEFT_SHOULDER)
@@ -71,13 +75,16 @@ def extract_diagonal_face_punch_features(
     left_wrist_forward = max(raw_left_wrist_forward - effective_left_baseline, 0.0)
     right_wrist_forward = max(raw_right_wrist_forward - effective_right_baseline, 0.0)
 
-    left_wrist_height = 0.0
+    raw_left_wrist_height = 0.0
     if left_shoulder is not None and left_wrist is not None:
-        left_wrist_height = max(left_shoulder.y - left_wrist.y, 0.0)
+        raw_left_wrist_height = max(left_shoulder.y - left_wrist.y, 0.0)
 
-    right_wrist_height = 0.0
+    raw_right_wrist_height = 0.0
     if right_shoulder is not None and right_wrist is not None:
-        right_wrist_height = max(right_shoulder.y - right_wrist.y, 0.0)
+        raw_right_wrist_height = max(right_shoulder.y - right_wrist.y, 0.0)
+
+    left_wrist_height = max(raw_left_wrist_height - (baseline_left_wrist_height or 0.0), 0.0)
+    right_wrist_height = max(raw_right_wrist_height - (baseline_right_wrist_height or 0.0), 0.0)
 
     left_arm_extension = _distance(left_shoulder, left_wrist)
     right_arm_extension = _distance(right_shoulder, right_wrist)
@@ -107,6 +114,8 @@ def extract_diagonal_face_punch_features(
         raw_right_wrist_forward=raw_right_wrist_forward,
         left_wrist_height=left_wrist_height,
         right_wrist_height=right_wrist_height,
+        raw_left_wrist_height=raw_left_wrist_height,
+        raw_right_wrist_height=raw_right_wrist_height,
         left_arm_extension=left_arm_extension,
         right_arm_extension=right_arm_extension,
         left_elbow_angle=left_elbow_angle,
