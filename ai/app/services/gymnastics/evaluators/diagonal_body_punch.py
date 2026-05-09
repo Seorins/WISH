@@ -163,6 +163,11 @@ class DiagonalBodyPunchEvaluator(BaseEvaluator):
                 baseline_stance_span=next_baseline_stance_span,
                 feedback_state=next_feedback_state,
                 representative_state=next_representative_state,
+                frame_label=self._resolve_frame_label(
+                    tracking=frame.tracking,
+                    motion_present=False,
+                    attempting=False,
+                ),
             )
 
         if next_reference_hip_x is None or next_reference_hip_y is None or next_reference_scale is None:
@@ -193,6 +198,7 @@ class DiagonalBodyPunchEvaluator(BaseEvaluator):
                 baseline_stance_span=next_baseline_stance_span,
                 feedback_state=next_feedback_state,
                 representative_state=next_representative_state,
+                frame_label=self._resolve_top_frame_label(features, frame.tracking, "idle"),
             )
 
         if captured_baseline_this_frame:
@@ -223,6 +229,7 @@ class DiagonalBodyPunchEvaluator(BaseEvaluator):
                 baseline_stance_span=next_baseline_stance_span,
                 feedback_state=next_feedback_state,
                 representative_state=next_representative_state,
+                frame_label=self._resolve_top_frame_label(features, frame.tracking, "idle"),
             )
 
         next_left_armed = left_armed or features.left_wrist_forward <= self.config.release_threshold
@@ -248,6 +255,7 @@ class DiagonalBodyPunchEvaluator(BaseEvaluator):
                 next_counted_side = "right"
                 next_right_armed = False
 
+        frame_label = self._resolve_top_frame_label(features, frame.tracking, next_state)
         if next_step_count >= effective_target:
             next_state = "complete"
 
@@ -283,6 +291,7 @@ class DiagonalBodyPunchEvaluator(BaseEvaluator):
             baseline_stance_span=next_baseline_stance_span,
             feedback_state=next_feedback_state,
             representative_state=next_representative_state,
+            frame_label=frame_label,
         )
 
     def _resolve_next_state(
@@ -307,28 +316,18 @@ class DiagonalBodyPunchEvaluator(BaseEvaluator):
         return "idle"
 
     def _is_left_punch(self, features: DiagonalBodyPunchFeatureSet) -> bool:
-        left_straight = features.left_elbow_angle is not None and features.left_elbow_angle >= self.config.arm_straight_threshold
         return (
             features.left_wrist_forward >= self.config.forward_threshold
             and features.left_wrist_forward > features.right_wrist_forward + self.config.dominance_margin
-            and left_straight
-            and features.stance_span >= self.config.stance_span_threshold
         )
 
     def _is_right_punch(self, features: DiagonalBodyPunchFeatureSet) -> bool:
-        right_straight = features.right_elbow_angle is not None and features.right_elbow_angle >= self.config.arm_straight_threshold
         return (
             features.right_wrist_forward >= self.config.forward_threshold
             and features.right_wrist_forward > features.left_wrist_forward + self.config.dominance_margin
-            and right_straight
-            and features.stance_span >= self.config.stance_span_threshold
         )
 
     def _should_hold_left_punch(self, features: DiagonalBodyPunchFeatureSet) -> bool:
-        elbow_ok = (
-            features.left_elbow_angle is not None
-            and features.left_elbow_angle >= self.config.arm_straight_threshold - 12.0
-        )
         forward_hold_floor = max(
             self.config.release_threshold * 0.85,
             self.config.forward_threshold * 0.45,
@@ -336,13 +335,9 @@ class DiagonalBodyPunchEvaluator(BaseEvaluator):
         still_dominant = features.left_wrist_forward > features.right_wrist_forward + (
             self.config.dominance_margin * 0.5
         )
-        return features.left_wrist_forward > forward_hold_floor and elbow_ok and still_dominant
+        return features.left_wrist_forward > forward_hold_floor and still_dominant
 
     def _should_hold_right_punch(self, features: DiagonalBodyPunchFeatureSet) -> bool:
-        elbow_ok = (
-            features.right_elbow_angle is not None
-            and features.right_elbow_angle >= self.config.arm_straight_threshold - 12.0
-        )
         forward_hold_floor = max(
             self.config.release_threshold * 0.85,
             self.config.forward_threshold * 0.45,
@@ -350,7 +345,7 @@ class DiagonalBodyPunchEvaluator(BaseEvaluator):
         still_dominant = features.right_wrist_forward > features.left_wrist_forward + (
             self.config.dominance_margin * 0.5
         )
-        return features.right_wrist_forward > forward_hold_floor and elbow_ok and still_dominant
+        return features.right_wrist_forward > forward_hold_floor and still_dominant
 
     def _get_punch_side(self, state: str) -> str | None:
         if state == "left_punch":
@@ -361,6 +356,22 @@ class DiagonalBodyPunchEvaluator(BaseEvaluator):
 
     def _get_active_side(self, state: str) -> str | None:
         return self._get_punch_side(state)
+
+    def _resolve_top_frame_label(
+        self,
+        features: DiagonalBodyPunchFeatureSet,
+        tracking: str,
+        state: str,
+    ) -> str:
+        return self._resolve_frame_label(
+            tracking=tracking,
+            motion_present=self._get_punch_side(state) is not None,
+            attempting=self._is_attempting_punch(features),
+        )
+
+    def _is_attempting_punch(self, features: DiagonalBodyPunchFeatureSet) -> bool:
+        dominant_forward = max(features.left_wrist_forward, features.right_wrist_forward)
+        return dominant_forward >= self.config.forward_threshold * 0.75
 
     def _compute_accuracy(self, features: DiagonalBodyPunchFeatureSet) -> float:
         dominant_forward = max(features.left_wrist_forward, features.right_wrist_forward)
@@ -434,6 +445,7 @@ class DiagonalBodyPunchEvaluator(BaseEvaluator):
         baseline_stance_span: float | None,
         feedback_state: FeedbackStabilizerState,
         representative_state: RepresentativeFeedbackState,
+        frame_label: str,
     ) -> EvaluatorResult:
         return EvaluatorResult(
             motion_id=self.motion_id,
@@ -462,4 +474,7 @@ class DiagonalBodyPunchEvaluator(BaseEvaluator):
             baseline_left_wrist_forward=baseline_left_wrist_forward,
             baseline_right_wrist_forward=baseline_right_wrist_forward,
             baseline_stance_span=baseline_stance_span,
+            frame_label=frame_label,
+            guidance_code=feedback_state.displayed_code,
+            guidance_text=feedback_state.displayed_text,
         )

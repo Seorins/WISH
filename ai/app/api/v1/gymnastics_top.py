@@ -41,6 +41,45 @@ from app.services.gymnastics.feedback.common import TRACKING_LOW
 
 router = APIRouter()
 
+_TOP_MOTION_PRESENT_STATES = frozenset(
+    {
+        "left_peak",
+        "right_peak",
+        "left_open",
+        "right_open",
+        "left_punch",
+        "right_punch",
+        "bottom",
+        "ascending",
+        "complete",
+    }
+)
+_TOP_ATTEMPTING_STATES = frozenset({"left_lift", "right_lift", "descending"})
+
+
+def _resolve_top_response_frame_label(result: object) -> str:
+    frame_label = getattr(result, "frame_label", None)
+    if frame_label is not None:
+        return frame_label
+
+    if getattr(result, "tracking", None) != "tracking_ok":
+        return "tracking_low"
+
+    state = getattr(result, "state", "idle")
+    if state in _TOP_MOTION_PRESENT_STATES:
+        return "motion_present"
+    if state in _TOP_ATTEMPTING_STATES:
+        return "attempting"
+    return "guidance_needed"
+
+
+def _resolve_top_response_guidance_code(result: object) -> str | None:
+    return getattr(result, "guidance_code", None) or getattr(result, "displayed_feedback_code", None)
+
+
+def _resolve_top_response_guidance_text(result: object) -> str | None:
+    return getattr(result, "guidance_text", None) or getattr(result, "displayed_feedback_text", None)
+
 
 def _build_march_tracking_low_response(payload: MarchEvaluationRequest) -> MarchEvaluationResponse:
     return MarchEvaluationResponse(
@@ -50,6 +89,9 @@ def _build_march_tracking_low_response(payload: MarchEvaluationRequest) -> March
         accuracy=0.0,
         feedback=TRACKING_LOW.text,
         tracking="tracking_low",
+        frame_label="tracking_low",
+        guidance_code=TRACKING_LOW.code,
+        guidance_text=TRACKING_LOW.text,
         last_counted_side=payload.last_counted_side,
         last_seen_side=payload.last_seen_side,
         left_armed=payload.left_armed,
@@ -136,6 +178,9 @@ def evaluate_march(payload: MarchEvaluationRequest) -> MarchEvaluationResponse:
         accuracy=result.accuracy,
         feedback=result.feedback,
         tracking=result.tracking,
+        frame_label=_resolve_top_response_frame_label(result),
+        guidance_code=_resolve_top_response_guidance_code(result),
+        guidance_text=_resolve_top_response_guidance_text(result),
         last_counted_side=result.last_counted_side,
         last_seen_side=result.last_seen_side,
         left_armed=result.left_armed,
@@ -228,6 +273,9 @@ def evaluate_side_step(payload: SideStepEvaluationRequest) -> SideStepEvaluation
         accuracy=result.accuracy,
         feedback=result.feedback,
         tracking=result.tracking,
+        frame_label=_resolve_top_response_frame_label(result),
+        guidance_code=_resolve_top_response_guidance_code(result),
+        guidance_text=_resolve_top_response_guidance_text(result),
         last_counted_side=result.last_counted_side,
         last_seen_side=result.last_seen_side,
         left_armed=result.left_armed,
@@ -322,6 +370,9 @@ def evaluate_diagonal_body_punch(
         accuracy=result.accuracy,
         feedback=result.feedback,
         tracking=result.tracking,
+        frame_label=_resolve_top_response_frame_label(result),
+        guidance_code=_resolve_top_response_guidance_code(result),
+        guidance_text=_resolve_top_response_guidance_text(result),
         last_counted_side=result.last_counted_side,
         last_seen_side=result.last_seen_side,
         left_armed=result.left_armed,
@@ -420,6 +471,9 @@ def evaluate_diagonal_face_punch(
         accuracy=result.accuracy,
         feedback=result.feedback,
         tracking=result.tracking,
+        frame_label=_resolve_top_response_frame_label(result),
+        guidance_code=_resolve_top_response_guidance_code(result),
+        guidance_text=_resolve_top_response_guidance_text(result),
         last_counted_side=result.last_counted_side,
         last_seen_side=result.last_seen_side,
         left_armed=result.left_armed,
@@ -508,6 +562,9 @@ def evaluate_squat(payload: SquatEvaluationRequest) -> SquatEvaluationResponse:
         accuracy=result.accuracy,
         feedback=result.feedback,
         tracking=result.tracking,
+        frame_label=_resolve_top_response_frame_label(result),
+        guidance_code=_resolve_top_response_guidance_code(result),
+        guidance_text=_resolve_top_response_guidance_text(result),
         reference_hip_x=result.reference_hip_x,
         reference_hip_y=result.reference_hip_y,
         reference_scale=result.reference_scale,

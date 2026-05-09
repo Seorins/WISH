@@ -91,6 +91,21 @@ class BaseEvaluator(ABC):
     ) -> EvaluatorResult:
         raise NotImplementedError
 
+    @staticmethod
+    def _resolve_frame_label(
+        *,
+        tracking: str,
+        motion_present: bool,
+        attempting: bool,
+    ) -> str:
+        if tracking != "tracking_ok":
+            return "tracking_low"
+        if motion_present:
+            return "motion_present"
+        if attempting:
+            return "attempting"
+        return "guidance_needed"
+
 
 @dataclass(slots=True)
 class HoldEvaluatorConfig:
@@ -214,21 +229,6 @@ class BaseHoldEvaluator(BaseEvaluator):
         ratio: float = DEFAULT_RELAXED_LIMIT_RATIO,
     ) -> bool:
         return value is not None and value <= limit * ratio
-
-    @staticmethod
-    def _resolve_frame_label(
-        *,
-        tracking: str,
-        motion_present: bool,
-        attempting: bool,
-    ) -> str:
-        if tracking != "tracking_ok":
-            return "tracking_low"
-        if motion_present:
-            return "motion_present"
-        if attempting:
-            return "attempting"
-        return "guidance_needed"
 
     @staticmethod
     def _resolve_session_state(
