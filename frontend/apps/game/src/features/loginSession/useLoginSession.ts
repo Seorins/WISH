@@ -1,12 +1,11 @@
 import { useEffect, useRef } from 'react'
-import { endLoginSession, heartbeatLoginSession, startLoginSession } from '@wish/api-client'
+import { heartbeatLoginSession, startLoginSession } from '@wish/api-client'
 
 const HEARTBEAT_INTERVAL_MS = 30_000
 const ACCESS_TOKEN_STORAGE_KEY = 'wish_access_token'
 
-function bestEffortEnd(sessionId: number) {
+function fireEnd(sessionId: number, token: string | null) {
   const baseUrl = import.meta.env.VITE_API_BASE_URL ?? '/api/v1'
-  const token = localStorage.getItem(ACCESS_TOKEN_STORAGE_KEY)
   try {
     void fetch(`${baseUrl}/login-sessions/${sessionId}/end`, {
       method: 'PATCH',
@@ -14,12 +13,13 @@ function bestEffortEnd(sessionId: number) {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
   } catch {
-    // pagehide 동안 발사한 요청은 결과를 알 수 없음 — BE 가 5분 후 자동 마감
+    // best-effort — 실패해도 BE 가 5분 후 자동 마감
   }
 }
 
 export function useLoginSession(patientProfileId: number | undefined) {
   const sessionIdRef = useRef<number | null>(null)
+  const tokenRef = useRef<string | null>(null)
   const intervalIdRef = useRef<number | null>(null)
 
   useEffect(() => {
@@ -61,7 +61,7 @@ export function useLoginSession(patientProfileId: number | undefined) {
       const sessionId = sessionIdRef.current
       if (sessionId === null) return
       stopHeartbeat()
-      bestEffortEnd(sessionId)
+      fireEnd(sessionId, tokenRef.current)
       sessionIdRef.current = null
     }
 
@@ -69,6 +69,7 @@ export function useLoginSession(patientProfileId: number | undefined) {
       .then(response => {
         if (cancelled) return
         sessionIdRef.current = response.data.id
+        tokenRef.current = localStorage.getItem(ACCESS_TOKEN_STORAGE_KEY)
         if (document.visibilityState !== 'hidden') {
           startHeartbeat()
         }
@@ -86,9 +87,11 @@ export function useLoginSession(patientProfileId: number | undefined) {
       window.removeEventListener('pagehide', handlePageHide)
       stopHeartbeat()
       const sessionId = sessionIdRef.current
+      const token = tokenRef.current
       sessionIdRef.current = null
+      tokenRef.current = null
       if (sessionId !== null) {
-        endLoginSession(sessionId).catch(() => {})
+        fireEnd(sessionId, token)
       }
     }
   }, [patientProfileId])
