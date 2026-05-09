@@ -87,4 +87,54 @@ public class DialogueSession {
     void prePersist() {
         this.startedAt = LocalDateTime.now();
     }
+
+    /**
+     * 세션을 정상 종료한다. {@link DialogueStatus#IN_PROGRESS} 상태에서만 호출 가능하며 그 외 상태에선 {@link
+     * IllegalStateException} 을 던진다.
+     */
+    public void finish(DialogueFinishReason reason) {
+        Objects.requireNonNull(reason, "reason must not be null");
+        requireInProgress();
+        this.status = DialogueStatus.FINISHED;
+        this.finishReason = reason;
+        this.endedAt = LocalDateTime.now();
+    }
+
+    /**
+     * 세션을 비정상 포기한다 (예: 클라이언트 이탈, 타임아웃 batch). {@link DialogueStatus#IN_PROGRESS} 에서만 호출 가능. {@link
+     * #finishReason} 은 부여하지 않는다 — 사유 미상 케이스이므로.
+     */
+    public void abandon() {
+        requireInProgress();
+        this.status = DialogueStatus.ABANDONED;
+        this.endedAt = LocalDateTime.now();
+    }
+
+    /**
+     * 새로운 턴이 적재되는 시점에 호출. {@link #stepCount} 를 1 증가시키며 {@link #maxSteps} 를 초과하지 못한다는 도메인 불변식을 강제한다
+     * (DB CHECK 와 같은 룰을 in-memory 에서 fail-fast).
+     */
+    public void incrementStepCount() {
+        requireInProgress();
+        if (stepCount >= maxSteps) {
+            throw new IllegalStateException(
+                    "stepCount cannot exceed maxSteps (current="
+                            + stepCount
+                            + ", max="
+                            + maxSteps
+                            + ")");
+        }
+        this.stepCount += 1;
+    }
+
+    /** 다음 턴이 들어오면 종료해야 하는 상태인지 (= 마지막 step 이 적재된 상태). */
+    public boolean isAtMaxSteps() {
+        return stepCount >= maxSteps;
+    }
+
+    private void requireInProgress() {
+        if (status != DialogueStatus.IN_PROGRESS) {
+            throw new IllegalStateException("session must be IN_PROGRESS but is " + status);
+        }
+    }
 }
