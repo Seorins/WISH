@@ -30,6 +30,9 @@ export function AdminShell({ title, description, actions, children }: Props) {
         </div>
 
         <nav style={styles.nav}>
+          <NavLink to="/dashboard" style={({ isActive }) => navLinkStyle(isActive)}>
+            대시보드
+          </NavLink>
           <NavLink to="/users" style={({ isActive }) => navLinkStyle(isActive)}>
             유저 관리
           </NavLink>

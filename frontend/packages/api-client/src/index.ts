@@ -1,4 +1,5 @@
 export { apiClient } from './client'
+export { getAdminDashboard } from './admin-dashboard'
 export { authInterceptor } from './interceptors/auth'
 export { issueDemoToken, login, signup } from './auth'
 export { createArtwork, deleteArtwork, getArtwork, getMyArtworks, updateArtwork } from './artworks'
@@ -52,6 +53,16 @@ export {
 export { calculateTaekwondoAverageAccuracy, createTaekwondoSession } from './taekwondo-sessions'
 export { listUsers } from './users'
 export type { LoginRequest, SignupRequest, TokenResponse, UserResponse, UserRole } from './auth'
+export type {
+  AdminDashboard,
+  AdminDashboardAlert,
+  AdminDashboardContentShare,
+  AdminDashboardDailyUsage,
+  AdminDashboardPatientActivity,
+  AdminDashboardPatientStatus,
+  AdminDashboardSummary,
+  GetAdminDashboardParams,
+} from './admin-dashboard'
 export type {
   ApiResponse,
   Artwork,
