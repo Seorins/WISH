@@ -50,6 +50,9 @@ public class MusicResult {
     @Column(name = "perfect_count", nullable = false)
     private int perfectCount;
 
+    @Column(name = "great_count", nullable = false)
+    private int greatCount;
+
     @Column(name = "good_count", nullable = false)
     private int goodCount;
 
@@ -85,6 +88,7 @@ public class MusicResult {
             int score,
             int maxCombo,
             int perfectCount,
+            int greatCount,
             int goodCount,
             int missCount,
             int totalNotes,
@@ -99,6 +103,7 @@ public class MusicResult {
         validateNonNegative(score, "score");
         validateNonNegative(maxCombo, "maxCombo");
         validateNonNegative(perfectCount, "perfectCount");
+        validateNonNegative(greatCount, "greatCount");
         validateNonNegative(goodCount, "goodCount");
         validateNonNegative(missCount, "missCount");
         validatePositive(totalNotes, "totalNotes");
@@ -107,6 +112,7 @@ public class MusicResult {
         this.score = score;
         this.maxCombo = maxCombo;
         this.perfectCount = perfectCount;
+        this.greatCount = greatCount;
         this.goodCount = goodCount;
         this.missCount = missCount;
         this.totalNotes = totalNotes;
