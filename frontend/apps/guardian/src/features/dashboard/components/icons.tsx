@@ -207,6 +207,53 @@ export function ActivityIcon(props: IconProps) {
   )
 }
 
+export function PaletteIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M12 3a9 9 0 1 0 0 18c.83 0 1.5-.67 1.5-1.5 0-.4-.16-.76-.42-1.04-.27-.28-.45-.66-.45-1.07 0-.83.67-1.5 1.5-1.5h1.85A4.52 4.52 0 0 0 21 11.5C21 6.81 16.97 3 12 3z" />
+      <circle cx="7.5" cy="10.5" r="1.1" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="7.5" r="1.1" fill="currentColor" stroke="none" />
+      <circle cx="16.5" cy="10.5" r="1.1" fill="currentColor" stroke="none" />
+      <circle cx="8.5" cy="14.5" r="1.1" fill="currentColor" stroke="none" />
+    </svg>
+  )
+}
+
+export function PaletteColorIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg width={24} height={24} viewBox="0 0 24 24" fill="none" {...props}>
+      <path
+        d="M12 2.5C6.2 2.5 1.5 6.7 1.5 12s4.7 9.5 10.5 9.5c1.5 0 2.65-1.15 2.65-2.65 0-.42-.16-.78-.43-1.07-.28-.3-.47-.7-.47-1.13 0-.88.72-1.6 1.6-1.6h1.95c3.13 0 5.2-2.4 5.2-5.55 0-3.95-3.95-7-10.5-7z"
+        fill="#C9B8FF"
+      />
+      <circle cx="7.4" cy="10.6" r="1.55" fill="#FF7BA9" />
+      <circle cx="12" cy="7.3" r="1.55" fill="#FFC93C" />
+      <circle cx="16.6" cy="10.6" r="1.55" fill="#6BCB77" />
+      <circle cx="8.5" cy="15.2" r="1.55" fill="#4D96FF" />
+    </svg>
+  )
+}
+
+export function StarFilledIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg width={24} height={24} viewBox="0 0 24 24" fill="none" {...props}>
+      <defs>
+        <linearGradient id="starGrad" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%" stopColor="#FFD66B" />
+          <stop offset="100%" stopColor="#F5A524" />
+        </linearGradient>
+      </defs>
+      <path
+        d="M12 2.5l2.92 5.92 6.53.95-4.72 4.6 1.11 6.5L12 17.4l-5.84 3.07 1.11-6.5L2.55 9.37l6.53-.95L12 2.5z"
+        fill="url(#starGrad)"
+        stroke="#E89B0F"
+        strokeWidth="0.9"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
 export function LogoutIcon(props: IconProps) {
   return (
     <svg {...base} {...props}>
