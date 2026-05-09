@@ -55,7 +55,7 @@ class FeedbackTtsResponse(BaseModel):
     priority: Literal["tracking", "posture"] | None = None
 
 
-# Daniel frame labels are the primary per-frame interpretation values for
+# Gymnastics frame labels are the primary per-frame interpretation values for
 # FE/guardian consumers.
 # - tracking_low: the frame is not reliable enough to interpret because core
 #   landmarks are missing or unstable.
@@ -65,12 +65,13 @@ class FeedbackTtsResponse(BaseModel):
 #   the motion is not yet strong enough to treat as present.
 # - motion_present: the target motion pattern is sufficiently visible on the
 #   current frame.
-DanielFrameLabel = Literal[
+GymnasticsFrameLabel = Literal[
     "tracking_low",
     "guidance_needed",
     "attempting",
     "motion_present",
 ]
+DanielFrameLabel = GymnasticsFrameLabel
 
 
 class MarchEvaluationRequest(BaseModel):
@@ -140,6 +141,18 @@ class MarchEvaluationResponse(BaseModel):
     accuracy: float
     feedback: str | None = None
     tracking: str
+    frame_label: GymnasticsFrameLabel | None = Field(
+        default=None,
+        description="Primary per-frame classification label.",
+    )
+    guidance_code: str | None = Field(
+        default=None,
+        description="Displayed coaching feedback code for the current frame, when any.",
+    )
+    guidance_text: str | None = Field(
+        default=None,
+        description="Displayed coaching feedback text for the current frame, when any.",
+    )
     last_counted_side: str | None = None
     last_seen_side: str | None = None
     left_armed: bool = True
@@ -464,6 +477,18 @@ class SideStepEvaluationResponse(BaseModel):
     accuracy: float
     feedback: str | None = None
     tracking: str
+    frame_label: GymnasticsFrameLabel | None = Field(
+        default=None,
+        description="Primary per-frame classification label.",
+    )
+    guidance_code: str | None = Field(
+        default=None,
+        description="Displayed coaching feedback code for the current frame, when any.",
+    )
+    guidance_text: str | None = Field(
+        default=None,
+        description="Displayed coaching feedback text for the current frame, when any.",
+    )
     last_counted_side: str | None = None
     last_seen_side: str | None = None
     left_armed: bool = True
@@ -537,6 +562,18 @@ class DiagonalBodyPunchEvaluationResponse(BaseModel):
     accuracy: float
     feedback: str | None = None
     tracking: str
+    frame_label: GymnasticsFrameLabel | None = Field(
+        default=None,
+        description="Primary per-frame classification label.",
+    )
+    guidance_code: str | None = Field(
+        default=None,
+        description="Displayed coaching feedback code for the current frame, when any.",
+    )
+    guidance_text: str | None = Field(
+        default=None,
+        description="Displayed coaching feedback text for the current frame, when any.",
+    )
     last_counted_side: str | None = None
     last_seen_side: str | None = None
     left_armed: bool = True
@@ -612,6 +649,18 @@ class DiagonalFacePunchEvaluationResponse(BaseModel):
     accuracy: float
     feedback: str | None = None
     tracking: str
+    frame_label: GymnasticsFrameLabel | None = Field(
+        default=None,
+        description="Primary per-frame classification label.",
+    )
+    guidance_code: str | None = Field(
+        default=None,
+        description="Displayed coaching feedback code for the current frame, when any.",
+    )
+    guidance_text: str | None = Field(
+        default=None,
+        description="Displayed coaching feedback text for the current frame, when any.",
+    )
     last_counted_side: str | None = None
     last_seen_side: str | None = None
     left_armed: bool = True
@@ -674,6 +723,18 @@ class SquatEvaluationResponse(BaseModel):
     accuracy: float
     feedback: str | None = None
     tracking: str
+    frame_label: GymnasticsFrameLabel | None = Field(
+        default=None,
+        description="Primary per-frame classification label.",
+    )
+    guidance_code: str | None = Field(
+        default=None,
+        description="Displayed coaching feedback code for the current frame, when any.",
+    )
+    guidance_text: str | None = Field(
+        default=None,
+        description="Displayed coaching feedback text for the current frame, when any.",
+    )
     reference_hip_x: float | None = None
     reference_hip_y: float | None = None
     reference_scale: float | None = None

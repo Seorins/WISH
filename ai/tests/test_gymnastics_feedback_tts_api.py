@@ -152,6 +152,9 @@ def test_evaluate_march_includes_tts_metadata(monkeypatch) -> None:
     assert response.tts.key == "LIFT_LEG_BIGGER"
     assert response.tts.text == "Lift your leg higher."
     assert response.tts.priority == "posture"
+    assert response.frame_label == "guidance_needed"
+    assert response.guidance_code == "LIFT_LEG_BIGGER"
+    assert response.guidance_text == "Lift your leg higher."
 
 
 def test_evaluate_daniel_forward_press_does_not_repeat_unchanged_tts(monkeypatch) -> None:

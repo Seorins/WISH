@@ -17,11 +17,13 @@ def test_squat_counts_rep_on_full_cycle() -> None:
     descending = build_squat_frame(hip_y=0.60)
     desc_result = _evaluate(evaluator, descending, init)
     assert desc_result.state == "descending"
+    assert desc_result.frame_label == "attempting"
 
     # 3. 충분히 앉음 (hip_drop >= bottom_threshold=0.30)
     bottom = build_squat_frame(hip_y=0.80)
     bot_result = _evaluate(evaluator, bottom, desc_result)
     assert bot_result.state == "bottom"
+    assert bot_result.frame_label == "motion_present"
 
     # 4. 올라오는 중 (return_threshold < hip_drop < bottom_threshold)
     ascending = build_squat_frame(hip_y=0.65)

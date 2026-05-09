@@ -127,6 +127,11 @@ class MarchEvaluator(BaseEvaluator):
                 reference_scale=next_reference_scale,
                 feedback_state=next_feedback_state,
                 representative_state=next_representative_state,
+                frame_label=self._resolve_frame_label(
+                    tracking=frame.tracking,
+                    motion_present=False,
+                    attempting=False,
+                ),
             )
 
         if next_reference_hip_x is None or next_reference_hip_y is None or next_reference_scale is None:
@@ -154,6 +159,7 @@ class MarchEvaluator(BaseEvaluator):
                 reference_scale=next_reference_scale,
                 feedback_state=next_feedback_state,
                 representative_state=next_representative_state,
+                frame_label=self._resolve_top_frame_label(features, frame.tracking, "idle"),
             )
 
         next_left_armed = left_armed or features.left_thigh_angle <= self.config.release_threshold
@@ -163,19 +169,19 @@ class MarchEvaluator(BaseEvaluator):
         next_step_count = step_count
         next_counted_side = last_counted_side
 
-        is_in_place = self._is_in_place(features)
         peak_side = self._get_peak_side(next_state)
 
         if next_step_count < effective_target:
-            if peak_side == "left" and next_left_armed and is_in_place:
+            if peak_side == "left" and next_left_armed:
                 next_step_count += 1
                 next_counted_side = "left"
                 next_left_armed = False
-            elif peak_side == "right" and next_right_armed and is_in_place:
+            elif peak_side == "right" and next_right_armed:
                 next_step_count += 1
                 next_counted_side = "right"
                 next_right_armed = False
 
+        frame_label = self._resolve_top_frame_label(features, frame.tracking, next_state)
         if next_step_count >= effective_target:
             next_state = "complete"
 
@@ -208,6 +214,7 @@ class MarchEvaluator(BaseEvaluator):
             reference_scale=next_reference_scale,
             feedback_state=next_feedback_state,
             representative_state=next_representative_state,
+            frame_label=frame_label,
         )
 
     def _resolve_next_state(self, features: MarchFeatureSet) -> str:
@@ -253,12 +260,21 @@ class MarchEvaluator(BaseEvaluator):
             return "right"
         return None
 
-    def _is_in_place(self, features: MarchFeatureSet) -> bool:
-        return (
-            abs(features.pelvis_shift_x) <= self.config.pelvis_shift_max
-            and abs(features.pelvis_shift_y) <= self.config.pelvis_shift_max
-            and abs(features.pelvis_depth_shift) <= self.config.depth_shift_max
+    def _resolve_top_frame_label(
+        self,
+        features: MarchFeatureSet,
+        tracking: str,
+        state: str,
+    ) -> str:
+        return self._resolve_frame_label(
+            tracking=tracking,
+            motion_present=self._get_peak_side(state) is not None,
+            attempting=self._is_attempting_march(features),
         )
+
+    def _is_attempting_march(self, features: MarchFeatureSet) -> bool:
+        dominant_angle = max(features.left_thigh_angle, features.right_thigh_angle)
+        return dominant_angle >= self.config.thigh_angle_threshold * 0.5
 
     def _compute_accuracy(self, features: MarchFeatureSet) -> float:
         dominant_angle = max(features.left_thigh_angle, features.right_thigh_angle)
@@ -321,6 +337,7 @@ class MarchEvaluator(BaseEvaluator):
         reference_scale: float | None,
         feedback_state: FeedbackStabilizerState,
         representative_state: RepresentativeFeedbackState,
+        frame_label: str,
     ) -> EvaluatorResult:
         return EvaluatorResult(
             motion_id=self.motion_id,
@@ -346,6 +363,9 @@ class MarchEvaluator(BaseEvaluator):
             representative_feedback_code=representative_state.representative_code,
             representative_feedback_text=representative_state.representative_text,
             representative_feedback_frames=representative_state.representative_frames,
+            frame_label=frame_label,
+            guidance_code=feedback_state.displayed_code,
+            guidance_text=feedback_state.displayed_text,
         )
 
     def _update_representative_feedback(

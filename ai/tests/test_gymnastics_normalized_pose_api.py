@@ -146,6 +146,7 @@ def test_evaluate_march_includes_normalized_pose(monkeypatch) -> None:
 
     assert response.normalized_pose is not None
     assert len(response.normalized_pose.landmarks) == 12
+    assert response.frame_label == "guidance_needed"
 
 
 def test_evaluate_march_returns_tracking_low_when_normalization_fails(monkeypatch) -> None:
