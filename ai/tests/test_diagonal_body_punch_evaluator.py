@@ -162,6 +162,44 @@ def test_diagonal_body_punch_counts_alternating_punches() -> None:
     assert right_result.right_armed is False
 
 
+def test_diagonal_body_punch_counts_forward_progress_even_with_narrow_stance() -> None:
+    evaluator = DiagonalBodyPunchEvaluator()
+
+    neutral_result = evaluator.evaluate(
+        frame=build_diagonal_body_punch_frame(),
+        previous_state="idle",
+        step_count=0,
+        target_steps=8,
+    )
+
+    result = evaluator.evaluate(
+        frame=build_diagonal_body_punch_frame(
+            left_wrist_x=-1.70,
+            left_elbow_x=-1.20,
+            right_elbow_x=0.65,
+            stance_span=1.30,
+        ),
+        previous_state=neutral_result.state,
+        step_count=neutral_result.step_count,
+        target_steps=8,
+        last_counted_side=neutral_result.last_counted_side,
+        last_seen_side=neutral_result.last_seen_side,
+        left_armed=neutral_result.left_armed,
+        right_armed=neutral_result.right_armed,
+        reference_hip_x=neutral_result.reference_hip_x,
+        reference_hip_y=neutral_result.reference_hip_y,
+        reference_scale=neutral_result.reference_scale,
+        baseline_left_wrist_forward=neutral_result.baseline_left_wrist_forward,
+        baseline_right_wrist_forward=neutral_result.baseline_right_wrist_forward,
+        baseline_stance_span=neutral_result.baseline_stance_span,
+    )
+
+    assert result.state == "left_punch"
+    assert result.step_count == 1
+    assert result.frame_label == "motion_present"
+    assert result.candidate_feedback_code == "WIDEN_PUNCH_STANCE"
+
+
 def build_diagonal_body_punch_frame(
     left_wrist_x: float = -0.80,
     right_wrist_x: float = 0.80,

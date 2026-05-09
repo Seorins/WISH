@@ -128,6 +128,49 @@ def test_side_step_counts_alternating_open_positions() -> None:
     assert right_result.right_armed is False
 
 
+def test_side_step_counts_progress_even_with_forward_backward_sway() -> None:
+    evaluator = SideStepEvaluator()
+    neutral_result = evaluator.evaluate(
+        frame=build_side_step_frame(
+            hip_center_x=0.5,
+            left_ankle_raw_x=0.40,
+            right_ankle_raw_x=0.60,
+        ),
+        previous_state="idle",
+        step_count=0,
+        target_steps=8,
+    )
+
+    sway_frame = build_side_step_frame(
+        hip_center_x=0.45,
+        left_ankle_raw_x=0.15,
+        right_ankle_raw_x=0.58,
+    )
+    sway_frame.scale_reference = 0.35
+
+    result = evaluator.evaluate(
+        frame=sway_frame,
+        previous_state=neutral_result.state,
+        step_count=neutral_result.step_count,
+        target_steps=8,
+        last_counted_side=neutral_result.last_counted_side,
+        last_seen_side=neutral_result.last_seen_side,
+        left_armed=neutral_result.left_armed,
+        right_armed=neutral_result.right_armed,
+        reference_hip_x=neutral_result.reference_hip_x,
+        reference_hip_y=neutral_result.reference_hip_y,
+        reference_scale=neutral_result.reference_scale,
+        baseline_left_step_extent=neutral_result.baseline_left_step_extent,
+        baseline_right_step_extent=neutral_result.baseline_right_step_extent,
+        baseline_ankle_span=neutral_result.baseline_ankle_span,
+    )
+
+    assert result.state == "left_open"
+    assert result.step_count == 1
+    assert result.frame_label == "motion_present"
+    assert result.candidate_feedback_code == "MOVE_SIDE_ONLY"
+
+
 def test_side_step_tracking_low_does_not_initialize_baseline() -> None:
     evaluator = SideStepEvaluator()
     tracking_low_frame = build_side_step_frame(

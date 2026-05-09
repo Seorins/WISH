@@ -176,6 +176,45 @@ def test_diagonal_face_punch_requires_punch_height() -> None:
     assert low_punch_result.step_count == 0
 
 
+def test_diagonal_face_punch_counts_high_hand_even_when_forward_is_short() -> None:
+    evaluator = DiagonalFacePunchEvaluator()
+
+    neutral_result = evaluator.evaluate(
+        frame=build_diagonal_face_punch_frame(),
+        previous_state="idle",
+        step_count=0,
+        target_steps=8,
+    )
+
+    result = evaluator.evaluate(
+        frame=build_diagonal_face_punch_frame(
+            left_wrist_x=-0.90,
+            left_wrist_y=-1.28,
+            left_elbow_x=-0.85,
+            left_elbow_y=-1.12,
+            stance_span=2.20,
+        ),
+        previous_state=neutral_result.state,
+        step_count=neutral_result.step_count,
+        target_steps=8,
+        last_counted_side=neutral_result.last_counted_side,
+        last_seen_side=neutral_result.last_seen_side,
+        left_armed=neutral_result.left_armed,
+        right_armed=neutral_result.right_armed,
+        reference_hip_x=neutral_result.reference_hip_x,
+        reference_hip_y=neutral_result.reference_hip_y,
+        reference_scale=neutral_result.reference_scale,
+        baseline_left_wrist_forward=neutral_result.baseline_left_wrist_forward,
+        baseline_right_wrist_forward=neutral_result.baseline_right_wrist_forward,
+        baseline_stance_span=neutral_result.baseline_stance_span,
+    )
+
+    assert result.state == "left_punch"
+    assert result.step_count == 1
+    assert result.frame_label == "motion_present"
+    assert result.candidate_feedback_code == "PUNCH_FURTHER"
+
+
 def test_punch_hold_via_previous_state() -> None:
     """punch 자세 유지 중 strict 조건 미달이어도 previous_state로 hold 유지."""
     evaluator = DiagonalFacePunchEvaluator()
