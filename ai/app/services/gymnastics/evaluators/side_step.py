@@ -147,6 +147,11 @@ class SideStepEvaluator(BaseEvaluator):
                 baseline_ankle_span=next_baseline_ankle_span,
                 feedback_state=next_feedback_state,
                 representative_state=next_representative_state,
+                frame_label=self._resolve_frame_label(
+                    tracking=frame.tracking,
+                    motion_present=False,
+                    attempting=False,
+                ),
             )
 
         if next_reference_hip_x is None or next_reference_hip_y is None or next_reference_scale is None:
@@ -177,6 +182,7 @@ class SideStepEvaluator(BaseEvaluator):
                 baseline_ankle_span=next_baseline_ankle_span,
                 feedback_state=next_feedback_state,
                 representative_state=next_representative_state,
+                frame_label=self._resolve_top_frame_label(features, frame.tracking, "idle"),
             )
 
         if (
@@ -215,6 +221,7 @@ class SideStepEvaluator(BaseEvaluator):
                 baseline_ankle_span=next_baseline_ankle_span,
                 feedback_state=next_feedback_state,
                 representative_state=next_representative_state,
+                frame_label=self._resolve_top_frame_label(features, frame.tracking, "idle"),
             )
 
         next_left_armed = left_armed or features.left_step_extent <= self.config.release_threshold
@@ -235,6 +242,7 @@ class SideStepEvaluator(BaseEvaluator):
                 next_counted_side = "right"
                 next_right_armed = False
 
+        frame_label = self._resolve_top_frame_label(features, frame.tracking, next_state)
         if next_step_count >= effective_target:
             next_state = "complete"
 
@@ -270,6 +278,7 @@ class SideStepEvaluator(BaseEvaluator):
             baseline_ankle_span=next_baseline_ankle_span,
             feedback_state=next_feedback_state,
             representative_state=next_representative_state,
+            frame_label=frame_label,
         )
 
     def _resolve_next_state(self, features: SideStepFeatureSet) -> str:
@@ -284,7 +293,6 @@ class SideStepEvaluator(BaseEvaluator):
             features.left_step_extent >= self.config.extent_threshold
             and features.left_step_extent > features.right_step_extent + self.config.dominance_margin
             and features.ankle_span >= self.config.ankle_span_threshold
-            and abs(features.pelvis_depth_shift) <= self.config.depth_shift_max
         )
 
     def _is_right_open(self, features: SideStepFeatureSet) -> bool:
@@ -292,7 +300,6 @@ class SideStepEvaluator(BaseEvaluator):
             features.right_step_extent >= self.config.extent_threshold
             and features.right_step_extent > features.left_step_extent + self.config.dominance_margin
             and features.ankle_span >= self.config.ankle_span_threshold
-            and abs(features.pelvis_depth_shift) <= self.config.depth_shift_max
         )
 
     def _get_open_side(self, state: str) -> str | None:
@@ -304,6 +311,25 @@ class SideStepEvaluator(BaseEvaluator):
 
     def _get_active_side(self, state: str) -> str | None:
         return self._get_open_side(state)
+
+    def _resolve_top_frame_label(
+        self,
+        features: SideStepFeatureSet,
+        tracking: str,
+        state: str,
+    ) -> str:
+        return self._resolve_frame_label(
+            tracking=tracking,
+            motion_present=self._get_open_side(state) is not None,
+            attempting=self._is_attempting_side_step(features),
+        )
+
+    def _is_attempting_side_step(self, features: SideStepFeatureSet) -> bool:
+        dominant_extent = max(features.left_step_extent, features.right_step_extent)
+        return (
+            dominant_extent >= self.config.extent_threshold * 0.75
+            or features.ankle_span >= self.config.ankle_span_threshold * 0.75
+        )
 
     def _compute_accuracy(self, features: SideStepFeatureSet) -> float:
         dominant_extent = max(features.left_step_extent, features.right_step_extent)
@@ -373,6 +399,7 @@ class SideStepEvaluator(BaseEvaluator):
         baseline_ankle_span: float | None,
         feedback_state: FeedbackStabilizerState,
         representative_state: RepresentativeFeedbackState,
+        frame_label: str,
     ) -> EvaluatorResult:
         return EvaluatorResult(
             motion_id=self.motion_id,
@@ -401,4 +428,7 @@ class SideStepEvaluator(BaseEvaluator):
             baseline_left_step_extent=baseline_left_step_extent,
             baseline_right_step_extent=baseline_right_step_extent,
             baseline_ankle_span=baseline_ankle_span,
+            frame_label=frame_label,
+            guidance_code=feedback_state.displayed_code,
+            guidance_text=feedback_state.displayed_text,
         )
