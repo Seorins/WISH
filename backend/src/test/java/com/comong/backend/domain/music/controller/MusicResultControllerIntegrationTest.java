@@ -1,11 +1,15 @@
 package com.comong.backend.domain.music.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.within;
 import static org.hamcrest.Matchers.closeTo;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import java.sql.Timestamp;
+import java.time.LocalDateTime;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -13,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.comong.backend.domain.music.repository.MusicResultRepository;
@@ -31,6 +36,7 @@ class MusicResultControllerIntegrationTest extends IntegrationTestSupport {
     @Autowired private MusicResultRepository musicResultRepository;
     @Autowired private PatientProfileRepository patientProfileRepository;
     @Autowired private UserRepository userRepository;
+    @Autowired private JdbcTemplate jdbc;
 
     @BeforeEach
     void cleanDb() {
@@ -292,6 +298,74 @@ class MusicResultControllerIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
+    void findMine_returnsPagedResultsOrderedByPlayedAtDesc() throws Exception {
+        String token = setupUserWithProfile("music-list@example.com", "music-list-user");
+        long olderId =
+                saveMusicResultReturningId(
+                        token, saveRequest("baby-shark", 10000, 50, 100, 50, 25, 175, 96196));
+        long newerId = saveMusicResultReturningId(token, validSaveRequest(24830));
+        updatePlayedAt(olderId, LocalDateTime.of(2026, 1, 1, 10, 0));
+        updatePlayedAt(newerId, LocalDateTime.of(2026, 1, 2, 10, 0));
+
+        String body =
+                mockMvc.perform(
+                                get("/music/results/me?page=0&size=1")
+                                        .header("Authorization", "Bearer " + token))
+                        .andExpect(status().isOk())
+                        .andExpect(jsonPath("$.code").value("SUCCESS"))
+                        .andExpect(jsonPath("$.data.content.length()").value(1))
+                        .andExpect(jsonPath("$.data.totalElements").value(2))
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString();
+
+        JsonNode first = objectMapper.readTree(body).get("data").get("content").get(0);
+        assertThat(first.get("id").asLong()).isEqualTo(newerId);
+        assertThat(first.get("chartId").asString()).isEqualTo("baby-shark");
+        assertThat(first.get("chartTitle").isTextual()).isTrue();
+        assertThat(first.get("chartCoverUrl").asString())
+                .isEqualTo("images/themes/music/ui/babyshark_thum.png");
+        assertThat(first.get("score").asInt()).isEqualTo(24830);
+        assertThat(first.get("maxCombo").asInt()).isEqualTo(87);
+        assertThat(first.get("perfectCount").asInt()).isEqualTo(142);
+        assertThat(first.get("greatCount").asInt()).isEqualTo(10);
+        assertThat(first.get("goodCount").asInt()).isEqualTo(13);
+        assertThat(first.get("missCount").asInt()).isEqualTo(10);
+        assertThat(first.get("totalNotes").asInt()).isEqualTo(175);
+        assertThat(first.get("accuracy").asDouble())
+                .isCloseTo(expectedAccuracy(142, 10, 13, 175), within(0.000001));
+        assertThat(first.get("rank").asString()).isEqualTo("A");
+        assertThat(first.get("playedDurationMs").asInt()).isEqualTo(96196);
+        assertThat(first.get("playedAt").isTextual()).isTrue();
+        assertThat(first.has("videoKey")).isTrue();
+        assertThat(first.get("videoKey").isNull()).isTrue();
+        assertThat(first.has("thumbKey")).isTrue();
+        assertThat(first.get("thumbKey").isNull()).isTrue();
+    }
+
+    @Test
+    void findMine_excludesOtherUsersResults() throws Exception {
+        String ownerToken =
+                setupUserWithProfile("music-list-owner@example.com", "music-list-owner");
+        String otherToken =
+                setupUserWithProfile("music-list-other@example.com", "music-list-other");
+        saveMusicResult(ownerToken, validSaveRequest(12000));
+        saveMusicResult(otherToken, validSaveRequest(50000));
+
+        mockMvc.perform(get("/music/results/me").header("Authorization", "Bearer " + ownerToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content.length()").value(1))
+                .andExpect(jsonPath("$.data.content[0].score").value(12000));
+    }
+
+    @Test
+    void findMine_requiresAuthentication() throws Exception {
+        mockMvc.perform(get("/music/results/me"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("G-003"));
+    }
+
+    @Test
     void findMyBest_returnsBestResultsGroupedByChart() throws Exception {
         String token = setupUserWithProfile("music-best@example.com", "music-best-user");
         saveMusicResult(token, saveRequest("baby-shark", 10000, 50, 100, 50, 25, 175, 96196));
@@ -384,6 +458,13 @@ class MusicResultControllerIntegrationTest extends IntegrationTestSupport {
 
     private void saveMusicResult(String token, String requestBody) throws Exception {
         saveMusicResultReturningId(token, requestBody);
+    }
+
+    private void updatePlayedAt(long resultId, LocalDateTime playedAt) {
+        jdbc.update(
+                "UPDATE music_result SET played_at = ? WHERE id = ?",
+                Timestamp.valueOf(playedAt),
+                resultId);
     }
 
     private long saveMusicResultReturningId(String token, String requestBody) throws Exception {
