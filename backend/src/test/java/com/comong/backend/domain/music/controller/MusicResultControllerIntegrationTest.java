@@ -414,7 +414,14 @@ class MusicResultControllerIntegrationTest extends IntegrationTestSupport {
             int totalNotes,
             int playedDurationMs) {
         return saveRequest(
-                chartId, score, maxCombo, perfectCount, 0, goodCount, missCount, totalNotes,
+                chartId,
+                score,
+                maxCombo,
+                perfectCount,
+                0,
+                goodCount,
+                missCount,
+                totalNotes,
                 playedDurationMs);
     }
 

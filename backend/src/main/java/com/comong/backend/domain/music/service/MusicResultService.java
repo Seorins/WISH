@@ -156,7 +156,9 @@ public class MusicResultService {
     }
 
     private double calculateAccuracy(MusicResultSaveRequest request) {
-        return (request.perfectCount() + greatCountOrZero(request) * 0.85 + request.goodCount() * 0.6)
+        return (request.perfectCount()
+                        + greatCountOrZero(request) * 0.85
+                        + request.goodCount() * 0.6)
                 / request.totalNotes();
     }
 

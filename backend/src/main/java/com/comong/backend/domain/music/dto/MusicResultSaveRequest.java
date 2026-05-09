@@ -14,7 +14,8 @@ public record MusicResultSaveRequest(
         @Schema(description = "최대 콤보", example = "87") @NotNull @PositiveOrZero Integer maxCombo,
         @Schema(description = "Perfect 판정 개수", example = "142") @NotNull @PositiveOrZero
                 Integer perfectCount,
-        @Schema(description = "Great note count", example = "10") @PositiveOrZero Integer greatCount,
+        @Schema(description = "Great note count", example = "10") @PositiveOrZero
+                Integer greatCount,
         @Schema(description = "Good 판정 개수", example = "23") @NotNull @PositiveOrZero
                 Integer goodCount,
         @Schema(description = "Miss 판정 개수", example = "10") @NotNull @PositiveOrZero
