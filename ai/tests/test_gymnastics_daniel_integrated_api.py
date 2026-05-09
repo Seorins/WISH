@@ -9,9 +9,9 @@ from app.schemas.gymnastics import (
     DanielForwardPressFeaturesResponse,
     DanielLeftSideBendEvaluationResponse,
     DanielLeftSideBendFeaturesResponse,
-    DanielStretchEvaluationRequest,
     DanielRightSideBendEvaluationResponse,
     DanielRightSideBendFeaturesResponse,
+    DanielStretchEvaluationRequest,
     DanielUpwardPressEvaluationResponse,
     DanielUpwardPressFeaturesResponse,
 )
@@ -22,6 +22,7 @@ from app.services.gymnastics.constants import (
     DANIEL_RIGHT_SIDE_BEND_MOTION_NAME,
     DANIEL_UPWARD_PRESS_MOTION_NAME,
 )
+from app.services.gymnastics.feedback.common import BEND_FORWARD_MORE
 
 
 def _build_request(motion_id: str) -> DanielStretchEvaluationRequest:
@@ -41,6 +42,9 @@ def _build_forward_press_response() -> DanielForwardPressEvaluationResponse:
         state="holding",
         accuracy=0.88,
         tracking="tracking_ok",
+        frame_label="motion_present",
+        guidance_code=None,
+        guidance_text=None,
         hold_duration_ms=2200,
         hold_completed=False,
         baseline_left_wrist_forward=0.11,
@@ -69,6 +73,9 @@ def _build_upward_press_response() -> DanielUpwardPressEvaluationResponse:
         state="holding",
         accuracy=0.84,
         tracking="tracking_ok",
+        frame_label="motion_present",
+        guidance_code=None,
+        guidance_text=None,
         hold_duration_ms=1800,
         hold_completed=False,
         features=DanielUpwardPressFeaturesResponse(
@@ -90,6 +97,9 @@ def _build_left_side_bend_response() -> DanielLeftSideBendEvaluationResponse:
         state="holding",
         accuracy=0.79,
         tracking="tracking_ok",
+        frame_label="motion_present",
+        guidance_code=None,
+        guidance_text=None,
         hold_duration_ms=1400,
         hold_completed=False,
         features=DanielLeftSideBendFeaturesResponse(
@@ -110,6 +120,9 @@ def _build_right_side_bend_response() -> DanielRightSideBendEvaluationResponse:
         state="holding",
         accuracy=0.81,
         tracking="tracking_ok",
+        frame_label="motion_present",
+        guidance_code=None,
+        guidance_text=None,
         hold_duration_ms=1450,
         hold_completed=False,
         features=DanielRightSideBendFeaturesResponse(
@@ -129,8 +142,11 @@ def _build_forward_bend_response() -> DanielForwardBendEvaluationResponse:
         motion_id="daniel_forward_bend",
         state="idle",
         accuracy=0.61,
-        feedback="상체를 더 숙여요",
+        feedback=BEND_FORWARD_MORE.text,
         tracking="tracking_ok",
+        frame_label="guidance_needed",
+        guidance_code=BEND_FORWARD_MORE.code,
+        guidance_text=BEND_FORWARD_MORE.text,
         hold_duration_ms=900,
         hold_completed=False,
         features=DanielForwardBendFeaturesResponse(
@@ -146,7 +162,15 @@ def _build_forward_bend_response() -> DanielForwardBendEvaluationResponse:
 
 
 @pytest.mark.parametrize(
-    ("motion_id", "motion_name", "response_builder", "feature_key", "expected_feature", "expected_baseline_left"),
+    (
+        "motion_id",
+        "motion_name",
+        "response_builder",
+        "feature_key",
+        "expected_feature",
+        "expected_baseline_left",
+        "expected_frame_label",
+    ),
     [
         (
             "daniel_forward_press",
@@ -155,6 +179,7 @@ def _build_forward_bend_response() -> DanielForwardBendEvaluationResponse:
             "wrist_forward",
             0.32,
             0.11,
+            "motion_present",
         ),
         (
             "daniel_upward_press",
@@ -163,6 +188,7 @@ def _build_forward_bend_response() -> DanielForwardBendEvaluationResponse:
             "wrist_height",
             0.61,
             None,
+            "motion_present",
         ),
         (
             "daniel_side_bend_left",
@@ -171,6 +197,7 @@ def _build_forward_bend_response() -> DanielForwardBendEvaluationResponse:
             "torso_tilt",
             0.24,
             None,
+            "motion_present",
         ),
         (
             "daniel_side_bend_right",
@@ -179,6 +206,7 @@ def _build_forward_bend_response() -> DanielForwardBendEvaluationResponse:
             "torso_tilt",
             0.23,
             None,
+            "motion_present",
         ),
         (
             "daniel_forward_bend",
@@ -187,6 +215,7 @@ def _build_forward_bend_response() -> DanielForwardBendEvaluationResponse:
             "forward_bend_angle",
             48.0,
             None,
+            "guidance_needed",
         ),
     ],
 )
@@ -198,6 +227,7 @@ def test_integrated_daniel_evaluate_dispatches_each_motion(
     feature_key: str,
     expected_feature: float,
     expected_baseline_left: float | None,
+    expected_frame_label: str,
 ) -> None:
     _, request_model, _ = gymnastics_daniel._DANIEL_STRETCH_EVALUATION_SPECS[motion_id]
 
@@ -216,6 +246,7 @@ def test_integrated_daniel_evaluate_dispatches_each_motion(
     assert response.motion_name == motion_name
     assert response.baseline_left_wrist_forward == expected_baseline_left
     assert response.features[feature_key] == expected_feature
+    assert response.frame_label == expected_frame_label
 
 
 def test_integrated_daniel_evaluate_rejects_missing_motion_mapping(monkeypatch) -> None:

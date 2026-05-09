@@ -55,6 +55,24 @@ class FeedbackTtsResponse(BaseModel):
     priority: Literal["tracking", "posture"] | None = None
 
 
+# Daniel frame labels are the primary per-frame interpretation values for
+# FE/guardian consumers.
+# - tracking_low: the frame is not reliable enough to interpret because core
+#   landmarks are missing or unstable.
+# - guidance_needed: tracking is usable, but the target motion pattern is not
+#   yet sufficiently present and guidance can be shown.
+# - attempting: the child is starting to move toward the target pattern, but
+#   the motion is not yet strong enough to treat as present.
+# - motion_present: the target motion pattern is sufficiently visible on the
+#   current frame.
+DanielFrameLabel = Literal[
+    "tracking_low",
+    "guidance_needed",
+    "attempting",
+    "motion_present",
+]
+
+
 class MarchEvaluationRequest(BaseModel):
     frame: PoseFrameRequest
     previous_state: str = Field(default="idle", description="Previous evaluator state")
@@ -216,12 +234,19 @@ class StretchHoldEvaluationRequestBase(BaseModel):
     hold_duration_ms: int = Field(
         default=0,
         ge=0,
-        description="Accumulated successful hold duration in milliseconds",
+        description=(
+            "Legacy FE compatibility field. Daniel uses this as accumulated "
+            "session elapsed time and expects FE to reset it to 0 when a new "
+            "session starts."
+        ),
     )
     hold_last_timestamp_ms: int | None = Field(
         default=None,
         ge=0,
-        description="Timestamp of the last frame that counted toward hold time",
+        description=(
+            "Legacy FE compatibility field. Timestamp of the last Daniel "
+            "session progress frame; FE should reset it to null for a new session."
+        ),
     )
     reference_hip_x: float | None = Field(default=None)
     reference_hip_y: float | None = Field(default=None)
@@ -240,10 +265,28 @@ class StretchHoldEvaluationRequestBase(BaseModel):
 
 class StretchHoldEvaluationResponseBase(BaseModel):
     motion_id: str
-    state: str
+    state: str = Field(
+        ...,
+        description=(
+            "Legacy FE compatibility state. For Daniel, consumers should prefer "
+            "`frame_label` for per-frame interpretation."
+        ),
+    )
     accuracy: float
     feedback: str | None = None
     tracking: str
+    frame_label: DanielFrameLabel | None = Field(
+        default=None,
+        description="Primary Daniel per-frame classification label.",
+    )
+    guidance_code: str | None = Field(
+        default=None,
+        description="Displayed guidance code for the current frame, when any.",
+    )
+    guidance_text: str | None = Field(
+        default=None,
+        description="Displayed guidance text for the current frame, when any.",
+    )
     hold_duration_ms: int = 0
     hold_completed: bool = False
     hold_last_timestamp_ms: int | None = None
