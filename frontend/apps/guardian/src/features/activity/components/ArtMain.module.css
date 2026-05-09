@@ -1,21 +1,131 @@
-.placeholder {
+.heroCard {
   background: var(--dash-color-surface, #fff);
   border-radius: var(--dash-radius-card, 22px);
   box-shadow: var(--dash-shadow-card, 0 2px 12px rgba(60, 50, 120, 0.06));
-  padding: 24px;
+  padding: 18px 18px 16px;
+  display: flex;
+  flex-direction: column;
   flex: 1 1 auto;
   min-height: 0;
+  position: relative;
 }
 
 .title {
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 700;
   color: var(--dash-color-text-strong, #1f1b3a);
-  margin: 0 0 8px;
+  margin: 0 4px 10px;
 }
 
-.body {
+.carousel {
+  position: relative;
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 0;
+}
+
+.imageFrame {
+  position: relative;
+  flex: 1 1 auto;
+  border-radius: 18px;
+  overflow: hidden;
+  background: #f6f4ff;
+  box-shadow: inset 0 0 0 1px rgba(124, 92, 255, 0.08);
+  min-height: 0;
+  height: 100%;
+}
+
+.image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #ffffff;
+}
+
+.captionBar {
+  position: absolute;
+  left: 14px;
+  bottom: 14px;
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 16px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 4px 14px rgba(60, 50, 120, 0.15);
+  backdrop-filter: blur(6px);
+}
+
+.captionLabel {
+  font-size: 11px;
+  font-weight: 600;
+  color: #8a7fb3;
+}
+
+.captionTitle {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--dash-color-text-strong, #1f1b3a);
+}
+
+.navBtn {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: none;
+  background: var(--dash-color-primary-50, #f1edff);
+  color: var(--dash-color-primary, #7c5cff);
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(124, 92, 255, 0.18);
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.12s ease,
+    opacity 0.12s ease;
+}
+
+.navBtn:hover:not(:disabled) {
+  transform: scale(1.08);
+  box-shadow: 0 4px 12px rgba(124, 92, 255, 0.28);
+}
+
+.navBtn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.indexPill {
+  align-self: center;
+  margin-top: 10px;
+  padding: 4px 14px;
+  border-radius: 999px;
+  background: var(--dash-color-primary-50, #f1edff);
+  color: var(--dash-color-primary, #7c5cff);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.empty,
+.error,
+.emptyArt {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   color: #7a7891;
-  margin: 0;
   font-size: 14px;
+  padding: 40px 20px;
+}
+
+.error {
+  color: #c43855;
 }
