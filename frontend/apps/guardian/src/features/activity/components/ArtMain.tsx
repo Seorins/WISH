@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { Artwork } from '@wish/api-client'
-import { useMyArtworks } from '../hooks'
+import { useMyPatientId } from '@/features/auth/hooks/useMyPatientId'
+import { useDailyUsageStats, useMyArtworks } from '../hooks'
 import styles from './ArtMain.module.css'
 
 function todayKst(): string {
@@ -43,6 +44,13 @@ const PLACEHOLDER_COLORS_USED = 8
  */
 export function ArtMain() {
   const { data, isLoading, error } = useMyArtworks({ size: 20 })
+  const { data: patientId } = useMyPatientId()
+  const today = todayKst()
+  const { data: daily } = useDailyUsageStats(patientId ?? undefined, {
+    from: today,
+    to: today,
+  })
+  const todayArtSeconds = daily?.items[0]?.art ?? 0
   const [index, setIndex] = useState(0)
 
   const todayArtworks = useMemo<Artwork[]>(() => {
@@ -124,9 +132,59 @@ export function ArtMain() {
       </div>
       <aside className={styles.sideColumn}>
         <ArtInfoCard artwork={current} />
+        <ArtPeerCompareCard mineSeconds={todayArtSeconds} />
         <ArtPastCarousel artworks={pastArtworks} />
       </aside>
     </div>
+  )
+}
+
+function ArtPeerCompareCard({ mineSeconds }: { mineSeconds: number }) {
+  // 또래 평균 API 미구현 — 음악 페이지와 동일하게 "집계 중" 처리. peer endpoint 생기면 활성화.
+  const hasPeer = false
+  const peerSeconds = 0
+
+  const max = Math.max(mineSeconds, peerSeconds, 1)
+  const minePct = (mineSeconds / max) * 100
+  const peerPct = hasPeer ? (peerSeconds / max) * 100 : 0
+  const peerLabel = hasPeer ? formatDurationSec(peerSeconds) : '집계 중'
+
+  return (
+    <section className={styles.peerCard}>
+      <h3 className={styles.peerCardTitle}>아이와 평균 비교</h3>
+      <div className={styles.peerRows}>
+        <div className={styles.peerRow}>
+          <div className={styles.peerRowHead}>
+            <span className={styles.peerRowLabel}>아이</span>
+            <strong className={styles.peerRowValue}>{formatDurationSec(mineSeconds)}</strong>
+          </div>
+          <div className={styles.peerBar}>
+            <div
+              className={`${styles.peerBarFill} ${styles.peerBarFillMine}`}
+              style={{ width: `${minePct}%` }}
+            />
+          </div>
+        </div>
+        <div className={styles.peerRow}>
+          <div className={styles.peerRowHead}>
+            <span className={styles.peerRowLabel}>평균</span>
+            <strong className={styles.peerRowValue}>{peerLabel}</strong>
+          </div>
+          <div className={styles.peerBar}>
+            <div
+              className={`${styles.peerBarFill} ${styles.peerBarFillOther}`}
+              style={{ width: `${peerPct}%` }}
+            />
+          </div>
+        </div>
+      </div>
+      <div className={styles.peerNote}>
+        <span aria-hidden className={styles.peerNoteIcon}>
+          ⌛
+        </span>
+        <span>또래 평균 데이터를 모으는 중이에요</span>
+      </div>
+    </section>
   )
 }
 
