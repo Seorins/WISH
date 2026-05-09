@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import type { Artwork } from '@wish/api-client'
+import artIconImg from '@/assets/art_icon.png'
 import { useMyPatientId } from '@/features/auth/hooks/useMyPatientId'
 import { useDailyUsageStats, useMyArtworks } from '../hooks'
 import styles from './ArtMain.module.css'
@@ -37,10 +38,14 @@ const PAST_VISIBLE_COUNT = 3
 // 색 추적은 Phase 2 (백엔드 colors_used 컬럼) 에서 실제값으로 교체.
 const PLACEHOLDER_COLORS_USED = 8
 
+// AI 요약 미구현 — Phase 3 에서 lighthouse 감정 분석과 유사한 구조로 교체.
+const SUMMARY_PLACEHOLDER_TEXT = '다양한 색을 사용해서 멋진 풍경을 표현했어요.'
+const SUMMARY_PLACEHOLDER_TAGS = ['색감 표현이 풍부해요', '구성이 안정적이에요', '집중력이 좋아요']
+
 /**
  * 미술 활동 결과 화면.
- * 좌측: 당일 그림 carousel.
- * 우측: 그림별 정보 카드 (시간/색/종류). 또래 비교/지난 그림은 후속 커밋.
+ * 좌측: 당일 그림 carousel + 활동 요약 카드.
+ * 우측: 그림별 정보 카드 (시간/색/종류) + 또래 평균 비교 + 지난 그림 보기.
  */
 export function ArtMain() {
   const { data, isLoading, error } = useMyArtworks({ size: 20 })
@@ -129,6 +134,7 @@ export function ArtMain() {
             </div>
           )}
         </section>
+        <ArtSummaryCard />
       </div>
       <aside className={styles.sideColumn}>
         <ArtInfoCard artwork={current} />
@@ -136,6 +142,39 @@ export function ArtMain() {
         <ArtPastCarousel artworks={pastArtworks} />
       </aside>
     </div>
+  )
+}
+
+function ArtSummaryCard() {
+  return (
+    <section className={styles.summaryCard}>
+      <span aria-hidden className={styles.summarySparkleA}>
+        ✦
+      </span>
+      <span aria-hidden className={styles.summarySparkleB}>
+        ✦
+      </span>
+      <span aria-hidden className={styles.summarySparkleC}>
+        ✦
+      </span>
+      <div className={styles.summaryBody}>
+        <h3 className={styles.summaryTitle}>
+          <span aria-hidden className={styles.summaryStar}>
+            ★
+          </span>
+          오늘의 미술 활동 요약
+        </h3>
+        <p className={styles.summaryText}>{SUMMARY_PLACEHOLDER_TEXT}</p>
+        <div className={styles.summaryTags}>
+          {SUMMARY_PLACEHOLDER_TAGS.map(tag => (
+            <span key={tag} className={styles.summaryTag}>
+              {tag}
+            </span>
+          ))}
+        </div>
+      </div>
+      <img src={artIconImg} alt="" aria-hidden className={styles.summaryMascot} />
+    </section>
   )
 }
 

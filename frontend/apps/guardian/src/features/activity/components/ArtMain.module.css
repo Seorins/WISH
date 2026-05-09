@@ -154,6 +154,106 @@
   padding: 40px 20px;
 }
 
+/* ── 오늘의 미술 활동 요약 ───────────────────────────────── */
+
+.summaryCard {
+  position: relative;
+  background: linear-gradient(135deg, #efeaff 0%, #f5f0ff 50%, #efe7fc 100%);
+  border-radius: var(--dash-radius-card, 22px);
+  box-shadow: var(--dash-shadow-card, 0 2px 12px rgba(60, 50, 120, 0.06));
+  padding: 18px 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  overflow: hidden;
+}
+
+.summaryBody {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  position: relative;
+  z-index: 1;
+}
+
+.summaryTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--dash-color-text-strong, #1f1b3a);
+  margin: 0;
+}
+
+.summaryStar {
+  color: #f5b932;
+  font-size: 16px;
+}
+
+.summaryText {
+  margin: 0;
+  font-size: 13px;
+  color: #4a4561;
+  line-height: 1.5;
+}
+
+.summaryTags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.summaryTag {
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.7);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--dash-color-primary, #7c5cff);
+  box-shadow: 0 1px 4px rgba(124, 92, 255, 0.1);
+}
+
+.summaryMascot {
+  flex-shrink: 0;
+  width: 110px;
+  height: 110px;
+  object-fit: contain;
+  position: relative;
+  z-index: 1;
+}
+
+.summarySparkleA,
+.summarySparkleB,
+.summarySparkleC {
+  position: absolute;
+  color: #c9bff5;
+  pointer-events: none;
+}
+
+.summarySparkleA {
+  top: 14px;
+  right: 130px;
+  font-size: 12px;
+  opacity: 0.6;
+}
+
+.summarySparkleB {
+  top: 8px;
+  right: 38px;
+  font-size: 14px;
+  opacity: 0.7;
+}
+
+.summarySparkleC {
+  bottom: 12px;
+  right: 100px;
+  font-size: 10px;
+  opacity: 0.55;
+}
+
 /* ── 그림 정보 카드 ─────────────────────────────────────── */
 
 .infoCard {
