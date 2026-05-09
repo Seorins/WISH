@@ -65,6 +65,7 @@ public class MusicResultService {
         validateNoteCounts(request);
         validateChartTotalNotes(musicChart, request.totalNotes());
 
+        int greatCount = greatCountOrZero(request);
         double accuracy = calculateAccuracy(request);
         MusicRank rank = MusicRank.fromAccuracy(accuracy);
 
@@ -84,6 +85,7 @@ public class MusicResultService {
                                 .score(request.score())
                                 .maxCombo(request.maxCombo())
                                 .perfectCount(request.perfectCount())
+                                .greatCount(greatCount)
                                 .goodCount(request.goodCount())
                                 .missCount(request.missCount())
                                 .totalNotes(request.totalNotes())
@@ -137,7 +139,11 @@ public class MusicResultService {
     }
 
     private void validateNoteCounts(MusicResultSaveRequest request) {
-        int judgedNotes = request.perfectCount() + request.goodCount() + request.missCount();
+        int judgedNotes =
+                request.perfectCount()
+                        + greatCountOrZero(request)
+                        + request.goodCount()
+                        + request.missCount();
         if (judgedNotes != request.totalNotes()) {
             throw new BusinessException(MusicErrorCode.MUSIC_RESULT_NOTE_COUNT_MISMATCH);
         }
@@ -150,7 +156,12 @@ public class MusicResultService {
     }
 
     private double calculateAccuracy(MusicResultSaveRequest request) {
-        return (request.perfectCount() + request.goodCount() * 0.6) / request.totalNotes();
+        return (request.perfectCount() + greatCountOrZero(request) * 0.85 + request.goodCount() * 0.6)
+                / request.totalNotes();
+    }
+
+    private int greatCountOrZero(MusicResultSaveRequest request) {
+        return request.greatCount() == null ? 0 : request.greatCount();
     }
 
     private MusicBestResultResponse toBestResultResponse(List<MusicResult> results) {

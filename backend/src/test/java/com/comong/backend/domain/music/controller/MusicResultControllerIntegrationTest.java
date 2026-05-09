@@ -63,7 +63,8 @@ class MusicResultControllerIntegrationTest extends IntegrationTestSupport {
                                                         24830,
                                                         87,
                                                         142,
-                                                        23,
+                                                        10,
+                                                        13,
                                                         10,
                                                         175,
                                                         96196)))
@@ -74,12 +75,16 @@ class MusicResultControllerIntegrationTest extends IntegrationTestSupport {
                         .andExpect(jsonPath("$.data.score").value(24830))
                         .andExpect(jsonPath("$.data.maxCombo").value(87))
                         .andExpect(jsonPath("$.data.perfectCount").value(142))
-                        .andExpect(jsonPath("$.data.goodCount").value(23))
+                        .andExpect(jsonPath("$.data.greatCount").value(10))
+                        .andExpect(jsonPath("$.data.goodCount").value(13))
                         .andExpect(jsonPath("$.data.missCount").value(10))
                         .andExpect(jsonPath("$.data.totalNotes").value(175))
                         .andExpect(
                                 jsonPath("$.data.accuracy")
-                                        .value(closeTo(expectedAccuracy(142, 23, 175), 0.000001)))
+                                        .value(
+                                                closeTo(
+                                                        expectedAccuracy(142, 10, 13, 175),
+                                                        0.000001)))
                         .andExpect(jsonPath("$.data.rank").value("A"))
                         .andExpect(jsonPath("$.data.playedDurationMs").value(96196))
                         .andExpect(jsonPath("$.data.isNewBest").value(true))
@@ -133,6 +138,7 @@ class MusicResultControllerIntegrationTest extends IntegrationTestSupport {
                         .andExpect(jsonPath("$.data.id").value(resultId))
                         .andExpect(jsonPath("$.data.chartId").value("baby-shark"))
                         .andExpect(jsonPath("$.data.score").value(24830))
+                        .andExpect(jsonPath("$.data.greatCount").value(10))
                         .andReturn()
                         .getResponse()
                         .getContentAsString();
@@ -301,7 +307,7 @@ class MusicResultControllerIntegrationTest extends IntegrationTestSupport {
                 .andExpect(jsonPath("$.data[0].bestRank").value("A"))
                 .andExpect(
                         jsonPath("$.data[0].bestAccuracy")
-                                .value(closeTo(expectedAccuracy(142, 23, 175), 0.000001)))
+                                .value(closeTo(expectedAccuracy(142, 10, 13, 175), 0.000001)))
                 .andExpect(jsonPath("$.data[0].playCount").value(2))
                 .andExpect(jsonPath("$.data[0].lastPlayedAt").exists())
                 .andExpect(jsonPath("$.data[1].chartId").value("twinkle-star"))
@@ -395,7 +401,7 @@ class MusicResultControllerIntegrationTest extends IntegrationTestSupport {
     }
 
     private String validSaveRequest(int score) {
-        return saveRequest("baby-shark", score, 87, 142, 23, 10, 175, 96196);
+        return saveRequest("baby-shark", score, 87, 142, 10, 13, 10, 175, 96196);
     }
 
     private String saveRequest(
@@ -407,12 +413,28 @@ class MusicResultControllerIntegrationTest extends IntegrationTestSupport {
             int missCount,
             int totalNotes,
             int playedDurationMs) {
+        return saveRequest(
+                chartId, score, maxCombo, perfectCount, 0, goodCount, missCount, totalNotes,
+                playedDurationMs);
+    }
+
+    private String saveRequest(
+            String chartId,
+            int score,
+            int maxCombo,
+            int perfectCount,
+            int greatCount,
+            int goodCount,
+            int missCount,
+            int totalNotes,
+            int playedDurationMs) {
         return """
                 {
                   "chartId": "%s",
                   "score": %d,
                   "maxCombo": %d,
                   "perfectCount": %d,
+                  "greatCount": %d,
                   "goodCount": %d,
                   "missCount": %d,
                   "totalNotes": %d,
@@ -424,6 +446,7 @@ class MusicResultControllerIntegrationTest extends IntegrationTestSupport {
                         score,
                         maxCombo,
                         perfectCount,
+                        greatCount,
                         goodCount,
                         missCount,
                         totalNotes,
@@ -469,7 +492,12 @@ class MusicResultControllerIntegrationTest extends IntegrationTestSupport {
     }
 
     private double expectedAccuracy(int perfectCount, int goodCount, int totalNotes) {
-        return (perfectCount + goodCount * 0.6) / totalNotes;
+        return expectedAccuracy(perfectCount, 0, goodCount, totalNotes);
+    }
+
+    private double expectedAccuracy(
+            int perfectCount, int greatCount, int goodCount, int totalNotes) {
+        return (perfectCount + greatCount * 0.85 + goodCount * 0.6) / totalNotes;
     }
 
     private String setupUserWithProfile(String email, String nickname) throws Exception {
