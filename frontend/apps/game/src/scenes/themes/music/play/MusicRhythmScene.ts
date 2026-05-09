@@ -33,12 +33,14 @@ function getRhythmBackgroundPath(chartId: string): string {
   return RHYTHM_BACKGROUND_BY_CHART[chartId] ?? 'images/themes/music/background/background.png'
 }
 
+type JudgmentLabel = 'PERFECT' | 'GREAT' | 'GOOD'
+
 type ActiveNote = {
   note: RhythmNote
   body: Phaser.GameObjects.Graphics
   resolved: boolean
   holdStartMs?: number
-  holdLabel?: 'PERFECT' | 'GOOD'
+  holdLabel?: JudgmentLabel
 }
 
 type LaneView = {
@@ -56,8 +58,9 @@ const GAME_FONT = '"Arial Black", "Pretendard", "Noto Sans KR", "Malgun Gothic",
 const LANE_COUNT = 4
 const LANE_COLORS = [0x4fd8ff, 0x8b7cff, 0xffcf5d, 0xff6fbd] as const
 const NOTE_LEAD_MS = 1_800
-const PERFECT_WINDOW_MS = 200
-const GOOD_WINDOW_MS = 360
+const PERFECT_WINDOW_MS = 130
+const GREAT_WINDOW_MS = 250
+const GOOD_WINDOW_MS = 400
 const MISS_WINDOW_MS = 520
 const HIT_LINE_RATIO = 0.78
 const SPAWN_LINE_RATIO = 0.16
@@ -86,6 +89,7 @@ export class MusicRhythmScene extends Phaser.Scene {
   private combo = 0
   private maxCombo = 0
   private perfectCount = 0
+  private greatCount = 0
   private goodCount = 0
   private missCount = 0
   private padRadius = 0
@@ -368,6 +372,7 @@ export class MusicRhythmScene extends Phaser.Scene {
     this.combo = 0
     this.maxCombo = 0
     this.perfectCount = 0
+    this.greatCount = 0
     this.goodCount = 0
     this.missCount = 0
     this.laneHeld = [false, false, false, false]
@@ -1066,12 +1071,15 @@ export class MusicRhythmScene extends Phaser.Scene {
 
     const isHold = Boolean(best.activeNote.note.durationMs && best.activeNote.note.durationMs > 150)
 
-    let label: 'PERFECT' | 'GOOD'
+    let label: JudgmentLabel
     let color: string
 
     if (best.diffMs <= PERFECT_WINDOW_MS) {
       label = 'PERFECT'
       color = '#fff4a8'
+    } else if (best.diffMs <= GREAT_WINDOW_MS) {
+      label = 'GREAT'
+      color = '#a7e5ff'
     } else if (best.diffMs <= GOOD_WINDOW_MS) {
       label = 'GOOD'
       color = '#a7f3d0'
@@ -1087,15 +1095,16 @@ export class MusicRhythmScene extends Phaser.Scene {
       this.holdNotes[lane] = best.activeNote
       this.combo += 1
       this.maxCombo = Math.max(this.maxCombo, this.combo)
-      const baseScore = label === 'PERFECT' ? 500 : 300
+      const baseScore = label === 'PERFECT' ? 500 : label === 'GREAT' ? 400 : 300
       this.score += baseScore + this.combo * 6
       if (label === 'PERFECT') this.perfectCount += 1
+      else if (label === 'GREAT') this.greatCount += 1
       else this.goodCount += 1
       this.updateScoreHud()
       this.showJudgment(label, color)
       this.spawnBurst(this.getLaneCenterX(lane, this.hitLineY), this.hitLineY, lane)
     } else {
-      const baseScore = label === 'PERFECT' ? 1_000 : 650
+      const baseScore = label === 'PERFECT' ? 1_000 : label === 'GREAT' ? 850 : 650
       this.resolveHit(best.activeNote, label, baseScore, color)
     }
   }
@@ -1190,7 +1199,7 @@ export class MusicRhythmScene extends Phaser.Scene {
 
   private resolveHit(
     activeNote: ActiveNote,
-    label: 'PERFECT' | 'GOOD',
+    label: JudgmentLabel,
     baseScore: number,
     color: string,
   ) {
@@ -1201,6 +1210,8 @@ export class MusicRhythmScene extends Phaser.Scene {
 
     if (label === 'PERFECT') {
       this.perfectCount += 1
+    } else if (label === 'GREAT') {
+      this.greatCount += 1
     } else {
       this.goodCount += 1
     }
@@ -1346,6 +1357,7 @@ export class MusicRhythmScene extends Phaser.Scene {
       score: this.score,
       maxCombo: this.maxCombo,
       perfectCount: this.perfectCount,
+      greatCount: this.greatCount,
       goodCount: this.goodCount,
       missCount: this.missCount,
       totalNotes: this.chart.notes.length,
@@ -1423,8 +1435,11 @@ export class MusicRhythmScene extends Phaser.Scene {
     const dim = this.add.rectangle(0, 0, vw, vh, 0x2a2350, 0.5).setOrigin(0.5)
 
     // pick a celebratory message tier from accuracy (still varied, but no visible rank)
-    const totalNotes = this.perfectCount + this.goodCount + this.missCount
-    const accuracy = totalNotes > 0 ? (this.perfectCount + this.goodCount * 0.6) / totalNotes : 0
+    const totalNotes = this.perfectCount + this.greatCount + this.goodCount + this.missCount
+    const accuracy =
+      totalNotes > 0
+        ? (this.perfectCount + this.greatCount * 0.85 + this.goodCount * 0.6) / totalNotes
+        : 0
     const tier =
       accuracy >= 0.95 ? 0 : accuracy >= 0.85 ? 1 : accuracy >= 0.7 ? 2 : accuracy >= 0.5 ? 3 : 4
 
@@ -1475,16 +1490,17 @@ export class MusicRhythmScene extends Phaser.Scene {
     underline.fillStyle(accentNum, 0.7)
     underline.fillRoundedRect(-ulW / 2, scoreValueY + 50, ulW, 3, 2)
 
-    // ── 4 stat chips with rounded backgrounds ──
+    // ── 5 stat chips with rounded backgrounds ──
     const colStats = [
       { label: '콤보', value: `${this.maxCombo}`, color: 0xc4b5fd, hex: '#c4b5fd' },
       { label: '퍼펙트', value: `${this.perfectCount}`, color: 0xfff4a8, hex: '#fff4a8' },
+      { label: '그레이트', value: `${this.greatCount}`, color: 0xa7e5ff, hex: '#a7e5ff' },
       { label: '굿', value: `${this.goodCount}`, color: 0xb6f0c8, hex: '#b6f0c8' },
       { label: '미스', value: `${this.missCount}`, color: 0xffadad, hex: '#ffadad' },
     ]
-    const chipW = 88
+    const chipW = 76
     const chipH = 64
-    const chipGap = 18
+    const chipGap = 12
     const totalW = colStats.length * chipW + (colStats.length - 1) * chipGap
     const startX = -totalW / 2 + chipW / 2
     const colY = scoreValueY + 130
