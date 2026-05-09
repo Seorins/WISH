@@ -3,6 +3,7 @@ from dataclasses import dataclass
 
 from app.services.gymnastics.constants import (
     DEFAULT_HOLD_MAX_FRAME_GAP_MS,
+    DEFAULT_GYMNASTICS_BASELINE_TARGET_FRAMES,
     DEFAULT_STRETCH_HOLD_TARGET_MS,
 )
 from app.services.gymnastics.types import NormalizedPoseFrame
@@ -27,6 +28,9 @@ class EvaluatorResult:
     reference_hip_x: float | None = None
     reference_hip_y: float | None = None
     reference_scale: float | None = None
+    baseline_status: str = "ready"
+    baseline_frames: int = 0
+    baseline_target_frames: int = DEFAULT_GYMNASTICS_BASELINE_TARGET_FRAMES
     # Feedback stabilizer state (persisted across API calls to avoid flicker)
     displayed_feedback_code: str | None = None
     displayed_feedback_text: str | None = None
@@ -38,11 +42,17 @@ class EvaluatorResult:
     representative_feedback_code: str | None = None
     representative_feedback_text: str | None = None
     representative_feedback_frames: int = 0
+    baseline_left_knee_lift: float | None = None
+    baseline_right_knee_lift: float | None = None
+    baseline_left_thigh_angle: float | None = None
+    baseline_right_thigh_angle: float | None = None
     baseline_left_step_extent: float | None = None
     baseline_right_step_extent: float | None = None
     baseline_ankle_span: float | None = None
     baseline_left_wrist_forward: float | None = None
     baseline_right_wrist_forward: float | None = None
+    baseline_left_wrist_height: float | None = None
+    baseline_right_wrist_height: float | None = None
     baseline_stance_span: float | None = None
     hold_duration_ms: int = 0
     hold_completed: bool = False
@@ -69,6 +79,9 @@ class BaseEvaluator(ABC):
         reference_hip_x: float | None = None,
         reference_hip_y: float | None = None,
         reference_scale: float | None = None,
+        baseline_status: str = "ready",
+        baseline_frames: int = 0,
+        baseline_target_frames: int = DEFAULT_GYMNASTICS_BASELINE_TARGET_FRAMES,
         displayed_feedback_code: str | None = None,
         displayed_feedback_text: str | None = None,
         displayed_feedback_frames: int = 0,
@@ -79,11 +92,17 @@ class BaseEvaluator(ABC):
         representative_feedback_code: str | None = None,
         representative_feedback_text: str | None = None,
         representative_feedback_frames: int = 0,
+        baseline_left_knee_lift: float | None = None,
+        baseline_right_knee_lift: float | None = None,
+        baseline_left_thigh_angle: float | None = None,
+        baseline_right_thigh_angle: float | None = None,
         baseline_left_step_extent: float | None = None,
         baseline_right_step_extent: float | None = None,
         baseline_ankle_span: float | None = None,
         baseline_left_wrist_forward: float | None = None,
         baseline_right_wrist_forward: float | None = None,
+        baseline_left_wrist_height: float | None = None,
+        baseline_right_wrist_height: float | None = None,
         baseline_stance_span: float | None = None,
         target_hold_ms: int | None = None,
         hold_duration_ms: int = 0,
@@ -105,6 +124,38 @@ class BaseEvaluator(ABC):
         if attempting:
             return "attempting"
         return "guidance_needed"
+
+    @staticmethod
+    def _normalize_baseline_frames(baseline_frames: int | None) -> int:
+        return max(baseline_frames or 0, 0)
+
+    @staticmethod
+    def _normalize_baseline_target_frames(baseline_target_frames: int | None) -> int:
+        return max(baseline_target_frames or DEFAULT_GYMNASTICS_BASELINE_TARGET_FRAMES, 1)
+
+    @staticmethod
+    def _is_collecting_baseline(baseline_status: str | None) -> bool:
+        return baseline_status == "collecting"
+
+    def _advance_baseline_collection(
+        self,
+        *,
+        baseline_frames: int,
+        baseline_target_frames: int,
+    ) -> tuple[str, int]:
+        next_frames = self._normalize_baseline_frames(baseline_frames) + 1
+        target_frames = self._normalize_baseline_target_frames(baseline_target_frames)
+        return ("ready" if next_frames >= target_frames else "collecting"), next_frames
+
+    @staticmethod
+    def _update_baseline_average(
+        current_average: float | None,
+        sample: float,
+        sample_count: int,
+    ) -> float:
+        if current_average is None or sample_count <= 0:
+            return sample
+        return ((current_average * sample_count) + sample) / (sample_count + 1)
 
 
 @dataclass(slots=True)
