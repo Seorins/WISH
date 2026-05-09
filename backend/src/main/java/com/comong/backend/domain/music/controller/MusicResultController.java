@@ -4,6 +4,10 @@ import java.util.List;
 
 import jakarta.validation.Valid;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -16,6 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.comong.backend.domain.music.dto.MusicBestResultResponse;
 import com.comong.backend.domain.music.dto.MusicResultDetailResponse;
+import com.comong.backend.domain.music.dto.MusicResultListItemResponse;
 import com.comong.backend.domain.music.dto.MusicResultResponse;
 import com.comong.backend.domain.music.dto.MusicResultSaveRequest;
 import com.comong.backend.domain.music.service.MusicResultService;
@@ -60,6 +65,26 @@ public class MusicResultController {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(response));
     }
 
+    @Operation(
+            summary = "List my music results",
+            description = "Returns current user's music results ordered by playedAt desc.")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "200",
+                description = "Success"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "401",
+                description = "Unauthorized (G-003)")
+    })
+    @GetMapping("/me")
+    public ResponseEntity<ApiResponse<Page<MusicResultListItemResponse>>> findMine(
+            @AuthenticationPrincipal AuthenticatedUser currentUser, Pageable pageable) {
+        return ResponseEntity.ok(
+                ApiResponse.success(
+                        musicResultService.findMine(
+                                currentUser.userId(), withPlayedAtDesc(pageable))));
+    }
+
     @Operation(summary = "내 음악 리듬게임 곡별 최고 기록 조회", description = "현재 로그인 사용자의 곡별 최고 기록을 조회합니다.")
     @ApiResponses({
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
@@ -96,5 +121,12 @@ public class MusicResultController {
             @AuthenticationPrincipal AuthenticatedUser currentUser, @PathVariable Long id) {
         return ResponseEntity.ok(
                 ApiResponse.success(musicResultService.findById(currentUser.userId(), id)));
+    }
+
+    private Pageable withPlayedAtDesc(Pageable pageable) {
+        return PageRequest.of(
+                pageable.getPageNumber(),
+                pageable.getPageSize(),
+                Sort.by(Sort.Direction.DESC, "playedAt"));
     }
 }

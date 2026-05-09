@@ -4,10 +4,11 @@ import java.time.LocalDateTime;
 
 import com.comong.backend.domain.music.entity.MusicResult;
 
-public record MusicResultDetailResponse(
+public record MusicResultListItemResponse(
         Long id,
         String chartId,
         String chartTitle,
+        String chartCoverUrl,
         int score,
         int maxCombo,
         int perfectCount,
@@ -20,16 +21,14 @@ public record MusicResultDetailResponse(
         int playedDurationMs,
         LocalDateTime playedAt,
         String videoKey,
-        String thumbKey,
-        String videoUrl,
-        String thumbUrl) {
+        String thumbKey) {
 
-    public static MusicResultDetailResponse of(
-            MusicResult result, String videoUrl, String thumbUrl) {
-        return new MusicResultDetailResponse(
+    public static MusicResultListItemResponse of(MusicResult result) {
+        return new MusicResultListItemResponse(
                 result.getId(),
                 result.getMusicChart().getChartId(),
                 result.getMusicChart().getTitle(),
+                result.getMusicChart().getCoverUrl(),
                 result.getScore(),
                 result.getMaxCombo(),
                 result.getPerfectCount(),
@@ -42,8 +41,6 @@ public record MusicResultDetailResponse(
                 result.getPlayedDurationMs(),
                 result.getPlayedAt(),
                 result.getVideoKey(),
-                result.getThumbKey(),
-                videoUrl,
-                thumbUrl);
+                result.getThumbKey());
     }
 }

@@ -162,13 +162,27 @@ class DanielForwardPressEvaluator(BaseHoldEvaluator):
             and features.wrist_shoulder_offset >= self.config.wrist_below_shoulder_min
             and features.torso_tilt <= self.config.torso_tilt_max
         )
-        hold_progress = self._update_hold_progress(
+        is_attempting = self._is_attempting_forward_press(
+            features=features,
+            mean_elbow_angle=mean_elbow_angle,
+            tracking=frame.tracking,
+            captured_baseline_this_frame=captured_baseline_this_frame,
+        )
+        session_progress = self._update_session_progress(
             previous_state=previous_state,
             previous_hold_duration_ms=hold_duration_ms,
             previous_hold_last_timestamp_ms=hold_last_timestamp_ms,
             frame_timestamp_ms=frame.timestamp_ms,
-            is_pose_valid=is_pose_valid,
             target_hold_ms=target_hold_ms,
+        )
+        session_state = self._resolve_session_state(
+            hold_completed=session_progress.hold_completed,
+            motion_present=is_pose_valid,
+        )
+        frame_label = self._resolve_frame_label(
+            tracking=frame.tracking,
+            motion_present=is_pose_valid,
+            attempting=is_attempting,
         )
 
         previous_feedback_state = FeedbackStabilizerState(
@@ -188,7 +202,7 @@ class DanielForwardPressEvaluator(BaseHoldEvaluator):
 
         next_feedback_state = self._stabilize_feedback(
             features=features,
-            state=hold_progress.state,
+            state=session_state,
             tracking=frame.tracking,
             previous_feedback_state=previous_feedback_state,
             suppress_candidate=captured_baseline_this_frame,
@@ -200,7 +214,7 @@ class DanielForwardPressEvaluator(BaseHoldEvaluator):
 
         return EvaluatorResult(
             motion_id=self.motion_id,
-            state=hold_progress.state,
+            state=session_state,
             step_count=0,
             accuracy=self._compute_accuracy(features),
             feedback=next_feedback_state.displayed_text,
@@ -220,9 +234,48 @@ class DanielForwardPressEvaluator(BaseHoldEvaluator):
             representative_feedback_frames=next_representative_state.representative_frames,
             baseline_left_wrist_forward=next_baseline_left_wrist_forward,
             baseline_right_wrist_forward=next_baseline_right_wrist_forward,
-            hold_duration_ms=hold_progress.hold_duration_ms,
-            hold_completed=hold_progress.hold_completed,
-            hold_last_timestamp_ms=hold_progress.hold_last_timestamp_ms,
+            hold_duration_ms=session_progress.hold_duration_ms,
+            hold_completed=session_progress.hold_completed,
+            hold_last_timestamp_ms=session_progress.hold_last_timestamp_ms,
+            frame_label=frame_label,
+            guidance_code=next_feedback_state.displayed_code,
+            guidance_text=next_feedback_state.displayed_text,
+        )
+
+    def _is_attempting_forward_press(
+        self,
+        *,
+        features: DanielForwardPressFeatureSet,
+        mean_elbow_angle: float | None,
+        tracking: str,
+        captured_baseline_this_frame: bool,
+    ) -> bool:
+        if tracking != "tracking_ok" or captured_baseline_this_frame:
+            return False
+
+        has_forward_attempt = self._is_attempting_metric(
+            features.wrist_extension,
+            self.config.wrist_extension_threshold,
+        ) or self._is_attempting_metric(
+            mean_elbow_angle,
+            self.config.arm_straight_threshold,
+        )
+        if not has_forward_attempt:
+            return False
+
+        return self._has_relaxed_attempting_alignment(features)
+
+    def _has_relaxed_attempting_alignment(
+        self,
+        features: DanielForwardPressFeatureSet,
+    ) -> bool:
+        return (
+            self._is_relaxed_within_limit(features.torso_tilt, self.config.torso_tilt_max)
+            and self._is_relaxed_within_limit(features.wrist_gap, self.config.wrist_gap_max)
+            and self._is_relaxed_within_limit(
+                features.wrist_height_error,
+                self.config.wrist_height_error_max,
+            )
         )
 
     def _compute_accuracy(self, features: DanielForwardPressFeatureSet) -> float:

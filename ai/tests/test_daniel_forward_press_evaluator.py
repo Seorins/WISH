@@ -1,4 +1,5 @@
 from app.services.gymnastics.evaluators.daniel_forward_press import DanielForwardPressEvaluator
+from app.services.gymnastics.feedback.common import PRESS_HANDS_FORWARD
 from app.services.gymnastics.types import HipCenter, NormalizedLandmark, NormalizedPoseFrame
 
 
@@ -18,6 +19,7 @@ def test_daniel_forward_press_captures_baseline_on_first_valid_frame() -> None:
     assert result.baseline_left_wrist_forward is not None
     assert result.baseline_right_wrist_forward is not None
     assert result.feedback is None
+    assert result.frame_label == "guidance_needed"
 
 
 def test_daniel_forward_press_holds_and_completes_after_target_duration() -> None:
@@ -60,7 +62,8 @@ def test_daniel_forward_press_holds_and_completes_after_target_duration() -> Non
     )
 
     assert holding_result.state == "holding"
-    assert holding_result.hold_duration_ms == 0
+    assert holding_result.hold_duration_ms == 100
+    assert holding_result.frame_label == "motion_present"
     assert complete_result.state == "complete"
     assert complete_result.hold_duration_ms == 150
     assert complete_result.hold_completed is True
@@ -91,7 +94,9 @@ def test_daniel_forward_press_sets_forward_feedback_candidate_when_not_pushed_en
     )
 
     assert weak_result.state == "idle"
-    assert weak_result.candidate_feedback_text == "손을 더 앞으로 밀어요"
+    assert weak_result.frame_label == "attempting"
+    assert weak_result.candidate_feedback_code == PRESS_HANDS_FORWARD.code
+    assert weak_result.candidate_feedback_text == PRESS_HANDS_FORWARD.text
 
 
 def test_daniel_forward_press_does_not_hold_when_arms_are_raised_wide() -> None:
@@ -119,6 +124,7 @@ def test_daniel_forward_press_does_not_hold_when_arms_are_raised_wide() -> None:
     )
 
     assert raised_result.state == "idle"
+    assert raised_result.frame_label == "guidance_needed"
 
 
 def test_daniel_forward_press_does_not_hold_when_hands_cover_face() -> None:
@@ -146,6 +152,7 @@ def test_daniel_forward_press_does_not_hold_when_hands_cover_face() -> None:
     )
 
     assert face_cover_result.state == "idle"
+    assert face_cover_result.frame_label == "attempting"
 
 
 def test_daniel_forward_press_recaptures_both_baselines_when_only_one_is_missing() -> None:
@@ -163,6 +170,37 @@ def test_daniel_forward_press_recaptures_both_baselines_when_only_one_is_missing
     assert result.state == "idle"
     assert result.baseline_left_wrist_forward is not None
     assert result.baseline_right_wrist_forward is not None
+    assert result.frame_label == "guidance_needed"
+
+
+def test_daniel_forward_press_resets_elapsed_progress_when_previous_state_is_complete() -> None:
+    evaluator = DanielForwardPressEvaluator()
+
+    baseline_result = evaluator.evaluate(
+        frame=build_forward_press_frame(timestamp_ms=0, pose="neutral"),
+        previous_state="idle",
+        step_count=0,
+        target_steps=1,
+    )
+    reset_result = evaluator.evaluate(
+        frame=build_forward_press_frame(timestamp_ms=100, pose="forward"),
+        previous_state="complete",
+        step_count=0,
+        target_steps=1,
+        reference_hip_x=baseline_result.reference_hip_x,
+        reference_hip_y=baseline_result.reference_hip_y,
+        reference_scale=baseline_result.reference_scale,
+        baseline_left_wrist_forward=baseline_result.baseline_left_wrist_forward,
+        baseline_right_wrist_forward=baseline_result.baseline_right_wrist_forward,
+        target_hold_ms=150,
+        hold_duration_ms=150,
+        hold_last_timestamp_ms=50,
+    )
+
+    assert reset_result.hold_duration_ms == 0
+    assert reset_result.hold_completed is False
+    assert reset_result.state == "holding"
+    assert reset_result.frame_label == "motion_present"
 
 
 def build_forward_press_frame(

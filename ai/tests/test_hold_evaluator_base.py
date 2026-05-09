@@ -121,3 +121,62 @@ def test_hold_reaches_complete_when_target_duration_is_met() -> None:
     assert progress.hold_duration_ms == 1_000
     assert progress.hold_last_timestamp_ms == 200
     assert progress.hold_completed is True
+
+
+def test_session_progress_accumulates_elapsed_time_without_pose_validity() -> None:
+    evaluator = DummyHoldEvaluator(HoldEvaluatorConfig(target_hold_ms=10_000, max_frame_gap_ms=250))
+
+    progress = evaluator._update_session_progress(
+        previous_state="idle",
+        previous_hold_duration_ms=0,
+        previous_hold_last_timestamp_ms=None,
+        frame_timestamp_ms=1_000,
+    )
+
+    assert progress.state == "holding"
+    assert progress.hold_duration_ms == 0
+    assert progress.hold_last_timestamp_ms == 1_000
+    assert progress.hold_completed is False
+
+    progress = evaluator._update_session_progress(
+        previous_state="idle",
+        previous_hold_duration_ms=progress.hold_duration_ms,
+        previous_hold_last_timestamp_ms=progress.hold_last_timestamp_ms,
+        frame_timestamp_ms=1_350,
+    )
+
+    assert progress.hold_duration_ms == 250
+    assert progress.hold_last_timestamp_ms == 1_350
+    assert progress.hold_completed is False
+
+
+def test_session_progress_resets_after_complete_state_for_new_session() -> None:
+    evaluator = DummyHoldEvaluator(HoldEvaluatorConfig(target_hold_ms=1_000, max_frame_gap_ms=250))
+
+    progress = evaluator._update_session_progress(
+        previous_state="complete",
+        previous_hold_duration_ms=1_000,
+        previous_hold_last_timestamp_ms=2_000,
+        frame_timestamp_ms=2_500,
+    )
+
+    assert progress.state == "holding"
+    assert progress.hold_duration_ms == 0
+    assert progress.hold_last_timestamp_ms == 2_500
+    assert progress.hold_completed is False
+
+
+def test_session_progress_resets_when_timestamp_rewinds() -> None:
+    evaluator = DummyHoldEvaluator(HoldEvaluatorConfig(target_hold_ms=10_000, max_frame_gap_ms=250))
+
+    progress = evaluator._update_session_progress(
+        previous_state="idle",
+        previous_hold_duration_ms=700,
+        previous_hold_last_timestamp_ms=2_000,
+        frame_timestamp_ms=1_500,
+    )
+
+    assert progress.state == "holding"
+    assert progress.hold_duration_ms == 0
+    assert progress.hold_last_timestamp_ms == 1_500
+    assert progress.hold_completed is False

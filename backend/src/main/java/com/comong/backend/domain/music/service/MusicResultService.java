@@ -9,11 +9,14 @@ import java.util.TreeMap;
 import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.comong.backend.domain.music.dto.MusicBestResultResponse;
 import com.comong.backend.domain.music.dto.MusicResultDetailResponse;
+import com.comong.backend.domain.music.dto.MusicResultListItemResponse;
 import com.comong.backend.domain.music.dto.MusicResultResponse;
 import com.comong.backend.domain.music.dto.MusicResultSaveRequest;
 import com.comong.backend.domain.music.entity.MusicChart;
@@ -65,6 +68,7 @@ public class MusicResultService {
         validateNoteCounts(request);
         validateChartTotalNotes(musicChart, request.totalNotes());
 
+        int greatCount = greatCountOrZero(request);
         double accuracy = calculateAccuracy(request);
         MusicRank rank = MusicRank.fromAccuracy(accuracy);
 
@@ -84,6 +88,7 @@ public class MusicResultService {
                                 .score(request.score())
                                 .maxCombo(request.maxCombo())
                                 .perfectCount(request.perfectCount())
+                                .greatCount(greatCount)
                                 .goodCount(request.goodCount())
                                 .missCount(request.missCount())
                                 .totalNotes(request.totalNotes())
@@ -119,6 +124,12 @@ public class MusicResultService {
         return resultsByChart.values().stream().map(this::toBestResultResponse).toList();
     }
 
+    public Page<MusicResultListItemResponse> findMine(Long userId, Pageable pageable) {
+        return musicResultRepository
+                .findPageByPatientProfileUserIdWithMusicChart(userId, pageable)
+                .map(MusicResultListItemResponse::of);
+    }
+
     public MusicResultDetailResponse findById(Long userId, Long resultId) {
         MusicResult result =
                 musicResultRepository
@@ -137,7 +148,11 @@ public class MusicResultService {
     }
 
     private void validateNoteCounts(MusicResultSaveRequest request) {
-        int judgedNotes = request.perfectCount() + request.goodCount() + request.missCount();
+        int judgedNotes =
+                request.perfectCount()
+                        + greatCountOrZero(request)
+                        + request.goodCount()
+                        + request.missCount();
         if (judgedNotes != request.totalNotes()) {
             throw new BusinessException(MusicErrorCode.MUSIC_RESULT_NOTE_COUNT_MISMATCH);
         }
@@ -150,7 +165,14 @@ public class MusicResultService {
     }
 
     private double calculateAccuracy(MusicResultSaveRequest request) {
-        return (request.perfectCount() + request.goodCount() * 0.6) / request.totalNotes();
+        return (request.perfectCount()
+                        + greatCountOrZero(request) * 0.85
+                        + request.goodCount() * 0.6)
+                / request.totalNotes();
+    }
+
+    private int greatCountOrZero(MusicResultSaveRequest request) {
+        return request.greatCount() == null ? 0 : request.greatCount();
     }
 
     private MusicBestResultResponse toBestResultResponse(List<MusicResult> results) {
