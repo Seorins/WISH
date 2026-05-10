@@ -282,6 +282,34 @@ class ClaudeSceneProviderTest {
     }
 
     @Test
+    @DisplayName("새로 추가된 금지어(참아야 해) 가 npcResponse 에 등장 → empty")
+    void npcResponseWithNewForbiddenTerm_paranya_returnsEmpty() {
+        ClaudeSceneResult raw =
+                new ClaudeSceneResult(
+                        "괜찮니?",
+                        List.of(new ClaudeChoice("worry_pain", "아픈 게 걱정돼요")),
+                        false,
+                        List.of("참아야 해. 곧 괜찮아질 거야."));
+        when(claudeClient.generateNextScene(anyString(), anyString())).thenReturn(Optional.of(raw));
+
+        assertThat(provider.nextScene(session, List.of(turn("mood_worried")))).isEmpty();
+    }
+
+    @Test
+    @DisplayName("새로 추가된 금지어(긍정적으로 생각) 가 questionText 에 등장 → empty")
+    void questionTextWithNewForbiddenTerm_positive_returnsEmpty() {
+        ClaudeSceneResult raw =
+                new ClaudeSceneResult(
+                        "긍정적으로 생각해볼래?",
+                        List.of(new ClaudeChoice("worry_pain", "아픈 게 걱정돼요")),
+                        false,
+                        List.of("좋아."));
+        when(claudeClient.generateNextScene(anyString(), anyString())).thenReturn(Optional.of(raw));
+
+        assertThat(provider.nextScene(session, List.of(turn("mood_worried")))).isEmpty();
+    }
+
+    @Test
     @DisplayName("npcResponse 에 금지어(우울) 포함 → empty")
     void npcResponseWithForbiddenTerm_returnsEmpty() {
         ClaudeSceneResult raw =

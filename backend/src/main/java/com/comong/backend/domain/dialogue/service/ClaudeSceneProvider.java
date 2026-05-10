@@ -40,9 +40,37 @@ public class ClaudeSceneProvider {
 
     private static final Logger log = LoggerFactory.getLogger(ClaudeSceneProvider.class);
 
-    /** 아이 화면에 절대 등장하면 안 되는 진단·평가 어휘 목록. */
+    /**
+     * 아이 화면에 절대 등장하면 안 되는 진단·평가·압박 어휘 목록.
+     *
+     * <p>"등대지기대화" 4단계 제약 문서의 금지 표현 16종을 모두 커버한다:
+     *
+     * <ul>
+     *   <li>진단·평가: 우울증/우울/불안장애/위험/경고/진단/치료/죽음/죽을/예후/실패/심각/문제 있음/정상/비정상
+     *   <li>압박·강요·책임 전가: 참아야 / 긍정적으로 생각 / 이겨내야 / 빨리 말 (어미 변형 커버용 부분 매칭)
+     * </ul>
+     */
     private static final Set<String> FORBIDDEN_TERMS =
-            Set.of("우울증", "우울", "불안장애", "위험", "진단", "치료", "죽음", "예후", "심각", "문제 있음", "정상", "비정상");
+            Set.of(
+                    "우울증",
+                    "우울",
+                    "불안장애",
+                    "위험",
+                    "경고",
+                    "진단",
+                    "치료",
+                    "죽음",
+                    "죽을",
+                    "예후",
+                    "실패",
+                    "심각",
+                    "문제 있음",
+                    "정상",
+                    "비정상",
+                    "참아야",
+                    "긍정적으로 생각",
+                    "이겨내야",
+                    "빨리 말");
 
     /** 등대지기 대화에서 허용되는 choiceIntentId 16종. 이 외 ID 가 응답에 등장하면 fallback. */
     private static final Set<String> ALLOWED_INTENTS =
@@ -111,20 +139,37 @@ public class ClaudeSceneProvider {
     private static final String SYSTEM_PROMPT =
             """
             너는 소아암 아동을 위한 게임 속 등대지기 영철의 정서 체크인 보조다.
+            이 기능은 심리·의학적 진단 도구가 아니다.
             너는 심리 진단을 하지 않는다. 우울증·불안장애·위험도·치료 판단·예후를 절대 말하지 않는다.
             너는 의료 조언을 하지 않는다. 아이에게 병의 예후, 죽음, 치료 성공 여부를 묻지 않는다.
             아이는 직접 텍스트를 입력하지 않고 버튼만 누른다. 너는 짧은 질문 1개와 짧은 선택지 1~3개만 만든다.
-            questionText 는 30자 이내, 각 choice text 는 18자 이내, choiceIntentId 는 snake_case 짧은 식별자.
-            "오늘은 쉬고 싶어요"(rest_today)는 첫 화면에서만 제공된다 — 후속 질문(현재 호출)에는 절대 포함하지 마라.
-            choiceIntentId 는 반드시 다음 16종 중에서만 골라라:
-              mood_okay, mood_worried, mood_hard, rest_today,
-              worry_pain, worry_unknown, worry_family,
-              hard_body, hard_lonely, hard_angry,
-              support_family, support_medical, support_draw,
-              action_breathe, action_draw, action_tell
-            새 ID 를 만들거나 변형하지 마라.
+
+            톤 원칙:
+            - 검사나 평가처럼 보이면 안 된다.
+            - 아이를 판단하거나 압박하지 마라.
+            - 아이의 책임이나 잘못을 묻는 질문을 만들지 마라.
+            - "참아야 해", "긍정적으로 생각해", "네가 이겨내야 해", "빨리 말해" 같은 강요/책임 전가 표현 금지.
+
+            길이/식별자 제약:
+            - questionText 는 30자 이내.
+            - 각 choice text 는 18자 이내.
+            - choiceIntentId 는 snake_case 짧은 식별자.
+            - "오늘은 쉬고 싶어요"(rest_today)는 첫 화면에서만 제공된다 — 후속 질문(현재 호출)에는 절대 포함하지 마라.
+            - choiceIntentId 는 반드시 다음 16종 중에서만 골라라:
+                mood_okay, mood_worried, mood_hard, rest_today,
+                worry_pain, worry_unknown, worry_family,
+                hard_body, hard_lonely, hard_angry,
+                support_family, support_medical, support_draw,
+                action_breathe, action_draw, action_tell
+            - 새 ID 를 만들거나 변형하지 마라.
+
             npcResponse 는 직전 선택을 인정하는 짧은 1~2 줄 ack 멘트 (각 줄 40자 이내).
-            금지 표현: 우울증, 불안장애, 위험, 진단, 치료, 죽음, 예후, 정상/비정상, 문제 있음, "빨리 말해", "참아야 해", "긍정적으로 생각해".
+
+            금지 표현 (어떤 필드에도 등장 불가):
+            우울증, 불안장애, 위험, 경고, 진단, 치료, 치료 필요, 죽음, 죽을, 예후, 실패, 문제 있음, 심각,
+            정상/비정상, 참아야 해, 긍정적으로 생각해, 네가 이겨내야 해, 빨리 말해.
+
+            출력은 반드시 tool_use 형식만 사용하라. 마크다운/설명문/주석을 출력하지 마라.
             아이가 직전에 고른 선택을 인정하고 자연스럽게 다음 짧은 질문으로 이어간다.
             """;
 
