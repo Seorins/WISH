@@ -8,7 +8,8 @@ import {
   type TaekwondoMotion,
 } from '@wish/api-client'
 import { useMyPatientId } from '@/features/auth/hooks/useMyPatientId'
-import { useDailyUsageStats } from '../hooks'
+import { useDailyUsageStats, useMyTaekwondoSessions } from '../hooks'
+import { aggregateTaekwondoMotionStats, type MotionStats } from '../utils/aggregateMotionStats'
 import styles from './MotionActivity.module.css'
 
 const DEFAULT_POOMSAE: Poomsae = 'TAEGEUK_1'
@@ -38,11 +39,12 @@ function useTaekwondoMotions(poomsae: Poomsae) {
 
 /**
  * 태권도 활동 결과 화면.
- * 좌측: 선택된 동작의 영상 + 설명 + 통계(빈 박스) + 또래 비교.
- * 우측: 품새별 동작 리스트(클릭 시 좌측 영상 교체) + 지난 영상(빈 박스).
+ * 좌측: 선택된 동작의 영상 + 설명 + 통계 + (우측 또래 비교).
+ * 우측: 품새별 동작 리스트(클릭 시 좌측 영상 교체) + 다른 사용자들과 비교.
  *
- * 통계/지난영상은 BE me-sessions 엔드포인트(`GET /me/taekwondo-sessions`)와
- * `TaekwondoSessionMotionResult.videoUrl` 컬럼이 추가되면 실데이터로 채움.
+ * 좌측 영상은 me-sessions 의 가장 최근 수행본(`latestVideoUrl`) 우선,
+ * 없으면 motion 의 시범영상(`demoVideoUrl`)으로 폴백. me-sessions 엔드포인트
+ * 미구현 상태에서는 stats 가 undefined 로 떨어지고 통계 칸은 '—' 표시.
  */
 export function TaekwondoMain() {
   const { data: patientId } = useMyPatientId()
@@ -52,6 +54,13 @@ export function TaekwondoMain() {
 
   const [poomsae, setPoomsae] = useState<Poomsae>(DEFAULT_POOMSAE)
   const { data: motions = [], isLoading, error } = useTaekwondoMotions(poomsae)
+
+  // me-sessions: 같은 품새로 필터링 (서버가 지원하면) 후 motion-별 집계.
+  const { data: sessionsPage } = useMyTaekwondoSessions({ poomsae, size: 100 })
+  const motionStatsMap = useMemo(
+    () => aggregateTaekwondoMotionStats(sessionsPage?.content ?? []),
+    [sessionsPage],
+  )
 
   const sortedMotions = useMemo<TaekwondoMotion[]>(() => {
     return [...motions].sort((a, b) => a.routineOrder - b.routineOrder)
@@ -72,6 +81,7 @@ export function TaekwondoMain() {
   }, [sortedMotions])
 
   const selectedMotion = sortedMotions.find(m => m.id === selectedMotionId) ?? null
+  const selectedStats = selectedMotion ? motionStatsMap[selectedMotion.id] : undefined
 
   return (
     <div className={styles.layout}>
@@ -86,9 +96,9 @@ export function TaekwondoMain() {
           <div className={styles.fullStatus}>등록된 동작이 없어요</div>
         ) : (
           <>
-            <VideoCard motion={selectedMotion} />
+            <VideoCard motion={selectedMotion} stats={selectedStats} />
             <DescriptionCard motion={selectedMotion} />
-            <StatsCard motion={selectedMotion} />
+            <StatsCard motion={selectedMotion} stats={selectedStats} />
           </>
         )}
       </div>
@@ -128,16 +138,18 @@ function PoomsaeTabBar({ value, onChange }: { value: Poomsae; onChange: (v: Poom
   )
 }
 
-function VideoCard({ motion }: { motion: TaekwondoMotion }) {
-  const hasVideo = Boolean(motion.demoVideoUrl)
+function VideoCard({ motion, stats }: { motion: TaekwondoMotion; stats: MotionStats | undefined }) {
+  // 아이가 수행한 가장 최근 영상 → 시범영상 순 폴백.
+  const videoUrl = stats?.latestVideoUrl ?? motion.demoVideoUrl ?? null
+  const hasVideo = Boolean(videoUrl)
   return (
     <section className={styles.videoCard}>
       <div className={styles.videoFrame}>
         {hasVideo ? (
           <video
-            key={motion.id}
+            key={`${motion.id}-${videoUrl}`}
             className={styles.video}
-            src={motion.demoVideoUrl ?? undefined}
+            src={videoUrl ?? undefined}
             poster={motion.thumbnailUrl ?? undefined}
             controls
             playsInline
@@ -171,27 +183,41 @@ function DescriptionCard({ motion }: { motion: TaekwondoMotion }) {
   )
 }
 
-function StatsCard({ motion }: { motion: TaekwondoMotion }) {
-  // 통계 실데이터는 BE me-sessions 엔드포인트 추가 후 motion 결과에서 가져옴.
-  const stats = [
-    { id: 'duration', icon: '⏱️', label: '수행 시간', value: '—' },
+function StatsCard({ motion, stats }: { motion: TaekwondoMotion; stats: MotionStats | undefined }) {
+  const cells = [
+    {
+      id: 'duration',
+      icon: '⏱️',
+      label: '수행 시간',
+      value: stats ? formatDurationSec(stats.latestDurationSec) : '—',
+    },
     { id: 'motion', icon: '🥋', label: '동작', value: motion.name },
-    { id: 'reps', icon: '🔁', label: '총 연습 수', value: '—' },
-    { id: 'accuracy', icon: '🎯', label: '평균 정확도', value: '—' },
+    {
+      id: 'reps',
+      icon: '🔁',
+      label: '총 연습 수',
+      value: stats ? `${stats.totalReps}회` : '—',
+    },
+    {
+      id: 'accuracy',
+      icon: '🎯',
+      label: '평균 정확도',
+      value: stats ? `${Math.round(stats.avgAccuracy * 100)}%` : '—',
+    },
   ] as const
 
   return (
     <section className={styles.statsCard}>
       <h3 className={styles.cardTitle}>활동 통계</h3>
       <div className={styles.statRow}>
-        {stats.map(stat => (
-          <div key={stat.id} className={styles.statCell}>
+        {cells.map(cell => (
+          <div key={cell.id} className={styles.statCell}>
             <span className={styles.statIcon} aria-hidden>
-              {stat.icon}
+              {cell.icon}
             </span>
             <div className={styles.statBody}>
-              <span className={styles.statLabel}>{stat.label}</span>
-              <span className={styles.statValue}>{stat.value}</span>
+              <span className={styles.statLabel}>{cell.label}</span>
+              <span className={styles.statValue}>{cell.value}</span>
             </div>
           </div>
         ))}
