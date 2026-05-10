@@ -61,7 +61,7 @@ export interface FinishLighthouseEmotionRequest {
 
 export interface FinishLighthouseEmotionResponse {
   sessionId: string
-  status: 'FINISHED' | 'CANCELLED'
+  status: 'IN_PROGRESS' | 'FINISHED' | 'CANCELLED'
   closingLines: string[]
   reportUpdated?: boolean
 }
@@ -96,6 +96,17 @@ export interface DialogueSessionDetailApiResponse {
   code: string
   message: string
   data: DialogueSessionDetail | null
+  errors?: Record<string, string>
+}
+
+export interface FinishLighthouseEmotionApiResponse {
+  code: string
+  message: string
+  data: {
+    sessionId: number
+    status: 'IN_PROGRESS' | 'FINISHED' | 'CANCELLED'
+    closingLines: string[]
+  } | null
   errors?: Record<string, string>
 }
 

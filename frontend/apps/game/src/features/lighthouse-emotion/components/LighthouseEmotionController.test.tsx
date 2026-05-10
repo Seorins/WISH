@@ -80,9 +80,13 @@ describe('LighthouseEmotionController', () => {
       )
       .mockResolvedValueOnce(
         jsonResponse({
-          sessionId: 'session-1',
-          status: 'FINISHED',
-          closingLines: ['오늘 이야기를 들려줘서 고맙구나.'],
+          code: 'OK',
+          message: 'finished',
+          data: {
+            sessionId: 1,
+            status: 'FINISHED',
+            closingLines: ['오늘 이야기를 들려줘서 고맙구나.'],
+          },
         }),
       )
 
@@ -162,7 +166,7 @@ describe('LighthouseEmotionController', () => {
     })
 
     expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringMatching(/\/api\/v1\/emotion-checkin\/sessions\/1\/finish$/),
+      expect.stringMatching(/\/api\/v1\/dialogue\/sessions\/1\/finish$/),
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({ finishReason: 'COMPLETED' }),
@@ -210,9 +214,13 @@ describe('LighthouseEmotionController', () => {
       )
       .mockResolvedValueOnce(
         jsonResponse({
-          sessionId: 'session-rest',
-          status: 'FINISHED',
-          closingLines: ['편히 쉬어도 괜찮아.'],
+          code: 'OK',
+          message: 'finished',
+          data: {
+            sessionId: 2,
+            status: 'FINISHED',
+            closingLines: ['편히 쉬어도 괜찮아.'],
+          },
         }),
       )
 
@@ -240,7 +248,7 @@ describe('LighthouseEmotionController', () => {
     })
 
     expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringMatching(/\/api\/v1\/emotion-checkin\/sessions\/2\/finish$/),
+      expect.stringMatching(/\/api\/v1\/dialogue\/sessions\/2\/finish$/),
       expect.objectContaining({
         body: JSON.stringify({ finishReason: 'REST' }),
       }),
