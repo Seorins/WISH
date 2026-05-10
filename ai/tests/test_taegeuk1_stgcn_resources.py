@@ -80,3 +80,28 @@ def test_taegeuk1_loaded_prototype_can_be_analyzed() -> None:
     assert result.body_part_errors
     assert result.weakest_body_part in result.body_part_scores
     assert result.worst_joint in resources.keypoint_names
+
+
+def test_taegeuk1_success_decision_uses_pass_threshold() -> None:
+    resources = load_taegeuk1_resources()
+    movement_name = resources.class_names[0]
+
+    matched_result = analyze_taegeuk1_sequence(
+        resources.prototypes[0].tolist(),
+        movement_name,
+        pass_threshold=80.0,
+    )
+    assert matched_result.pass_threshold == 80.0
+    assert matched_result.passed is True
+    assert matched_result.passed == (matched_result.score >= matched_result.pass_threshold)
+
+    mismatched_sequence = resources.prototypes[0].copy()
+    mismatched_sequence[:2] = mismatched_sequence[:2] + 10.0
+    failed_result = analyze_taegeuk1_sequence(
+        mismatched_sequence.tolist(),
+        movement_name,
+        pass_threshold=100.0,
+    )
+    assert failed_result.pass_threshold == 100.0
+    assert failed_result.score < failed_result.pass_threshold
+    assert failed_result.passed is False
