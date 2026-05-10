@@ -137,7 +137,7 @@ type VillageSceneData = {
   portalCooldownMs?: number
 }
 
-const DEBUG_OBSTACLES = false
+const DEBUG_OBSTACLES = import.meta.env.DEV
 const OBSTACLE_EDITOR_ENABLED = import.meta.env.DEV
 const OBSTACLE_EDITOR_MIN_SIZE = 0.003
 
@@ -170,7 +170,6 @@ const OBSTACLES: ObstacleRect[] = [
   { x: 0.5019, y: 0.2598, w: 0.0289, h: 0.0393 },
   { x: 0.5428, y: 0.284, w: 0.0088, h: 0.0324 },
   { x: 0.565, y: 0.2814, w: 0.0155, h: 0.0141 },
-  { x: 0.4667, y: 0.2467, w: 0.0194, h: 0.0249 },
   { x: 0.4361, y: 0.2562, w: 0.0118, h: 0.0184 },
   { x: 0.444, y: 0.2224, w: 0.0324, h: 0.0403 },
   { x: 0.4509, y: 0.2109, w: 0.0211, h: 0.0154 },
@@ -373,6 +372,8 @@ const OBSTACLES: ObstacleRect[] = [
   { x: 0.1898, y: 0.3545, w: 0.1535, h: 0.0855 },
   { x: 0.4796, y: 0.0529, w: 0.0542, h: 0.0197 },
   { x: 0.484, y: 0.0824, w: 0.0076, h: 0.0082 },
+  { x: 0.4756, y: 0.2481, w: 0.0071, h: 0.0205 },
+  { x: 0.4657, y: 0.263, w: 0.0095, h: 0.0065 },
 ]
 
 export class VillageScene extends Phaser.Scene {
