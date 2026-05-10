@@ -131,10 +131,7 @@ public class AdminDashboardService {
         LocalDateTime tomorrowStart = today.plusDays(1).atStartOfDay();
         long dayCount = effectiveTo.toEpochDay() - effectiveFrom.toEpochDay() + 1L;
         long periodActivePatients =
-                activePatientsByDate.values().stream()
-                        .flatMap(Set::stream)
-                        .distinct()
-                        .count();
+                activePatientsByDate.values().stream().flatMap(Set::stream).distinct().count();
 
         AdminDashboardResponse.Summary summary =
                 new AdminDashboardResponse.Summary(
@@ -168,13 +165,14 @@ public class AdminDashboardService {
 
     /**
      * 직전 동기간(현재 기간과 같은 일수만큼 더 과거) 의 누적 앱 사용시간 / 일 평균 / 기간 활성 환자 수를 집계한다. 직전 기간 안에 today 가 들어올 수 있는
-     * 케이스(예: 매우 짧은 기간을 미래 날짜로 조회)는 today 분을 라이브 집계에서 가져온다 — 다만 일반적인 "오늘까지 N 일" 조회에서는 직전 기간이 모두 과거이므로
-     * cachedRows 만으로 충분하다.
+     * 케이스(예: 매우 짧은 기간을 미래 날짜로 조회)는 today 분을 라이브 집계에서 가져온다 — 다만 일반적인 "오늘까지 N 일" 조회에서는 직전 기간이 모두
+     * 과거이므로 cachedRows 만으로 충분하다.
      */
     private AdminDashboardResponse.PreviousPeriodSummary computePreviousPeriodSummary(
             LocalDate currentFrom, long dayCount, LocalDate today) {
         if (dayCount <= 0) {
-            return new AdminDashboardResponse.PreviousPeriodSummary(currentFrom, currentFrom, 0, 0, 0);
+            return new AdminDashboardResponse.PreviousPeriodSummary(
+                    currentFrom, currentFrom, 0, 0, 0);
         }
         LocalDate previousTo = currentFrom.minusDays(1);
         LocalDate previousFrom = previousTo.minusDays(dayCount - 1L);
@@ -314,9 +312,7 @@ public class AdminDashboardService {
         List<AdminPatientDashboardResponse.HeatmapCell> cells = new ArrayList<>(168);
         for (int w = 1; w <= 7; w++) {
             for (int h = 0; h < 24; h++) {
-                cells.add(
-                        new AdminPatientDashboardResponse.HeatmapCell(
-                                w, h, grid[w - 1][h]));
+                cells.add(new AdminPatientDashboardResponse.HeatmapCell(w, h, grid[w - 1][h]));
             }
         }
         return new AdminPatientDashboardResponse.HourlyHeatmap(max, cells);
