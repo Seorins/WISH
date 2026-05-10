@@ -31,6 +31,29 @@ export type DailyUsageStatsParams = {
   to?: string
 }
 
+export type UsageAverage = {
+  totalSeconds: number
+  averageSeconds: number
+}
+
+export type ContentUsageAverage = UsageAverage & {
+  contentType: 'ART' | 'MUSIC' | 'TAEKWONDO' | 'GYMNASTICS' | 'LOGIN'
+  label: string
+}
+
+export type UsageAverages = {
+  from: string
+  to: string
+  activePatients: number
+  login: UsageAverage
+  contentAverages: ContentUsageAverage[]
+}
+
+export type UsageAveragesParams = {
+  from?: string
+  to?: string
+}
+
 export async function getDailyUsageStats(patientId: number, params: DailyUsageStatsParams = {}) {
   const response = await apiClient.get<ApiResponse<DailyUsageStats>>(
     `/patients/${patientId}/usage-stats/daily`,
@@ -43,5 +66,12 @@ export async function getCumulativeUsageStats(patientId: number) {
   const response = await apiClient.get<ApiResponse<CumulativeUsageStats>>(
     `/patients/${patientId}/usage-stats/cumulative`,
   )
+  return response.data
+}
+
+export async function getUsageAverages(params: UsageAveragesParams = {}) {
+  const response = await apiClient.get<ApiResponse<UsageAverages>>('/usage-stats/period-averages', {
+    params,
+  })
   return response.data
 }
