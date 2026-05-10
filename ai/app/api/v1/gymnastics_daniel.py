@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException
 
 from app.api.v1.gymnastics_shared import (
     build_feedback_tts_response,
+    build_replay_metadata_response,
     daniel_forward_bend_evaluator,
     daniel_forward_press_evaluator,
     daniel_left_side_bend_evaluator,
@@ -74,6 +75,20 @@ def _resolve_daniel_response_guidance_code(result: object) -> str | None:
 
 def _resolve_daniel_response_guidance_text(result: object) -> str | None:
     return getattr(result, "guidance_text", None) or getattr(result, "displayed_feedback_text", None)
+
+
+def _build_daniel_replay_metadata(result: object, timestamp_ms: int):
+    return build_replay_metadata_response(
+        motion_id=getattr(result, "motion_id", None),
+        timestamp_ms=timestamp_ms,
+        tracking=getattr(result, "tracking", None),
+        frame_label=_resolve_daniel_response_frame_label(result),
+        state=getattr(result, "state", None),
+        hold_duration_ms=getattr(result, "hold_duration_ms", None),
+        hold_completed=getattr(result, "hold_completed", None),
+        guidance_code=_resolve_daniel_response_guidance_code(result),
+        guidance_text=_resolve_daniel_response_guidance_text(result),
+    )
 
 
 @router.post("/daniel-forward-press/evaluate", response_model=DanielForwardPressEvaluationResponse)
@@ -155,6 +170,7 @@ def evaluate_daniel_forward_press(
             displayed_text=result.displayed_feedback_text,
         ),
         normalized_pose=to_motion_replay_pose_response(normalized),
+        replay_metadata=_build_daniel_replay_metadata(result, payload.frame.timestamp_ms),
         features=DanielForwardPressFeaturesResponse(
             wrist_forward=features.wrist_forward,
             wrist_extension=features.wrist_extension,
@@ -249,6 +265,7 @@ def evaluate_daniel_forward_bend(
             displayed_text=result.displayed_feedback_text,
         ),
         normalized_pose=to_motion_replay_pose_response(normalized),
+        replay_metadata=_build_daniel_replay_metadata(result, payload.frame.timestamp_ms),
         features=DanielForwardBendFeaturesResponse(
             forward_bend_angle=features.forward_bend_angle,
             wrist_drop=features.wrist_drop,
@@ -337,6 +354,7 @@ def evaluate_daniel_upward_press(
             displayed_text=result.displayed_feedback_text,
         ),
         normalized_pose=to_motion_replay_pose_response(normalized),
+        replay_metadata=_build_daniel_replay_metadata(result, payload.frame.timestamp_ms),
         features=DanielUpwardPressFeaturesResponse(
             wrist_height=features.wrist_height,
             wrist_height_balance=features.wrist_height_balance,
@@ -426,6 +444,7 @@ def evaluate_daniel_left_side_bend(
             displayed_text=result.displayed_feedback_text,
         ),
         normalized_pose=to_motion_replay_pose_response(normalized),
+        replay_metadata=_build_daniel_replay_metadata(result, payload.frame.timestamp_ms),
         features=DanielLeftSideBendFeaturesResponse(
             torso_tilt=features.torso_tilt,
             wrist_height=features.wrist_height,
@@ -514,6 +533,7 @@ def evaluate_daniel_right_side_bend(
             displayed_text=result.displayed_feedback_text,
         ),
         normalized_pose=to_motion_replay_pose_response(normalized),
+        replay_metadata=_build_daniel_replay_metadata(result, payload.frame.timestamp_ms),
         features=DanielRightSideBendFeaturesResponse(
             torso_tilt=features.torso_tilt,
             wrist_height=features.wrist_height,
@@ -600,6 +620,7 @@ def _to_integrated_daniel_response(
         baseline_left_wrist_forward=baseline_left,
         baseline_right_wrist_forward=baseline_right,
         normalized_pose=normalized_pose,
+        replay_metadata=result.replay_metadata,
         features=result.features.model_dump(),
     )
 

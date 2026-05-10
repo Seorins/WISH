@@ -1,10 +1,12 @@
 import logging
+from typing import TypeVar
 
 from app.schemas.gymnastics import (
     FeedbackTtsResponse,
     HipCenterResponse,
     NormalizedLandmarkResponse,
     NormalizedPoseResponse,
+    ReplayMetadataResponse,
 )
 from app.services.gymnastics.feedback.common import TRACKING_LOW
 from app.services.gymnastics.constants import MOTION_REPLAY_LANDMARK_NAMES
@@ -22,6 +24,7 @@ from app.services.gymnastics.normalization.pose_normalizer import PoseNormalizer
 from app.services.gymnastics.types import NormalizedPoseFrame
 
 logger = logging.getLogger(__name__)
+T = TypeVar("T")
 
 normalizer = PoseNormalizer(min_confidence=0.25)
 march_evaluator = MarchEvaluator()
@@ -90,6 +93,41 @@ def to_motion_replay_pose_response(frame: NormalizedPoseFrame) -> NormalizedPose
         scale_reference=frame.scale_reference,
         hip_center=HipCenterResponse(x=frame.hip_center.x, y=frame.hip_center.y),
         landmarks=landmarks,
+    )
+
+
+def _require_replay_metadata_field(value: T | None, field_name: str) -> T:
+    if value is None:
+        raise ValueError(f"Missing replay metadata field: {field_name}")
+    return value
+
+
+def build_replay_metadata_response(
+    *,
+    motion_id: str | None,
+    timestamp_ms: int | None,
+    tracking: str | None,
+    frame_label: str | None,
+    state: str | None,
+    progress_count: int | None = None,
+    hold_duration_ms: int | None = None,
+    hold_completed: bool | None = None,
+    guidance_code: str | None = None,
+    guidance_text: str | None = None,
+    baseline_status: str | None = None,
+) -> ReplayMetadataResponse:
+    return ReplayMetadataResponse(
+        motion_id=_require_replay_metadata_field(motion_id, "motion_id"),
+        timestamp_ms=_require_replay_metadata_field(timestamp_ms, "timestamp_ms"),
+        tracking=_require_replay_metadata_field(tracking, "tracking"),
+        frame_label=frame_label,
+        state=state,
+        progress_count=progress_count,
+        hold_duration_ms=hold_duration_ms,
+        hold_completed=hold_completed,
+        guidance_code=guidance_code,
+        guidance_text=guidance_text,
+        baseline_status=baseline_status,
     )
 
 

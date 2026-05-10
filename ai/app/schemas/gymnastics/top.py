@@ -6,6 +6,7 @@ from app.schemas.gymnastics.common import (
     GymnasticsFrameLabel,
     NormalizedPoseResponse,
     PoseFrameRequest,
+    ReplayMetadataResponse,
 )
 from app.services.gymnastics.constants import DEFAULT_GYMNASTICS_BASELINE_TARGET_FRAMES
 
@@ -123,6 +124,7 @@ class MarchEvaluationResponse(BaseModel):
     representative_feedback_frames: int = 0
     tts: FeedbackTtsResponse = Field(default_factory=FeedbackTtsResponse)
     normalized_pose: NormalizedPoseResponse | None = None
+    replay_metadata: ReplayMetadataResponse | None = None
     features: MarchFeaturesResponse
 
 
@@ -210,6 +212,7 @@ class SideStepEvaluationResponse(BaseModel):
     baseline_ankle_span: float | None = None
     tts: FeedbackTtsResponse = Field(default_factory=FeedbackTtsResponse)
     normalized_pose: NormalizedPoseResponse | None = None
+    replay_metadata: ReplayMetadataResponse | None = None
     features: SideStepFeaturesResponse
 
 
@@ -301,6 +304,7 @@ class DiagonalBodyPunchEvaluationResponse(BaseModel):
     baseline_stance_span: float | None = None
     tts: FeedbackTtsResponse = Field(default_factory=FeedbackTtsResponse)
     normalized_pose: NormalizedPoseResponse | None = None
+    replay_metadata: ReplayMetadataResponse | None = None
     features: DiagonalBodyPunchFeaturesResponse
 
 
@@ -398,6 +402,7 @@ class DiagonalFacePunchEvaluationResponse(BaseModel):
     baseline_stance_span: float | None = None
     tts: FeedbackTtsResponse = Field(default_factory=FeedbackTtsResponse)
     normalized_pose: NormalizedPoseResponse | None = None
+    replay_metadata: ReplayMetadataResponse | None = None
     features: DiagonalFacePunchFeaturesResponse
 
 
@@ -471,4 +476,5 @@ class SquatEvaluationResponse(BaseModel):
     representative_feedback_frames: int = 0
     tts: FeedbackTtsResponse = Field(default_factory=FeedbackTtsResponse)
     normalized_pose: NormalizedPoseResponse | None = None
+    replay_metadata: ReplayMetadataResponse | None = None
     features: SquatFeaturesResponse

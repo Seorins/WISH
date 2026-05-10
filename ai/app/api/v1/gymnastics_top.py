@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException
 
 from app.api.v1.gymnastics_shared import (
     build_feedback_tts_response,
+    build_replay_metadata_response,
     diagonal_body_punch_evaluator,
     diagonal_face_punch_evaluator,
     logger,
@@ -85,6 +86,20 @@ def _result_attr(result: object, name: str, default: object = None) -> object:
     return getattr(result, name, default)
 
 
+def _build_top_replay_metadata(result: object, timestamp_ms: int):
+    return build_replay_metadata_response(
+        motion_id=getattr(result, "motion_id", None),
+        timestamp_ms=timestamp_ms,
+        tracking=getattr(result, "tracking", None),
+        frame_label=_resolve_top_response_frame_label(result),
+        state=getattr(result, "state", None),
+        progress_count=getattr(result, "step_count", None),
+        guidance_code=_resolve_top_response_guidance_code(result),
+        guidance_text=_resolve_top_response_guidance_text(result),
+        baseline_status=getattr(result, "baseline_status", "ready"),
+    )
+
+
 def _build_march_tracking_low_response(payload: MarchEvaluationRequest) -> MarchEvaluationResponse:
     return MarchEvaluationResponse(
         motion_id="top_march",
@@ -127,6 +142,17 @@ def _build_march_tracking_low_response(payload: MarchEvaluationRequest) -> March
             displayed_text=TRACKING_LOW.text,
         ),
         normalized_pose=None,
+        replay_metadata=build_replay_metadata_response(
+            motion_id="top_march",
+            timestamp_ms=payload.frame.timestamp_ms,
+            tracking="tracking_low",
+            frame_label="tracking_low",
+            state=payload.previous_state,
+            progress_count=payload.step_count,
+            guidance_code=TRACKING_LOW.code,
+            guidance_text=TRACKING_LOW.text,
+            baseline_status=payload.baseline_status,
+        ),
         features=MarchFeaturesResponse(
             left_knee_lift=0.0,
             right_knee_lift=0.0,
@@ -234,6 +260,7 @@ def evaluate_march(payload: MarchEvaluationRequest) -> MarchEvaluationResponse:
             displayed_text=result.displayed_feedback_text,
         ),
         normalized_pose=to_motion_replay_pose_response(normalized),
+        replay_metadata=_build_top_replay_metadata(result, payload.frame.timestamp_ms),
         features=MarchFeaturesResponse(
             left_knee_lift=features.left_knee_lift,
             right_knee_lift=features.right_knee_lift,
@@ -338,6 +365,7 @@ def evaluate_side_step(payload: SideStepEvaluationRequest) -> SideStepEvaluation
             displayed_text=result.displayed_feedback_text,
         ),
         normalized_pose=to_motion_replay_pose_response(normalized),
+        replay_metadata=_build_top_replay_metadata(result, payload.frame.timestamp_ms),
         features=SideStepFeaturesResponse(
             left_step_extent=features.left_step_extent,
             right_step_extent=features.right_step_extent,
@@ -441,6 +469,7 @@ def evaluate_diagonal_body_punch(
             displayed_text=result.displayed_feedback_text,
         ),
         normalized_pose=to_motion_replay_pose_response(normalized),
+        replay_metadata=_build_top_replay_metadata(result, payload.frame.timestamp_ms),
         features=DiagonalBodyPunchFeaturesResponse(
             left_wrist_forward=features.left_wrist_forward,
             right_wrist_forward=features.right_wrist_forward,
@@ -554,6 +583,7 @@ def evaluate_diagonal_face_punch(
             displayed_text=result.displayed_feedback_text,
         ),
         normalized_pose=to_motion_replay_pose_response(normalized),
+        replay_metadata=_build_top_replay_metadata(result, payload.frame.timestamp_ms),
         features=DiagonalFacePunchFeaturesResponse(
             left_wrist_forward=features.left_wrist_forward,
             right_wrist_forward=features.right_wrist_forward,
@@ -644,6 +674,7 @@ def evaluate_squat(payload: SquatEvaluationRequest) -> SquatEvaluationResponse:
             displayed_text=result.displayed_feedback_text,
         ),
         normalized_pose=to_motion_replay_pose_response(normalized),
+        replay_metadata=_build_top_replay_metadata(result, payload.frame.timestamp_ms),
         features=SquatFeaturesResponse(
             hip_drop=features.hip_drop,
             left_knee_angle=features.left_knee_angle,

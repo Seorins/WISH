@@ -7,6 +7,7 @@ from app.schemas.gymnastics.common import (
     FeedbackTtsResponse,
     NormalizedPoseResponse,
     PoseFrameRequest,
+    ReplayMetadataResponse,
 )
 from app.services.gymnastics.constants import DEFAULT_STRETCH_HOLD_TARGET_MS
 
@@ -102,6 +103,7 @@ class StretchHoldEvaluationResponseBase(BaseModel):
     representative_feedback_frames: int = 0
     tts: FeedbackTtsResponse = Field(default_factory=FeedbackTtsResponse)
     normalized_pose: NormalizedPoseResponse | None = None
+    replay_metadata: ReplayMetadataResponse | None = None
 
 
 class DanielForwardPressEvaluationRequest(StretchHoldEvaluationRequestBase):
