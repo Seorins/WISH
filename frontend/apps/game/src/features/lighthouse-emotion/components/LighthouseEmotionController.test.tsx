@@ -28,22 +28,26 @@ describe('LighthouseEmotionController', () => {
     fetchMock
       .mockResolvedValueOnce(
         jsonResponse({
-          sessionId: 'session-1',
-          status: 'IN_PROGRESS',
-          scene: {
-            sceneId: 'first',
-            questionText: '오늘 마음은 어때?',
-            choices: [
-              { choiceIntentId: 'mood_okay', text: '괜찮아요' },
-              { choiceIntentId: 'rest_today', text: '숨겨야 해요' },
-              { choiceIntentId: 'mood_worried', text: '걱정돼요' },
-              { choiceIntentId: 'mood_hard', text: '힘들어요' },
-              { choiceIntentId: 'extra', text: '네 번째' },
-            ],
-            secondaryAction: { choiceIntentId: 'rest_today', text: '오늘은 쉬고 싶어요' },
-            shouldEndSession: false,
-            generatedBy: 'CLAUDE',
-            reasonCode: 'safe_reason',
+          code: 'CREATED',
+          message: '세션 생성',
+          data: {
+            sessionId: 1,
+            status: 'IN_PROGRESS',
+            scene: {
+              sceneId: 'first',
+              questionText: '오늘 마음은 어때?',
+              choices: [
+                { choiceIntentId: 'mood_okay', text: '괜찮아요' },
+                { choiceIntentId: 'rest_today', text: '숨겨야 해요' },
+                { choiceIntentId: 'mood_worried', text: '걱정돼요' },
+                { choiceIntentId: 'mood_hard', text: '힘들어요' },
+                { choiceIntentId: 'extra', text: '네 번째' },
+              ],
+              secondaryAction: { choiceIntentId: 'rest_today', text: '오늘은 쉬고 싶어요' },
+              shouldEndSession: false,
+              generatedBy: 'CLAUDE',
+              reasonCode: 'safe_reason',
+            },
           },
         }),
       )
@@ -101,8 +105,7 @@ describe('LighthouseEmotionController', () => {
         method: 'POST',
         body: JSON.stringify({
           patientProfileId: 7,
-          npcId: 'lighthouse_keeper',
-          mode: 'LIGHTHOUSE_LLM',
+          npcName: 'YEONGCHEOL',
         }),
       }),
     )
@@ -124,7 +127,7 @@ describe('LighthouseEmotionController', () => {
     })
 
     expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringMatching(/\/api\/v1\/emotion-checkin\/sessions\/session-1\/turns$/),
+      expect.stringMatching(/\/api\/v1\/emotion-checkin\/sessions\/1\/turns$/),
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({
@@ -159,7 +162,7 @@ describe('LighthouseEmotionController', () => {
     })
 
     expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringMatching(/\/api\/v1\/emotion-checkin\/sessions\/session-1\/finish$/),
+      expect.stringMatching(/\/api\/v1\/emotion-checkin\/sessions\/1\/finish$/),
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({ finishReason: 'COMPLETED' }),
@@ -180,13 +183,17 @@ describe('LighthouseEmotionController', () => {
     fetchMock
       .mockResolvedValueOnce(
         jsonResponse({
-          sessionId: 'session-rest',
-          status: 'IN_PROGRESS',
-          scene: {
-            questionText: '오늘 마음은 어때?',
-            choices: [{ choiceIntentId: 'mood_okay', text: '괜찮아요' }],
-            secondaryAction: { choiceIntentId: 'rest_today', text: '오늘은 쉬고 싶어요' },
-            shouldEndSession: false,
+          code: 'CREATED',
+          message: '세션 생성',
+          data: {
+            sessionId: 2,
+            status: 'IN_PROGRESS',
+            scene: {
+              questionText: '오늘 마음은 어때?',
+              choices: [{ choiceIntentId: 'mood_okay', text: '괜찮아요' }],
+              secondaryAction: { choiceIntentId: 'rest_today', text: '오늘은 쉬고 싶어요' },
+              shouldEndSession: false,
+            },
           },
         }),
       )
@@ -233,7 +240,7 @@ describe('LighthouseEmotionController', () => {
     })
 
     expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringMatching(/\/api\/v1\/emotion-checkin\/sessions\/session-rest\/finish$/),
+      expect.stringMatching(/\/api\/v1\/emotion-checkin\/sessions\/2\/finish$/),
       expect.objectContaining({
         body: JSON.stringify({ finishReason: 'REST' }),
       }),

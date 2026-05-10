@@ -3,6 +3,7 @@ import type {
   EmotionSceneViewModel,
   FinishLighthouseEmotionRequest,
   FinishLighthouseEmotionResponse,
+  StartLighthouseEmotionApiResponse,
   StartLighthouseEmotionResponse,
   SubmitLighthouseTurnResponse,
 } from './types'
@@ -10,6 +11,12 @@ import type {
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api/v1'
 const FALLBACK_QUESTION = '오늘 기분은 어떠니?'
 const REST_TODAY_CHOICE_ID = 'rest_today'
+const ACCESS_TOKEN_STORAGE_KEY = 'wish_access_token'
+
+function getAuthHeaders(): Record<string, string> {
+  const token = localStorage.getItem(ACCESS_TOKEN_STORAGE_KEY)
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
 
 function isDisplayChoice(value: unknown): value is EmotionChoiceViewModel {
   if (!value || typeof value !== 'object') return false
@@ -68,11 +75,11 @@ export async function startLighthouseEmotionSession(
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      ...getAuthHeaders(),
     },
     body: JSON.stringify({
       patientProfileId,
-      npcId: 'lighthouse_keeper',
-      mode: 'LIGHTHOUSE_LLM',
+      npcName: 'YEONGCHEOL',
     }),
   })
 
@@ -80,7 +87,16 @@ export async function startLighthouseEmotionSession(
     throw new Error('등대지기 대화를 시작하지 못했어요.')
   }
 
-  return response.json()
+  const payload = (await response.json()) as StartLighthouseEmotionApiResponse
+  if (!payload.data || payload.data.scene === null) {
+    throw new Error('?ê¹…?ï§žÂ€æ¹²??Â€?ë¶¾? ?ì’–ì˜‰?ì„? ï§ì‚µë»½?ëŒìŠ‚.')
+  }
+
+  return {
+    sessionId: String(payload.data.sessionId),
+    status: payload.data.status,
+    scene: payload.data.scene,
+  }
 }
 
 export async function submitLighthouseEmotionTurn(
@@ -91,6 +107,7 @@ export async function submitLighthouseEmotionTurn(
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      ...getAuthHeaders(),
     },
     body: JSON.stringify({
       selectedChoice,
@@ -112,6 +129,7 @@ export async function finishLighthouseEmotionSession(
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      ...getAuthHeaders(),
     },
     body: JSON.stringify({
       finishReason,
