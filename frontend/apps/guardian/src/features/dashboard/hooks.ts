@@ -35,12 +35,18 @@ export function useGymnasticsRangeSummary(patientId: number | undefined | null) 
         return null
       }
 
-      const [currentDetail, previousDetail] = await Promise.all([
+      const [currentResult, previousResult] = await Promise.allSettled([
         getExerciseSessionDetail(current.id),
         previous ? getExerciseSessionDetail(previous.id) : Promise.resolve(null),
       ])
 
-      return buildGymnasticsRangeSummary(currentDetail, previousDetail)
+      if (currentResult.status === 'rejected') {
+        throw currentResult.reason
+      }
+
+      const previousDetail = previousResult.status === 'fulfilled' ? previousResult.value : null
+
+      return buildGymnasticsRangeSummary(currentResult.value, previousDetail)
     },
     enabled: typeof patientId === 'number' && patientId > 0,
   })

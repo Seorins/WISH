@@ -34,8 +34,6 @@ export type GymnasticsRangeSummary = {
 
 const TOP_TARGET_COUNT = 8
 const DANIEL_TARGET_COUNT = 1
-const TOP_MOTION_IDS = new Set([1, 2, 3, 4, 5])
-const DANIEL_MOTION_IDS = new Set([6, 7, 8, 9, 10])
 const DELTA_STEADY_THRESHOLD = 1
 
 export function isGymnasticsSession(
@@ -58,22 +56,27 @@ function average(values: number[]): number {
   return Math.round(values.reduce((sum, value) => sum + value, 0) / values.length)
 }
 
+function normalizeCompletedCount(value: number): number {
+  if (!Number.isFinite(value)) return 0
+  return Math.max(0, value)
+}
+
 function resolveTargetCount(exerciseType: string, motion: ExerciseSessionMotionResult): number {
-  if (exerciseType === 'TOP' || TOP_MOTION_IDS.has(motion.exerciseMotionId)) {
+  if (exerciseType === 'TOP') {
     return TOP_TARGET_COUNT
   }
 
-  if (exerciseType === 'DANIEL' || DANIEL_MOTION_IDS.has(motion.exerciseMotionId)) {
+  if (exerciseType === 'DANIEL') {
     return DANIEL_TARGET_COUNT
   }
 
-  return Math.max(1, Math.ceil(motion.completedReps))
+  return Math.max(1, Math.ceil(normalizeCompletedCount(motion.completedReps)))
 }
 
 function resolveRangeRate(exerciseType: string, motion: ExerciseSessionMotionResult): number {
   const completionRate = clampRate(motion.accuracy)
   const targetCount = resolveTargetCount(exerciseType, motion)
-  const countRate = clampRate(motion.completedReps / targetCount)
+  const countRate = clampRate(normalizeCompletedCount(motion.completedReps) / targetCount)
 
   return Math.max(completionRate, countRate)
 }
@@ -115,7 +118,7 @@ export function buildGymnasticsRangeSummary(
           ? roundPercent(resolveRangeRate(previous.exerciseType, previousMotion))
           : null
       const deltaPercent = previousPercent === null ? null : currentPercent - previousPercent
-      const completedCount = Math.max(0, motion.completedReps)
+      const completedCount = normalizeCompletedCount(motion.completedReps)
       const targetCount = resolveTargetCount(current.exerciseType, motion)
 
       return {
