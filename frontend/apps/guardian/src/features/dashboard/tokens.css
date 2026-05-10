@@ -57,4 +57,9 @@
 
   --dash-sidebar-width: 88px;
   --dash-header-height: 80px;
+
+  --dash-bottom-tab-height: 64px;
+  --dash-bp-tablet: 1024px;
+  --dash-bp-mobile: 768px;
+  --dash-bp-mobile-sm: 480px;
 }

@@ -534,3 +534,72 @@
   font-size: 16px;
   flex-shrink: 0;
 }
+
+@media (max-width: 1024px) {
+  .heroBody {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .accuracyCard,
+  .peerCard {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .statRow,
+  .chipRow {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .heroCard,
+  .mediaSlider,
+  .accuracyCard,
+  .peerCard {
+    min-width: 0;
+  }
+  .heroBody {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+  .songTitle {
+    font-size: 18px;
+  }
+  .statRow {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .accuracyCard {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+  .chipRow {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+  }
+  .chip {
+    padding: 8px 4px;
+  }
+  .chipValue {
+    font-size: 18px;
+  }
+  .accuracySub {
+    font-size: 26px;
+  }
+  .peerCard {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+  .peerBars {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+  .peerVs {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .chipRow {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+}

@@ -153,3 +153,49 @@
     transform: translateY(4px);
   }
 }
+
+@media (max-width: 768px) {
+  .nav {
+    flex-direction: row;
+    min-width: 0;
+  }
+  .list {
+    flex-direction: row;
+    gap: 6px;
+    min-width: 0;
+  }
+  .itemWrap {
+    flex-direction: row;
+  }
+  .item {
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 10px;
+    border-radius: 12px;
+    flex: 0 0 auto;
+  }
+  .itemNum {
+    width: 22px;
+    height: 22px;
+    font-size: 11px;
+  }
+  .itemBody {
+    align-items: center;
+    text-align: center;
+  }
+  .itemLabel {
+    font-size: 12px;
+    white-space: nowrap;
+  }
+  .itemMeta {
+    display: none;
+  }
+  .connector,
+  .tailConnector {
+    display: none;
+  }
+  .scrollHint {
+    display: none;
+  }
+}

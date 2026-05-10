@@ -206,3 +206,26 @@
   width: 18px;
   height: 18px;
 }
+
+@media (max-width: 768px) {
+  .recent {
+    padding: 10px 14px;
+    gap: var(--dash-space-3);
+  }
+  .recentTitle {
+    font-size: 13px;
+  }
+  .recentList {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .recentList::-webkit-scrollbar {
+    display: none;
+  }
+  .session {
+    flex: 0 0 auto;
+    min-width: 80px;
+  }
+}
