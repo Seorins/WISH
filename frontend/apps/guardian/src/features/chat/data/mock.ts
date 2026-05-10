@@ -1,9 +1,13 @@
 import comongImg from '@/assets/comong.png'
 import comongChatImg from '@/assets/comong_chat.png'
 import dainImg from '@/assets/dain.png'
+import dainChatImg from '@/assets/dain_chat.png'
 import gunbinImg from '@/assets/gunbin.png'
+import gunbinChatImg from '@/assets/gunbin_chat.png'
 import jeonghoImg from '@/assets/jeongho.png'
+import jeonghoChatImg from '@/assets/jeongho_chat.png'
 import sehyunImg from '@/assets/sehyun.png'
+import sehyunChatImg from '@/assets/sehyun_chat.png'
 import yeongchulImg from '@/assets/yeongchul.png'
 import youngchulChatImg from '@/assets/youngchul_chat.png'
 
@@ -92,6 +96,10 @@ export const CHARACTERS: ChatCharacter[] = [
     emotion: 'tired',
     thumbOffsetY: '-6%',
     thumbScale: '1.5',
+    chatImageUrl: dainChatImg,
+    chatImageScale: '180%',
+    chatImageOffsetX: '-3%',
+    chatImageOffsetY: '10%',
   },
   {
     id: 'gunbin',
@@ -100,6 +108,10 @@ export const CHARACTERS: ChatCharacter[] = [
     emotion: 'worried',
     thumbOffsetY: '-11%',
     thumbScale: '1.45',
+    chatImageUrl: gunbinChatImg,
+    chatImageScale: '180%',
+    chatImageOffsetX: '-3%',
+    chatImageOffsetY: '10%',
   },
   {
     id: 'jeongho',
@@ -108,6 +120,10 @@ export const CHARACTERS: ChatCharacter[] = [
     emotion: 'calm',
     thumbOffsetY: '-6%',
     thumbScale: '1.5',
+    chatImageUrl: jeonghoChatImg,
+    chatImageScale: '180%',
+    chatImageOffsetX: '-3%',
+    chatImageOffsetY: '10%',
   },
   {
     id: 'sehyun',
@@ -116,6 +132,10 @@ export const CHARACTERS: ChatCharacter[] = [
     emotion: 'calm',
     thumbOffsetY: '-10%',
     thumbScale: '1.5',
+    chatImageUrl: sehyunChatImg,
+    chatImageScale: '160%',
+    chatImageOffsetX: '-6%',
+    chatImageOffsetY: '10%',
   },
 ]
 
