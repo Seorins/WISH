@@ -141,12 +141,25 @@
   object-fit: contain;
 }
 
-.rowName {
+.rowText {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.rowName {
   font-size: 14px;
   font-weight: 600;
   color: var(--dash-color-text-strong);
   letter-spacing: -0.01em;
+}
+
+.rowMeta {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--dash-color-text-muted);
 }
 
 .viewAll {

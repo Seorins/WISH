@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, XAxis, YAxis } from 'recharts'
+import { useMyPatientId } from '@/features/auth/hooks/useMyPatientId'
 import {
   OVERALL_SCORE,
   RANGE_OF_MOTION,
@@ -9,6 +10,7 @@ import {
   type RangeOfMotion,
   type TrendRangeId,
 } from '../data/mock'
+import { useGymnasticsRangeSummary } from '../hooks'
 import { ArrowUpIcon, ChevronDownIcon, InfoIcon } from './icons'
 import { ScoreRing } from './ScoreRing'
 import styles from './InsightCards.module.css'
@@ -30,6 +32,24 @@ function CardTitle({ children, tip }: { children: React.ReactNode; tip?: string 
 }
 
 export function OverallScoreCard() {
+  const { data: patientId } = useMyPatientId()
+  const { data: rangeSummary } = useGymnasticsRangeSummary(patientId)
+  const currentScore = rangeSummary?.averagePercent ?? OVERALL_SCORE.current
+  const delta = rangeSummary?.averageDeltaPercent ?? OVERALL_SCORE.delta
+  const title =
+    rangeSummary && delta !== null && delta < 0
+      ? '조금 쉬어갔어요'
+      : rangeSummary && delta !== null && delta === 0
+        ? '비슷하게 해냈어요'
+        : OVERALL_SCORE.title
+  const subtitle = rangeSummary
+    ? delta === null
+      ? '첫 체조 기록이에요.'
+      : delta >= 0
+        ? '지난 번보다\n더 잘하고 있어요.'
+        : '지난 번보다\n조금 낮아졌어요.'
+    : OVERALL_SCORE.subtitle
+
   return (
     <article className={styles.card}>
       <header className={styles.cardHead}>
@@ -39,7 +59,7 @@ export function OverallScoreCard() {
       </header>
       <div className={styles.scoreBody}>
         <ScoreRing
-          value={OVERALL_SCORE.current}
+          value={currentScore}
           size={90}
           strokeWidth={8}
           fontSize={26}
@@ -47,12 +67,14 @@ export function OverallScoreCard() {
           gradientTo="#34c99c"
         />
         <div className={styles.scoreCopy}>
-          <span className={styles.scoreTitle}>{OVERALL_SCORE.title}</span>
-          <span className={styles.scoreSubtitle}>{OVERALL_SCORE.subtitle}</span>
-          <span className={styles.scoreDelta}>
-            <ArrowUpIcon className={styles.scoreDeltaIcon} />
-            {OVERALL_SCORE.delta}점
-          </span>
+          <span className={styles.scoreTitle}>{title}</span>
+          <span className={styles.scoreSubtitle}>{subtitle}</span>
+          {delta !== null && (
+            <span className={`${styles.scoreDelta} ${delta < 0 ? styles.scoreDeltaDown : ''}`}>
+              <ArrowUpIcon className={styles.scoreDeltaIcon} />
+              {delta > 0 ? `+${delta}` : delta}점
+            </span>
+          )}
         </div>
         <span className={styles.scoreStar} aria-hidden>
           ⭐
