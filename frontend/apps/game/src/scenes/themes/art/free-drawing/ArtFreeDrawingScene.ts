@@ -76,6 +76,7 @@ type ExportedDrawingPng = {
   playDurationSeconds: number
   width: number
   height: number
+  colorCount: number
 }
 
 export class ArtFreeDrawingScene extends Phaser.Scene {
@@ -1410,6 +1411,7 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
     const playDurationSeconds = this.getPlayDurationSeconds()
     void this.exportDrawingPng(playDurationSeconds, isPublic)
       .then(exportedDrawing => {
+        const colorCount = exportedDrawing.colorCount
         if (this.editingArtwork) {
           return updateArtwork({
             id: this.editingArtwork.id,
@@ -1417,6 +1419,7 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
             filename: exportedDrawing.filename,
             additionalPlayDurationSeconds: exportedDrawing.playDurationSeconds,
             isPublic: exportedDrawing.isPublic,
+            colorCount,
           })
         }
 
@@ -1426,6 +1429,7 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
           sketchCode: null,
           playDurationSeconds: exportedDrawing.playDurationSeconds,
           isPublic: exportedDrawing.isPublic,
+          colorCount,
         })
       })
       .then(() => {
@@ -1476,6 +1480,7 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
           playDurationSeconds,
           width,
           height,
+          colorCount: 0,
         })
       }, 'image/png')
     })
