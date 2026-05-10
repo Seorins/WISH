@@ -56,18 +56,20 @@ const PLACEHOLDER_ITEMS: ActivityItem[] = [
   {
     id: 'taekwondo',
     name: '태권도',
-    status: 'planned',
+    status: 'done',
     avatarUrl: seokjaeImg,
     thumbScale: '1.5',
     thumbOffsetY: '-6%',
+    to: '/activity?tab=taekwondo',
   },
   {
     id: 'gymnastics',
     name: '체조',
-    status: 'planned',
+    status: 'done',
     avatarUrl: sungsuImg,
     thumbScale: '1.5',
     thumbOffsetY: '-6%',
+    to: '/activity?tab=gymnastics',
   },
 ]
 
@@ -75,6 +77,7 @@ function resolveActiveItemId(searchParams: URLSearchParams): ActivityItemId | nu
   const tab = searchParams.get('tab')
   if (tab === 'art') return 'art'
   if (tab === 'taekwondo') return 'taekwondo'
+  if (tab === 'gymnastics') return 'gymnastics'
   // 기본 진입(/activity)과 ?id= 딥링크 모두 음악으로 간주.
   return 'music'
 }
