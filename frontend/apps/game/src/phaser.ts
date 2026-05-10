@@ -13,6 +13,7 @@ import {
   GymnasticsTopScene,
 } from './scenes/themes/gymnastics/play/GymnasticsPlayScene'
 import { GymnasticsSelectScene } from './scenes/themes/gymnastics/select/GymnasticsSelectScene'
+import { FerrySelectScene } from './scenes/themes/ferry/select/FerrySelectScene'
 import { LighthouseSelectScene } from './scenes/themes/lighthouse/select/LighthouseSelectScene'
 import { MusicRhythmScene } from './scenes/themes/music/play/MusicRhythmScene'
 import { MusicSelectScene } from './scenes/themes/music/select/MusicSelectScene'
@@ -72,6 +73,7 @@ export function createGame(parent: HTMLElement): Phaser.Game {
       GymnasticsSelectScene,
       GymnasticsTopScene,
       GymnasticsDanielScene,
+      FerrySelectScene,
       LighthouseSelectScene,
       MusicSelectScene,
       MusicSongSelectScene,

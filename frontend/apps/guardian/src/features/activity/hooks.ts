@@ -6,19 +6,32 @@ import {
   getMyExerciseSessions,
   getMyMusicResults,
   getMyTaekwondoSessions,
+  getUsageAverages,
   type DailyUsageStatsParams,
   type GetMyArtworksParams,
   type GetMyExerciseSessionsParams,
   type GetMyMusicResultsParams,
   type GetMyTaekwondoSessionsParams,
+  type UsageAveragesParams,
 } from '@wish/api-client'
 
 export const USAGE_STATS_DAILY_QUERY_KEY = 'usage-stats-daily'
 export const USAGE_STATS_CUMULATIVE_QUERY_KEY = 'usage-stats-cumulative'
+export const USAGE_STATS_AVERAGES_QUERY_KEY = 'usage-stats-averages'
 export const MY_ARTWORKS_QUERY_KEY = 'artworks-me'
 export const MY_MUSIC_RESULTS_QUERY_KEY = 'music-results-me'
 export const MY_TAEKWONDO_SESSIONS_QUERY_KEY = 'taekwondo-sessions-me'
 export const MY_EXERCISE_SESSIONS_QUERY_KEY = 'exercise-sessions-me'
+
+export function useUsageAverages(params: UsageAveragesParams = {}) {
+  return useQuery({
+    queryKey: [USAGE_STATS_AVERAGES_QUERY_KEY, params.from, params.to],
+    queryFn: async () => {
+      const response = await getUsageAverages(params)
+      return response.data
+    },
+  })
+}
 
 export function useDailyUsageStats(
   patientId: number | undefined,

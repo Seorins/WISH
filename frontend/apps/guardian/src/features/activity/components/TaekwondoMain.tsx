@@ -8,7 +8,7 @@ import {
   type TaekwondoMotion,
 } from '@wish/api-client'
 import { useMyPatientId } from '@/features/auth/hooks/useMyPatientId'
-import { useDailyUsageStats, useMyTaekwondoSessions } from '../hooks'
+import { useDailyUsageStats, useMyTaekwondoSessions, useUsageAverages } from '../hooks'
 import { aggregateTaekwondoMotionStats, type MotionStats } from '../utils/aggregateMotionStats'
 import styles from './MotionActivity.module.css'
 
@@ -51,6 +51,9 @@ export function TaekwondoMain() {
   const today = todayKst()
   const { data: daily } = useDailyUsageStats(patientId ?? undefined, { from: today, to: today })
   const todayTaekwondoSeconds = daily?.items[0]?.taekwondo ?? 0
+  // mineSeconds 가 today 단일일이라 또래 평균도 same window 로 맞춤.
+  const { data: averages } = useUsageAverages({ from: today, to: today })
+  const peerTaekwondo = averages?.contentAverages.find(c => c.contentType === 'TAEKWONDO')
 
   const [poomsae, setPoomsae] = useState<Poomsae>(DEFAULT_POOMSAE)
   const { data: motions = [], isLoading, error } = useTaekwondoMotions(poomsae)
@@ -110,7 +113,11 @@ export function TaekwondoMain() {
           onSelect={setSelectedMotionId}
           isLoading={isLoading}
         />
-        <PeerCompareCard mineSeconds={todayTaekwondoSeconds} />
+        <PeerCompareCard
+          mineSeconds={todayTaekwondoSeconds}
+          peerSeconds={peerTaekwondo?.averageSeconds ?? null}
+          activePatients={averages?.activePatients ?? 0}
+        />
       </aside>
     </div>
   )
@@ -227,15 +234,22 @@ function StatsCard({ motion, stats }: { motion: TaekwondoMotion; stats: MotionSt
   )
 }
 
-function PeerCompareCard({ mineSeconds }: { mineSeconds: number }) {
-  // 또래 평균 API 미구현 — 음악/미술과 동일하게 "집계 중" 처리.
-  const hasPeer = false
-  const peerSeconds = 0
+function PeerCompareCard({
+  mineSeconds,
+  peerSeconds,
+  activePatients,
+}: {
+  mineSeconds: number
+  peerSeconds: number | null
+  activePatients: number
+}) {
+  const hasPeer = peerSeconds != null && activePatients > 0
+  const peerValue = hasPeer ? peerSeconds : 0
 
-  const max = Math.max(mineSeconds, peerSeconds, 1)
+  const max = Math.max(mineSeconds, peerValue, 1)
   const minePct = (mineSeconds / max) * 100
-  const peerPct = hasPeer ? (peerSeconds / max) * 100 : 0
-  const peerLabel = hasPeer ? formatDurationSec(peerSeconds) : '집계 중'
+  const peerPct = hasPeer ? (peerValue / max) * 100 : 0
+  const peerLabel = hasPeer ? formatDurationSec(peerValue) : '집계 중'
 
   return (
     <section className={styles.peerCard}>
@@ -266,12 +280,14 @@ function PeerCompareCard({ mineSeconds }: { mineSeconds: number }) {
           </div>
         </div>
       </div>
-      <div className={styles.peerNote}>
-        <span aria-hidden className={styles.peerNoteIcon}>
-          ⌛
-        </span>
-        <span>또래 평균 데이터를 모으는 중이에요</span>
-      </div>
+      {!hasPeer && (
+        <div className={styles.peerNote}>
+          <span aria-hidden className={styles.peerNoteIcon}>
+            ⌛
+          </span>
+          <span>또래 평균 데이터를 모으는 중이에요</span>
+        </div>
+      )}
     </section>
   )
 }

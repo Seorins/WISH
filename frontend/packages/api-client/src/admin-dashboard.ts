@@ -10,9 +10,18 @@ export type AdminDashboardSummary = {
   todayTotalSeconds: number
   periodTotalSeconds: number
   averageDailySeconds: number
+  periodActivePatients: number
   atRiskPatients: number
   newUsersToday: number
   newPatientsToday: number
+}
+
+export type AdminDashboardPreviousPeriodSummary = {
+  from: string
+  to: string
+  periodTotalSeconds: number
+  averageDailySeconds: number
+  periodActivePatients: number
 }
 
 export type AdminDashboardDailyUsage = {
@@ -59,6 +68,7 @@ export type AdminDashboard = {
   from: string
   to: string
   summary: AdminDashboardSummary
+  previous: AdminDashboardPreviousPeriodSummary
   dailyUsage: AdminDashboardDailyUsage[]
   contentShares: AdminDashboardContentShare[]
   patientActivities: AdminDashboardPatientActivity[]
@@ -104,6 +114,17 @@ export type AdminPatientDashboardDailyUsage = {
   active: boolean
 }
 
+export type AdminPatientHeatmapCell = {
+  weekday: number
+  hour: number
+  totalSeconds: number
+}
+
+export type AdminPatientHourlyHeatmap = {
+  maxSeconds: number
+  cells: AdminPatientHeatmapCell[]
+}
+
 export type AdminPatientDashboard = {
   from: string
   to: string
@@ -111,6 +132,32 @@ export type AdminPatientDashboard = {
   summary: AdminPatientDashboardSummary
   dailyUsage: AdminPatientDashboardDailyUsage[]
   contentShares: AdminDashboardContentShare[]
+  heatmap: AdminPatientHourlyHeatmap
+}
+
+export type GuardianNotificationType = 'RISK' | 'CONTENT_SKEW' | 'CHECK_IN'
+
+export type GuardianNotificationRequest = {
+  patientId: number
+  type: GuardianNotificationType
+  message: string
+}
+
+export type GuardianNotificationResponse = {
+  patientId: number
+  patientName: string
+  guardianEmail: string
+  type: GuardianNotificationType
+  message: string
+  sentAt: string
+}
+
+export async function notifyGuardian(request: GuardianNotificationRequest) {
+  const response = await apiClient.post<ApiResponse<GuardianNotificationResponse>>(
+    '/admin/notifications/guardian',
+    request,
+  )
+  return response.data
 }
 
 export async function getAdminDashboard(params?: GetAdminDashboardParams) {

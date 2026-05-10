@@ -40,3 +40,42 @@
   min-height: 0;
 }
 
+@media (max-width: 1024px) {
+  .headerSlot {
+    padding: 12px 20px 0;
+  }
+  .main {
+    padding: var(--dash-space-3) var(--dash-space-5) var(--dash-space-3);
+    gap: var(--dash-space-3);
+  }
+  .topGrid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--dash-space-3);
+  }
+}
+
+@media (max-width: 768px) {
+  .shell {
+    height: auto;
+    min-height: 100vh;
+    overflow: visible;
+    overflow-x: hidden;
+    padding-bottom: calc(var(--dash-bottom-tab-height) + env(safe-area-inset-bottom, 0px));
+  }
+  .headerSlot {
+    padding: 10px 16px 0;
+  }
+  .main {
+    flex: 0 1 auto;
+    padding: var(--dash-space-3) var(--dash-space-4) var(--dash-space-4);
+    gap: var(--dash-space-3);
+  }
+  .topGrid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--dash-space-3);
+  }
+  .rightStack {
+    gap: var(--dash-space-3);
+  }
+}
+

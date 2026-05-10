@@ -337,3 +337,32 @@
 .romRatingCyan {
   color: #2c9bbd;
 }
+
+@media (max-width: 768px) {
+  .card {
+    padding: var(--dash-space-4);
+  }
+  .scoreBody {
+    grid-template-columns: 80px 1fr auto;
+    gap: var(--dash-space-3);
+  }
+  .scoreTitle {
+    font-size: 16px;
+  }
+  .scoreSubtitle {
+    font-size: 12px;
+  }
+  .scoreStar {
+    font-size: 26px;
+  }
+  .romGrid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+  }
+}
+
+@media (max-width: 480px) {
+  .romGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

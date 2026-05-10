@@ -10,6 +10,7 @@ export type GymnasticsRangeSummaryItem = {
   exerciseMotionId: number
   motionName: string
   routineOrder: number
+  scoreAvailable: boolean
   currentPercent: number
   previousPercent: number | null
   deltaPercent: number | null
@@ -24,6 +25,7 @@ export type GymnasticsRangeSummary = {
   sessionId: number
   exerciseType: string
   createdAt: string
+  scoreAvailable: boolean
   averagePercent: number
   previousAveragePercent: number | null
   averageDeltaPercent: number | null
@@ -33,7 +35,6 @@ export type GymnasticsRangeSummary = {
 }
 
 const TOP_TARGET_COUNT = 8
-const DANIEL_TARGET_COUNT = 1
 const DELTA_STEADY_THRESHOLD = 1
 
 export function isGymnasticsSession(
@@ -61,13 +62,17 @@ function normalizeCompletedCount(value: number): number {
   return Math.max(0, value)
 }
 
+function isSessionRecordOnly(exerciseType: string): boolean {
+  return exerciseType === 'DANIEL'
+}
+
 function resolveTargetCount(exerciseType: string, motion: ExerciseSessionMotionResult): number {
   if (exerciseType === 'TOP') {
     return TOP_TARGET_COUNT
   }
 
   if (exerciseType === 'DANIEL') {
-    return DANIEL_TARGET_COUNT
+    return 0
   }
 
   return Math.max(1, Math.ceil(normalizeCompletedCount(motion.completedReps)))
@@ -81,15 +86,14 @@ function resolveRangeRate(exerciseType: string, motion: ExerciseSessionMotionRes
   return Math.max(completionRate, countRate)
 }
 
-function resolveProgressLabel(
-  exerciseType: string,
-  completedCount: number,
-  targetCount: number,
-): string {
+function resolveProgressLabel(exerciseType: string, motion: ExerciseSessionMotionResult): string {
   if (exerciseType === 'DANIEL') {
-    return completedCount >= 1 ? '10초 완료' : '10초 진행 중'
+    const durationSec = Math.max(0, Math.round(motion.durationSec))
+    return durationSec > 0 ? `${durationSec}초 세션` : '10초 세션'
   }
 
+  const completedCount = normalizeCompletedCount(motion.completedReps)
+  const targetCount = resolveTargetCount(exerciseType, motion)
   return `${completedCount}/${targetCount}회`
 }
 
@@ -111,10 +115,13 @@ export function buildGymnasticsRangeSummary(
   const items = [...current.motions]
     .sort((a, b) => a.routineOrder - b.routineOrder)
     .map(motion => {
-      const currentPercent = roundPercent(resolveRangeRate(current.exerciseType, motion))
+      const scoreAvailable = !isSessionRecordOnly(current.exerciseType)
+      const currentPercent = scoreAvailable
+        ? roundPercent(resolveRangeRate(current.exerciseType, motion))
+        : 0
       const previousMotion = previousByMotionId.get(motion.exerciseMotionId)
       const previousPercent =
-        previous && previousMotion
+        scoreAvailable && previous && previousMotion
           ? roundPercent(resolveRangeRate(previous.exerciseType, previousMotion))
           : null
       const deltaPercent = previousPercent === null ? null : currentPercent - previousPercent
@@ -125,18 +132,20 @@ export function buildGymnasticsRangeSummary(
         exerciseMotionId: motion.exerciseMotionId,
         motionName: motion.motionName,
         routineOrder: motion.routineOrder,
+        scoreAvailable,
         currentPercent,
         previousPercent,
         deltaPercent,
         completionRate: clampRate(motion.accuracy),
         completedCount,
         targetCount,
-        progressLabel: resolveProgressLabel(current.exerciseType, completedCount, targetCount),
+        progressLabel: resolveProgressLabel(current.exerciseType, motion),
         status: resolveStatus(deltaPercent),
       }
     })
 
-  const averagePercent = average(items.map(item => item.currentPercent))
+  const scoreItems = items.filter(item => item.scoreAvailable)
+  const averagePercent = average(scoreItems.map(item => item.currentPercent))
   const previousValues = items
     .map(item => item.previousPercent)
     .filter((value): value is number => value !== null)
@@ -148,6 +157,7 @@ export function buildGymnasticsRangeSummary(
     sessionId: current.id,
     exerciseType: current.exerciseType,
     createdAt: current.createdAt,
+    scoreAvailable: scoreItems.length > 0,
     averagePercent,
     previousAveragePercent,
     averageDeltaPercent,

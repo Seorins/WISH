@@ -227,3 +227,81 @@
   font-size: 11.5px;
   font-weight: 600;
 }
+
+@media (max-width: 768px) {
+  .card {
+    padding: 16px;
+    gap: 12px;
+    height: auto;
+    overflow: hidden;
+    min-width: 0;
+  }
+  .title {
+    font-size: 20px;
+  }
+  .topRow {
+    flex-direction: column;
+    gap: 10px;
+    align-items: stretch;
+  }
+  .stage {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: 220px auto;
+    gap: 10px;
+    padding: 10px;
+    min-height: 380px;
+  }
+  .stageLeft {
+    grid-column: 1;
+    grid-row: 1;
+    height: 220px;
+    overflow: hidden;
+    min-width: 0;
+  }
+  .stageRight {
+    grid-column: 2;
+    grid-row: 1;
+    height: 220px;
+    overflow: hidden;
+    min-width: 0;
+  }
+  .partnerImg {
+    width: auto;
+    height: 200%;
+    max-width: none;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    object-fit: contain;
+    object-position: center top;
+  }
+  .bubbles {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    min-width: 0;
+    align-items: stretch;
+    justify-content: flex-start;
+    padding: 0 4px;
+  }
+  .bubble {
+    max-width: 75%;
+    align-self: flex-end;
+  }
+  .bubbleChild {
+    align-self: flex-start;
+  }
+  .summaryRow {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+}
+
+@media (max-width: 480px) {
+  .stage {
+    grid-template-rows: 180px auto;
+  }
+  .stageLeft,
+  .stageRight {
+    height: 180px;
+  }
+}

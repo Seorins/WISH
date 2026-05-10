@@ -116,6 +116,11 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
   private lastHandDrawPoint: Phaser.Math.Vector2 | null = null
   private currentTool: DrawingTool = 'brush'
   private currentColor: number = PALETTE_SWATCHES[0].color
+  // 실제로 brush 로 그려본 팔레트 색 추적 (지우개 제외).
+  // 이전엔 export 시 캔버스 픽셀 RGB 를 팔레트와 정확 매칭했는데, Phaser 안티알리아싱이
+  // 가장자리를 배경과 블렌딩해서 정확 매칭이 거의 실패 → 0가지로 저장되는 버그가 있었다.
+  // 유저가 선택해서 한 번이라도 그은 색을 누적하는 게 의도("사용한 색 N가지")에도 더 충실.
+  private usedColors = new Set<number>()
   private lastHandColorSelectedAt = 0
   private pendingHandColor: number | null = null
   private pendingHandColorStartedAt = 0
@@ -1319,6 +1324,7 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
     this.brushStroke.fillStyle(this.getActiveStrokeColor(), 1)
     this.brushStroke.fillCircle(x - this.drawBounds.x, y - this.drawBounds.y, strokeSize / 2)
     this.drawingTexture.draw(this.brushStroke)
+    this.recordUsedColor()
   }
 
   private drawStroke(from: Phaser.Math.Vector2, to: Phaser.Math.Vector2) {
@@ -1333,6 +1339,13 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
     this.brushStroke.fillStyle(strokeColor, 1)
     this.brushStroke.fillCircle(to.x - this.drawBounds.x, to.y - this.drawBounds.y, strokeSize / 2)
     this.drawingTexture.draw(this.brushStroke)
+    this.recordUsedColor()
+  }
+
+  private recordUsedColor() {
+    if (this.currentTool !== 'eraser') {
+      this.usedColors.add(this.currentColor)
+    }
   }
 
   private getActiveStrokeColor() {
@@ -1385,6 +1398,7 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
     this.drawingTexture.clear()
     this.hasStartedDrawing = false
     this.strokeCount = 0
+    this.usedColors.clear()
   }
 
   private requestSaveDrawing() {
@@ -1471,7 +1485,7 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
         context.fillRect(0, 0, width, height)
         context.drawImage(snapshot, 0, 0, width, height)
 
-        const colorCount = this.countPaletteColorsInCanvas(context, width, height)
+        const colorCount = this.usedColors.size
 
         const dataUrl = outputCanvas.toDataURL('image/png')
         resolve({
@@ -1490,30 +1504,6 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
 
   private getPlayDurationSeconds() {
     return Math.max(0, Math.floor((this.time.now - this.contentStartedAt) / 1000))
-  }
-
-  private countPaletteColorsInCanvas(
-    context: CanvasRenderingContext2D,
-    width: number,
-    height: number,
-  ): number {
-    const paletteColors = new Set<number>()
-    for (const swatch of PALETTE_SWATCHES) {
-      paletteColors.add(swatch.color)
-    }
-    const totalPaletteColors = paletteColors.size
-    const found = new Set<number>()
-    const data = context.getImageData(0, 0, width, height).data
-    for (let i = 0; i < data.length; i += 4) {
-      const rgb = (data[i] << 16) | (data[i + 1] << 8) | data[i + 2]
-      if (paletteColors.has(rgb)) {
-        found.add(rgb)
-        if (found.size === totalPaletteColors) {
-          break
-        }
-      }
-    }
-    return found.size
   }
 
   private dataUrlToBlob(dataUrl: string) {

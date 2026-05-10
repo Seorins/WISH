@@ -3,7 +3,7 @@ import type { Artwork } from '@wish/api-client'
 import artIconImg from '@/assets/art_icon.png'
 import { useMyPatientId } from '@/features/auth/hooks/useMyPatientId'
 import { PaletteColorIcon, StarFilledIcon } from '@/features/dashboard/components/icons'
-import { useDailyUsageStats, useMyArtworks } from '../hooks'
+import { useDailyUsageStats, useMyArtworks, useUsageAverages } from '../hooks'
 import styles from './ArtMain.module.css'
 
 function todayKst(): string {
@@ -36,9 +36,6 @@ function formatShortDateKst(createdAt: string): string {
 
 const PAST_VISIBLE_COUNT = 1
 
-// 색 추적은 Phase 2 (백엔드 colors_used 컬럼) 에서 실제값으로 교체.
-const PLACEHOLDER_COLORS_USED = 8
-
 // AI 요약 미구현 — Phase 3 에서 lighthouse 감정 분석과 유사한 구조로 교체.
 const SUMMARY_PLACEHOLDER_TEXT = '다양한 색을 사용해서 멋진 풍경을 표현했어요.'
 const SUMMARY_PLACEHOLDER_TAGS = ['색감 표현이 풍부해요', '구성이 안정적이에요', '집중력이 좋아요']
@@ -56,6 +53,9 @@ export function ArtMain() {
     from: today,
     to: today,
   })
+  // mineSeconds 가 today 단일일이라 또래 평균도 같은 today 윈도우로 맞춰야 분모/스케일이 일치.
+  const { data: averages } = useUsageAverages({ from: today, to: today })
+  const peerArt = averages?.contentAverages.find(c => c.contentType === 'ART')
   const todayArtSeconds = daily?.items[0]?.art ?? 0
   const [index, setIndex] = useState(0)
 
@@ -148,7 +148,11 @@ export function ArtMain() {
       </div>
       <aside className={styles.sideColumn}>
         <ArtInfoCard artwork={current} />
-        <ArtPeerCompareCard mineSeconds={todayArtSeconds} />
+        <ArtPeerCompareCard
+          mineSeconds={todayArtSeconds}
+          peerSeconds={peerArt?.averageSeconds ?? null}
+          activePatients={averages?.activePatients ?? 0}
+        />
         <ArtPastCarousel artworks={pastArtworks} />
       </aside>
     </div>
@@ -186,15 +190,24 @@ function ArtSummaryCard() {
   )
 }
 
-function ArtPeerCompareCard({ mineSeconds }: { mineSeconds: number }) {
-  // 또래 평균 API 미구현 — 음악 페이지와 동일하게 "집계 중" 처리. peer endpoint 생기면 활성화.
-  const hasPeer = false
-  const peerSeconds = 0
+function ArtPeerCompareCard({
+  mineSeconds,
+  peerSeconds,
+  activePatients,
+}: {
+  mineSeconds: number
+  peerSeconds: number | null
+  activePatients: number
+}) {
+  // BE /usage-stats/period-averages 가 today 윈도우로 활동 환자 수 = 0 일 수도 있다.
+  // 그 경우 averageSeconds 도 0 으로 내려오는데 "비교"가 아니라 "집계 중" UI 가 더 정확.
+  const hasPeer = peerSeconds != null && activePatients > 0
+  const peerValue = hasPeer ? peerSeconds : 0
 
-  const max = Math.max(mineSeconds, peerSeconds, 1)
+  const max = Math.max(mineSeconds, peerValue, 1)
   const minePct = (mineSeconds / max) * 100
-  const peerPct = hasPeer ? (peerSeconds / max) * 100 : 0
-  const peerLabel = hasPeer ? formatDurationSec(peerSeconds) : '집계 중'
+  const peerPct = hasPeer ? (peerValue / max) * 100 : 0
+  const peerLabel = hasPeer ? formatDurationSec(peerValue) : '집계 중'
 
   return (
     <section className={styles.peerCard}>
@@ -225,12 +238,14 @@ function ArtPeerCompareCard({ mineSeconds }: { mineSeconds: number }) {
           </div>
         </div>
       </div>
-      <div className={styles.peerNote}>
-        <span aria-hidden className={styles.peerNoteIcon}>
-          ⌛
-        </span>
-        <span>또래 평균 데이터를 모으는 중이에요</span>
-      </div>
+      {!hasPeer && (
+        <div className={styles.peerNote}>
+          <span aria-hidden className={styles.peerNoteIcon}>
+            ⌛
+          </span>
+          <span>또래 평균 데이터를 모으는 중이에요</span>
+        </div>
+      )}
     </section>
   )
 }
@@ -289,6 +304,9 @@ function ArtPastCarousel({ artworks }: { artworks: Artwork[] }) {
 
 function ArtInfoCard({ artwork }: { artwork: Artwork }) {
   const kindLabel = artwork.sketchCode == null ? '자유그림' : '색칠하기'
+  // V23 마이그레이션 이전 작품은 colorCount 가 0/undefined 로 내려옴 — "—" 표시.
+  const colorsLabel =
+    artwork.colorCount != null && artwork.colorCount > 0 ? `${artwork.colorCount}가지` : '—'
   const stats = [
     {
       id: 'time',
@@ -298,7 +316,7 @@ function ArtInfoCard({ artwork }: { artwork: Artwork }) {
     {
       id: 'colors',
       label: '사용한 색',
-      value: `${PLACEHOLDER_COLORS_USED}가지`,
+      value: colorsLabel,
     },
     {
       id: 'kind',

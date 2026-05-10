@@ -69,22 +69,32 @@ describe('gymnasticsRangeSummary', () => {
     })
   })
 
-  it('다니엘 세션은 10초 완료 여부를 기준으로 요약한다', () => {
+  it('다니엘 세션은 완료율 점수가 아니라 세션 기록으로 요약한다', () => {
     const current = session({ exerciseType: 'DANIEL' }, [motion(6, 1, 0.2), motion(7, 0, 0)])
 
     const summary = buildGymnasticsRangeSummary(current)
 
+    expect(summary.scoreAvailable).toBe(false)
+    expect(summary.averagePercent).toBe(0)
+    expect(summary.previousAveragePercent).toBeNull()
+    expect(summary.averageDeltaPercent).toBeNull()
     expect(summary.items[0]).toMatchObject({
-      currentPercent: 100,
+      scoreAvailable: false,
+      currentPercent: 0,
+      previousPercent: null,
+      deltaPercent: null,
       completedCount: 1,
-      targetCount: 1,
-      progressLabel: '10초 완료',
+      targetCount: 0,
+      progressLabel: '10초 세션',
     })
     expect(summary.items[1]).toMatchObject({
+      scoreAvailable: false,
       currentPercent: 0,
+      previousPercent: null,
+      deltaPercent: null,
       completedCount: 0,
-      targetCount: 1,
-      progressLabel: '10초 진행 중',
+      targetCount: 0,
+      progressLabel: '10초 세션',
     })
   })
 

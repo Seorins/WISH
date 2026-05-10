@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import type { CSSProperties } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { getAdminDashboard } from '@wish/api-client'
@@ -8,6 +8,7 @@ import type {
   AdminDashboardContentShare,
   AdminDashboardPatientActivity,
   AdminDashboardPatientStatus,
+  GuardianNotificationType,
 } from '@wish/api-client'
 import {
   Bar,
@@ -25,6 +26,7 @@ import {
   YAxis,
 } from 'recharts'
 import { AdminShell } from '../shared/components/AdminShell'
+import { NotifyGuardianDialog } from '../shared/components/NotifyGuardianDialog'
 
 type RangeDays = 7 | 14 | 30
 
@@ -69,9 +71,18 @@ const fullDateFormat = new Intl.DateTimeFormat('ko-KR', {
   day: '2-digit',
 })
 
+type NotifyTarget = {
+  patientId: number
+  patientName: string
+  guardianEmail: string
+  type: GuardianNotificationType
+  defaultMessage: string
+}
+
 export function DashboardPage() {
   const navigate = useNavigate()
   const [rangeDays, setRangeDays] = useState<RangeDays>(7)
+  const [notifyTarget, setNotifyTarget] = useState<NotifyTarget | null>(null)
   const dateRange = useMemo(() => createDateRange(rangeDays), [rangeDays])
 
   const dashboardQuery = useQuery({
@@ -94,9 +105,30 @@ export function DashboardPage() {
       })) ?? [],
     [dashboard],
   )
-  const patientRows = useMemo(
-    () => sortPatientActivities(dashboard?.patientActivities ?? []).slice(0, 12),
+  const sortedPatients = useMemo(
+    () => sortPatientActivities(dashboard?.patientActivities ?? []),
     [dashboard],
+  )
+  // 위험 환자는 잘리지 않도록 우선 모두 노출하고, 나머지는 상위 일부만 채워 최대 20명 한도.
+  const patientRows = useMemo(() => {
+    const riskRows = sortedPatients.filter(activity => activity.status === 'RISK')
+    const others = sortedPatients.filter(activity => activity.status !== 'RISK')
+    const cap = Math.max(20, riskRows.length)
+    return [...riskRows, ...others].slice(0, cap)
+  }, [sortedPatients])
+  const summary = dashboard?.summary
+  const previous = dashboard?.previous
+  const periodSecondsDelta = computePercentDelta(
+    summary?.periodTotalSeconds ?? 0,
+    previous?.periodTotalSeconds ?? 0,
+  )
+  const averageDailyDelta = computePercentDelta(
+    summary?.averageDailySeconds ?? 0,
+    previous?.averageDailySeconds ?? 0,
+  )
+  const periodActiveDelta = computeAbsoluteDelta(
+    summary?.periodActivePatients ?? 0,
+    previous?.periodActivePatients ?? 0,
   )
 
   const actions = (
@@ -162,6 +194,28 @@ export function DashboardPage() {
               label="기간 앱 사용"
               value={formatDuration(dashboard.summary.periodTotalSeconds)}
               detail={`일 평균 앱 사용 ${formatDuration(dashboard.summary.averageDailySeconds)}`}
+              delta={
+                <DeltaBadge
+                  label="직전 동기간"
+                  type="percent"
+                  value={periodSecondsDelta}
+                  positiveIsGood
+                />
+              }
+            />
+            <KpiCard
+              label="기간 활성 환자"
+              value={`${formatNumber(dashboard.summary.periodActivePatients)}명`}
+              detail={`기간 일 평균 ${formatDuration(dashboard.summary.averageDailySeconds)}`}
+              delta={
+                <DeltaBadge
+                  label="직전 동기간"
+                  type="count"
+                  value={periodActiveDelta}
+                  positiveIsGood
+                  unit="명"
+                />
+              }
             />
             <KpiCard
               label="이탈 위험"
@@ -170,9 +224,17 @@ export function DashboardPage() {
               tone={dashboard.summary.atRiskPatients > 0 ? 'risk' : 'normal'}
             />
             <KpiCard
-              label="오늘 신규 계정"
-              value={`${formatNumber(dashboard.summary.newUsersToday)}명`}
-              detail="보호자/관리자 포함"
+              label="일 평균 앱 사용"
+              value={formatDuration(dashboard.summary.averageDailySeconds)}
+              detail={`기간 합계 ${formatDuration(dashboard.summary.periodTotalSeconds)}`}
+              delta={
+                <DeltaBadge
+                  label="직전 동기간"
+                  type="percent"
+                  value={averageDailyDelta}
+                  positiveIsGood
+                />
+              }
             />
           </section>
 
@@ -301,10 +363,11 @@ export function DashboardPage() {
               <div>
                 <h2 style={styles.panelTitle}>관심 환자 활동 현황</h2>
                 <p style={styles.panelDescription}>
-                  위험 상태를 우선 정렬하고 기간 앱 사용시간을 함께 표시합니다.
+                  위험 환자는 잘리지 않고 모두 노출하며, 행에서 바로 보호자에게 안내를 보낼 수
+                  있습니다.
                 </p>
               </div>
-              <span style={styles.periodBadge}>상위 {formatNumber(patientRows.length)}명</span>
+              <span style={styles.periodBadge}>표시 {formatNumber(patientRows.length)}명</span>
             </div>
             <div style={styles.tableWrap}>
               <table style={styles.table}>
@@ -317,13 +380,17 @@ export function DashboardPage() {
                     <th style={styles.th}>선호 콘텐츠</th>
                     <th style={styles.th}>마지막 활동</th>
                     <th style={styles.th}>상태</th>
+                    <th style={styles.th}>안내</th>
                   </tr>
                 </thead>
                 <tbody>
                   {patientRows.length === 0 && (
                     <tr>
-                      <td colSpan={7} style={styles.emptyRow}>
-                        표시할 환자 활동이 없습니다.
+                      <td colSpan={8} style={styles.emptyRow}>
+                        <div style={styles.emptyTitle}>표시할 환자 활동이 없습니다</div>
+                        <div style={styles.emptyHint}>
+                          기간을 늘리거나 데이터 수집을 기다려 주세요.
+                        </div>
                       </td>
                     </tr>
                   )}
@@ -338,7 +405,10 @@ export function DashboardPage() {
                           navigate(`/dashboard/patients/${patient.patientId}`)
                         }
                       }}
-                      style={styles.clickableRow}
+                      style={{
+                        ...styles.clickableRow,
+                        ...(patient.status === 'RISK' ? styles.riskRow : {}),
+                      }}
                     >
                       <td style={styles.nameCell}>
                         <strong>{patient.patientName}</strong>
@@ -352,6 +422,22 @@ export function DashboardPage() {
                       <td style={styles.td}>
                         <StatusBadge status={patient.status} />
                       </td>
+                      <td style={styles.td}>
+                        <button
+                          type="button"
+                          onClick={event => {
+                            event.stopPropagation()
+                            setNotifyTarget(buildNotifyTarget(patient))
+                          }}
+                          style={
+                            patient.status === 'RISK'
+                              ? styles.notifyButtonRisk
+                              : styles.notifyButton
+                          }
+                        >
+                          {patient.status === 'RISK' ? '위험 안내' : '안내'}
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -360,8 +446,108 @@ export function DashboardPage() {
           </section>
         </div>
       )}
+
+      <NotifyGuardianDialog
+        open={notifyTarget != null}
+        patientId={notifyTarget?.patientId ?? null}
+        patientName={notifyTarget?.patientName}
+        guardianEmail={notifyTarget?.guardianEmail}
+        type={notifyTarget?.type ?? 'CHECK_IN'}
+        defaultMessage={notifyTarget?.defaultMessage ?? ''}
+        onClose={() => setNotifyTarget(null)}
+      />
     </AdminShell>
   )
+}
+
+function buildNotifyTarget(patient: AdminDashboardPatientActivity): NotifyTarget {
+  if (patient.status === 'RISK') {
+    return {
+      patientId: patient.patientId,
+      patientName: patient.patientName,
+      guardianEmail: patient.guardianEmail,
+      type: 'RISK',
+      defaultMessage: `${patient.patientName} 환자가 최근 활동이 줄어 콘몽 운영팀에서 안내드립니다. 함께 짧은 활동이라도 시작해 보시면 좋겠어요.`,
+    }
+  }
+  return {
+    patientId: patient.patientId,
+    patientName: patient.patientName,
+    guardianEmail: patient.guardianEmail,
+    type: 'CHECK_IN',
+    defaultMessage: `${patient.patientName} 환자의 최근 콘몽 활동을 확인해 주세요. 궁금하신 점이 있다면 운영팀에 알려주세요.`,
+  }
+}
+
+function computePercentDelta(current: number, previous: number) {
+  if (previous <= 0) {
+    if (current > 0) return { kind: 'new' as const }
+    return { kind: 'flat' as const }
+  }
+  const diff = current - previous
+  const percent = (diff / previous) * 100
+  if (Math.abs(percent) < 0.5) return { kind: 'flat' as const }
+  return { kind: 'value' as const, value: percent }
+}
+
+function computeAbsoluteDelta(current: number, previous: number) {
+  const diff = current - previous
+  if (diff === 0) return { kind: 'flat' as const }
+  return { kind: 'value' as const, value: diff }
+}
+
+type DeltaResult = { kind: 'flat' } | { kind: 'new' } | { kind: 'value'; value: number }
+
+function DeltaBadge({
+  label,
+  value,
+  type,
+  positiveIsGood,
+  unit,
+}: {
+  label: string
+  value: DeltaResult
+  type: 'percent' | 'count'
+  positiveIsGood: boolean
+  unit?: string
+}) {
+  let text: string
+  let tone: 'good' | 'bad' | 'flat' | 'new'
+  if (value.kind === 'flat') {
+    text = '변화 없음'
+    tone = 'flat'
+  } else if (value.kind === 'new') {
+    text = '신규 추세'
+    tone = 'new'
+  } else {
+    const sign = value.value > 0 ? '▲' : '▼'
+    if (type === 'percent') {
+      text = `${sign} ${Math.abs(value.value).toFixed(1)}%`
+    } else {
+      text = `${sign} ${Math.abs(value.value)}${unit ?? ''}`
+    }
+    const positive = value.value > 0
+    tone = positiveIsGood === positive ? 'good' : 'bad'
+  }
+  return (
+    <span style={{ ...styles.deltaBadge, ...deltaToneStyle(tone) }}>
+      <span style={styles.deltaLabel}>{label}</span>
+      <span style={styles.deltaValue}>{text}</span>
+    </span>
+  )
+}
+
+function deltaToneStyle(tone: 'good' | 'bad' | 'flat' | 'new'): CSSProperties {
+  if (tone === 'good') {
+    return { color: '#0b7285', background: '#e6f6ff', borderColor: '#b3ecff' }
+  }
+  if (tone === 'bad') {
+    return { color: '#c92a2a', background: '#fff5f5', borderColor: '#ffc9c9' }
+  }
+  if (tone === 'new') {
+    return { color: '#5f3dc4', background: '#f3f0ff', borderColor: '#d0bfff' }
+  }
+  return { color: '#627d98', background: '#f0f4f8', borderColor: '#d9e2ec' }
 }
 
 function KpiCard({
@@ -369,17 +555,20 @@ function KpiCard({
   value,
   detail,
   tone = 'normal',
+  delta,
 }: {
   label: string
   value: string
   detail: string
   tone?: 'normal' | 'risk'
+  delta?: ReactNode
 }) {
   return (
     <article style={{ ...styles.kpiCard, ...(tone === 'risk' ? styles.kpiCardRisk : {}) }}>
       <span style={styles.kpiLabel}>{label}</span>
       <strong style={styles.kpiValue}>{value}</strong>
       <span style={styles.kpiDetail}>{detail}</span>
+      {delta && <div style={styles.kpiDelta}>{delta}</div>}
     </article>
   )
 }
@@ -643,6 +832,26 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 12,
     lineHeight: 1.35,
   },
+  kpiDelta: {
+    marginTop: 8,
+  },
+  deltaBadge: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 6,
+    padding: '4px 8px',
+    border: '1px solid transparent',
+    borderRadius: 6,
+    fontSize: 11,
+    fontWeight: 700,
+  },
+  deltaLabel: {
+    fontWeight: 500,
+    opacity: 0.8,
+  },
+  deltaValue: {
+    fontWeight: 800,
+  },
   chartGrid: {
     display: 'grid',
     gridTemplateColumns: 'minmax(0, 1.55fr) minmax(320px, 0.95fr)',
@@ -814,6 +1023,41 @@ const styles: Record<string, CSSProperties> = {
   },
   clickableRow: {
     cursor: 'pointer',
+  },
+  riskRow: {
+    background: '#fff5f5',
+    boxShadow: 'inset 3px 0 0 0 #c92a2a',
+  },
+  notifyButton: {
+    padding: '6px 10px',
+    background: '#fff',
+    color: '#0b7285',
+    border: '1px solid #b3ecff',
+    borderRadius: 6,
+    cursor: 'pointer',
+    fontSize: 12,
+    fontWeight: 700,
+  },
+  notifyButtonRisk: {
+    padding: '6px 10px',
+    background: '#c92a2a',
+    color: '#fff',
+    border: '1px solid #c92a2a',
+    borderRadius: 6,
+    cursor: 'pointer',
+    fontSize: 12,
+    fontWeight: 700,
+  },
+  emptyTitle: {
+    color: '#486581',
+    fontSize: 14,
+    fontWeight: 700,
+    marginBottom: 4,
+  },
+  emptyHint: {
+    color: '#829ab1',
+    fontSize: 12,
+    lineHeight: 1.6,
   },
   nameCell: {
     width: 150,
