@@ -29,6 +29,6 @@ public record LiveKitProperties(String url, String apiKey, String apiSecret) {
     }
 
     private static boolean isPlaceholder(String value) {
-        return value.startsWith(PLACEHOLDER_PREFIX) || value.contains("change-me.");
+        return value.contains(PLACEHOLDER_PREFIX);
     }
 }

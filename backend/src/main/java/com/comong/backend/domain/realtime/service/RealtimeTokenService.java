@@ -1,7 +1,5 @@
 package com.comong.backend.domain.realtime.service;
 
-import java.util.concurrent.TimeUnit;
-
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,13 +17,16 @@ import io.livekit.server.CanSubscribe;
 import io.livekit.server.RoomJoin;
 import io.livekit.server.RoomName;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class RealtimeTokenService {
 
     private static final long TOKEN_TTL_SECONDS = 3600;
+    private static final long TOKEN_TTL_MILLIS = TOKEN_TTL_SECONDS * 1000;
 
     private final LoginSessionService loginSessionService;
     private final LiveKitProperties liveKitProperties;
@@ -66,21 +67,35 @@ public class RealtimeTokenService {
                 new AccessToken(liveKitProperties.apiKey(), liveKitProperties.apiSecret());
         token.setIdentity(participantIdentity);
         token.setName(participantName);
-        token.setTtl(TimeUnit.MILLISECONDS.convert(TOKEN_TTL_SECONDS, TimeUnit.SECONDS));
+        token.setTtl(TOKEN_TTL_MILLIS);
         token.addGrants(
                 new RoomJoin(true),
                 new RoomName(roomName),
                 new CanPublish(canPublish),
                 new CanSubscribe(true),
                 new CanPublishData(canPublishData));
+        String jwt = createJwt(token, roomName, participantIdentity);
 
         return new LiveKitTokenResponse(
                 liveKitProperties.url(),
                 roomName,
                 participantIdentity,
                 participantName,
-                token.toJwt(),
+                jwt,
                 TOKEN_TTL_SECONDS);
+    }
+
+    private String createJwt(AccessToken token, String roomName, String participantIdentity) {
+        try {
+            return token.toJwt();
+        } catch (RuntimeException e) {
+            log.error(
+                    "LiveKit token issue failed. roomName={}, participantIdentity={}",
+                    roomName,
+                    participantIdentity,
+                    e);
+            throw new BusinessException(RealtimeErrorCode.LIVEKIT_TOKEN_ISSUE_FAILED);
+        }
     }
 
     private static String roomName(Long patientProfileId, Long loginSessionId) {
