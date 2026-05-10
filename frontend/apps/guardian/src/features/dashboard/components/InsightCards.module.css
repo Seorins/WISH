@@ -245,6 +245,15 @@
   height: 12px;
 }
 
+.scoreDeltaDown {
+  background: #fff1f3;
+  color: #d34962;
+}
+
+.scoreDeltaDown .scoreDeltaIcon {
+  transform: rotate(180deg);
+}
+
 .scoreStar {
   font-size: 32px;
   line-height: 1;
