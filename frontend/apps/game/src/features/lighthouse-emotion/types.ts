@@ -25,14 +25,24 @@ export interface EmotionSceneViewModel {
 
 export interface StartLighthouseEmotionRequest {
   patientProfileId: number
-  npcId: 'lighthouse_keeper'
-  mode: 'LIGHTHOUSE_LLM'
+  npcName: 'YEONGCHEOL'
 }
 
 export interface StartLighthouseEmotionResponse {
   sessionId: string
   status: 'IN_PROGRESS' | 'FINISHED' | 'CANCELLED'
   scene: EmotionSceneViewModel
+}
+
+export interface StartLighthouseEmotionApiResponse {
+  code: string
+  message: string
+  data: {
+    sessionId: number
+    status: 'IN_PROGRESS' | 'FINISHED' | 'CANCELLED'
+    scene: EmotionSceneViewModel | null
+  }
+  errors?: Record<string, string>
 }
 
 export interface SubmitLighthouseTurnRequest {
