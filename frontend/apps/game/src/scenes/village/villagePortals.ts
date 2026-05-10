@@ -1,7 +1,7 @@
 import Phaser from 'phaser'
 import { createRatioRectangle, type RatioRect } from '@/game/world/portal'
 
-export type VillagePortalKey = 'art' | 'taekwondo' | 'gymnastics' | 'music' | 'lighthouse'
+export type VillagePortalKey = 'art' | 'taekwondo' | 'gymnastics' | 'music' | 'lighthouse' | 'ferry'
 
 export type VillageThemePortal = RatioRect & {
   key: VillagePortalKey
@@ -34,6 +34,7 @@ export const VILLAGE_THEME_PORTALS: VillageThemePortal[] = [
   createVillageThemePortal('gymnastics', 'GymnasticsSelectScene', 0.724, 0.225),
   createVillageThemePortal('music', 'MusicSelectScene', 0.231, 0.15),
   createVillageThemePortal('lighthouse', 'LighthouseSelectScene', 0.688, 0.595),
+  createVillageThemePortal('ferry', 'FerrySelectScene', 0.465, 0.79),
 ]
 
 export function createInitialVillagePortalState(): Record<VillagePortalKey, boolean> {
