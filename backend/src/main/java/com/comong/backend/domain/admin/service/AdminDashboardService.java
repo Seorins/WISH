@@ -22,6 +22,7 @@ import com.comong.backend.domain.patient.repository.PatientProfileRepository;
 import com.comong.backend.domain.usage.entity.ContentType;
 import com.comong.backend.domain.usage.entity.DailyUsageStat;
 import com.comong.backend.domain.usage.repository.DailyUsageStatRepository;
+import com.comong.backend.domain.usage.repository.LoginSessionRepository;
 import com.comong.backend.domain.usage.repository.UsageAggregationQuery;
 import com.comong.backend.domain.user.entity.UserRole;
 import com.comong.backend.domain.user.repository.UserRepository;
@@ -45,6 +46,7 @@ public class AdminDashboardService {
     private final PatientProfileRepository patientProfileRepository;
     private final DailyUsageStatRepository dailyUsageStatRepository;
     private final UsageAggregationQuery usageAggregationQuery;
+    private final LoginSessionRepository loginSessionRepository;
 
     public AdminDashboardResponse getDashboard(LocalDate from, LocalDate to) {
         DateRange range = resolveDateRange(from, to);
@@ -128,6 +130,11 @@ public class AdminDashboardService {
         LocalDateTime todayStart = today.atStartOfDay();
         LocalDateTime tomorrowStart = today.plusDays(1).atStartOfDay();
         long dayCount = effectiveTo.toEpochDay() - effectiveFrom.toEpochDay() + 1L;
+        long periodActivePatients =
+                activePatientsByDate.values().stream()
+                        .flatMap(Set::stream)
+                        .distinct()
+                        .count();
 
         AdminDashboardResponse.Summary summary =
                 new AdminDashboardResponse.Summary(
@@ -139,19 +146,64 @@ public class AdminDashboardService {
                         todayTotalSeconds,
                         periodTotals.appUsageSeconds(),
                         dayCount > 0 ? periodTotals.appUsageSeconds() / dayCount : 0,
+                        periodActivePatients,
                         atRiskPatients,
                         userRepository.countByCreatedAtBetween(todayStart, tomorrowStart),
                         patientProfileRepository.countByCreatedAtBetween(
                                 todayStart, tomorrowStart));
 
+        AdminDashboardResponse.PreviousPeriodSummary previous =
+                computePreviousPeriodSummary(effectiveFrom, dayCount, today);
+
         return new AdminDashboardResponse(
                 effectiveFrom,
                 effectiveTo,
                 summary,
+                previous,
                 toDailyResponses(dailyTotals, activePatientsByDate),
                 toContentShares(periodTotals),
                 patientActivities,
                 toAlerts(summary, guardianUsers, contentSkewedPatients));
+    }
+
+    /**
+     * 직전 동기간(현재 기간과 같은 일수만큼 더 과거) 의 누적 앱 사용시간 / 일 평균 / 기간 활성 환자 수를 집계한다. 직전 기간 안에 today 가 들어올 수 있는
+     * 케이스(예: 매우 짧은 기간을 미래 날짜로 조회)는 today 분을 라이브 집계에서 가져온다 — 다만 일반적인 "오늘까지 N 일" 조회에서는 직전 기간이 모두 과거이므로
+     * cachedRows 만으로 충분하다.
+     */
+    private AdminDashboardResponse.PreviousPeriodSummary computePreviousPeriodSummary(
+            LocalDate currentFrom, long dayCount, LocalDate today) {
+        if (dayCount <= 0) {
+            return new AdminDashboardResponse.PreviousPeriodSummary(currentFrom, currentFrom, 0, 0, 0);
+        }
+        LocalDate previousTo = currentFrom.minusDays(1);
+        LocalDate previousFrom = previousTo.minusDays(dayCount - 1L);
+        Map<LocalDate, UsageTotals> dailyTotals = createDailyMap(previousFrom, previousTo);
+        Map<LocalDate, Set<Long>> activeByDate = createActiveMap(previousFrom, previousTo);
+        UsageTotals periodTotals = new UsageTotals();
+        Map<Long, PatientUsage> dummy = new HashMap<>();
+
+        List<DailyUsageStat> rows =
+                dailyUsageStatRepository.findAllWithPatientByStatDateBetween(
+                        previousFrom, previousTo);
+        for (DailyUsageStat row : rows) {
+            if (row.getStatDate().equals(today)) {
+                continue;
+            }
+            addPeriodUsage(
+                    dailyTotals,
+                    activeByDate,
+                    dummy,
+                    periodTotals,
+                    row.getStatDate(),
+                    row.getPatientProfile().getId(),
+                    row.getContentType(),
+                    row.getTotalSeconds());
+        }
+        long activeUnique = activeByDate.values().stream().flatMap(Set::stream).distinct().count();
+        long average = periodTotals.appUsageSeconds() / dayCount;
+        return new AdminDashboardResponse.PreviousPeriodSummary(
+                previousFrom, previousTo, periodTotals.appUsageSeconds(), average, activeUnique);
     }
 
     public AdminPatientDashboardResponse getPatientDashboard(
@@ -213,6 +265,9 @@ public class AdminDashboardService {
                         isContentSkewed(periodTotals),
                         RISK_INACTIVE_DAYS);
 
+        AdminPatientDashboardResponse.HourlyHeatmap heatmap =
+                buildHourlyHeatmap(patientId, range.from(), range.to());
+
         return new AdminPatientDashboardResponse(
                 range.from(),
                 range.to(),
@@ -226,7 +281,45 @@ public class AdminDashboardService {
                         patient.getUser().getEmail()),
                 summary,
                 toPatientDailyResponses(dailyTotals),
-                toContentShares(periodTotals));
+                toContentShares(periodTotals),
+                heatmap);
+    }
+
+    /**
+     * 환자별 요일×시간대 사용시간 히트맵을 만든다. 7×24 격자 전체를 0 으로 채운 뒤 native 쿼리 결과로 채워, FE 가 sparse 데이터를 추가 가공하지 않고
+     * 그대로 그릴 수 있게 한다.
+     */
+    private AdminPatientDashboardResponse.HourlyHeatmap buildHourlyHeatmap(
+            Long patientId, LocalDate from, LocalDate to) {
+        LocalDateTime fromDateTime = from.atStartOfDay();
+        LocalDateTime toExclusive = to.plusDays(1).atStartOfDay();
+
+        long[][] grid = new long[7][24];
+        long max = 0L;
+        for (LoginSessionRepository.HourlyHeatmapRow row :
+                loginSessionRepository.findHourlyHeatmapByPatient(
+                        patientId, fromDateTime, toExclusive)) {
+            int weekday = row.getWeekday() == null ? 0 : row.getWeekday();
+            int hour = row.getHour() == null ? 0 : row.getHour();
+            long seconds = row.getTotalSeconds() == null ? 0L : row.getTotalSeconds();
+            if (weekday < 1 || weekday > 7 || hour < 0 || hour > 23) {
+                continue;
+            }
+            grid[weekday - 1][hour] = seconds;
+            if (seconds > max) {
+                max = seconds;
+            }
+        }
+
+        List<AdminPatientDashboardResponse.HeatmapCell> cells = new ArrayList<>(168);
+        for (int w = 1; w <= 7; w++) {
+            for (int h = 0; h < 24; h++) {
+                cells.add(
+                        new AdminPatientDashboardResponse.HeatmapCell(
+                                w, h, grid[w - 1][h]));
+            }
+        }
+        return new AdminPatientDashboardResponse.HourlyHeatmap(max, cells);
     }
 
     private DateRange resolveDateRange(LocalDate from, LocalDate to) {
