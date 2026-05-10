@@ -37,6 +37,9 @@
 | `JWT_SECRET` | JWT 서명 키 (HS256, **32자 이상**) | 로컬 전용 플레이스홀더 | ✅ **반드시 강한 랜덤값으로 오버라이드** |
 | `JWT_ACCESS_TTL_SECONDS` | Access 토큰 유효시간 (초) | `3600` (1시간) | 정책에 맞춰 조정 |
 | `JWT_ISSUER` | 토큰 발급자 (`iss` 클레임) | `comong` | 필요 시 변경 |
+| `LIVEKIT_URL` | LiveKit Cloud 서버 URL | (빈 값) | ✅ 실시간 모니터링 토큰 발급 전 주입 |
+| `LIVEKIT_API_KEY` | LiveKit API key | (빈 값) | ✅ 서버 환경변수로만 주입 |
+| `LIVEKIT_API_SECRET` | LiveKit API secret | (빈 값) | ✅ 서버 환경변수로만 주입, git/Jira/Slack 평문 공유 금지 |
 | `GMS_KEY` | GMS Anthropic Claude API 키 (등대지기 LLM) | (빈 값) | ✅ dev/prod 에서 주입. 미설정 시 Claude 비활성, 항상 fallback scene |
 | `GMS_ANTHROPIC_BASE_URL` | GMS 엔드포인트 | `https://gms.ssafy.io/gmsapi/api.anthropic.com/v1` | 운영 도메인 변경 시만 |
 | `GMS_ANTHROPIC_MODEL` | Claude 모델 ID | `claude-sonnet-4-5-20250929` | 모델 업그레이드 시 |

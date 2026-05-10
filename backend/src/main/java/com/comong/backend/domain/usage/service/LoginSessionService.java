@@ -58,6 +58,14 @@ public class LoginSessionService {
         return LoginSessionResponse.from(session);
     }
 
+    /** 다른 도메인 service 가 로그인 세션 기준으로 환자 소유권을 재사용할 때 사용. 존재하지 않거나 본인 소유가 아니면 동일하게 404 로 숨긴다. */
+    public LoginSession findOwnedOrThrow(Long userId, Long sessionId) {
+        return loginSessionRepository
+                .findById(sessionId)
+                .filter(s -> s.isOwnedBy(userId))
+                .orElseThrow(() -> new BusinessException(UsageErrorCode.LOGIN_SESSION_NOT_FOUND));
+    }
+
     /**
      * heartbeat / end 가 사용. {@code FOR UPDATE} 로 row 락을 잡고 가져와, 두 요청이 동시에 들어왔을 때 lost update 를
      * 차단한다. 소유자 검증 시 {@code patient.user} 가 lazy 로딩되어 추가 SELECT 1~2 회가 발생하지만 같은 트랜잭션 안이라 race-free.
