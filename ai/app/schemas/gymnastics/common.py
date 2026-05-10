@@ -60,3 +60,41 @@ GymnasticsFrameLabel = Literal[
 ]
 DanielFrameLabel = GymnasticsFrameLabel
 GymnasticsBaselineStatus = Literal["collecting", "ready"]
+ReplayBaselineStatus = Literal["not_applicable", "collecting", "ready"]
+
+
+class ReplayMetadataResponse(BaseModel):
+    motion_id: str = Field(..., description="Motion identifier for this replay frame")
+    timestamp_ms: int = Field(..., ge=0, description="Source frame timestamp in milliseconds")
+    tracking: str = Field(..., description="Tracking quality status for this frame")
+    frame_label: GymnasticsFrameLabel | None = Field(
+        default=None,
+        description="Primary rule-based frame classification for replay consumers.",
+    )
+    state: str | None = Field(default=None, description="Evaluator state for this frame")
+    progress_count: int | None = Field(
+        default=None,
+        ge=0,
+        description="Session progress count for count-based TOP motions.",
+    )
+    hold_duration_ms: int | None = Field(
+        default=None,
+        ge=0,
+        description="Session elapsed duration for Daniel time-based motions.",
+    )
+    hold_completed: bool | None = Field(
+        default=None,
+        description="Whether the Daniel time-based session reached the target duration.",
+    )
+    guidance_code: str | None = Field(
+        default=None,
+        description="Displayed coaching feedback code for this frame.",
+    )
+    guidance_text: str | None = Field(
+        default=None,
+        description="Displayed coaching feedback text for this frame.",
+    )
+    baseline_status: ReplayBaselineStatus | None = Field(
+        default=None,
+        description="Baseline-relative replay context status for this frame.",
+    )
