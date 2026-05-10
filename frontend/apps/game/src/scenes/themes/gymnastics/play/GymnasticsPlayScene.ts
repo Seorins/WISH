@@ -349,6 +349,13 @@ const FEEDBACK_TIMER_MIN_FONT_SIZE = 26
 const AI_EVALUATION_INTERVAL_MS = 550
 const AI_REQUEST_RETRY_DELAY_MS = 2000
 const GYMNASTICS_COUNTDOWN_SECONDS = 3
+const BASELINE_READY_TTS_TEXT =
+  '\uCC28\uB837 \uC790\uC138\uB85C \uC11C \uBCFC\uAE4C\uC694? \uB450 \uBC1C\uC744 \uBC14\uB2E5\uC5D0 \uB193\uACE0, \uBAB8\uC744 \uCABD \uD3B4 \uC8FC\uC138\uC694. \uC14B\uC744 \uC138\uACE0 \uC2DC\uC791\uD560\uAC8C\uC694.'
+const BASELINE_READY_TIPS = [
+  '\uB450 \uBC1C\uC740 \uBC14\uB2E5\uC5D0 \uCF55!',
+  '\uC190\uC740 \uBAB8 \uC606\uC5D0 \uC790\uC5F0\uC2A4\uB7FD\uAC8C',
+  '\uCE74\uBA54\uB77C\uB97C \uBCF4\uBA70 3\uCD08\uB9CC \uAE30\uB2E4\uB824\uC694',
+] as const
 const FRAME_TEXT_COLOR = '#5a2f12'
 const FRAME_TEXT_STROKE = '#fff0c8'
 const FRAME_TEXT_SHADOW = '#2f1708'
@@ -1741,6 +1748,64 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     this.showCountdown()
   }
 
+  private createBaselineReadyFigure(centerX: number, centerY: number, size: number) {
+    const graphics = this.add.graphics()
+    const headRadius = Math.max(12, size * 0.13)
+    const bodyTopY = centerY - size * 0.16
+    const bodyBottomY = centerY + size * 0.22
+    const shoulderY = centerY - size * 0.04
+    const hipY = centerY + size * 0.22
+    const footY = centerY + size * 0.44
+    const armX = size * 0.22
+    const footX = size * 0.22
+
+    graphics.lineStyle(Math.max(5, size * 0.055), 0x5a2f12, 0.95)
+    graphics.fillStyle(0xffc879, 1)
+    graphics.fillCircle(centerX, centerY - size * 0.34, headRadius)
+    graphics.lineBetween(centerX, bodyTopY, centerX, bodyBottomY)
+    graphics.lineBetween(centerX - armX, shoulderY, centerX + armX, shoulderY)
+    graphics.lineBetween(centerX - armX * 0.85, shoulderY, centerX - armX * 0.85, hipY)
+    graphics.lineBetween(centerX + armX * 0.85, shoulderY, centerX + armX * 0.85, hipY)
+    graphics.lineBetween(centerX, hipY, centerX - footX, footY)
+    graphics.lineBetween(centerX, hipY, centerX + footX, footY)
+    graphics.fillStyle(0x67b86b, 0.92)
+    graphics.fillRoundedRect(centerX - size * 0.35, footY + size * 0.05, size * 0.7, 8, 4)
+    return graphics
+  }
+
+  private createBaselineReadyTip(
+    centerX: number,
+    centerY: number,
+    width: number,
+    height: number,
+    text: string,
+  ) {
+    const background = this.add.graphics()
+    background.fillStyle(0xffffff, 0.72)
+    background.fillRoundedRect(centerX - width / 2, centerY - height / 2, width, height, 16)
+    background.lineStyle(2, 0xe3c28d, 0.82)
+    background.strokeRoundedRect(centerX - width / 2, centerY - height / 2, width, height, 16)
+
+    const dotRadius = Math.max(5, height * 0.16)
+    const dot = this.add.circle(centerX - width / 2 + height * 0.55, centerY, dotRadius, 0x67b86b)
+    const labelFontSize = Math.round(Phaser.Math.Clamp(height * 0.45, 16, 22))
+    const label = this.add
+      .text(centerX + height * 0.16, centerY, text, {
+        fontFamily: 'sans-serif',
+        fontSize: `${labelFontSize}px`,
+        color: '#5a2f12',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5)
+      .setMaxLines(1)
+    this.fitTextToWidth(label, width - height * 1.5, labelFontSize, 12)
+    return [background, dot, label]
+  }
+
+  private speakBaselineReadyGuide() {
+    speakFeedback(BASELINE_READY_TTS_TEXT, { rate: 0.94, pitch: 1.06 })
+  }
+
   private showCountdown() {
     this.clearGuideOverlay()
     this.clearCountdownOverlay()
@@ -1751,6 +1816,19 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     const { width: vw, height: vh } = this.scale
     const overlay = this.add.container(0, 0).setDepth(31)
     const dim = this.add.rectangle(vw / 2, vh / 2, vw, vh, 0x1b120d, 0.54)
+    const panelW = Math.min(vw - 48, Math.round(Phaser.Math.Clamp(vw * 0.78, 520, 760)))
+    const panelH = Math.min(vh - 48, Math.round(Phaser.Math.Clamp(vh * 0.68, 420, 600)))
+    const panelX = vw / 2 - panelW / 2
+    const panelY = vh / 2 - panelH / 2
+    const panel = this.add.graphics()
+    panel.fillStyle(0x2e1b10, 0.28)
+    panel.fillRoundedRect(panelX, panelY + 8, panelW, panelH, 28)
+    panel.fillStyle(0xfff4d6, 0.98)
+    panel.fillRoundedRect(panelX, panelY, panelW, panelH, 28)
+    panel.lineStyle(4, 0xb8783d, 0.92)
+    panel.strokeRoundedRect(panelX, panelY, panelW, panelH, 28)
+    panel.lineStyle(2, 0xffffff, 0.55)
+    panel.strokeRoundedRect(panelX + 8, panelY + 8, panelW - 16, panelH - 16, 20)
     const countdownLabelFontSize = Math.round(Phaser.Math.Clamp(vh * 0.095, 88, 128))
     const guide = this.add
       .text(
@@ -1769,18 +1847,56 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
       .setOrigin(0.5)
       .setMaxLines(1)
     this.fitTextToWidth(guide, vw * 0.9, countdownLabelFontSize, 64)
+    const titleFontSize = Math.round(Phaser.Math.Clamp(panelH * 0.085, 30, 46))
+    guide
+      .setText('\uCC28\uB837 \uC790\uC138\uB85C \uC11C\uC694')
+      .setPosition(vw / 2, panelY + panelH * 0.16)
+      .setFontSize(titleFontSize)
+      .setColor('#5a2f12')
+      .setStroke('#fff0c8', 4)
+    this.fitTextToWidth(guide, panelW - 56, titleFontSize, 26)
+
+    const subtitleFontSize = Math.round(Phaser.Math.Clamp(panelH * 0.045, 18, 24))
+    const subtitle = this.add
+      .text(
+        vw / 2,
+        panelY + panelH * 0.25,
+        '\uC774 \uC790\uC138\uB97C \uAE30\uC900\uC73C\uB85C \uC6B4\uB3D9\uC744 \uC2DC\uC791\uD574\uC694',
+        {
+          fontFamily: 'sans-serif',
+          fontSize: `${subtitleFontSize}px`,
+          color: '#7a5430',
+          fontStyle: 'bold',
+        },
+      )
+      .setOrigin(0.5)
+      .setMaxLines(1)
+    this.fitTextToWidth(subtitle, panelW - 64, subtitleFontSize, 14)
+
+    const figure = this.createBaselineReadyFigure(vw / 2, panelY + panelH * 0.42, panelH * 0.16)
+    const tipGap = Math.round(Phaser.Math.Clamp(panelH * 0.08, 36, 48))
+    const tipObjects = BASELINE_READY_TIPS.flatMap((tip, index) =>
+      this.createBaselineReadyTip(
+        vw / 2,
+        panelY + panelH * 0.53 + index * tipGap,
+        panelW * 0.76,
+        Math.round(Phaser.Math.Clamp(panelH * 0.07, 34, 44)),
+        tip,
+      ),
+    )
     const countText = this.add
-      .text(vw / 2, vh / 2, String(GYMNASTICS_COUNTDOWN_SECONDS), {
+      .text(vw / 2, panelY + panelH * 0.84, String(GYMNASTICS_COUNTDOWN_SECONDS), {
         fontFamily: 'sans-serif',
-        fontSize: `${Math.round(Phaser.Math.Clamp(vh * 0.25, 180, 260))}px`,
+        fontSize: `${Math.round(Phaser.Math.Clamp(panelH * 0.2, 88, 132))}px`,
         color: '#ffffff',
         fontStyle: 'bold',
         stroke: '#4a2811',
-        strokeThickness: 10,
+        strokeThickness: 8,
       })
       .setOrigin(0.5)
-    overlay.add([dim, guide, countText])
+    overlay.add([dim, panel, guide, subtitle, figure, ...tipObjects, countText])
     this.countdownOverlay = overlay
+    this.speakBaselineReadyGuide()
 
     for (let index = 0; index < GYMNASTICS_COUNTDOWN_SECONDS; index += 1) {
       const timer = this.time.delayedCall(index * 1000, () => {
