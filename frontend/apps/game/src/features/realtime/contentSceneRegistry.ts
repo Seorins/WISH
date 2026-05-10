@@ -5,16 +5,13 @@ import type { RealtimeContentType } from '@wish/api-client'
 //
 // 등록되지 않은 scene 은 콘텐츠로 간주하지 않으므로 마을/셀렉트/대화 진입 시 보호자
 // 마이크 권한이 켜지지 않는다. 새 콘텐츠 scene 을 추가했다면 여기에도 추가해야 한다.
-//
-// TODO(S14P31E103-XXX): ArtColoringScene 을 ART 로 포함할지 결정 필요.
-// 현재는 자유 그리기(ArtFreeDrawingScene) 만 등록 — 컬러링 활동도 보호자 모니터링
-// 대상이 되어야 한다고 합의되면 매핑 추가.
 export const CONTENT_SCENE_REGISTRY: Readonly<Record<string, RealtimeContentType>> = {
   MusicRhythmScene: 'MUSIC',
   GymnasticsTopScene: 'GYMNASTICS',
   GymnasticsDanielScene: 'GYMNASTICS',
   TaekwondoPoomsaePracticeScene: 'TAEKWONDO',
   ArtFreeDrawingScene: 'ART',
+  ArtColoringScene: 'ART',
 }
 
 export function getContentTypeForSceneKey(sceneKey: string): RealtimeContentType | null {
