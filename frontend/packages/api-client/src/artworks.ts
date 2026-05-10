@@ -21,6 +21,7 @@ export type Artwork = {
   imageUrl: string
   playDurationSeconds: number
   isPublic: boolean
+  colorCount?: number
   createdAt: string
   updatedAt: string
 }
