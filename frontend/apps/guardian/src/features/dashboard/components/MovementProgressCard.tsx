@@ -20,6 +20,7 @@ const TOP_CLIP_ID_BY_MOTION_ID: Record<number, string> = {
 
 type DashboardMovement = Movement & {
   progressLabel?: string
+  scoreAvailable?: boolean
 }
 
 const DEFAULT_MOVEMENT_BY_ID = new Map(MOVEMENTS.map(movement => [movement.id, movement]))
@@ -33,9 +34,10 @@ function toDashboardMovement(item: GymnasticsRangeSummaryItem): DashboardMovemen
   return {
     id: clipId,
     name: item.motionName || fallback?.name || '체조 동작',
-    score: item.currentPercent,
+    score: item.scoreAvailable ? item.currentPercent : (fallback?.score ?? 0),
     thumbnail: fallback?.thumbnail ?? FALLBACK_THUMBNAIL,
     progressLabel: item.progressLabel,
+    scoreAvailable: item.scoreAvailable,
   }
 }
 
@@ -97,14 +99,18 @@ export function MovementProgressCard() {
                   <span className={styles.rowName}>{m.name}</span>
                   {m.progressLabel && <span className={styles.rowMeta}>{m.progressLabel}</span>}
                 </span>
-                <ScoreRing
-                  value={m.score}
-                  size={52}
-                  strokeWidth={5.5}
-                  fontSize={17}
-                  gradientFrom={from}
-                  gradientTo={to}
-                />
+                {m.scoreAvailable === false ? (
+                  <span className={styles.sessionBadge}>세션 기록</span>
+                ) : (
+                  <ScoreRing
+                    value={m.score}
+                    size={52}
+                    strokeWidth={5.5}
+                    fontSize={17}
+                    gradientFrom={from}
+                    gradientTo={to}
+                  />
+                )}
               </button>
             )
           })}

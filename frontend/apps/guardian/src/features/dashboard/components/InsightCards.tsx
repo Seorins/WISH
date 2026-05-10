@@ -34,15 +34,16 @@ function CardTitle({ children, tip }: { children: React.ReactNode; tip?: string 
 export function OverallScoreCard() {
   const { data: patientId } = useMyPatientId()
   const { data: rangeSummary } = useGymnasticsRangeSummary(patientId)
-  const currentScore = rangeSummary?.averagePercent ?? OVERALL_SCORE.current
-  const delta = rangeSummary?.averageDeltaPercent ?? OVERALL_SCORE.delta
+  const scoreSummary = rangeSummary?.scoreAvailable ? rangeSummary : null
+  const currentScore = scoreSummary ? scoreSummary.averagePercent : OVERALL_SCORE.current
+  const delta = scoreSummary ? scoreSummary.averageDeltaPercent : OVERALL_SCORE.delta
   const title =
-    rangeSummary && delta !== null && delta < 0
+    scoreSummary && delta !== null && delta < 0
       ? '조금 쉬어갔어요'
-      : rangeSummary && delta !== null && delta === 0
+      : scoreSummary && delta !== null && delta === 0
         ? '비슷하게 해냈어요'
         : OVERALL_SCORE.title
-  const subtitle = rangeSummary
+  const subtitle = scoreSummary
     ? delta === null
       ? '첫 체조 기록이에요.'
       : delta >= 0
