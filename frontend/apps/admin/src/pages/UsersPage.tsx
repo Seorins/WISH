@@ -1,24 +1,80 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { CSSProperties } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { listUsers } from '@wish/api-client'
-import type { UserRole } from '@wish/api-client'
+import { useSearchParams } from 'react-router-dom'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { changeUserRole, listUsers } from '@wish/api-client'
+import type { UserResponse, UserRole } from '@wish/api-client'
 import { AdminShell } from '../shared/components/AdminShell'
+import { ConfirmModal } from '../shared/components/ConfirmModal'
+import { useAuthStore } from '../shared/auth/store'
 
 type RoleFilter = 'ALL' | UserRole
 
 const ROLE_FILTERS: RoleFilter[] = ['ALL', 'USER', 'ADMIN']
 
+function isRoleFilter(value: string | null): value is RoleFilter {
+  return value === 'ALL' || value === 'USER' || value === 'ADMIN'
+}
+
+type PendingRoleChange = {
+  user: UserResponse
+  nextRole: UserRole
+}
+
 export function UsersPage() {
-  const [keyword, setKeyword] = useState('')
-  const [roleFilter, setRoleFilter] = useState<RoleFilter>('ALL')
+  const queryClient = useQueryClient()
+  const currentEmail = useAuthStore(state => state.email)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [keyword, setKeyword] = useState(() => searchParams.get('q') ?? '')
+  const [roleFilter, setRoleFilter] = useState<RoleFilter>(() => {
+    const role = searchParams.get('role')
+    return isRoleFilter(role) ? role : 'ALL'
+  })
+  const [pendingChange, setPendingChange] = useState<PendingRoleChange | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const next = new URLSearchParams(searchParams)
+    const trimmed = keyword.trim()
+    if (trimmed) {
+      next.set('q', trimmed)
+    } else {
+      next.delete('q')
+    }
+    if (roleFilter !== 'ALL') {
+      next.set('role', roleFilter)
+    } else {
+      next.delete('role')
+    }
+    if (next.toString() !== searchParams.toString()) {
+      setSearchParams(next, { replace: true })
+    }
+  }, [keyword, roleFilter, searchParams, setSearchParams])
 
   const usersQuery = useQuery({
     queryKey: ['users'],
     queryFn: () => listUsers().then(response => response.data),
   })
 
+  const roleMutation = useMutation({
+    mutationFn: ({ userId, role }: { userId: number; role: UserRole }) =>
+      changeUserRole(userId, role),
+    onSuccess: () => {
+      setPendingChange(null)
+      setActionError(null)
+      queryClient.invalidateQueries({ queryKey: ['users'] })
+    },
+    onError: (err: unknown) => {
+      const res =
+        err && typeof err === 'object' && 'response' in err
+          ? (err as { response?: { data?: { message?: string } } }).response
+          : null
+      setActionError(res?.data?.message ?? '권한 변경 실패')
+    },
+  })
+
   const users = useMemo(() => usersQuery.data ?? [], [usersQuery.data])
+  const adminTotal = useMemo(() => users.filter(user => user.role === 'ADMIN').length, [users])
   const filteredUsers = useMemo(
     () =>
       users.filter(user => {
@@ -32,8 +88,6 @@ export function UsersPage() {
       }),
     [keyword, roleFilter, users],
   )
-
-  const adminCount = users.filter(user => user.role === 'ADMIN').length
 
   return (
     <AdminShell title="유저 관리" description="계정과 관리자 권한 상태를 확인합니다.">
@@ -68,7 +122,7 @@ export function UsersPage() {
 
         <div style={styles.summary}>
           <span style={styles.summaryItem}>전체 {users.length}명</span>
-          <span style={styles.summaryItem}>관리자 {adminCount}명</span>
+          <span style={styles.summaryItem}>관리자 {adminTotal}명</span>
           <span style={styles.summaryItem}>표시 {filteredUsers.length}명</span>
         </div>
       </section>
@@ -77,6 +131,7 @@ export function UsersPage() {
       {usersQuery.isError && (
         <div style={styles.errorBox}>유저 목록 조회 실패: {extractMessage(usersQuery.error)}</div>
       )}
+      {actionError && <div style={styles.errorBox}>{actionError}</div>}
 
       {usersQuery.data && (
         <div style={styles.tableWrap}>
@@ -88,38 +143,106 @@ export function UsersPage() {
                 <th style={styles.th}>닉네임</th>
                 <th style={styles.th}>권한</th>
                 <th style={styles.th}>가입일</th>
+                <th style={styles.th}>권한 변경</th>
               </tr>
             </thead>
             <tbody>
               {filteredUsers.length === 0 && (
                 <tr>
-                  <td colSpan={5} style={styles.emptyRow}>
-                    표시할 유저가 없습니다.
+                  <td colSpan={6} style={styles.emptyRow}>
+                    <div style={styles.emptyTitle}>조건에 맞는 유저가 없습니다</div>
+                    <div style={styles.emptyHint}>
+                      검색어를 비우거나 권한 필터를 <strong>전체</strong>로 바꿔 보세요.
+                    </div>
                   </td>
                 </tr>
               )}
-              {filteredUsers.map(user => (
-                <tr key={user.id}>
-                  <td style={styles.td}>{user.id}</td>
-                  <td style={styles.emailCell}>{user.email}</td>
-                  <td style={styles.td}>{user.nickname}</td>
-                  <td style={styles.td}>
-                    <span
-                      style={{
-                        ...styles.roleBadge,
-                        ...(user.role === 'ADMIN' ? styles.adminBadge : styles.userBadge),
-                      }}
-                    >
-                      {roleLabel(user.role ?? 'USER')}
-                    </span>
-                  </td>
-                  <td style={styles.td}>{formatDate(user.createdAt)}</td>
-                </tr>
-              ))}
+              {filteredUsers.map(user => {
+                const role = user.role ?? 'USER'
+                const isSelf = currentEmail != null && currentEmail === user.email
+                const lastAdmin = role === 'ADMIN' && adminTotal <= 1
+                const disabledReason = isSelf
+                  ? '본인 권한은 변경할 수 없습니다'
+                  : lastAdmin
+                    ? '마지막 관리자 계정은 강등할 수 없습니다'
+                    : null
+                const nextRole: UserRole = role === 'ADMIN' ? 'USER' : 'ADMIN'
+                return (
+                  <tr key={user.id}>
+                    <td style={styles.td}>{user.id}</td>
+                    <td style={styles.emailCell}>{user.email}</td>
+                    <td style={styles.td}>{user.nickname}</td>
+                    <td style={styles.td}>
+                      <span
+                        style={{
+                          ...styles.roleBadge,
+                          ...(role === 'ADMIN' ? styles.adminBadge : styles.userBadge),
+                        }}
+                      >
+                        {roleLabel(role)}
+                      </span>
+                    </td>
+                    <td style={styles.td}>{formatDate(user.createdAt)}</td>
+                    <td style={styles.td}>
+                      <button
+                        type="button"
+                        title={disabledReason ?? undefined}
+                        onClick={() => {
+                          setActionError(null)
+                          setPendingChange({ user, nextRole })
+                        }}
+                        disabled={disabledReason != null}
+                        style={{
+                          ...styles.roleActionButton,
+                          ...(role === 'ADMIN'
+                            ? styles.roleActionDemote
+                            : styles.roleActionPromote),
+                          ...(disabledReason != null ? styles.roleActionDisabled : {}),
+                        }}
+                      >
+                        {role === 'ADMIN' ? '관리자 해제' : '관리자로 승격'}
+                      </button>
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>
       )}
+
+      <ConfirmModal
+        open={pendingChange != null}
+        title={
+          pendingChange?.nextRole === 'ADMIN'
+            ? '관리자 권한을 부여할까요?'
+            : '관리자 권한을 해제할까요?'
+        }
+        description={
+          pendingChange && (
+            <span>
+              <strong>{pendingChange.user.email}</strong> 사용자를{' '}
+              <strong>{roleLabel(pendingChange.nextRole)}</strong> 권한으로 변경합니다.
+              {pendingChange.nextRole === 'ADMIN' && ' 운영 콘솔의 모든 기능에 접근할 수 있습니다.'}
+              {pendingChange.nextRole === 'USER' && ' 운영 콘솔에서 더 이상 로그인할 수 없습니다.'}
+            </span>
+          )
+        }
+        confirmLabel={pendingChange?.nextRole === 'ADMIN' ? '승격' : '해제'}
+        tone={pendingChange?.nextRole === 'USER' ? 'danger' : 'default'}
+        loading={roleMutation.isPending}
+        onConfirm={() => {
+          if (!pendingChange) return
+          roleMutation.mutate({
+            userId: pendingChange.user.id,
+            role: pendingChange.nextRole,
+          })
+        }}
+        onCancel={() => {
+          if (roleMutation.isPending) return
+          setPendingChange(null)
+        }}
+      />
     </AdminShell>
   )
 }
@@ -277,11 +400,44 @@ const styles: Record<string, CSSProperties> = {
     background: '#f3f0ff',
     borderColor: '#d0bfff',
   },
+  roleActionButton: {
+    padding: '6px 10px',
+    border: '1px solid transparent',
+    borderRadius: 6,
+    cursor: 'pointer',
+    fontSize: 12,
+    fontWeight: 700,
+  },
+  roleActionPromote: {
+    background: '#fff',
+    color: '#0b7285',
+    borderColor: '#b3ecff',
+  },
+  roleActionDemote: {
+    background: '#fff',
+    color: '#c92a2a',
+    borderColor: '#ffc9c9',
+  },
+  roleActionDisabled: {
+    opacity: 0.45,
+    cursor: 'not-allowed',
+  },
   emptyRow: {
-    padding: 28,
+    padding: '36px 16px',
     textAlign: 'center',
     color: '#829ab1',
     fontSize: 13,
+  },
+  emptyTitle: {
+    color: '#486581',
+    fontSize: 14,
+    fontWeight: 700,
+    marginBottom: 4,
+  },
+  emptyHint: {
+    color: '#829ab1',
+    fontSize: 12,
+    lineHeight: 1.6,
   },
   loading: {
     padding: 20,
