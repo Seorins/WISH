@@ -3,7 +3,12 @@ import type { CSSProperties } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { getAdminPatientDashboard } from '@wish/api-client'
-import type { AdminDashboardContentShare, AdminDashboardPatientStatus } from '@wish/api-client'
+import type {
+  AdminDashboardContentShare,
+  AdminDashboardPatientStatus,
+  AdminPatientHourlyHeatmap,
+  GuardianNotificationType,
+} from '@wish/api-client'
 import {
   Bar,
   CartesianGrid,
@@ -19,6 +24,7 @@ import {
   YAxis,
 } from 'recharts'
 import { AdminShell } from '../shared/components/AdminShell'
+import { NotifyGuardianDialog } from '../shared/components/NotifyGuardianDialog'
 
 type RangeDays = 7 | 14 | 30
 
@@ -63,11 +69,14 @@ const fullDateFormat = new Intl.DateTimeFormat('ko-KR', {
   day: '2-digit',
 })
 
+type NotifyTargetType = GuardianNotificationType
+
 export function PatientDashboardPage() {
   const navigate = useNavigate()
   const params = useParams()
   const patientId = Number(params.patientId)
   const [rangeDays, setRangeDays] = useState<RangeDays>(7)
+  const [notifyType, setNotifyType] = useState<NotifyTargetType | null>(null)
   const dateRange = useMemo(() => createDateRange(rangeDays), [rangeDays])
 
   const patientQuery = useQuery({
@@ -96,6 +105,25 @@ export function PatientDashboardPage() {
       <button type="button" onClick={() => navigate('/dashboard')} style={styles.secondaryButton}>
         대시보드
       </button>
+      {dashboard && (
+        <button
+          type="button"
+          onClick={() => {
+            const status = dashboard.summary.status
+            const skewed = dashboard.summary.contentSkewed
+            setNotifyType(status === 'RISK' ? 'RISK' : skewed ? 'CONTENT_SKEW' : 'CHECK_IN')
+          }}
+          style={
+            dashboard.summary.status === 'RISK'
+              ? styles.notifyButtonRisk
+              : dashboard.summary.contentSkewed
+                ? styles.notifyButtonWarn
+                : styles.notifyButton
+          }
+        >
+          보호자에게 안내
+        </button>
+      )}
       <div style={styles.segmented} role="group" aria-label="조회 기간">
         {RANGE_OPTIONS.map(option => (
           <button
@@ -134,6 +162,24 @@ export function PatientDashboardPage() {
       {patientQuery.isLoading && <div style={styles.loading}>환자 활동을 불러오는 중</div>}
       {patientQuery.isError && (
         <div style={styles.errorBox}>환자 활동 조회 실패: {extractMessage(patientQuery.error)}</div>
+      )}
+
+      {dashboard && (
+        <NotifyGuardianDialog
+          open={notifyType != null}
+          patientId={dashboard.patient.patientId}
+          patientName={dashboard.patient.patientName}
+          guardianEmail={dashboard.patient.guardianEmail}
+          type={notifyType ?? 'CHECK_IN'}
+          defaultMessage={
+            notifyType === 'RISK'
+              ? `${dashboard.patient.patientName} 환자가 최근 활동이 줄어 콘몽 운영팀에서 안내드립니다. 짧은 활동이라도 함께 시작해 보시면 좋겠어요.`
+              : notifyType === 'CONTENT_SKEW'
+                ? `${dashboard.patient.patientName} 환자의 콘몽 활동이 한 콘텐츠에 집중되고 있어요. 다양한 활동을 함께 권유해 주시면 좋겠습니다.`
+                : `${dashboard.patient.patientName} 환자의 최근 콘몽 활동을 확인해 주세요. 궁금한 점이 있으면 운영팀에 알려주세요.`
+          }
+          onClose={() => setNotifyType(null)}
+        />
       )}
 
       {dashboard && (
@@ -261,6 +307,19 @@ export function PatientDashboardPage() {
             </div>
           </section>
 
+          <section style={styles.heatmapSection}>
+            <div style={styles.panelHeader}>
+              <div>
+                <h2 style={styles.panelTitle}>요일×시간대 사용 패턴</h2>
+                <p style={styles.panelDescription}>
+                  접속 세션의 시작 시각 기준으로 누적합니다. 색이 진할수록 해당 시간대에 더 많이
+                  사용했음을 뜻합니다.
+                </p>
+              </div>
+            </div>
+            <HourlyHeatmapPanel heatmap={dashboard.heatmap} />
+          </section>
+
           <section style={styles.tableSection}>
             <div style={styles.panelHeader}>
               <div>
@@ -332,6 +391,91 @@ function KpiCard({
       <span style={styles.kpiDetail}>{detail}</span>
     </article>
   )
+}
+
+const WEEKDAY_LABELS = ['월', '화', '수', '목', '금', '토', '일']
+
+function HourlyHeatmapPanel({ heatmap }: { heatmap: AdminPatientHourlyHeatmap }) {
+  const grid = useMemo(() => {
+    const matrix: number[][] = Array.from({ length: 7 }, () => Array(24).fill(0))
+    for (const cell of heatmap.cells) {
+      if (cell.weekday < 1 || cell.weekday > 7) continue
+      if (cell.hour < 0 || cell.hour > 23) continue
+      matrix[cell.weekday - 1][cell.hour] = cell.totalSeconds
+    }
+    return matrix
+  }, [heatmap])
+
+  const max = heatmap.maxSeconds
+  if (max <= 0) {
+    return (
+      <div style={styles.heatmapEmpty}>
+        <strong style={styles.heatmapEmptyTitle}>아직 사용 패턴이 없습니다</strong>
+        <span style={styles.heatmapEmptyHint}>
+          기간 내 접속 세션이 누적되면 시간대별 사용 패턴이 채워집니다.
+        </span>
+      </div>
+    )
+  }
+
+  return (
+    <div style={styles.heatmapWrap}>
+      <div style={styles.heatmapHeaderRow}>
+        <div style={styles.heatmapWeekdayPlaceholder} />
+        {Array.from({ length: 24 }, (_, hour) => (
+          <div key={hour} style={styles.heatmapHourLabel}>
+            {hour % 3 === 0 ? hour : ''}
+          </div>
+        ))}
+      </div>
+      {grid.map((row, weekdayIndex) => (
+        <div key={weekdayIndex} style={styles.heatmapRow}>
+          <div style={styles.heatmapWeekday}>{WEEKDAY_LABELS[weekdayIndex]}</div>
+          {row.map((seconds, hour) => {
+            const intensity = max > 0 ? Math.min(1, seconds / max) : 0
+            return (
+              <div
+                key={hour}
+                style={{
+                  ...styles.heatmapCell,
+                  background: intensityColor(intensity),
+                }}
+                title={`${WEEKDAY_LABELS[weekdayIndex]} ${hour}시 — ${formatDuration(seconds)}`}
+              />
+            )
+          })}
+        </div>
+      ))}
+      <div style={styles.heatmapLegend}>
+        <span style={styles.heatmapLegendLabel}>적음</span>
+        <div style={styles.heatmapLegendBar}>
+          {Array.from({ length: 6 }, (_, idx) => (
+            <span
+              key={idx}
+              style={{
+                ...styles.heatmapLegendChip,
+                background: intensityColor(idx / 5),
+              }}
+            />
+          ))}
+        </div>
+        <span style={styles.heatmapLegendLabel}>많음</span>
+        <span style={styles.heatmapLegendMax}>최대 {formatDuration(max)}</span>
+      </div>
+    </div>
+  )
+}
+
+function intensityColor(intensity: number) {
+  if (intensity <= 0) return '#f0f4f8'
+  // #e6f6ff → #0b7285 보간. 두 색을 RGB 로 변환해 단순 선형 보간.
+  const t = Math.max(0, Math.min(1, intensity))
+  const start = { r: 0xe6, g: 0xf6, b: 0xff }
+  const end = { r: 0x0b, g: 0x72, b: 0x85 }
+  const r = Math.round(start.r + (end.r - start.r) * t)
+  const g = Math.round(start.g + (end.g - start.g) * t)
+  const b = Math.round(start.b + (end.b - start.b) * t)
+  return `rgb(${r}, ${g}, ${b})`
 }
 
 function ContentSharePanel({ shares }: { shares: AdminDashboardContentShare[] }) {
@@ -504,6 +648,127 @@ const styles: Record<string, CSSProperties> = {
     cursor: 'pointer',
     fontSize: 13,
     fontWeight: 700,
+  },
+  notifyButton: {
+    height: 36,
+    padding: '0 12px',
+    background: '#fff',
+    color: '#0b7285',
+    border: '1px solid #b3ecff',
+    borderRadius: 6,
+    cursor: 'pointer',
+    fontSize: 13,
+    fontWeight: 700,
+  },
+  notifyButtonWarn: {
+    height: 36,
+    padding: '0 12px',
+    background: '#5f3dc4',
+    color: '#fff',
+    border: '1px solid #5f3dc4',
+    borderRadius: 6,
+    cursor: 'pointer',
+    fontSize: 13,
+    fontWeight: 700,
+  },
+  notifyButtonRisk: {
+    height: 36,
+    padding: '0 12px',
+    background: '#c92a2a',
+    color: '#fff',
+    border: '1px solid #c92a2a',
+    borderRadius: 6,
+    cursor: 'pointer',
+    fontSize: 13,
+    fontWeight: 700,
+  },
+  heatmapSection: {
+    padding: 18,
+    background: '#fff',
+    border: '1px solid #d9e2ec',
+    borderRadius: 8,
+  },
+  heatmapWrap: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 4,
+    overflowX: 'auto',
+  },
+  heatmapHeaderRow: {
+    display: 'grid',
+    gridTemplateColumns: '32px repeat(24, minmax(20px, 1fr))',
+    gap: 2,
+    alignItems: 'center',
+  },
+  heatmapWeekdayPlaceholder: {},
+  heatmapHourLabel: {
+    color: '#829ab1',
+    fontSize: 10,
+    textAlign: 'center',
+  },
+  heatmapRow: {
+    display: 'grid',
+    gridTemplateColumns: '32px repeat(24, minmax(20px, 1fr))',
+    gap: 2,
+    alignItems: 'center',
+  },
+  heatmapWeekday: {
+    color: '#486581',
+    fontSize: 12,
+    fontWeight: 700,
+    textAlign: 'right',
+    paddingRight: 6,
+  },
+  heatmapCell: {
+    height: 18,
+    borderRadius: 3,
+    border: '1px solid rgba(16, 42, 67, 0.04)',
+  },
+  heatmapEmpty: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 6,
+    padding: '24px 0',
+    color: '#829ab1',
+    fontSize: 13,
+    textAlign: 'center',
+  },
+  heatmapEmptyTitle: {
+    color: '#486581',
+    fontSize: 13,
+    fontWeight: 700,
+  },
+  heatmapEmptyHint: {
+    color: '#829ab1',
+    fontSize: 12,
+  },
+  heatmapLegend: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 8,
+    color: '#627d98',
+    fontSize: 12,
+  },
+  heatmapLegendLabel: {
+    color: '#829ab1',
+    fontSize: 11,
+  },
+  heatmapLegendBar: {
+    display: 'flex',
+    gap: 2,
+  },
+  heatmapLegendChip: {
+    width: 16,
+    height: 12,
+    borderRadius: 2,
+    border: '1px solid rgba(16, 42, 67, 0.06)',
+  },
+  heatmapLegendMax: {
+    marginLeft: 'auto',
+    color: '#486581',
+    fontSize: 11,
+    fontWeight: 600,
   },
   segmented: {
     display: 'inline-flex',

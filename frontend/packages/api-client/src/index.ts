@@ -1,5 +1,5 @@
 export { apiClient } from './client'
-export { getAdminDashboard, getAdminPatientDashboard } from './admin-dashboard'
+export { getAdminDashboard, getAdminPatientDashboard, notifyGuardian } from './admin-dashboard'
 export { authInterceptor } from './interceptors/auth'
 export { issueDemoToken, login, signup } from './auth'
 export { createArtwork, deleteArtwork, getArtwork, getMyArtworks, updateArtwork } from './artworks'
@@ -54,7 +54,7 @@ export {
   TAEKWONDO_BELT_COLORS,
 } from './taekwondo-belt-history'
 export { calculateTaekwondoAverageAccuracy, createTaekwondoSession } from './taekwondo-sessions'
-export { listUsers } from './users'
+export { changeUserRole, listUsers } from './users'
 export type { LoginRequest, SignupRequest, TokenResponse, UserResponse, UserRole } from './auth'
 export type {
   AdminDashboard,
@@ -63,12 +63,18 @@ export type {
   AdminDashboardDailyUsage,
   AdminDashboardPatientActivity,
   AdminDashboardPatientStatus,
+  AdminDashboardPreviousPeriodSummary,
   AdminDashboardSummary,
   AdminPatientDashboard,
   AdminPatientDashboardDailyUsage,
   AdminPatientDashboardPatient,
   AdminPatientDashboardSummary,
+  AdminPatientHeatmapCell,
+  AdminPatientHourlyHeatmap,
   GetAdminDashboardParams,
+  GuardianNotificationRequest,
+  GuardianNotificationResponse,
+  GuardianNotificationType,
 } from './admin-dashboard'
 export type {
   ApiResponse,
