@@ -35,6 +35,13 @@ export { getFuelStatus, sendFuel } from './fuel'
 export { requestPresignedUploadUrls, uploadToPresignedUrl } from './uploads'
 export { createPatientProfile, listPatientProfiles } from './patient-profiles'
 export { endLoginSession, heartbeatLoginSession, startLoginSession } from './login-sessions'
+export {
+  endContent,
+  requestGameLivekitToken,
+  requestGuardianLivekitToken,
+  startContent,
+  subscribeRealtimeEvents,
+} from './realtime'
 export { getCumulativeUsageStats, getDailyUsageStats, getUsageAverages } from './usage-stats'
 export {
   createTaekwondoMotion,
@@ -134,6 +141,13 @@ export type {
 } from './uploads'
 export type { Gender, PatientProfile, PatientProfileCreateRequest } from './patient-profiles'
 export type { LoginSession, LoginSessionStartRequest } from './login-sessions'
+export type {
+  GameLivekitTokenResponse,
+  GuardianLivekitTokenResponse,
+  RealtimeContentType,
+  RealtimeEvent,
+  StartContentRequest,
+} from './realtime'
 export type {
   ContentUsageAverage,
   CumulativeUsageStats,
