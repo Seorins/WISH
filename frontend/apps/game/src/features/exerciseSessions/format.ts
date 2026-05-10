@@ -7,7 +7,7 @@ import type {
 export type ExerciseSessionReportSummary = {
   totalSessionCount: number
   totalDurationSec: number
-  averageAccuracy: number | null
+  averageCompletionRate: number | null
   totalCompletedMotionCount: number
   latestSessionAt: string | null
   exerciseTypeCounts: Record<string, number>
@@ -22,11 +22,13 @@ export function formatDurationSec(durationSec: number) {
   return seconds > 0 ? `${minutes}\uBD84 ${seconds}\uCD08` : `${minutes}\uBD84`
 }
 
-export function formatAccuracy(value: number | null | undefined) {
+export function formatCompletionRate(value: number | null | undefined) {
   if (typeof value !== 'number' || Number.isNaN(value)) return '-'
   const percent = value <= 1 ? value * 100 : value
   return `${Math.round(percent)}%`
 }
+
+export const formatAccuracy = formatCompletionRate
 
 export function formatExerciseType(type: string) {
   const labels: Record<string, string> = {
@@ -73,7 +75,7 @@ export function buildExerciseSessionReportSummary(
     return {
       totalSessionCount: 0,
       totalDurationSec: 0,
-      averageAccuracy: null,
+      averageCompletionRate: null,
       totalCompletedMotionCount: 0,
       latestSessionAt: null,
       exerciseTypeCounts: {},
@@ -85,12 +87,12 @@ export function buildExerciseSessionReportSummary(
     (sum, session) => sum + (session.completedMotionCount ?? 0),
     0,
   )
-  const accuracyValues = sessions
+  const completionRateValues = sessions
     .map(session => session.averageAccuracy)
     .filter((value): value is number => typeof value === 'number' && !Number.isNaN(value))
-  const averageAccuracy =
-    accuracyValues.length > 0
-      ? accuracyValues.reduce((sum, value) => sum + value, 0) / accuracyValues.length
+  const averageCompletionRate =
+    completionRateValues.length > 0
+      ? completionRateValues.reduce((sum, value) => sum + value, 0) / completionRateValues.length
       : null
   const latestSessionAt =
     [...sessions].sort(
@@ -105,7 +107,7 @@ export function buildExerciseSessionReportSummary(
   return {
     totalSessionCount: sessions.length,
     totalDurationSec,
-    averageAccuracy,
+    averageCompletionRate,
     totalCompletedMotionCount,
     latestSessionAt,
     exerciseTypeCounts,
