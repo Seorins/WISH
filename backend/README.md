@@ -37,6 +37,11 @@
 | `JWT_SECRET` | JWT 서명 키 (HS256, **32자 이상**) | 로컬 전용 플레이스홀더 | ✅ **반드시 강한 랜덤값으로 오버라이드** |
 | `JWT_ACCESS_TTL_SECONDS` | Access 토큰 유효시간 (초) | `3600` (1시간) | 정책에 맞춰 조정 |
 | `JWT_ISSUER` | 토큰 발급자 (`iss` 클레임) | `comong` | 필요 시 변경 |
+| `GMS_KEY` | GMS Anthropic Claude API 키 (등대지기 LLM) | (빈 값) | ✅ dev/prod 에서 주입. 미설정 시 Claude 비활성, 항상 fallback scene |
+| `GMS_ANTHROPIC_BASE_URL` | GMS 엔드포인트 | `https://gms.ssafy.io/gmsapi/api.anthropic.com/v1` | 운영 도메인 변경 시만 |
+| `GMS_ANTHROPIC_MODEL` | Claude 모델 ID | `claude-sonnet-4-5-20250929` | 모델 업그레이드 시 |
+| `GMS_ANTHROPIC_VERSION` | Anthropic API 버전 헤더 | `2023-06-01` | API 스펙 변경 시 |
+| `GMS_ANTHROPIC_TIMEOUT_SECONDS` | Claude 응답 timeout (초) | `5` | 네트워크 환경 따라 조정 |
 
 > ⚠️ `JWT_SECRET` 의 기본값은 로컬 개발 편의용 플레이스홀더입니다. `dev`/`prod` 환경에서는 외부에서 반드시 주입하세요. 유출되면 토큰 위조 가능.
 > 랜덤값 생성 예: `openssl rand -base64 48`
