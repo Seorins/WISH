@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildExerciseSessionReportSummary,
-  formatAccuracy,
+  formatCompletionRate,
   formatDateTime,
   formatDurationSec,
   formatExerciseType,
@@ -38,10 +38,10 @@ describe('exercise session formatters', () => {
     expect(formatDurationSec(0)).toBe('0\uCD08')
   })
 
-  it('formats accuracy safely for 0-1 and 0-100 values', () => {
-    expect(formatAccuracy(0.82)).toBe('82%')
-    expect(formatAccuracy(82)).toBe('82%')
-    expect(formatAccuracy(null)).toBe('-')
+  it('formats completion rate safely for 0-1 and 0-100 values', () => {
+    expect(formatCompletionRate(0.82)).toBe('82%')
+    expect(formatCompletionRate(82)).toBe('82%')
+    expect(formatCompletionRate(null)).toBe('-')
   })
 
   it('formats exercise type and date labels', () => {
@@ -94,7 +94,7 @@ describe('exercise session formatters', () => {
     expect(buildExerciseSessionReportSummary(sessions)).toEqual({
       totalSessionCount: 2,
       totalDurationSec: 300,
-      averageAccuracy: 45.4,
+      averageCompletionRate: 45.4,
       totalCompletedMotionCount: 20,
       latestSessionAt: '2026-05-07T01:36:20.863Z',
       exerciseTypeCounts: {
@@ -108,7 +108,7 @@ describe('exercise session formatters', () => {
     expect(buildExerciseSessionReportSummary([])).toEqual({
       totalSessionCount: 0,
       totalDurationSec: 0,
-      averageAccuracy: null,
+      averageCompletionRate: null,
       totalCompletedMotionCount: 0,
       latestSessionAt: null,
       exerciseTypeCounts: {},
