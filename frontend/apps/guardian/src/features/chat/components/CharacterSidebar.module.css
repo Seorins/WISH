@@ -129,3 +129,45 @@
   font-weight: 700;
 }
 
+@media (max-width: 768px) {
+  .card {
+    height: auto;
+    padding: 14px;
+  }
+  .list {
+    flex-direction: row;
+    overflow-x: auto;
+    overflow-y: visible;
+    gap: 10px;
+    flex: 0 0 auto;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+    margin: 0 -14px;
+    padding-left: 14px;
+    padding-right: 14px;
+    scrollbar-width: thin;
+  }
+  .list::-webkit-scrollbar {
+    height: 4px;
+  }
+  .list::-webkit-scrollbar-thumb {
+    background: var(--dash-color-border-strong, #ddd7ee);
+    border-radius: 999px;
+  }
+  .item {
+    flex: 0 0 auto;
+    width: 180px;
+    padding: 10px 12px;
+    scroll-snap-align: start;
+  }
+  .avatar {
+    width: 56px;
+    height: 56px;
+    border-radius: 14px;
+  }
+  .name {
+    font-size: 13.5px;
+  }
+}
+

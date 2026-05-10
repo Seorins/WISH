@@ -174,3 +174,24 @@
   margin-top: 3px;
   line-height: 1.4;
 }
+
+@media (max-width: 768px) {
+  .stack {
+    height: auto;
+    min-height: 0;
+    min-width: 0;
+  }
+  .card {
+    min-width: 0;
+  }
+  .cardTrend {
+    flex: 0 0 auto;
+  }
+  .chartWrap {
+    flex: 0 0 auto;
+    min-height: 140px;
+    width: 100%;
+    min-width: 0;
+    overflow: hidden;
+  }
+}

@@ -91,9 +91,85 @@ class ArtworkTest {
                                         .sketchCode(1)
                                         .imageUrl("/api/v1/uploads/x.png")
                                         .playDurationSeconds(-1)
+                                        .colorCount(0)
                                         .isPublic(false)
                                         .build())
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void builder_rejectsNegativeColorCount() {
+        // 615: 도안 팔레트 크기에 따라 상한이 달라 음수만 차단.
+        PatientProfile profile = mock(PatientProfile.class);
+        assertThatThrownBy(
+                        () ->
+                                Artwork.builder()
+                                        .patientProfile(profile)
+                                        .sketchCode(1)
+                                        .imageUrl("/api/v1/uploads/x.png")
+                                        .playDurationSeconds(0)
+                                        .colorCount(-1)
+                                        .isPublic(false)
+                                        .build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("색 개수");
+    }
+
+    @Test
+    void update_replacesColorCountAbsoluteValue() {
+        // 615: colorCount 는 누적이 아닌 절대값 교체 (FE 가 캔버스 전체 스캔해서 보냄).
+        PatientProfile profile = mock(PatientProfile.class);
+        Artwork artwork =
+                Artwork.builder()
+                        .patientProfile(profile)
+                        .sketchCode(1)
+                        .imageUrl("/api/v1/uploads/x.png")
+                        .playDurationSeconds(0)
+                        .colorCount(3)
+                        .isPublic(false)
+                        .build();
+
+        artwork.update(null, 7);
+
+        assertThat(artwork.getColorCount()).isEqualTo(7);
+    }
+
+    @Test
+    void update_keepsColorCountWhenNull() {
+        // PATCH 시맨틱 — null 이면 변경 없음.
+        PatientProfile profile = mock(PatientProfile.class);
+        Artwork artwork =
+                Artwork.builder()
+                        .patientProfile(profile)
+                        .sketchCode(1)
+                        .imageUrl("/api/v1/uploads/x.png")
+                        .playDurationSeconds(0)
+                        .colorCount(3)
+                        .isPublic(false)
+                        .build();
+
+        artwork.update(true, null);
+
+        assertThat(artwork.getColorCount()).isEqualTo(3);
+        assertThat(artwork.isPublic()).isTrue();
+    }
+
+    @Test
+    void update_rejectsNegativeColorCount() {
+        PatientProfile profile = mock(PatientProfile.class);
+        Artwork artwork =
+                Artwork.builder()
+                        .patientProfile(profile)
+                        .sketchCode(1)
+                        .imageUrl("/api/v1/uploads/x.png")
+                        .playDurationSeconds(0)
+                        .colorCount(0)
+                        .isPublic(false)
+                        .build();
+
+        assertThatThrownBy(() -> artwork.update(null, -1))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("색 개수");
     }
 
     @Test

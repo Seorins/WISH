@@ -3,16 +3,22 @@ import {
   getCumulativeUsageStats,
   getDailyUsageStats,
   getMyArtworks,
+  getMyExerciseSessions,
   getMyMusicResults,
+  getMyTaekwondoSessions,
   type DailyUsageStatsParams,
   type GetMyArtworksParams,
+  type GetMyExerciseSessionsParams,
   type GetMyMusicResultsParams,
+  type GetMyTaekwondoSessionsParams,
 } from '@wish/api-client'
 
 export const USAGE_STATS_DAILY_QUERY_KEY = 'usage-stats-daily'
 export const USAGE_STATS_CUMULATIVE_QUERY_KEY = 'usage-stats-cumulative'
 export const MY_ARTWORKS_QUERY_KEY = 'artworks-me'
 export const MY_MUSIC_RESULTS_QUERY_KEY = 'music-results-me'
+export const MY_TAEKWONDO_SESSIONS_QUERY_KEY = 'taekwondo-sessions-me'
+export const MY_EXERCISE_SESSIONS_QUERY_KEY = 'exercise-sessions-me'
 
 export function useDailyUsageStats(
   patientId: number | undefined,
@@ -61,5 +67,41 @@ export function useMyMusicResults(params: GetMyMusicResultsParams = {}) {
       const response = await getMyMusicResults(params)
       return response.data
     },
+  })
+}
+
+// BE me-sessions 엔드포인트가 아직 없을 때는 404 가 떨어지는데, 그 경우 retry
+// 무한 루프 방지를 위해 retry: false. 엔드포인트 머지 후엔 default(3회)로 복구해도 됨.
+export function useMyTaekwondoSessions(params: GetMyTaekwondoSessionsParams = {}) {
+  return useQuery({
+    queryKey: [
+      MY_TAEKWONDO_SESSIONS_QUERY_KEY,
+      params.poomsae,
+      params.page ?? 0,
+      params.size ?? 50,
+      params.sort ?? 'createdAt,desc',
+    ],
+    queryFn: async () => {
+      const response = await getMyTaekwondoSessions(params)
+      return response.data
+    },
+    retry: false,
+  })
+}
+
+export function useMyExerciseSessions(params: GetMyExerciseSessionsParams = {}) {
+  return useQuery({
+    queryKey: [
+      MY_EXERCISE_SESSIONS_QUERY_KEY,
+      params.exerciseType,
+      params.page ?? 0,
+      params.size ?? 50,
+      params.sort ?? 'createdAt,desc',
+    ],
+    queryFn: async () => {
+      const response = await getMyExerciseSessions(params)
+      return response.data
+    },
+    retry: false,
   })
 }

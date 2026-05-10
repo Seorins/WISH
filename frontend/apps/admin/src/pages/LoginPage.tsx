@@ -60,7 +60,13 @@ export function LoginPage() {
   return (
     <div style={styles.container}>
       <form onSubmit={handleSubmit(onSubmit)} style={styles.form}>
-        <h1 style={styles.title}>WISH Admin</h1>
+        <div style={styles.brand}>
+          <span style={styles.brandMark}>W</span>
+          <div>
+            <strong style={styles.brandTitle}>WISH Admin</strong>
+            <span style={styles.brandSub}>운영 콘솔</span>
+          </div>
+        </div>
 
         <label style={styles.label}>
           이메일
@@ -106,41 +112,83 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    background: '#f5f5f5',
+    background: '#f4f7f9',
+    color: '#102a43',
   },
   form: {
-    width: 360,
+    width: 380,
     padding: 32,
     background: '#fff',
+    border: '1px solid #d9e2ec',
     borderRadius: 8,
-    boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+    boxShadow: '0 8px 24px rgba(16, 42, 67, 0.06)',
     display: 'flex',
     flexDirection: 'column',
     gap: 16,
   },
-  title: { margin: 0, fontSize: 24, textAlign: 'center' },
-  label: { display: 'flex', flexDirection: 'column', gap: 6, fontSize: 14 },
-  input: {
-    padding: '8px 10px',
-    fontSize: 14,
-    border: '1px solid #ccc',
-    borderRadius: 4,
+  brand: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 4,
   },
-  error: { color: '#d32f2f', fontSize: 12 },
+  brandMark: {
+    width: 38,
+    height: 38,
+    display: 'grid',
+    placeItems: 'center',
+    borderRadius: 8,
+    background: '#0b7285',
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 800,
+  },
+  brandTitle: {
+    display: 'block',
+    color: '#102a43',
+    fontSize: 18,
+    fontWeight: 800,
+  },
+  brandSub: {
+    display: 'block',
+    marginTop: 2,
+    color: '#829ab1',
+    fontSize: 12,
+  },
+  label: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 6,
+    color: '#486581',
+    fontSize: 13,
+    fontWeight: 600,
+  },
+  input: {
+    padding: '9px 10px',
+    fontSize: 14,
+    color: '#102a43',
+    background: '#fff',
+    border: '1px solid #bcccdc',
+    borderRadius: 6,
+  },
+  error: { color: '#c92a2a', fontSize: 12, fontWeight: 500 },
   errorBox: {
     padding: 10,
-    background: '#fdecea',
-    color: '#d32f2f',
-    borderRadius: 4,
+    background: '#fff5f5',
+    color: '#c92a2a',
+    border: '1px solid #ffc9c9',
+    borderRadius: 6,
     fontSize: 13,
   },
   submit: {
-    padding: '10px 14px',
-    fontSize: 15,
-    background: '#1976d2',
+    height: 40,
+    padding: '0 14px',
+    fontSize: 14,
+    fontWeight: 700,
     color: '#fff',
-    border: 'none',
-    borderRadius: 4,
+    background: '#0b7285',
+    border: '1px solid #0b7285',
+    borderRadius: 6,
     cursor: 'pointer',
   },
 }

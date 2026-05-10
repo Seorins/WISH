@@ -18,6 +18,7 @@ public record ArtworkResponse(
         Integer sketchCode,
         String imageUrl,
         int playDurationSeconds,
+        int colorCount,
         boolean isPublic,
         LocalDateTime createdAt,
         LocalDateTime updatedAt) {
@@ -28,6 +29,7 @@ public record ArtworkResponse(
                 artwork.getSketchCode(),
                 imageStorage.toPublicUrl(artwork.getImageUrl()),
                 artwork.getPlayDurationSeconds(),
+                artwork.getColorCount(),
                 artwork.isPublic(),
                 artwork.getCreatedAt(),
                 artwork.getUpdatedAt());

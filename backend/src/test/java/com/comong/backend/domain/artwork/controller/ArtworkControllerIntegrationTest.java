@@ -71,13 +71,14 @@ class ArtworkControllerIntegrationTest extends IntegrationTestSupport {
                                 .file(imagePart())
                                 .file(
                                         requestPart(
-                                                "{\"sketchCode\":1,\"playDurationSeconds\":60,\"isPublic\":false}"))
+                                                "{\"sketchCode\":1,\"playDurationSeconds\":60,\"colorCount\":5,\"isPublic\":false}"))
                                 .header("Authorization", "Bearer " + token))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.code").value("SUCCESS"))
                 .andExpect(jsonPath("$.data.id").isNumber())
                 .andExpect(jsonPath("$.data.sketchCode").value(1))
                 .andExpect(jsonPath("$.data.playDurationSeconds").value(60))
+                .andExpect(jsonPath("$.data.colorCount").value(5))
                 .andExpect(jsonPath("$.data.isPublic").value(false))
                 .andExpect(
                         jsonPath("$.data.imageUrl")
@@ -96,13 +97,14 @@ class ArtworkControllerIntegrationTest extends IntegrationTestSupport {
                                 .file(imagePart())
                                 .file(
                                         requestPart(
-                                                "{\"playDurationSeconds\":30,\"isPublic\":false}"))
+                                                "{\"playDurationSeconds\":30,\"colorCount\":0,\"isPublic\":false}"))
                                 .header("Authorization", "Bearer " + token))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.code").value("SUCCESS"))
                 .andExpect(jsonPath("$.data.id").isNumber())
                 .andExpect(jsonPath("$.data.sketchCode").value(org.hamcrest.Matchers.nullValue()))
-                .andExpect(jsonPath("$.data.playDurationSeconds").value(30));
+                .andExpect(jsonPath("$.data.playDurationSeconds").value(30))
+                .andExpect(jsonPath("$.data.colorCount").value(0));
     }
 
     @Test
@@ -114,7 +116,39 @@ class ArtworkControllerIntegrationTest extends IntegrationTestSupport {
                                 .file(imagePart())
                                 .file(
                                         requestPart(
-                                                "{\"sketchCode\":1,\"playDurationSeconds\":-5,\"isPublic\":false}"))
+                                                "{\"sketchCode\":1,\"playDurationSeconds\":-5,\"colorCount\":1,\"isPublic\":false}"))
+                                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("G-001"));
+    }
+
+    @Test
+    void createArtwork_rejectsMissingColorCount() throws Exception {
+        // 615: colorCount 는 @NotNull. 누락 시 G-001 로 차단.
+        String token = setupUserWithProfile("nocolor@example.com", "nocolor", "N", "nk");
+
+        mockMvc.perform(
+                        artworkMultipart(HttpMethod.POST, "/artworks")
+                                .file(imagePart())
+                                .file(
+                                        requestPart(
+                                                "{\"sketchCode\":1,\"playDurationSeconds\":10,\"isPublic\":false}"))
+                                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("G-001"));
+    }
+
+    @Test
+    void createArtwork_rejectsNegativeColorCount() throws Exception {
+        // 615: 도안 팔레트 크기에 따라 상한이 달라 0 이상만 강제.
+        String token = setupUserWithProfile("negcolor@example.com", "negcolor", "N", "nk");
+
+        mockMvc.perform(
+                        artworkMultipart(HttpMethod.POST, "/artworks")
+                                .file(imagePart())
+                                .file(
+                                        requestPart(
+                                                "{\"sketchCode\":1,\"playDurationSeconds\":10,\"colorCount\":-1,\"isPublic\":false}"))
                                 .header("Authorization", "Bearer " + token))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("G-001"));
@@ -143,6 +177,7 @@ class ArtworkControllerIntegrationTest extends IntegrationTestSupport {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.content.length()").value(1))
                 .andExpect(jsonPath("$.data.content[0].sketchCode").value(10))
+                .andExpect(jsonPath("$.data.content[0].colorCount").value(0))
                 // 공개 응답 author 는 nickname 만 노출, 내부 PK (patientProfileId) 는 응답에서 제외
                 .andExpect(jsonPath("$.data.content[0].author.nickname").value("pk"))
                 .andExpect(jsonPath("$.data.content[0].author.patientProfileId").doesNotExist());
@@ -157,7 +192,7 @@ class ArtworkControllerIntegrationTest extends IntegrationTestSupport {
                                 // image 파트 누락
                                 .file(
                                         requestPart(
-                                                "{\"sketchCode\":1,\"playDurationSeconds\":0,\"isPublic\":false}"))
+                                                "{\"sketchCode\":1,\"playDurationSeconds\":0,\"colorCount\":0,\"isPublic\":false}"))
                                 .header("Authorization", "Bearer " + token))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("G-001"));
@@ -288,7 +323,7 @@ class ArtworkControllerIntegrationTest extends IntegrationTestSupport {
                                                 requestPart(
                                                         "{\"sketchCode\":"
                                                                 + sketchCode
-                                                                + ",\"playDurationSeconds\":10,\"isPublic\":"
+                                                                + ",\"playDurationSeconds\":10,\"colorCount\":0,\"isPublic\":"
                                                                 + isPublic
                                                                 + "}"))
                                         .header("Authorization", "Bearer " + token))

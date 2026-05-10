@@ -1,14 +1,49 @@
-import { useState } from 'react'
-import { MOVEMENTS } from '../data/mock'
+import { useEffect, useMemo, useState } from 'react'
+import { useMyPatientId } from '@/features/auth/hooks/useMyPatientId'
+import { MOVEMENTS, type Movement } from '../data/mock'
 import { MOTION_CLIPS } from '../data/motionClips'
+import { useGymnasticsRangeSummary } from '../hooks'
+import type { GymnasticsRangeSummaryItem } from '../gymnasticsRangeSummary'
 import { Character3D } from './Character3D'
 import { ChevronDownIcon } from './icons'
 import { ScoreRing } from './ScoreRing'
 import styles from './MovementProgressCard.module.css'
 
 const COLLAPSED_COUNT = 3
+const TOP_CLIP_ID_BY_MOTION_ID: Record<number, string> = {
+  1: 'march',
+  2: 'side-step',
+  3: 'torso-cross',
+  4: 'face-cross',
+  5: 'sit-stand',
+}
+
+type DashboardMovement = Movement & {
+  progressLabel?: string
+  scoreAvailable?: boolean
+}
+
+const DEFAULT_MOVEMENT_BY_ID = new Map(MOVEMENTS.map(movement => [movement.id, movement]))
+const FALLBACK_THUMBNAIL = MOVEMENTS[0].thumbnail
+
+function toDashboardMovement(item: GymnasticsRangeSummaryItem): DashboardMovement {
+  const clipId =
+    TOP_CLIP_ID_BY_MOTION_ID[item.exerciseMotionId] ?? `motion-${item.exerciseMotionId}`
+  const fallback = DEFAULT_MOVEMENT_BY_ID.get(clipId)
+
+  return {
+    id: clipId,
+    name: item.motionName || fallback?.name || '체조 동작',
+    score: item.scoreAvailable ? item.currentPercent : (fallback?.score ?? 0),
+    thumbnail: fallback?.thumbnail ?? FALLBACK_THUMBNAIL,
+    progressLabel: item.progressLabel,
+    scoreAvailable: item.scoreAvailable,
+  }
+}
 
 export function MovementProgressCard() {
+  const { data: patientId } = useMyPatientId()
+  const { data: rangeSummary } = useGymnasticsRangeSummary(patientId)
   const [expanded, setExpanded] = useState(true)
   const [activeMotionId, setActiveMotionId] = useState<string | null>(null)
 
@@ -18,8 +53,19 @@ export function MovementProgressCard() {
     return { from: '#7cc7ff', to: '#5b9eff' }
   }
 
-  const visible = expanded ? MOVEMENTS : MOVEMENTS.slice(0, COLLAPSED_COUNT)
-  const canExpand = MOVEMENTS.length > COLLAPSED_COUNT
+  const movements = useMemo<DashboardMovement[]>(() => {
+    if (!rangeSummary || rangeSummary.items.length === 0) return MOVEMENTS
+    return rangeSummary.items.map(toDashboardMovement)
+  }, [rangeSummary])
+
+  useEffect(() => {
+    if (!activeMotionId) return
+    if (movements.some(movement => movement.id === activeMotionId)) return
+    setActiveMotionId(null)
+  }, [activeMotionId, movements])
+
+  const visible = expanded ? movements : movements.slice(0, COLLAPSED_COUNT)
+  const canExpand = movements.length > COLLAPSED_COUNT
 
   const activeClip = activeMotionId ? (MOTION_CLIPS[activeMotionId] ?? null) : null
 
@@ -49,15 +95,22 @@ export function MovementProgressCard() {
                 <div className={styles.thumb} aria-hidden>
                   <img src={m.thumbnail} alt="" />
                 </div>
-                <span className={styles.rowName}>{m.name}</span>
-                <ScoreRing
-                  value={m.score}
-                  size={52}
-                  strokeWidth={5.5}
-                  fontSize={17}
-                  gradientFrom={from}
-                  gradientTo={to}
-                />
+                <span className={styles.rowText}>
+                  <span className={styles.rowName}>{m.name}</span>
+                  {m.progressLabel && <span className={styles.rowMeta}>{m.progressLabel}</span>}
+                </span>
+                {m.scoreAvailable === false ? (
+                  <span className={styles.sessionBadge}>세션 기록</span>
+                ) : (
+                  <ScoreRing
+                    value={m.score}
+                    size={52}
+                    strokeWidth={5.5}
+                    fontSize={17}
+                    gradientFrom={from}
+                    gradientTo={to}
+                  />
+                )}
               </button>
             )
           })}

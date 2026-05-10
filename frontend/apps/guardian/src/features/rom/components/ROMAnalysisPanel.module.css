@@ -440,3 +440,25 @@
   line-height: 1.55;
   letter-spacing: -0.005em;
 }
+
+@media (max-width: 768px) {
+  .metricGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--dash-space-2);
+  }
+  .detailGrid {
+    grid-template-columns: 1fr;
+    gap: var(--dash-space-3);
+  }
+  .metricValue,
+  .metricValueDelta {
+    font-size: 20px;
+  }
+  .balanceValue,
+  .balanceCenterValue {
+    font-size: 18px;
+  }
+  .title {
+    font-size: 16px;
+  }
+}
