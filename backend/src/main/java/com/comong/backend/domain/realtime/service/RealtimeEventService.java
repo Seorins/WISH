@@ -9,6 +9,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.function.LongSupplier;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -21,19 +23,22 @@ import lombok.extern.slf4j.Slf4j;
 @Service
 public class RealtimeEventService {
 
-    private static final long SSE_TIMEOUT_MILLIS = 30 * 60 * 1000L;
     private static final String EVENT_NAME = "realtime";
 
     private final ConcurrentHashMap<Long, Set<EmitterRegistration>> emittersByUserId =
             new ConcurrentHashMap<>();
     private final LongSupplier nowMillis;
+    private final long sseTimeoutMillis;
 
-    public RealtimeEventService() {
-        this(System::currentTimeMillis);
+    @Autowired
+    public RealtimeEventService(
+            @Value("${realtime.sse.timeout-millis:1800000}") long sseTimeoutMillis) {
+        this(System::currentTimeMillis, sseTimeoutMillis);
     }
 
-    RealtimeEventService(LongSupplier nowMillis) {
+    RealtimeEventService(LongSupplier nowMillis, long sseTimeoutMillis) {
         this.nowMillis = nowMillis;
+        this.sseTimeoutMillis = sseTimeoutMillis;
     }
 
     public SseEmitter subscribe(Long userId) {
@@ -49,8 +54,7 @@ public class RealtimeEventService {
         if (emitters == null || emitters.isEmpty()) {
             return;
         }
-        EmitterRegistration[] snapshot = emitters.toArray(EmitterRegistration[]::new);
-        for (EmitterRegistration registration : snapshot) {
+        for (EmitterRegistration registration : emitters) {
             sendOrRemove(userId, registration, event);
         }
     }
@@ -64,13 +68,14 @@ public class RealtimeEventService {
                         registrations.forEach(
                                 registration -> {
                                     if (now - registration.registeredAtMillis()
-                                            >= SSE_TIMEOUT_MILLIS) {
+                                            >= sseTimeoutMillis) {
                                         expiredEmitters.add(
                                                 new ExpiredEmitter(userId, registration));
                                     }
                                 }));
-        expiredEmitters.forEach(expired -> remove(expired.userId(), expired.registration()));
-        expiredEmitters.forEach(expired -> expired.registration().emitter().complete());
+        expiredEmitters.stream()
+                .filter(expired -> remove(expired.userId(), expired.registration()))
+                .forEach(this::completeExpiredEmitter);
     }
 
     int activeEmitterCount(Long userId) {
@@ -79,7 +84,7 @@ public class RealtimeEventService {
     }
 
     SseEmitter createEmitter() {
-        return new SseEmitter(SSE_TIMEOUT_MILLIS);
+        return new SseEmitter(sseTimeoutMillis);
     }
 
     private void register(Long userId, EmitterRegistration registration) {
@@ -113,13 +118,23 @@ public class RealtimeEventService {
         }
     }
 
-    private void remove(Long userId, EmitterRegistration registration) {
+    private boolean remove(Long userId, EmitterRegistration registration) {
+        boolean[] removed = {false};
         emittersByUserId.computeIfPresent(
                 userId,
                 (ignored, current) -> {
-                    current.remove(registration);
+                    removed[0] = current.remove(registration);
                     return current.isEmpty() ? null : current;
                 });
+        return removed[0];
+    }
+
+    private void completeExpiredEmitter(ExpiredEmitter expired) {
+        try {
+            expired.registration().emitter().complete();
+        } catch (RuntimeException e) {
+            log.warn("SSE cleanup complete failed. userId={}", expired.userId(), e);
+        }
     }
 
     private record ExpiredEmitter(Long userId, EmitterRegistration registration) {}

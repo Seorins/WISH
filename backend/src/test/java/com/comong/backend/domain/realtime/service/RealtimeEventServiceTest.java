@@ -15,9 +15,11 @@ import com.comong.backend.domain.realtime.dto.RealtimeEventType;
 
 class RealtimeEventServiceTest {
 
+    private static final long TEST_SSE_TIMEOUT_MILLIS = 30 * 60 * 1000L;
+
     @Test
     void subscribe_registersEmitter() {
-        RealtimeEventService service = new RealtimeEventService();
+        RealtimeEventService service = new RealtimeEventService(TEST_SSE_TIMEOUT_MILLIS);
 
         service.subscribe(1L);
 
@@ -26,7 +28,7 @@ class RealtimeEventServiceTest {
 
     @Test
     void subscribe_supportsMultipleEmittersForSameUser() {
-        RealtimeEventService service = new RealtimeEventService();
+        RealtimeEventService service = new RealtimeEventService(TEST_SSE_TIMEOUT_MILLIS);
 
         service.subscribe(1L);
         service.subscribe(1L);
@@ -36,7 +38,7 @@ class RealtimeEventServiceTest {
 
     @Test
     void publish_withoutSubscriber_isNoOp() {
-        RealtimeEventService service = new RealtimeEventService();
+        RealtimeEventService service = new RealtimeEventService(TEST_SSE_TIMEOUT_MILLIS);
 
         service.publish(
                 1L, RealtimeEventResponse.of(RealtimeEventType.GAME_STARTED, 10L, 20L, null));
@@ -90,12 +92,30 @@ class RealtimeEventServiceTest {
         assertThat(emitter.completeCount()).isEqualTo(1);
     }
 
+    @Test
+    void cleanupExpiredEmitters_completeFailure_keepsCompletingOtherEmitters() {
+        AtomicLong nowMillis = new AtomicLong(0);
+        TestRealtimeEventService service = new TestRealtimeEventService(nowMillis);
+        service.subscribe(1L);
+        TestSseEmitter failing = service.createdEmitters().get(0);
+        service.subscribe(1L);
+        TestSseEmitter healthy = service.createdEmitters().get(1);
+        failing.failOnComplete();
+
+        nowMillis.set(31 * 60 * 1000L);
+        service.cleanupExpiredEmitters();
+
+        assertThat(service.activeEmitterCount(1L)).isZero();
+        assertThat(failing.completeCount()).isEqualTo(1);
+        assertThat(healthy.completeCount()).isEqualTo(1);
+    }
+
     private static final class TestRealtimeEventService extends RealtimeEventService {
 
         private final List<TestSseEmitter> createdEmitters = new ArrayList<>();
 
         private TestRealtimeEventService(AtomicLong nowMillis) {
-            super(nowMillis::get);
+            super(nowMillis::get, TEST_SSE_TIMEOUT_MILLIS);
         }
 
         @Override
@@ -116,9 +136,10 @@ class RealtimeEventServiceTest {
         private int completeCount;
         private boolean failOnSend;
         private boolean failOnRuntimeException;
+        private boolean failOnComplete;
 
         private TestSseEmitter() {
-            super(30 * 60 * 1000L);
+            super(TEST_SSE_TIMEOUT_MILLIS);
         }
 
         @Override
@@ -135,6 +156,9 @@ class RealtimeEventServiceTest {
         @Override
         public void complete() {
             completeCount++;
+            if (failOnComplete) {
+                throw new IllegalStateException("forced failure");
+            }
         }
 
         private void failOnSend() {
@@ -143,6 +167,10 @@ class RealtimeEventServiceTest {
 
         private void failOnRuntimeException() {
             failOnRuntimeException = true;
+        }
+
+        private void failOnComplete() {
+            failOnComplete = true;
         }
 
         private int sendCount() {
