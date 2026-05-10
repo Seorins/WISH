@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { getDialogueSessionDetail, sanitizeEmotionScene } from './lighthouseEmotionClient'
+import {
+  getDialogueSessionDetail,
+  sanitizeEmotionScene,
+  submitLighthouseEmotionTurn,
+} from './lighthouseEmotionClient'
 
 function jsonResponse(body: unknown, ok = true) {
   return {
@@ -129,6 +133,71 @@ describe('getDialogueSessionDetail', () => {
 
     await expect(getDialogueSessionDetail(404)).rejects.toThrow(
       'Dialogue session detail response is invalid.',
+    )
+  })
+})
+
+describe('submitLighthouseEmotionTurn', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    localStorage.clear()
+  })
+
+  it('submits a dialogue turn with question text and unwraps next scene', async () => {
+    localStorage.setItem('wish_access_token', 'token-1')
+    const nextScene = {
+      questionText: 'è­°ê³Œíˆ‘ ??ï§ë¨°ë¹ä»¥ê¾¨ì˜’?',
+      choices: [{ choiceIntentId: 'worry_body', text: 'ï§ëª„ì”  å«„ê¹†ì ™?ì‡±ìŠ‚' }],
+      secondaryAction: null,
+      shouldEndSession: false,
+      generatedBy: 'CLAUDE',
+    }
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        code: 'OK',
+        message: 'è­°ê³ ì‰¶ ?ê¹ƒë‚¬',
+        data: {
+          sessionId: 42,
+          status: 'IN_PROGRESS',
+          nextScene,
+        },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(
+      submitLighthouseEmotionTurn('42', {
+        questionText: '?ã…»ë’› æ¹²ê³•í…‡?Â€ ?ëŒ€ë¼š??',
+        selectedChoice: {
+          choiceIntentId: 'mood_worried',
+          text: 'å«„ê¹†ì ™?ì‡±ìŠ‚',
+          intensity: 2,
+          concernFlags: ['worry_present'],
+          protectiveFactors: ['emotion_named'],
+        },
+      }),
+    ).resolves.toEqual({ nextScene })
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringMatching(/\/api\/v1\/dialogue\/sessions\/42\/turns$/),
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          Authorization: 'Bearer token-1',
+        },
+        body: JSON.stringify({
+          questionText: '?ã…»ë’› æ¹²ê³•í…‡?Â€ ?ëŒ€ë¼š??',
+          selectedChoice: {
+            choiceIntentId: 'mood_worried',
+            text: 'å«„ê¹†ì ™?ì‡±ìŠ‚',
+            intensity: 2,
+            concernFlags: ['worry_present'],
+            protectiveFactors: ['emotion_named'],
+          },
+        }),
+      },
     )
   })
 })

@@ -8,6 +8,8 @@ import type {
   FinishLighthouseEmotionResponse,
   StartLighthouseEmotionApiResponse,
   StartLighthouseEmotionResponse,
+  SubmitLighthouseTurnApiResponse,
+  SubmitLighthouseTurnRequest,
   SubmitLighthouseTurnResponse,
 } from './types'
 
@@ -105,24 +107,37 @@ export async function startLighthouseEmotionSession(
 
 export async function submitLighthouseEmotionTurn(
   sessionId: string,
-  selectedChoice: EmotionChoiceViewModel,
+  request: SubmitLighthouseTurnRequest,
 ): Promise<SubmitLighthouseTurnResponse> {
-  const response = await fetch(`${API_BASE_URL}/emotion-checkin/sessions/${sessionId}/turns`, {
+  const response = await fetch(`${API_BASE_URL}/dialogue/sessions/${sessionId}/turns`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      Accept: 'application/json',
       ...getAuthHeaders(),
     },
-    body: JSON.stringify({
-      selectedChoice,
-    }),
+    body: JSON.stringify(request),
   })
 
   if (!response.ok) {
     throw new Error('선택을 저장하지 못했어요.')
   }
 
-  return response.json()
+  const payload = (await response.json()) as
+    | SubmitLighthouseTurnApiResponse
+    | SubmitLighthouseTurnResponse
+  const data = 'data' in payload ? payload.data : payload
+  if (!data?.nextScene) {
+    throw new Error(
+      '?ì±—ì¨”??ì±¦ì§ íƒ‘íš‚??â”‘ë®¤??íš‚??ì±˜ì¨‹ì©? ì±¦ì§ í˜§ì±™?ìŠ¿ë¤ãƒ‚ë¼˜?ì±˜í¸í˜–ì±™íž‹??',
+    )
+  }
+
+  return {
+    nextScene: data.nextScene,
+    ...('npcResponse' in data && data.npcResponse ? { npcResponse: data.npcResponse } : {}),
+    ...('closingLines' in data && data.closingLines ? { closingLines: data.closingLines } : {}),
+  }
 }
 
 export async function finishLighthouseEmotionSession(

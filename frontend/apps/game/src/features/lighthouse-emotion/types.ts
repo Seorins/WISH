@@ -11,6 +11,9 @@ export type LighthouseDialogueStatus =
 export interface EmotionChoiceViewModel {
   choiceIntentId: string
   text: string
+  intensity?: number
+  concernFlags?: string[]
+  protectiveFactors?: string[]
 }
 
 export interface EmotionSceneViewModel {
@@ -46,6 +49,7 @@ export interface StartLighthouseEmotionApiResponse {
 }
 
 export interface SubmitLighthouseTurnRequest {
+  questionText: string
   selectedChoice: EmotionChoiceViewModel
 }
 
@@ -53,6 +57,17 @@ export interface SubmitLighthouseTurnResponse {
   npcResponse?: string[]
   nextScene: EmotionSceneViewModel
   closingLines?: string[]
+}
+
+export interface SubmitLighthouseTurnApiResponse {
+  code: string
+  message: string
+  data: {
+    sessionId: number
+    status: 'IN_PROGRESS' | 'FINISHED' | 'CANCELLED'
+    nextScene: EmotionSceneViewModel
+  } | null
+  errors?: Record<string, string>
 }
 
 export interface FinishLighthouseEmotionRequest {

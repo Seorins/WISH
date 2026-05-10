@@ -162,9 +162,18 @@ export function useLighthouseEmotionSession({
       }))
 
       try {
+        const currentQuestionText = state.currentScene?.questionText ?? ''
         const result = await submitLighthouseEmotionTurn(targetSessionId, {
-          choiceIntentId: choice.choiceIntentId,
-          text: choice.text,
+          questionText: currentQuestionText,
+          selectedChoice: {
+            choiceIntentId: choice.choiceIntentId,
+            text: choice.text,
+            ...(typeof choice.intensity === 'number' ? { intensity: choice.intensity } : {}),
+            ...(Array.isArray(choice.concernFlags) ? { concernFlags: choice.concernFlags } : {}),
+            ...(Array.isArray(choice.protectiveFactors)
+              ? { protectiveFactors: choice.protectiveFactors }
+              : {}),
+          },
         })
         const npcResponseLines = getSafeLines(result.npcResponse, [])
 
@@ -202,7 +211,7 @@ export function useLighthouseEmotionSession({
         }))
       }
     },
-    [clearTimer, finish, state.status],
+    [clearTimer, finish, state.currentScene?.questionText, state.status],
   )
 
   const cancel = useCallback(() => {
