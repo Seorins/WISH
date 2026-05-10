@@ -8,7 +8,9 @@ import styles from './LiveMonitorPage.module.css'
 export function LiveMonitorPage() {
   return (
     <div className={styles.shell}>
-      <HeaderBar />
+      <div className={styles.headerSlot}>
+        <HeaderBar />
+      </div>
       <div className={styles.body}>
         <section className={styles.placeholder}>
           <h1 className={styles.title}>아이가 아직 게임에 접속하지 않았어요</h1>
