@@ -20,6 +20,7 @@ export {
   EXERCISE_SESSION_ERROR_MESSAGE,
   getExerciseSessionDetail,
   getExerciseSessions,
+  getMyExerciseSessions,
   toCreateExerciseSessionRequest,
   validateCreateExerciseSessionRequest,
 } from './exercise-sessions'
@@ -53,7 +54,11 @@ export {
   normalizeTaekwondoBeltColor,
   TAEKWONDO_BELT_COLORS,
 } from './taekwondo-belt-history'
-export { calculateTaekwondoAverageAccuracy, createTaekwondoSession } from './taekwondo-sessions'
+export {
+  calculateTaekwondoAverageAccuracy,
+  createTaekwondoSession,
+  getMyTaekwondoSessions,
+} from './taekwondo-sessions'
 export { listUsers } from './users'
 export type { LoginRequest, SignupRequest, TokenResponse, UserResponse, UserRole } from './auth'
 export type {
@@ -99,8 +104,10 @@ export type {
   CreateExerciseSessionRequest,
   ExerciseSessionDetail,
   ExerciseSessionMotionResult,
+  ExerciseSessionPage,
   ExerciseSessionSummary,
   ExerciseSessionType,
+  GetMyExerciseSessionsParams,
 } from './exercise-sessions'
 export type {
   ChartStats,
@@ -138,6 +145,8 @@ export type { TaekwondoBeltColor, TaekwondoBeltHistory } from './taekwondo-belt-
 export type {
   CreateTaekwondoSessionMotionRequest,
   CreateTaekwondoSessionRequest,
+  GetMyTaekwondoSessionsParams,
   TaekwondoSessionDetail,
   TaekwondoSessionMotionResult,
+  TaekwondoSessionPage,
 } from './taekwondo-sessions'
