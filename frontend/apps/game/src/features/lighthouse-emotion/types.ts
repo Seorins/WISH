@@ -66,6 +66,39 @@ export interface FinishLighthouseEmotionResponse {
   reportUpdated?: boolean
 }
 
+export interface DialogueTurnDetail {
+  id: number
+  stepIndex: number
+  questionText: string
+  choiceIntentId: string
+  choiceText: string
+  intensity: number
+  concernFlags: string[]
+  protectiveFactors: string[]
+  generatedBy: 'CLAUDE' | 'FALLBACK' | 'STATIC'
+  createdAt: string
+}
+
+export interface DialogueSessionDetail {
+  sessionId: number
+  patientProfileId: number
+  npcName: 'YEONGCHEOL' | string
+  status: 'IN_PROGRESS' | 'FINISHED' | 'CANCELLED'
+  stepCount: number
+  maxSteps: number
+  finishReason: FinishLighthouseEmotionRequest['finishReason'] | null
+  startedAt: string
+  endedAt: string | null
+  turns: DialogueTurnDetail[]
+}
+
+export interface DialogueSessionDetailApiResponse {
+  code: string
+  message: string
+  data: DialogueSessionDetail | null
+  errors?: Record<string, string>
+}
+
 export interface LighthouseEmotionState {
   sessionId: string | null
   status: LighthouseDialogueStatus
