@@ -53,6 +53,9 @@ const CARD_FONT_FAMILY =
   '"Pretendard Variable", Pretendard, "Noto Sans KR", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", sans-serif'
 const CARD_FRAME_ASPECT_RATIO = 408 / 612
 const CONTENT_CONFIRM_VISIBLE_MS = 1300
+const DEBUG_OBSTACLES = false
+const OBSTACLE_EDITOR_ENABLED = import.meta.env.DEV
+const OBSTACLE_EDITOR_MIN_SIZE = 0.003
 
 const CARD_LAYOUT = {
   tagTopOffset: 0.085,
@@ -89,10 +92,73 @@ type ArtCardView = {
 }
 
 type RumiDialogPhase = 'closed' | 'intro' | 'choice' | 'confirm'
+type ObstacleRect = { x: number; y: number; w: number; h: number }
+type ObstacleInstance = {
+  rect: ObstacleRect
+  object: Phaser.GameObjects.Rectangle
+}
+type BackgroundDisplayArea = {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+const ART_ROOM_OBSTACLES: ObstacleRect[] = [
+  { x: 0, y: 0, w: 1, h: 0.37 },
+  { x: 0.39, y: 0.04, w: 0.245, h: 0.38 },
+  { x: 0.88, y: 0.25, w: 0.12, h: 0.4 },
+  { x: 0.0219, y: 0.3673, w: 0.0564, h: 0.3111 },
+  { x: 0.0744, y: 0.4327, w: 0.0392, h: 0.1529 },
+  { x: 0.0219, y: 0.6719, w: 0.0319, h: 0.1085 },
+  { x: 0.0916, y: 0.6797, w: 0.0697, h: 0.085 },
+  { x: 0.0578, y: 0.8248, w: 0.0571, h: 0.1176 },
+  { x: 0.0219, y: 0.8667, w: 0.0531, h: 0.1281 },
+  { x: 0.0491, y: 0.7451, w: 0.0272, h: 0.1137 },
+  { x: 0.0717, y: 0.7647, w: 0.0219, h: 0.0837 },
+  { x: 0.097, y: 0.8235, w: 0.0133, h: 0.017 },
+  { x: 0.0923, y: 0.6353, w: 0.0226, h: 0.0693 },
+  { x: 0.1116, y: 0.6235, w: 0.0086, h: 0.0601 },
+  { x: 0.1355, y: 0.6301, w: 0.0146, h: 0.051 },
+  { x: 0.4721, y: 0.4235, w: 0.081, h: 0.1948 },
+  { x: 0.4728, y: 0.6157, w: 0.0764, h: 0.0248 },
+  { x: 0.4914, y: 0.6889, w: 0.0405, h: 0.0418 },
+  { x: 0.4927, y: 0.7333, w: 0.0073, h: 0.0222 },
+  { x: 0.5212, y: 0.7307, w: 0.01, h: 0.0222 },
+  { x: 0.5697, y: 0.5804, w: 0.0531, h: 0.115 },
+  { x: 0.5697, y: 0.5281, w: 0.0173, h: 0.0497 },
+  { x: 0.5963, y: 0.5621, w: 0.0073, h: 0.0222 },
+  { x: 0.6122, y: 0.5621, w: 0.008, h: 0.017 },
+  { x: 0.6487, y: 0.3647, w: 0.1056, h: 0.1294 },
+  { x: 0.5531, y: 0.4131, w: 0.1155, h: 0.0575 },
+  { x: 0.3818, y: 0.4013, w: 0.1129, h: 0.0562 },
+  { x: 0.2835, y: 0.3673, w: 0.1023, h: 0.132 },
+  { x: 0.3845, y: 0.4444, w: 0.0193, h: 0.0366 },
+  { x: 0.7457, y: 0.4105, w: 0.1448, h: 0.0641 },
+  { x: 0.6806, y: 0.6614, w: 0.2244, h: 0.1804 },
+  { x: 0.6932, y: 0.6092, w: 0.0272, h: 0.0706 },
+  { x: 0.7291, y: 0.6366, w: 0.0073, h: 0.0209 },
+  { x: 0.7437, y: 0.634, w: 0.0106, h: 0.0196 },
+  { x: 0.7802, y: 0.6379, w: 0.0133, h: 0.0275 },
+  { x: 0.7968, y: 0.6392, w: 0.0166, h: 0.0235 },
+  { x: 0.8161, y: 0.6314, w: 0.0146, h: 0.0327 },
+  { x: 0.8413, y: 0.6418, w: 0.0106, h: 0.0248 },
+  { x: 0.6116, y: 0.8536, w: 0.0485, h: 0.1373 },
+  { x: 0.3619, y: 0.8614, w: 0.0372, h: 0.1333 },
+  { x: 0.8944, y: 0.8, w: 0.0319, h: 0.1072 },
+  { x: 0.9416, y: 0.8275, w: 0.0359, h: 0.1477 },
+  { x: 0.1215, y: 0.3569, w: 0.1288, h: 0.1765 },
+  { x: 0.1235, y: 0.5268, w: 0.0372, h: 0.0667 },
+  { x: 0.1521, y: 0.5386, w: 0.0604, h: 0.0209 },
+]
 
 export class ArtSelectScene extends Phaser.Scene {
   private player!: PlayerSprite
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys
+  private obstacles!: Phaser.Physics.Arcade.StaticGroup
+  private obstacleInstances: ObstacleInstance[] = []
+  private obstacleEditorDraft?: Phaser.GameObjects.Rectangle
+  private obstacleEditorStart?: Phaser.Math.Vector2
   private target: Phaser.Math.Vector2 | null = null
   private lastDirection: PlayerDirection = 'down'
   private exitPortal!: Phaser.Geom.Rectangle
@@ -113,8 +179,13 @@ export class ArtSelectScene extends Phaser.Scene {
   private selectedMode: ArtContentMode | null = null
   private isWaitingContentStart = false
   private contentStartTimer: Phaser.Time.TimerEvent | null = null
+  private backgroundDisplayArea!: BackgroundDisplayArea
 
   private readonly handlePointerDown = (pointer: Phaser.Input.Pointer) => {
+    if (this.handleObstacleEditorPointerDown(pointer)) {
+      return
+    }
+
     if (this.isDialogVisible) {
       if (this.isWaitingContentStart) {
         return
@@ -198,11 +269,21 @@ export class ArtSelectScene extends Phaser.Scene {
     this.isWaitingContentStart = false
     this.target = null
     this.cards = []
+    this.obstacleInstances = []
+    this.obstacleEditorStart = undefined
+    this.obstacleEditorDraft?.destroy()
+    this.obstacleEditorDraft = undefined
     this.clearContentStartTimer()
 
     const background = addCoverBackground(this, 'art-room-background')
     const backgroundLeft = background.x - background.displayWidth / 2
     const backgroundTop = background.y - background.displayHeight / 2
+    this.backgroundDisplayArea = {
+      x: backgroundLeft,
+      y: backgroundTop,
+      width: background.displayWidth,
+      height: background.displayHeight,
+    }
 
     this.createAlbumObject(
       backgroundLeft,
@@ -231,6 +312,8 @@ export class ArtSelectScene extends Phaser.Scene {
       Math.min(background.displayWidth, background.displayHeight) * RUMI_INTERACTION.radiusRatio
 
     this.physics.world.setBounds(0, 0, vw, vh)
+    this.obstacles = this.physics.add.staticGroup()
+    ART_ROOM_OBSTACLES.forEach(rect => this.addObstacleRect(rect))
 
     ensurePlayerWalkAnimations(this)
     this.createDialogUi()
@@ -238,19 +321,30 @@ export class ArtSelectScene extends Phaser.Scene {
 
     const spawn = data.spawn ?? ART_ROOM_SPAWN
     this.player = createPlayer(this, vw * spawn.xRatio, vh * spawn.yRatio)
+    this.addRumiObstacle()
+    this.physics.add.collider(this.player, this.obstacles)
 
     this.exitPortal = createRatioRectangle(vw, vh, ART_EXIT_PORTAL)
 
     this.cursors = this.input.keyboard!.createCursorKeys()
     this.input.on('pointerdown', this.handlePointerDown)
+    this.input.on('pointermove', this.handleObstacleEditorPointerMove)
+    this.input.on('pointerup', this.handleObstacleEditorPointerUp)
     this.input.keyboard!.on('keydown-ENTER', this.handleEnterDown)
     this.input.keyboard!.on('keydown-ESC', this.handleEscDown)
+    this.input.keyboard!.on('keydown-E', this.exportObstacleRects)
+    this.input.keyboard!.on('keydown-R', this.clearEditedObstacleRects)
+    this.input.mouse?.disableContextMenu()
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.clearContentStartTimer()
       this.input.off('pointerdown', this.handlePointerDown)
+      this.input.off('pointermove', this.handleObstacleEditorPointerMove)
+      this.input.off('pointerup', this.handleObstacleEditorPointerUp)
       this.input.keyboard?.off('keydown-ENTER', this.handleEnterDown)
       this.input.keyboard?.off('keydown-ESC', this.handleEscDown)
+      this.input.keyboard?.off('keydown-E', this.exportObstacleRects)
+      this.input.keyboard?.off('keydown-R', this.clearEditedObstacleRects)
       this.closeAlbum()
     })
 
@@ -344,6 +438,177 @@ export class ArtSelectScene extends Phaser.Scene {
       .setOrigin(0.5, 0)
       .setDepth(5)
       .setDisplaySize(rumiWidth, rumiHeight)
+  }
+
+  private addObstacleRect(rect: ObstacleRect) {
+    const x = Phaser.Math.Clamp(rect.x, 0, 1)
+    const y = Phaser.Math.Clamp(rect.y, 0, 1)
+    const w = Phaser.Math.Clamp(rect.w, 0, 1 - x)
+    const h = Phaser.Math.Clamp(rect.h, 0, 1 - y)
+    const box = this.add
+      .rectangle(
+        this.backgroundDisplayArea.x + (x + w / 2) * this.backgroundDisplayArea.width,
+        this.backgroundDisplayArea.y + (y + h / 2) * this.backgroundDisplayArea.height,
+        w * this.backgroundDisplayArea.width,
+        h * this.backgroundDisplayArea.height,
+        0xff0000,
+        DEBUG_OBSTACLES ? 0.22 : 0,
+      )
+      .setDepth(1)
+
+    if (DEBUG_OBSTACLES) {
+      box.setStrokeStyle(2, 0xff3333, 0.85)
+    }
+
+    this.physics.add.existing(box, true)
+    this.obstacles.add(box)
+    this.obstacleInstances.push({ rect: { x, y, w, h }, object: box })
+
+    return box
+  }
+
+  private addRumiObstacle() {
+    const size = Math.min(this.backgroundDisplayArea.width, this.backgroundDisplayArea.height)
+    const box = this.add
+      .rectangle(
+        this.rumiAnchor.x,
+        this.rumiAnchor.y + size * 0.02,
+        size * 0.055,
+        size * 0.055,
+        0xff0000,
+        DEBUG_OBSTACLES ? 0.22 : 0,
+      )
+      .setDepth(1)
+
+    if (DEBUG_OBSTACLES) {
+      box.setStrokeStyle(2, 0xff3333, 0.85)
+    }
+
+    this.physics.add.existing(box, true)
+    this.obstacles.add(box)
+  }
+
+  private handleObstacleEditorPointerDown(pointer: Phaser.Input.Pointer) {
+    if (!OBSTACLE_EDITOR_ENABLED || !this.obstacles) {
+      return false
+    }
+
+    const event = pointer.event as MouseEvent | PointerEvent | undefined
+    const isShiftDrag = Boolean(event?.shiftKey)
+    const isRightClick = pointer.rightButtonDown() || pointer.button === 2
+
+    if (isRightClick) {
+      this.removeObstacleAt(pointer.x, pointer.y)
+      return true
+    }
+
+    if (!isShiftDrag) {
+      return false
+    }
+
+    this.obstacleEditorStart = new Phaser.Math.Vector2(pointer.x, pointer.y)
+    this.obstacleEditorDraft?.destroy()
+    this.obstacleEditorDraft = this.add
+      .rectangle(pointer.x, pointer.y, 1, 1, 0x00aaff, 0.26)
+      .setDepth(30)
+      .setStrokeStyle(2, 0x0077ff, 0.95)
+
+    return true
+  }
+
+  private readonly handleObstacleEditorPointerMove = (pointer: Phaser.Input.Pointer) => {
+    if (!this.obstacleEditorStart || !this.obstacleEditorDraft) {
+      return
+    }
+
+    const bounds = this.getObstacleDragBounds(this.obstacleEditorStart, pointer.x, pointer.y)
+    this.obstacleEditorDraft.setPosition(bounds.centerX, bounds.centerY)
+    this.obstacleEditorDraft.setSize(bounds.width, bounds.height)
+    this.obstacleEditorDraft.setDisplaySize(bounds.width, bounds.height)
+  }
+
+  private readonly handleObstacleEditorPointerUp = (pointer: Phaser.Input.Pointer) => {
+    if (!this.obstacleEditorStart || !this.obstacleEditorDraft) {
+      return
+    }
+
+    const bounds = this.getObstacleDragBounds(this.obstacleEditorStart, pointer.x, pointer.y)
+    this.obstacleEditorDraft.destroy()
+    this.obstacleEditorDraft = undefined
+    this.obstacleEditorStart = undefined
+
+    const rect = {
+      x: (bounds.x - this.backgroundDisplayArea.x) / this.backgroundDisplayArea.width,
+      y: (bounds.y - this.backgroundDisplayArea.y) / this.backgroundDisplayArea.height,
+      w: bounds.width / this.backgroundDisplayArea.width,
+      h: bounds.height / this.backgroundDisplayArea.height,
+    }
+
+    if (rect.w < OBSTACLE_EDITOR_MIN_SIZE || rect.h < OBSTACLE_EDITOR_MIN_SIZE) {
+      return
+    }
+
+    this.addObstacleRect(rect)
+  }
+
+  private getObstacleDragBounds(start: Phaser.Math.Vector2, currentX: number, currentY: number) {
+    const left = this.backgroundDisplayArea.x
+    const top = this.backgroundDisplayArea.y
+    const rightLimit = this.backgroundDisplayArea.x + this.backgroundDisplayArea.width
+    const bottomLimit = this.backgroundDisplayArea.y + this.backgroundDisplayArea.height
+    const x = Phaser.Math.Clamp(Math.min(start.x, currentX), left, rightLimit)
+    const y = Phaser.Math.Clamp(Math.min(start.y, currentY), top, bottomLimit)
+    const right = Phaser.Math.Clamp(Math.max(start.x, currentX), left, rightLimit)
+    const bottom = Phaser.Math.Clamp(Math.max(start.y, currentY), top, bottomLimit)
+    const width = Math.max(1, right - x)
+    const height = Math.max(1, bottom - y)
+
+    return new Phaser.Geom.Rectangle(x, y, width, height)
+  }
+
+  private removeObstacleAt(x: number, y: number) {
+    for (let index = this.obstacleInstances.length - 1; index >= 0; index -= 1) {
+      const instance = this.obstacleInstances[index]
+      if (!instance.object.getBounds().contains(x, y)) {
+        continue
+      }
+
+      this.obstacles.remove(instance.object, true, true)
+      this.obstacleInstances.splice(index, 1)
+      return
+    }
+  }
+
+  private readonly exportObstacleRects = () => {
+    if (!OBSTACLE_EDITOR_ENABLED) {
+      return
+    }
+
+    const lines = this.obstacleInstances.map(({ rect }) => {
+      const x = Number(rect.x.toFixed(4))
+      const y = Number(rect.y.toFixed(4))
+      const w = Number(rect.w.toFixed(4))
+      const h = Number(rect.h.toFixed(4))
+      return `  { x: ${x}, y: ${y}, w: ${w}, h: ${h} },`
+    })
+    const output = `const ART_ROOM_OBSTACLES: ObstacleRect[] = [\n${lines.join('\n')}\n]`
+
+    console.info('[ArtSelectScene] Exported obstacle rectangles:\n' + output)
+    void navigator.clipboard?.writeText(output).catch(() => undefined)
+  }
+
+  private readonly clearEditedObstacleRects = () => {
+    if (!OBSTACLE_EDITOR_ENABLED) {
+      return
+    }
+
+    this.obstacleInstances.forEach(({ object }) => {
+      this.obstacles.remove(object, true, true)
+    })
+    this.obstacleInstances = []
+    this.obstacleEditorDraft?.destroy()
+    this.obstacleEditorDraft = undefined
+    this.obstacleEditorStart = undefined
   }
 
   private createChoiceCards(vw: number, vh: number) {
