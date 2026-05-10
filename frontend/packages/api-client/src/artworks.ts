@@ -4,12 +4,14 @@ export type CreateArtworkRequest = {
   sketchCode: number | null
   playDurationSeconds: number
   isPublic: boolean
+  colorCount: number
 }
 
 export type UpdateArtworkRequest = {
   title?: string
   isPublic?: boolean
   additionalPlayDurationSeconds?: number
+  colorCount?: number
 }
 
 export type Artwork = {
@@ -19,6 +21,7 @@ export type Artwork = {
   imageUrl: string
   playDurationSeconds: number
   isPublic: boolean
+  colorCount?: number
   createdAt: string
   updatedAt: string
 }

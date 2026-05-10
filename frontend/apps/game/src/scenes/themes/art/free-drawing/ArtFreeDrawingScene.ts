@@ -76,6 +76,7 @@ type ExportedDrawingPng = {
   playDurationSeconds: number
   width: number
   height: number
+  colorCount: number
 }
 
 export class ArtFreeDrawingScene extends Phaser.Scene {
@@ -1410,6 +1411,7 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
     const playDurationSeconds = this.getPlayDurationSeconds()
     void this.exportDrawingPng(playDurationSeconds, isPublic)
       .then(exportedDrawing => {
+        const colorCount = exportedDrawing.colorCount
         if (this.editingArtwork) {
           return updateArtwork({
             id: this.editingArtwork.id,
@@ -1417,6 +1419,7 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
             filename: exportedDrawing.filename,
             additionalPlayDurationSeconds: exportedDrawing.playDurationSeconds,
             isPublic: exportedDrawing.isPublic,
+            colorCount,
           })
         }
 
@@ -1426,6 +1429,7 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
           sketchCode: null,
           playDurationSeconds: exportedDrawing.playDurationSeconds,
           isPublic: exportedDrawing.isPublic,
+          colorCount,
         })
       })
       .then(() => {
@@ -1467,6 +1471,8 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
         context.fillRect(0, 0, width, height)
         context.drawImage(snapshot, 0, 0, width, height)
 
+        const colorCount = this.countPaletteColorsInCanvas(context, width, height)
+
         const dataUrl = outputCanvas.toDataURL('image/png')
         resolve({
           blob: this.dataUrlToBlob(dataUrl),
@@ -1476,6 +1482,7 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
           playDurationSeconds,
           width,
           height,
+          colorCount,
         })
       }, 'image/png')
     })
@@ -1483,6 +1490,30 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
 
   private getPlayDurationSeconds() {
     return Math.max(0, Math.floor((this.time.now - this.contentStartedAt) / 1000))
+  }
+
+  private countPaletteColorsInCanvas(
+    context: CanvasRenderingContext2D,
+    width: number,
+    height: number,
+  ): number {
+    const paletteColors = new Set<number>()
+    for (const swatch of PALETTE_SWATCHES) {
+      paletteColors.add(swatch.color)
+    }
+    const totalPaletteColors = paletteColors.size
+    const found = new Set<number>()
+    const data = context.getImageData(0, 0, width, height).data
+    for (let i = 0; i < data.length; i += 4) {
+      const rgb = (data[i] << 16) | (data[i + 1] << 8) | data[i + 2]
+      if (paletteColors.has(rgb)) {
+        found.add(rgb)
+        if (found.size === totalPaletteColors) {
+          break
+        }
+      }
+    }
+    return found.size
   }
 
   private dataUrlToBlob(dataUrl: string) {

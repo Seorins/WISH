@@ -1422,6 +1422,21 @@ export class ArtColoringScene extends Phaser.Scene {
     }
   }
 
+  private countUsedColors() {
+    const filled = this.filledRegionColorById
+    if (!filled) {
+      return 0
+    }
+    const colors = new Set<number>()
+    for (let i = 0; i < filled.length; i += 1) {
+      const color = filled[i]
+      if (color >= 0 && color !== 0xffffff) {
+        colors.add(color)
+      }
+    }
+    return colors.size
+  }
+
   private prepareSourceImageData(source: HTMLImageElement) {
     const sourceWidth = Math.max(1, Math.round(this.drawBounds.width))
     const sourceHeight = Math.max(1, Math.round(this.drawBounds.height))
@@ -1840,6 +1855,7 @@ export class ArtColoringScene extends Phaser.Scene {
 
     this.isSavingColoring = true
     const playDurationSeconds = this.getPlayDurationSeconds()
+    const colorCount = this.countUsedColors()
     void this.exportColoringPng(playDurationSeconds, isPublic)
       .then(exportedColoring => {
         if (!exportedColoring) {
@@ -1853,6 +1869,7 @@ export class ArtColoringScene extends Phaser.Scene {
             filename: exportedColoring.filename,
             additionalPlayDurationSeconds: exportedColoring.playDurationSeconds,
             isPublic: exportedColoring.isPublic,
+            colorCount,
           })
         }
 
@@ -1862,6 +1879,7 @@ export class ArtColoringScene extends Phaser.Scene {
           sketchCode: this.getSelectedSketchCode(),
           playDurationSeconds: exportedColoring.playDurationSeconds,
           isPublic: exportedColoring.isPublic,
+          colorCount,
         })
       })
       .then(() => {
