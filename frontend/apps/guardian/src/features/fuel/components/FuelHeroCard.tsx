@@ -1,10 +1,16 @@
 import type { CSSProperties } from 'react'
 import fuelBgUrl from '@/assets/fuel__background.png'
-import { FUEL_OPTIONS, FUEL_STATUS, MESSAGE_MAX_LENGTH, type FuelOptionId } from '../data/mock'
+import {
+  FUEL_GOAL_PERCENT,
+  FUEL_OPTIONS,
+  MESSAGE_MAX_LENGTH,
+  type FuelOptionId,
+} from '../data/mock'
 import { CheckIcon, SparklesIcon, StarIcon } from './icons'
 import styles from './FuelHeroCard.module.css'
 
 type Props = {
+  currentPercent: number
   selectedId: FuelOptionId
   onSelect: (id: FuelOptionId) => void
   customAmount: string
@@ -13,9 +19,11 @@ type Props = {
   onMessageChange: (value: string) => void
   resolvedAmount: number
   onSend: () => void
+  isSending?: boolean
 }
 
 export function FuelHeroCard({
+  currentPercent,
   selectedId,
   onSelect,
   customAmount,
@@ -24,9 +32,10 @@ export function FuelHeroCard({
   onMessageChange,
   resolvedAmount,
   onSend,
+  isSending = false,
 }: Props) {
-  const isFull = FUEL_STATUS.currentPercent >= FUEL_STATUS.goalPercent
-  const canSend = !isFull && resolvedAmount > 0 && message.trim().length > 0
+  const isFull = currentPercent >= FUEL_GOAL_PERCENT
+  const canSend = !isFull && !isSending && resolvedAmount > 0 && message.trim().length > 0
 
   const handleSend = () => {
     if (!canSend) return
@@ -35,7 +44,7 @@ export function FuelHeroCard({
 
   const heroStyle: CSSProperties = {
     ['--fuel-hero-bg' as string]: `url(${fuelBgUrl})`,
-    ['--fuel-progress' as string]: `${FUEL_STATUS.currentPercent}%`,
+    ['--fuel-progress' as string]: `${currentPercent}%`,
   }
 
   return (
@@ -49,23 +58,22 @@ export function FuelHeroCard({
               별빛 연료
             </span>
             <div className={styles.heroBigPercent}>
-              {FUEL_STATUS.currentPercent}
+              {currentPercent}
               <span>%</span>
             </div>
             <div className={styles.heroSubtitle}>
-              새로운 출발까지{' '}
-              <strong>{Math.max(0, FUEL_STATUS.goalPercent - FUEL_STATUS.currentPercent)}%</strong>{' '}
+              새로운 출발까지 <strong>{Math.max(0, FUEL_GOAL_PERCENT - currentPercent)}%</strong>{' '}
               남았어요
             </div>
             <div className={styles.heroDesc}>아이의 치료 여정을 응원으로 채워주세요.</div>
           </div>
 
           <div className={styles.heroProgress}>
-            <span className={styles.heroProgressLabel}>{FUEL_STATUS.currentPercent}%</span>
+            <span className={styles.heroProgressLabel}>{currentPercent}%</span>
             <div className={styles.heroProgressBar}>
               <div className={styles.heroProgressFill} />
             </div>
-            <span className={styles.heroProgressGoal}>{FUEL_STATUS.goalPercent}%</span>
+            <span className={styles.heroProgressGoal}>{FUEL_GOAL_PERCENT}%</span>
           </div>
         </div>
       </div>
@@ -145,7 +153,7 @@ export function FuelHeroCard({
                 disabled={!canSend}
               >
                 <StarIcon color="#ffd55c" width={20} height={20} />
-                별빛 연료 보내기
+                {isSending ? '보내는 중...' : '별빛 연료 보내기'}
               </button>
               <div className={styles.sendCaption}>
                 {isFull ? '연료가 가득 찼어요!' : '보내면 아이에게 응원 메시지가 전달돼요.'}
