@@ -89,8 +89,8 @@ public class User {
     }
 
     /**
-     * ADMIN 사용자를 일반 USER 로 강등한다. 본 메서드는 도메인 invariant 만 다루며, "본인 강등 금지", "마지막 ADMIN 강등 금지" 같은 정책은 호출
-     * 측({@code UserService.changeRole})이 책임진다.
+     * ADMIN 사용자를 일반 USER 로 강등한다. 본 메서드는 도메인 invariant 만 다루며, "본인 강등 금지", "마지막 ADMIN 강등 금지" 같은 정책은
+     * 호출 측({@code UserService.changeRole})이 책임진다.
      */
     public void demoteToUser() {
         this.role = UserRole.USER;

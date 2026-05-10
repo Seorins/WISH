@@ -1,5 +1,7 @@
 package com.comong.backend.domain.admin.controller;
 
+import jakarta.validation.Valid;
+
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -16,7 +18,6 @@ import com.comong.backend.global.security.JwtTokenProvider.AuthenticatedUser;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 @Tag(name = "Admin Notification", description = "운영자가 보호자에게 안내 메시지를 발송한다 (MVP: 로그 stub)")

@@ -2,6 +2,8 @@ package com.comong.backend.domain.user.controller;
 
 import java.util.List;
 
+import jakarta.validation.Valid;
+
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -17,8 +19,6 @@ import com.comong.backend.domain.user.dto.UserResponse;
 import com.comong.backend.domain.user.service.UserService;
 import com.comong.backend.global.common.response.ApiResponse;
 import com.comong.backend.global.security.JwtTokenProvider.AuthenticatedUser;
-
-import jakarta.validation.Valid;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
