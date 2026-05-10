@@ -12,7 +12,16 @@ public record AdminPatientDashboardResponse(
         Patient patient,
         Summary summary,
         List<DailyUsage> dailyUsage,
-        List<AdminDashboardResponse.ContentShare> contentShares) {
+        List<AdminDashboardResponse.ContentShare> contentShares,
+        HourlyHeatmap heatmap) {
+
+    /**
+     * 요일×시간대 사용시간 히트맵. cells 는 7(요일)×24(시간) = 168 개 셀. weekday 1=월 ... 7=일 (Java DayOfWeek 동일).
+     * maxSeconds 는 색상 스케일 정규화용.
+     */
+    public record HourlyHeatmap(long maxSeconds, List<HeatmapCell> cells) {}
+
+    public record HeatmapCell(int weekday, int hour, long totalSeconds) {}
 
     public record Patient(
             long patientId,
