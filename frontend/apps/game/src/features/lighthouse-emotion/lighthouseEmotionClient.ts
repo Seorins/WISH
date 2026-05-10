@@ -1,4 +1,6 @@
 import type {
+  DialogueSessionDetail,
+  DialogueSessionDetailApiResponse,
   EmotionChoiceViewModel,
   EmotionSceneViewModel,
   FinishLighthouseEmotionRequest,
@@ -12,6 +14,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api/v1'
 const FALLBACK_QUESTION = '오늘 기분은 어떠니?'
 const REST_TODAY_CHOICE_ID = 'rest_today'
 const ACCESS_TOKEN_STORAGE_KEY = 'wish_access_token'
+const DIALOGUE_SESSION_DETAIL_ERROR_MESSAGE = 'Dialogue session detail response is invalid.'
 
 function getAuthHeaders(): Record<string, string> {
   const token = localStorage.getItem(ACCESS_TOKEN_STORAGE_KEY)
@@ -141,4 +144,27 @@ export async function finishLighthouseEmotionSession(
   }
 
   return response.json()
+}
+
+export async function getDialogueSessionDetail(
+  sessionId: number | string,
+): Promise<DialogueSessionDetail> {
+  const response = await fetch(`${API_BASE_URL}/dialogue/sessions/${sessionId}`, {
+    method: 'GET',
+    headers: {
+      Accept: 'application/json',
+      ...getAuthHeaders(),
+    },
+  })
+
+  if (!response.ok) {
+    throw new Error(DIALOGUE_SESSION_DETAIL_ERROR_MESSAGE)
+  }
+
+  const payload = (await response.json()) as DialogueSessionDetailApiResponse
+  if (!payload.data) {
+    throw new Error(DIALOGUE_SESSION_DETAIL_ERROR_MESSAGE)
+  }
+
+  return payload.data
 }
