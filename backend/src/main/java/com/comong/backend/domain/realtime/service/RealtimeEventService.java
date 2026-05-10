@@ -4,7 +4,9 @@ import java.io.IOException;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArraySet;
+import java.util.function.LongSupplier;
 
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -19,55 +21,90 @@ public class RealtimeEventService {
     private static final long SSE_TIMEOUT_MILLIS = 30 * 60 * 1000L;
     private static final String EVENT_NAME = "realtime";
 
-    private final ConcurrentHashMap<Long, Set<SseEmitter>> emittersByUserId =
+    private final ConcurrentHashMap<Long, Set<EmitterRegistration>> emittersByUserId =
             new ConcurrentHashMap<>();
+    private final LongSupplier nowMillis;
+
+    public RealtimeEventService() {
+        this(System::currentTimeMillis);
+    }
+
+    RealtimeEventService(LongSupplier nowMillis) {
+        this.nowMillis = nowMillis;
+    }
 
     public SseEmitter subscribe(Long userId) {
-        SseEmitter emitter = new SseEmitter(SSE_TIMEOUT_MILLIS);
-        register(userId, emitter);
-        sendOrRemove(userId, emitter, RealtimeEventResponse.connected());
+        SseEmitter emitter = createEmitter();
+        EmitterRegistration registration = new EmitterRegistration(emitter, nowMillis.getAsLong());
+        register(userId, registration);
+        sendOrRemove(userId, registration, RealtimeEventResponse.connected());
         return emitter;
     }
 
     public void publish(Long userId, RealtimeEventResponse event) {
-        Set<SseEmitter> emitters = emittersByUserId.get(userId);
+        Set<EmitterRegistration> emitters = emittersByUserId.get(userId);
         if (emitters == null || emitters.isEmpty()) {
             return;
         }
-        emitters.forEach(emitter -> sendOrRemove(userId, emitter, event));
+        emitters.forEach(registration -> sendOrRemove(userId, registration, event));
+    }
+
+    @Scheduled(fixedDelayString = "${realtime.sse.cleanup-interval-millis:60000}")
+    public void cleanupExpiredEmitters() {
+        long now = nowMillis.getAsLong();
+        emittersByUserId.forEach(
+                (userId, registrations) ->
+                        registrations.forEach(
+                                registration -> {
+                                    if (now - registration.registeredAtMillis()
+                                            >= SSE_TIMEOUT_MILLIS) {
+                                        registration.emitter().complete();
+                                        remove(userId, registration);
+                                    }
+                                }));
     }
 
     int activeEmitterCount(Long userId) {
-        Set<SseEmitter> emitters = emittersByUserId.get(userId);
+        Set<EmitterRegistration> emitters = emittersByUserId.get(userId);
         return emitters == null ? 0 : emitters.size();
     }
 
-    private void register(Long userId, SseEmitter emitter) {
-        emittersByUserId
-                .computeIfAbsent(userId, ignored -> new CopyOnWriteArraySet<>())
-                .add(emitter);
-        emitter.onCompletion(() -> remove(userId, emitter));
-        emitter.onTimeout(() -> remove(userId, emitter));
-        emitter.onError(error -> remove(userId, emitter));
+    SseEmitter createEmitter() {
+        return new SseEmitter(SSE_TIMEOUT_MILLIS);
     }
 
-    private void sendOrRemove(Long userId, SseEmitter emitter, RealtimeEventResponse event) {
+    private void register(Long userId, EmitterRegistration registration) {
+        emittersByUserId.compute(
+                userId,
+                (ignored, current) -> {
+                    Set<EmitterRegistration> registrations =
+                            current == null ? new CopyOnWriteArraySet<>() : current;
+                    registrations.add(registration);
+                    return registrations;
+                });
+        registration.emitter().onCompletion(() -> remove(userId, registration));
+        registration.emitter().onTimeout(() -> remove(userId, registration));
+        registration.emitter().onError(error -> remove(userId, registration));
+    }
+
+    private void sendOrRemove(
+            Long userId, EmitterRegistration registration, RealtimeEventResponse event) {
         try {
-            emitter.send(SseEmitter.event().name(EVENT_NAME).data(event));
-        } catch (IOException | IllegalStateException e) {
+            registration.emitter().send(SseEmitter.event().name(EVENT_NAME).data(event));
+        } catch (IOException | RuntimeException e) {
             log.debug("SSE send failed. userId={}, eventType={}", userId, event.type(), e);
-            remove(userId, emitter);
+            remove(userId, registration);
         }
     }
 
-    private void remove(Long userId, SseEmitter emitter) {
-        Set<SseEmitter> emitters = emittersByUserId.get(userId);
-        if (emitters == null) {
-            return;
-        }
-        emitters.remove(emitter);
-        if (emitters.isEmpty()) {
-            emittersByUserId.remove(userId, emitters);
-        }
+    private void remove(Long userId, EmitterRegistration registration) {
+        emittersByUserId.computeIfPresent(
+                userId,
+                (ignored, current) -> {
+                    current.remove(registration);
+                    return current.isEmpty() ? null : current;
+                });
     }
+
+    private record EmitterRegistration(SseEmitter emitter, long registeredAtMillis) {}
 }
