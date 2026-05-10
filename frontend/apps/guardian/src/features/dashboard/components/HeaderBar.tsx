@@ -25,7 +25,7 @@ const TABS: ReadonlyArray<{ id: TabId; label: string; Icon: typeof HomeIcon; to?
   { id: 'activity', label: '활동', Icon: ActivityIcon, to: '/activity' },
   { id: 'reports', label: '리포트', Icon: ClipboardIcon },
   { id: 'live', label: '실시간', Icon: LiveIcon },
-  { id: 'fuel', label: '연료', Icon: FuelIcon },
+  { id: 'fuel', label: '연료', Icon: FuelIcon, to: '/fuel' },
 ]
 
 function activeTabFromPath(pathname: string): TabId {

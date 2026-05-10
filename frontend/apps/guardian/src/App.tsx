@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { ActivityPage } from './pages/ActivityPage'
 import { ChatPage } from './pages/ChatPage'
 import { DashboardPage } from './pages/DashboardPage'
+import { FuelPage } from './pages/FuelPage'
 import { LoginPage } from './pages/LoginPage'
 import { ROMDetailPage } from './pages/ROMDetailPage'
 import { SignupPage } from './pages/SignupPage'
@@ -43,6 +44,14 @@ function App() {
           element={
             <RequireAuth>
               <ActivityPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/fuel"
+          element={
+            <RequireAuth>
+              <FuelPage />
             </RequireAuth>
           }
         />
