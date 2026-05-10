@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
+  calculateAverageCompletionRate,
   calculateAverageAccuracy,
   CREATE_EXERCISE_SESSION_ERROR_MESSAGE,
   createExerciseSession,
@@ -7,7 +8,9 @@ import {
   EXERCISE_SESSION_ERROR_MESSAGE,
   getExerciseSessionDetail,
   getExerciseSessions,
+  toCreateExerciseSessionRequest,
   validateCreateExerciseSessionRequest,
+  type CreateExerciseSessionRecord,
   type CreateExerciseSessionRequest,
   type ExerciseSessionDetail,
   type ExerciseSessionSummary,
@@ -229,7 +232,7 @@ describe('createExerciseSession', () => {
     await expect(
       createExerciseSession({ ...createPayload, averageAccuracy: 1.2 }, client as never),
     ).rejects.toThrow(
-      '\uD3C9\uADE0 \uC815\uD655\uB3C4\uAC00 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.',
+      '\uD3C9\uADE0 \uC218\uD589\uB960\uC774 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.',
     )
     expect(client.post).not.toHaveBeenCalled()
   })
@@ -289,7 +292,7 @@ describe('validateCreateExerciseSessionRequest', () => {
         motions: [{ ...createPayload.motions[0], accuracy: Number.NaN }],
       }),
     ).toThrow(
-      '1\uBC88\uC9F8 \uB3D9\uC791 \uC815\uD655\uB3C4\uAC00 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.',
+      '1\uBC88\uC9F8 \uB3D9\uC791 \uC218\uD589\uB960\uC774 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.',
     )
     expect(() =>
       validateCreateExerciseSessionRequest({
@@ -297,18 +300,55 @@ describe('validateCreateExerciseSessionRequest', () => {
         motions: [{ ...createPayload.motions[0], completedReps: -1 }],
       }),
     ).toThrow(
-      '1\uBC88\uC9F8 \uBC18\uBCF5 \uD69F\uC218\uAC00 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.',
+      '1\uBC88\uC9F8 \uC218\uD589 \uD69F\uC218\uAC00 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.',
     )
   })
 })
 
+describe('calculateAverageCompletionRate', () => {
+  it('calculates a rounded 0 to 1 average from completion rates', () => {
+    expect(
+      calculateAverageCompletionRate([{ completionRate: 0.9 }, { completionRate: 0.82 }]),
+    ).toBe(0.86)
+    expect(
+      calculateAverageCompletionRate([{ completionRate: 0.8777 }, { completionRate: 0.8222 }]),
+    ).toBe(0.85)
+  })
+
+  it('returns 0 when there are no valid completion rates', () => {
+    expect(calculateAverageCompletionRate([{ completionRate: Number.NaN }])).toBe(0)
+  })
+})
+
 describe('calculateAverageAccuracy', () => {
-  it('calculates a rounded 0 to 1 average', () => {
+  it('keeps the legacy API-field average helper compatible', () => {
     expect(calculateAverageAccuracy([{ accuracy: 0.9 }, { accuracy: 0.82 }])).toBe(0.86)
     expect(calculateAverageAccuracy([{ accuracy: 0.8777 }, { accuracy: 0.8222 }])).toBe(0.85)
   })
 
   it('returns 0 when there are no valid values', () => {
     expect(calculateAverageAccuracy([{ accuracy: Number.NaN }])).toBe(0)
+  })
+})
+
+describe('toCreateExerciseSessionRequest', () => {
+  it('maps record-oriented fields to the current exercise session API payload', () => {
+    const record: CreateExerciseSessionRecord = {
+      patientProfileId: 1,
+      exerciseType: 'TOP',
+      durationSec: 78,
+      averageCompletionRate: 0.87,
+      motions: [
+        {
+          exerciseMotionId: 1,
+          durationSec: 12,
+          completionRate: 0.91,
+          completedCount: 8,
+          feedback: '\uBB34\uB98E\uC744 \uC870\uAE08 \uB354 \uC62C\uB824\uC694',
+        },
+      ],
+    }
+
+    expect(toCreateExerciseSessionRequest(record)).toEqual(createPayload)
   })
 })

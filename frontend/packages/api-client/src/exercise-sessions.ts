@@ -22,12 +22,28 @@ export type CreateExerciseMotionResultRequest = {
   feedback?: string
 }
 
+export type CreateExerciseMotionRecord = {
+  exerciseMotionId: number
+  durationSec: number
+  completionRate: number
+  completedCount: number
+  feedback?: string
+}
+
 export type CreateExerciseSessionRequest = {
   patientProfileId: number
   exerciseType: ExerciseSessionType
   durationSec: number
   averageAccuracy: number
   motions: CreateExerciseMotionResultRequest[]
+}
+
+export type CreateExerciseSessionRecord = {
+  patientProfileId: number
+  exerciseType: ExerciseSessionType
+  durationSec: number
+  averageCompletionRate: number
+  motions: CreateExerciseMotionRecord[]
 }
 
 export type ExerciseSessionMotionResult = {
@@ -63,8 +79,8 @@ const INVALID_EXERCISE_TYPE_MESSAGE =
   '\uC6B4\uB3D9 \uC885\uB958\uAC00 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.'
 const INVALID_DURATION_MESSAGE =
   '\uC6B4\uB3D9 \uC2DC\uAC04\uC774 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.'
-const INVALID_AVERAGE_ACCURACY_MESSAGE =
-  '\uD3C9\uADE0 \uC815\uD655\uB3C4\uAC00 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.'
+const INVALID_AVERAGE_COMPLETION_RATE_MESSAGE =
+  '\uD3C9\uADE0 \uC218\uD589\uB960\uC774 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.'
 const EMPTY_MOTIONS_MESSAGE =
   '\uC800\uC7A5\uD560 \uB3D9\uC791 \uACB0\uACFC\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.'
 const INVALID_SAVE_RESPONSE_MESSAGE =
@@ -124,7 +140,7 @@ function assertFiniteNumber(value: number, message: string) {
   }
 }
 
-function assertAccuracy(value: number, message: string) {
+function assertCompletionRate(value: number, message: string) {
   assertFiniteNumber(value, message)
   if (value < 0 || value > 1) {
     throw new Error(message)
@@ -133,20 +149,21 @@ function assertAccuracy(value: number, message: string) {
 
 function getMotionMessage(
   order: number,
-  field: 'info' | 'duration' | 'accuracy' | 'reps' | 'feedback',
+  field: 'info' | 'duration' | 'completionRate' | 'count' | 'feedback',
 ) {
   const labels = {
-    info: '\uB3D9\uC791 \uC815\uBCF4',
-    duration: '\uB3D9\uC791 \uC2DC\uAC04',
-    accuracy: '\uB3D9\uC791 \uC815\uD655\uB3C4',
-    reps: '\uBC18\uBCF5 \uD69F\uC218',
-    feedback: '\uD53C\uB4DC\uBC31',
-  } satisfies Record<typeof field, string>
-  return `${order}\uBC88\uC9F8 ${labels[field]}\uAC00 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.`
+    info: ['\uB3D9\uC791 \uC815\uBCF4', '\uAC00'],
+    duration: ['\uB3D9\uC791 \uC2DC\uAC04', '\uC774'],
+    completionRate: ['\uB3D9\uC791 \uC218\uD589\uB960', '\uC774'],
+    count: ['\uC218\uD589 \uD69F\uC218', '\uAC00'],
+    feedback: ['\uD53C\uB4DC\uBC31', '\uC774'],
+  } satisfies Record<typeof field, [string, string]>
+  const [label, particle] = labels[field]
+  return `${order}\uBC88\uC9F8 ${label}${particle} \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.`
 }
 
-export function calculateAverageAccuracy(motions: Array<{ accuracy: number }>): number {
-  const validValues = motions.map(motion => motion.accuracy).filter(value => Number.isFinite(value))
+function calculateAverageRate(values: number[]): number {
+  const validValues = values.filter(value => Number.isFinite(value))
 
   if (validValues.length === 0) {
     return 0
@@ -154,6 +171,32 @@ export function calculateAverageAccuracy(motions: Array<{ accuracy: number }>): 
 
   const sum = validValues.reduce((acc, value) => acc + value, 0)
   return Math.round((sum / validValues.length) * 1000) / 1000
+}
+
+export function calculateAverageCompletionRate(motions: Array<{ completionRate: number }>): number {
+  return calculateAverageRate(motions.map(motion => motion.completionRate))
+}
+
+export function calculateAverageAccuracy(motions: Array<{ accuracy: number }>): number {
+  return calculateAverageRate(motions.map(motion => motion.accuracy))
+}
+
+export function toCreateExerciseSessionRequest(
+  record: CreateExerciseSessionRecord,
+): CreateExerciseSessionRequest {
+  return {
+    patientProfileId: record.patientProfileId,
+    exerciseType: record.exerciseType,
+    durationSec: record.durationSec,
+    averageAccuracy: record.averageCompletionRate,
+    motions: record.motions.map(motion => ({
+      exerciseMotionId: motion.exerciseMotionId,
+      durationSec: motion.durationSec,
+      accuracy: motion.completionRate,
+      completedReps: motion.completedCount,
+      feedback: motion.feedback,
+    })),
+  }
 }
 
 export function validateCreateExerciseSessionRequest(payload: CreateExerciseSessionRequest): void {
@@ -168,7 +211,7 @@ export function validateCreateExerciseSessionRequest(payload: CreateExerciseSess
     throw new Error(INVALID_DURATION_MESSAGE)
   }
 
-  assertAccuracy(payload.averageAccuracy, INVALID_AVERAGE_ACCURACY_MESSAGE)
+  assertCompletionRate(payload.averageAccuracy, INVALID_AVERAGE_COMPLETION_RATE_MESSAGE)
 
   if (!Array.isArray(payload.motions) || payload.motions.length === 0) {
     throw new Error(EMPTY_MOTIONS_MESSAGE)
@@ -186,11 +229,11 @@ export function validateCreateExerciseSessionRequest(payload: CreateExerciseSess
       throw new Error(getMotionMessage(order, 'duration'))
     }
 
-    assertAccuracy(motion.accuracy, getMotionMessage(order, 'accuracy'))
+    assertCompletionRate(motion.accuracy, getMotionMessage(order, 'completionRate'))
 
-    assertFiniteNumber(motion.completedReps, getMotionMessage(order, 'reps'))
+    assertFiniteNumber(motion.completedReps, getMotionMessage(order, 'count'))
     if (motion.completedReps < 0) {
-      throw new Error(getMotionMessage(order, 'reps'))
+      throw new Error(getMotionMessage(order, 'count'))
     }
 
     if (motion.feedback !== undefined && typeof motion.feedback !== 'string') {

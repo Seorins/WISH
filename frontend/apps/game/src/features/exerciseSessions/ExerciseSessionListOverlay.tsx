@@ -8,7 +8,7 @@ import { useExerciseSessionDetail, useExerciseSessions } from './hooks'
 import { resolvePatientProfileId } from './patientProfile'
 import {
   buildExerciseSessionReportSummary,
-  formatAccuracy,
+  formatCompletionRate,
   formatDateTime,
   formatDurationSec,
   formatExerciseType,
@@ -225,8 +225,8 @@ export function ExerciseSessionListOverlay({ open, onClose }: ExerciseSessionLis
                 value={formatDurationSec(summary.totalDurationSec)}
               />
               <SummaryItem
-                label={'\uD3C9\uADE0 \uC815\uD655\uB3C4'}
-                value={formatAccuracy(summary.averageAccuracy)}
+                label={'\uD3C9\uADE0 \uC218\uD589\uB960'}
+                value={formatCompletionRate(summary.averageCompletionRate)}
               />
               <SummaryItem
                 label={'\uC644\uB8CC \uB3D9\uC791'}
@@ -254,7 +254,8 @@ export function ExerciseSessionListOverlay({ open, onClose }: ExerciseSessionLis
                       {'\uC6B4\uB3D9 \uC2DC\uAC04'}: {formatDurationSec(session.durationSec)}
                     </span>
                     <span>
-                      {'\uD3C9\uADE0 \uC815\uD655\uB3C4'}: {formatAccuracy(session.averageAccuracy)}
+                      {'\uD3C9\uADE0 \uC218\uD589\uB960'}:{' '}
+                      {formatCompletionRate(session.averageAccuracy)}
                     </span>
                     <span>
                       {'\uC644\uB8CC \uB3D9\uC791'}: {session.completedMotionCount}
@@ -327,8 +328,8 @@ function ExerciseSessionDetailModal({
                 value={formatDurationSec(data.durationSec)}
               />
               <SummaryItem
-                label={'\uD3C9\uADE0 \uC815\uD655\uB3C4'}
-                value={formatAccuracy(data.averageAccuracy)}
+                label={'\uD3C9\uADE0 \uC218\uD589\uB960'}
+                value={formatCompletionRate(data.averageAccuracy)}
               />
               <SummaryItem
                 label={'\uC644\uB8CC \uB3D9\uC791'}
@@ -352,10 +353,10 @@ function ExerciseSessionDetailModal({
                         {'\uC2DC\uAC04'}: {formatDurationSec(motion.durationSec)}
                       </span>
                       <span>
-                        {'\uC815\uD655\uB3C4'}: {formatAccuracy(motion.accuracy)}
+                        {'\uC218\uD589\uB960'}: {formatCompletionRate(motion.accuracy)}
                       </span>
                       <span>
-                        {'\uBC18\uBCF5'}: {motion.completedReps}
+                        {'\uC218\uD589 \uD69F\uC218'}: {motion.completedReps}
                         {'\uD68C'}
                       </span>
                       <span>

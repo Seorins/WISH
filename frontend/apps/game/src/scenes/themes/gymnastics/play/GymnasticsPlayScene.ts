@@ -1,8 +1,9 @@
 import Phaser from 'phaser'
 import {
-  calculateAverageAccuracy,
+  calculateAverageCompletionRate,
   createExerciseSession,
-  type CreateExerciseSessionRequest,
+  toCreateExerciseSessionRequest,
+  type CreateExerciseSessionRecord,
 } from '@wish/api-client'
 import { assetPath } from '@/game/assets/assetPath'
 import { POSE_LANDMARK_NAMES, PoseTracker } from '@/game/motion/poseTracker'
@@ -66,11 +67,11 @@ type DanielAiMotionSpec = {
 
 type AiMotionSpec = TopAiMotionSpec | DanielAiMotionSpec
 
-type LocalExerciseMotionResult = {
+type LocalExerciseMotionRecord = {
   exerciseMotionId: number
   durationSec: number
-  accuracy: number
-  completedReps: number
+  completionRate: number
+  completedCount: number
   feedback: string
 }
 
@@ -456,7 +457,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
   private sessionStartedAtMs = 0
   private motionStartedAtMs = 0
   private motionAccumulatedDurationMs = 0
-  private motionResults: LocalExerciseMotionResult[] = []
+  private motionRecords: LocalExerciseMotionRecord[] = []
   private hasSubmittedSession = false
   private saveState: 'idle' | 'saving' | 'success' | 'error' = 'idle'
   private saveRetryButton?: Phaser.GameObjects.Text
@@ -525,7 +526,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     this.sessionStartedAtMs = 0
     this.motionStartedAtMs = 0
     this.motionAccumulatedDurationMs = 0
-    this.motionResults = []
+    this.motionRecords = []
     this.hasSubmittedSession = false
     this.saveState = 'idle'
     this.lastTtsKey = null
@@ -2677,8 +2678,8 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
       return this.getDanielHoldDetail(motionSpec)
     }
 
-    const completedReps = Math.min(this.aiState.stepCount, motionSpec.targetSteps)
-    return `${completedReps}/${motionSpec.targetSteps}\uD68C`
+    const completedCount = Math.min(this.aiState.stepCount, motionSpec.targetSteps)
+    return `${completedCount}/${motionSpec.targetSteps}\uD68C`
   }
 
   private clampProgressValue(value: number) {
@@ -2705,7 +2706,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     return this.aiState.stepCount >= motionSpec.targetSteps
   }
 
-  private getCompletedRepsByRecord(motionSpec: AiMotionSpec) {
+  private getCompletedCountByRecord(motionSpec: AiMotionSpec) {
     if (motionSpec.type === 'daniel') {
       return this.isMotionCompleteByRecord(motionSpec) ? 1 : 0
     }
@@ -2810,7 +2811,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
   private recordCurrentMotionResult() {
     const motionSpec = this.getCurrentAiMotionSpec()
     if (
-      this.motionResults.some(result => result.exerciseMotionId === motionSpec.exerciseMotionId)
+      this.motionRecords.some(record => record.exerciseMotionId === motionSpec.exerciseMotionId)
     ) {
       return
     }
@@ -2821,19 +2822,19 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
       0,
       Math.round((this.motionAccumulatedDurationMs + activeDurationMs) / 1000),
     )
-    const accuracy = this.getMotionProgressRatio(motionSpec)
-    const completedReps = this.getCompletedRepsByRecord(motionSpec)
+    const completionRate = this.getMotionProgressRatio(motionSpec)
+    const completedCount = this.getCompletedCountByRecord(motionSpec)
     const feedback = this.normalizeSessionFeedback(
       this.aiState.representativeFeedbackText ??
         this.aiState.displayedFeedbackText ??
         this.aiState.feedback,
     )
 
-    this.motionResults.push({
+    this.motionRecords.push({
       exerciseMotionId: motionSpec.exerciseMotionId,
       durationSec,
-      accuracy,
-      completedReps,
+      completionRate,
+      completedCount,
       feedback,
     })
   }
@@ -2843,19 +2844,19 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     return trimmedFeedback ? trimmedFeedback.slice(0, 255) : '\uC6B4\uB3D9 \uC644\uB8CC'
   }
 
-  private buildExerciseSessionPayload(): CreateExerciseSessionRequest {
+  private buildExerciseSessionRecord(): CreateExerciseSessionRecord {
     const patientProfileId = resolvePatientProfileId()
     if (!patientProfileId) {
       throw new Error('환자 정보가 올바르지 않습니다.')
     }
 
-    const durationSec = this.motionResults.reduce((total, result) => total + result.durationSec, 0)
+    const durationSec = this.motionRecords.reduce((total, record) => total + record.durationSec, 0)
     return {
       patientProfileId,
       exerciseType: this.exerciseType,
       durationSec,
-      averageAccuracy: calculateAverageAccuracy(this.motionResults),
-      motions: this.motionResults,
+      averageCompletionRate: calculateAverageCompletionRate(this.motionRecords),
+      motions: this.motionRecords,
     }
   }
 
@@ -2873,7 +2874,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     this.renderSaveState()
 
     try {
-      const payload = this.buildExerciseSessionPayload()
+      const payload = toCreateExerciseSessionRequest(this.buildExerciseSessionRecord())
       const savedSession = await createExerciseSession(payload)
       this.saveState = 'success'
       await Promise.all([
@@ -2892,7 +2893,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
         apiBaseUrl: import.meta.env.VITE_API_BASE_URL,
         hasAccessToken: Boolean(window.localStorage.getItem('wish_access_token')),
         patientProfileId: resolvePatientProfileId(),
-        motionResults: this.motionResults,
+        motionRecords: this.motionRecords,
       })
       this.hasSubmittedSession = false
       this.saveState = 'error'
