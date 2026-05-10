@@ -28,7 +28,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 
-@Tag(name = "Fuel", description = "Guardian fuel and game inbox API")
+@Tag(name = "연료", description = "보호자 별빛 연료 전송 및 게임 수신함 API")
 @RestController
 @RequestMapping("/fuel")
 @RequiredArgsConstructor
@@ -36,23 +36,23 @@ public class FuelController {
 
     private final FuelService fuelService;
 
-    @Operation(summary = "Send fuel", description = "Stores a guardian fuel message.")
+    @Operation(summary = "별빛 연료 보내기", description = "보호자가 환자에게 별빛 연료와 응원 메시지를 보냅니다.")
     @ApiResponses({
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
                 responseCode = "201",
-                description = "Fuel event created"),
+                description = "연료 저장 성공"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
                 responseCode = "400",
-                description = "Invalid input (G-001)"),
+                description = "입력값 검증 실패 (G-001)"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
                 responseCode = "401",
-                description = "Authentication required (G-003)"),
+                description = "인증 필요 (G-003)"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
                 responseCode = "404",
-                description = "Patient profile not found (P-001)"),
+                description = "환자 프로필이 없거나 본인 소유가 아님 (P-001)"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
                 responseCode = "409",
-                description = "Fuel already reached 100 percent (FL-001)")
+                description = "연료 게이지가 이미 100%에 도달함 (FL-001)")
     })
     @PostMapping
     public ResponseEntity<ApiResponse<FuelEventResponse>> send(
@@ -63,17 +63,17 @@ public class FuelController {
                 .body(ApiResponse.success(response));
     }
 
-    @Operation(summary = "Get fuel status", description = "Returns lifetime fuel gauge and events.")
+    @Operation(summary = "연료 상태 조회", description = "환자별 누적 연료 게이지와 연료 전송 기록을 조회합니다.")
     @ApiResponses({
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
                 responseCode = "200",
-                description = "Status returned"),
+                description = "조회 성공"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
                 responseCode = "401",
-                description = "Authentication required (G-003)"),
+                description = "인증 필요 (G-003)"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
                 responseCode = "404",
-                description = "Patient profile not found (P-001)")
+                description = "환자 프로필이 없거나 본인 소유가 아님 (P-001)")
     })
     @GetMapping("/status")
     public ResponseEntity<ApiResponse<FuelStatusResponse>> status(
@@ -81,17 +81,17 @@ public class FuelController {
         return ResponseEntity.ok(ApiResponse.success(fuelService.status(currentUser.userId())));
     }
 
-    @Operation(summary = "Get fuel inbox", description = "Returns unconsumed fuel messages.")
+    @Operation(summary = "미확인 별빛 메시지 조회", description = "게임에서 아직 연출하지 않은 별빛 연료 메시지를 시간순으로 조회합니다.")
     @ApiResponses({
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
                 responseCode = "200",
-                description = "Inbox returned"),
+                description = "조회 성공"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
                 responseCode = "401",
-                description = "Authentication required (G-003)"),
+                description = "인증 필요 (G-003)"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
                 responseCode = "404",
-                description = "Patient profile not found (P-001)")
+                description = "환자 프로필이 없거나 본인 소유가 아님 (P-001)")
     })
     @GetMapping("/inbox")
     public ResponseEntity<ApiResponse<List<FuelInboxEventResponse>>> inbox(
@@ -99,20 +99,20 @@ public class FuelController {
         return ResponseEntity.ok(ApiResponse.success(fuelService.inbox(currentUser.userId())));
     }
 
-    @Operation(summary = "Consume fuel events", description = "Marks inbox messages as consumed.")
+    @Operation(summary = "별빛 메시지 확인 처리", description = "게임에서 연출이 끝난 별빛 연료 메시지를 확인 완료로 표시합니다.")
     @ApiResponses({
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
                 responseCode = "200",
-                description = "Events consumed"),
+                description = "확인 처리 성공"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
                 responseCode = "400",
-                description = "Invalid input (G-001)"),
+                description = "입력값 검증 실패 (G-001)"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
                 responseCode = "401",
-                description = "Authentication required (G-003)"),
+                description = "인증 필요 (G-003)"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
                 responseCode = "404",
-                description = "Patient profile not found (P-001)")
+                description = "환자 프로필이 없거나 본인 소유가 아님 (P-001)")
     })
     @PostMapping("/consume")
     public ResponseEntity<ApiResponse<FuelConsumeResponse>> consume(

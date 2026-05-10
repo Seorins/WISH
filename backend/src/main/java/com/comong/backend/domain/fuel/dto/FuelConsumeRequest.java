@@ -8,5 +8,5 @@ import jakarta.validation.constraints.NotNull;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 public record FuelConsumeRequest(
-        @Schema(description = "Consumed fuel event ids", example = "[1,2,3]") @NotEmpty
+        @Schema(description = "확인 완료 처리할 연료 이벤트 ID 목록", example = "[1,2,3]") @NotEmpty
                 List<@NotNull Long> ids) {}

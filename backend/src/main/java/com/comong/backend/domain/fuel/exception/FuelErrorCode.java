@@ -10,7 +10,7 @@ import lombok.RequiredArgsConstructor;
 @Getter
 @RequiredArgsConstructor
 public enum FuelErrorCode implements ErrorCode {
-    FUEL_ALREADY_COMPLETED(HttpStatus.CONFLICT, "FL-001", "Fuel is already complete.");
+    FUEL_ALREADY_COMPLETED(HttpStatus.CONFLICT, "FL-001", "연료 게이지가 이미 100%에 도달했습니다.");
 
     private final HttpStatus status;
     private final String code;

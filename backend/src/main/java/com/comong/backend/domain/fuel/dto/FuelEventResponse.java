@@ -7,11 +7,11 @@ import com.comong.backend.domain.fuel.entity.FuelEvent;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 public record FuelEventResponse(
-        @Schema(description = "Fuel event id") Long id,
-        @Schema(description = "Fuel amount") int amount,
-        @Schema(description = "Guardian message") String message,
-        @Schema(description = "Sent time") LocalDateTime createdAt,
-        @Schema(description = "Consumed time") LocalDateTime consumedAt) {
+        @Schema(description = "연료 이벤트 ID") Long id,
+        @Schema(description = "연료량") int amount,
+        @Schema(description = "보호자 응원 메시지") String message,
+        @Schema(description = "전송 시각") LocalDateTime createdAt,
+        @Schema(description = "게임 확인 시각") LocalDateTime consumedAt) {
 
     public static FuelEventResponse from(FuelEvent event) {
         return new FuelEventResponse(
