@@ -88,9 +88,9 @@ def _result_attr(result: object, name: str, default: object = None) -> object:
 
 def _build_top_replay_metadata(result: object, timestamp_ms: int):
     return build_replay_metadata_response(
-        motion_id=getattr(result, "motion_id"),
+        motion_id=getattr(result, "motion_id", None),
         timestamp_ms=timestamp_ms,
-        tracking=getattr(result, "tracking"),
+        tracking=getattr(result, "tracking", None),
         frame_label=_resolve_top_response_frame_label(result),
         state=getattr(result, "state", None),
         progress_count=getattr(result, "step_count", None),

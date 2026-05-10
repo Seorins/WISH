@@ -1,7 +1,12 @@
 from types import SimpleNamespace
 
+import pytest
+
 from app.api.v1 import gymnastics_daniel, gymnastics_top
-from app.api.v1.gymnastics_shared import to_motion_replay_pose_response
+from app.api.v1.gymnastics_shared import (
+    build_replay_metadata_response,
+    to_motion_replay_pose_response,
+)
 from app.schemas.gymnastics import (
     DanielForwardPressEvaluationRequest,
     DanielForwardPressEvaluationResponse,
@@ -82,6 +87,26 @@ def test_motion_replay_pose_response_fills_missing_landmarks_with_nulls() -> Non
     assert right_knee.y is None
     assert right_knee.z is None
     assert right_knee.confidence == 0.0
+
+
+def test_replay_metadata_response_rejects_missing_required_fields() -> None:
+    with pytest.raises(ValueError, match="motion_id"):
+        build_replay_metadata_response(
+            motion_id=None,
+            timestamp_ms=1000,
+            tracking="tracking_ok",
+            frame_label="motion_present",
+            state="holding",
+        )
+
+    with pytest.raises(ValueError, match="tracking"):
+        build_replay_metadata_response(
+            motion_id="top_march",
+            timestamp_ms=1000,
+            tracking=None,
+            frame_label="motion_present",
+            state="left_peak",
+        )
 
 
 def test_evaluate_march_includes_normalized_pose(monkeypatch) -> None:
