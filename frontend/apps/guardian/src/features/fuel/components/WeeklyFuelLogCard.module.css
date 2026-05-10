@@ -114,3 +114,16 @@
   min-width: 36px;
   text-align: right;
 }
+
+@media (max-width: 768px) {
+  .card {
+    flex: 0 0 auto;
+    overflow: visible;
+  }
+  .list {
+    flex: 0 0 auto;
+  }
+  .rowBar {
+    width: 64px;
+  }
+}
