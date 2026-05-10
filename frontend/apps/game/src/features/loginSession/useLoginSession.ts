@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { heartbeatLoginSession, startLoginSession } from '@wish/api-client'
+import { useLoginSessionStore } from '../../stores/loginSessionStore'
 
 const HEARTBEAT_INTERVAL_MS = 30_000
 const ACCESS_TOKEN_STORAGE_KEY = 'wish_access_token'
@@ -63,6 +64,7 @@ export function useLoginSession(patientProfileId: number | undefined) {
       stopHeartbeat()
       fireEnd(sessionId, tokenRef.current)
       sessionIdRef.current = null
+      useLoginSessionStore.getState().clearSession()
     }
 
     void startLoginSession({ patientProfileId })
@@ -70,6 +72,7 @@ export function useLoginSession(patientProfileId: number | undefined) {
         if (cancelled) return
         sessionIdRef.current = response.data.id
         tokenRef.current = localStorage.getItem(ACCESS_TOKEN_STORAGE_KEY)
+        useLoginSessionStore.getState().setSession(response.data.id, patientProfileId)
         if (document.visibilityState !== 'hidden') {
           startHeartbeat()
         }
@@ -90,6 +93,7 @@ export function useLoginSession(patientProfileId: number | undefined) {
       const token = tokenRef.current
       sessionIdRef.current = null
       tokenRef.current = null
+      useLoginSessionStore.getState().clearSession()
       if (sessionId !== null) {
         fireEnd(sessionId, token)
       }
