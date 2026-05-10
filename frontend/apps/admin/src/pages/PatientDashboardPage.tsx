@@ -173,10 +173,10 @@ export function PatientDashboardPage() {
           type={notifyType ?? 'CHECK_IN'}
           defaultMessage={
             notifyType === 'RISK'
-              ? `${dashboard.patient.patientName} 환자가 최근 활동이 줄어 콘몽 운영팀에서 안내드립니다. 짧은 활동이라도 함께 시작해 보시면 좋겠어요.`
+              ? `${dashboard.patient.patientName} 환자가 최근 활동이 줄어 위시 운영팀에서 안내드립니다. 짧은 활동이라도 함께 시작해 보시면 좋겠어요.`
               : notifyType === 'CONTENT_SKEW'
-                ? `${dashboard.patient.patientName} 환자의 콘몽 활동이 한 콘텐츠에 집중되고 있어요. 다양한 활동을 함께 권유해 주시면 좋겠습니다.`
-                : `${dashboard.patient.patientName} 환자의 최근 콘몽 활동을 확인해 주세요. 궁금한 점이 있으면 운영팀에 알려주세요.`
+                ? `${dashboard.patient.patientName} 환자의 위시 활동이 한 콘텐츠에 집중되고 있어요. 다양한 활동을 함께 권유해 주시면 좋겠습니다.`
+                : `${dashboard.patient.patientName} 환자의 최근 위시 활동을 확인해 주세요. 궁금한 점이 있으면 운영팀에 알려주세요.`
           }
           onClose={() => setNotifyType(null)}
         />

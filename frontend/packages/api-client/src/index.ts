@@ -31,6 +31,7 @@ export {
   getMyMusicResults,
   saveMusicResult,
 } from './music-results'
+export { getFuelStatus, sendFuel } from './fuel'
 export { requestPresignedUploadUrls, uploadToPresignedUrl } from './uploads'
 export { createPatientProfile, listPatientProfiles } from './patient-profiles'
 export { endLoginSession, heartbeatLoginSession, startLoginSession } from './login-sessions'
@@ -61,6 +62,7 @@ export {
 } from './taekwondo-sessions'
 export { changeUserRole, listUsers } from './users'
 export type { LoginRequest, SignupRequest, TokenResponse, UserResponse, UserRole } from './auth'
+export type { AdminUserResponse } from './users'
 export type {
   AdminDashboard,
   AdminDashboardAlert,
@@ -124,6 +126,7 @@ export type {
   MusicResultPage,
   MusicResultRequest,
 } from './music-results'
+export type { FuelEvent, FuelSendRequest, FuelStatus } from './fuel'
 export type {
   PresignedUploadItem,
   PresignedUploadRequest,

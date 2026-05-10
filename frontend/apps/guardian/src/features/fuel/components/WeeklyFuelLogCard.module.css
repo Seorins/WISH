@@ -51,13 +51,30 @@
 .list {
   display: flex;
   flex-direction: column;
-  justify-content: space-around;
   gap: 6px;
   margin: 0;
   padding: 0;
   list-style: none;
   flex: 1;
   min-height: 0;
+  /* 항목이 카드 높이를 넘기면 내부 스크롤로 확인 — 시각적으로는 스크롤바 숨김. */
+  overflow-y: auto;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge legacy */
+}
+
+.list::-webkit-scrollbar {
+  display: none; /* Chromium/Safari */
+}
+
+.empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  color: var(--dash-color-text-muted);
+  padding: 24px 0;
 }
 
 .row {

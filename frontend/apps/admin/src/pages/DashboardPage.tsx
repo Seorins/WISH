@@ -193,7 +193,7 @@ export function DashboardPage() {
             <KpiCard
               label="기간 앱 사용"
               value={formatDuration(dashboard.summary.periodTotalSeconds)}
-              detail={`일 평균 앱 사용 ${formatDuration(dashboard.summary.averageDailySeconds)}`}
+              detail={`조회 기간 ${formatDateRange(dashboard.from, dashboard.to)}`}
               delta={
                 <DeltaBadge
                   label="직전 동기간"
@@ -206,7 +206,7 @@ export function DashboardPage() {
             <KpiCard
               label="기간 활성 환자"
               value={`${formatNumber(dashboard.summary.periodActivePatients)}명`}
-              detail={`기간 일 평균 ${formatDuration(dashboard.summary.averageDailySeconds)}`}
+              detail={`오늘 활성 ${formatNumber(dashboard.summary.todayActivePatients)}명`}
               delta={
                 <DeltaBadge
                   label="직전 동기간"
@@ -226,7 +226,7 @@ export function DashboardPage() {
             <KpiCard
               label="일 평균 앱 사용"
               value={formatDuration(dashboard.summary.averageDailySeconds)}
-              detail={`기간 합계 ${formatDuration(dashboard.summary.periodTotalSeconds)}`}
+              detail="조회 기간의 하루 평균"
               delta={
                 <DeltaBadge
                   label="직전 동기간"
@@ -467,7 +467,7 @@ function buildNotifyTarget(patient: AdminDashboardPatientActivity): NotifyTarget
       patientName: patient.patientName,
       guardianEmail: patient.guardianEmail,
       type: 'RISK',
-      defaultMessage: `${patient.patientName} 환자가 최근 활동이 줄어 콘몽 운영팀에서 안내드립니다. 함께 짧은 활동이라도 시작해 보시면 좋겠어요.`,
+      defaultMessage: `${patient.patientName} 환자가 최근 활동이 줄어 위시 운영팀에서 안내드립니다. 함께 짧은 활동이라도 시작해 보시면 좋겠어요.`,
     }
   }
   return {
@@ -475,7 +475,7 @@ function buildNotifyTarget(patient: AdminDashboardPatientActivity): NotifyTarget
     patientName: patient.patientName,
     guardianEmail: patient.guardianEmail,
     type: 'CHECK_IN',
-    defaultMessage: `${patient.patientName} 환자의 최근 콘몽 활동을 확인해 주세요. 궁금하신 점이 있다면 운영팀에 알려주세요.`,
+    defaultMessage: `${patient.patientName} 환자의 최근 위시 활동을 확인해 주세요. 궁금하신 점이 있다면 운영팀에 알려주세요.`,
   }
 }
 

@@ -195,3 +195,48 @@ class TaekwondoScoringResponse(BaseModel):
     )
     lstm: TaekwondoLstmScoreDetail
     dtw: TaekwondoDtwScoreDetail
+
+
+class Taegeuk1AnalyzeRequest(BaseModel):
+    session_id: str | None = Field(default=None, description="Client session identifier")
+    movement_name: str = Field(..., min_length=1, description="Target Taegeuk 1 movement name")
+    sequence: list = Field(
+        ...,
+        description="Pose sequence. Supported shapes: (3, 60, 29), (3, T, 29), (T, 29, 3), or (T, 29, 2).",
+    )
+    input_normalized: bool = Field(default=True, description="Whether the sequence is already normalized")
+    pass_threshold: float = Field(default=80.0, ge=0.0, le=100.0, description="Success threshold")
+
+
+class Taegeuk1PredictionResponse(BaseModel):
+    movement_index: int
+    movement_name: str
+    probability: float = Field(..., ge=0.0, le=1.0)
+
+
+class Taegeuk1JointErrorResponse(BaseModel):
+    joint: str
+    error: float = Field(..., ge=0.0)
+
+
+class Taegeuk1AnalyzeResponse(BaseModel):
+    session_id: str | None = None
+    target_movement_index: int
+    target_movement_name: str
+    predicted_movement_index: int
+    predicted_movement_name: str
+    confidence: float = Field(..., ge=0.0, le=1.0)
+    top3_predictions: list[Taegeuk1PredictionResponse]
+    scored_movement_index: int
+    scored_movement_name: str
+    classification_match: bool
+    score: float = Field(..., ge=0.0, le=100.0)
+    pass_threshold: float = Field(..., ge=0.0, le=100.0)
+    passed: bool
+    distance: float = Field(..., ge=0.0)
+    worst_joint: str
+    joint_errors_top5: list[Taegeuk1JointErrorResponse]
+    body_part_scores: dict[str, float]
+    body_part_errors: dict[str, float]
+    weakest_body_part: str
+    feedback_summary: str
