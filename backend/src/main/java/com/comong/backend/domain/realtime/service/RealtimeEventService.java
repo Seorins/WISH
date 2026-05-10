@@ -1,6 +1,9 @@
 package com.comong.backend.domain.realtime.service;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArraySet;
@@ -46,22 +49,28 @@ public class RealtimeEventService {
         if (emitters == null || emitters.isEmpty()) {
             return;
         }
-        emitters.forEach(registration -> sendOrRemove(userId, registration, event));
+        EmitterRegistration[] snapshot = emitters.toArray(EmitterRegistration[]::new);
+        for (EmitterRegistration registration : snapshot) {
+            sendOrRemove(userId, registration, event);
+        }
     }
 
     @Scheduled(fixedDelayString = "${realtime.sse.cleanup-interval-millis:60000}")
     public void cleanupExpiredEmitters() {
         long now = nowMillis.getAsLong();
+        List<ExpiredEmitter> expiredEmitters = new ArrayList<>();
         emittersByUserId.forEach(
                 (userId, registrations) ->
                         registrations.forEach(
                                 registration -> {
                                     if (now - registration.registeredAtMillis()
                                             >= SSE_TIMEOUT_MILLIS) {
-                                        registration.emitter().complete();
-                                        remove(userId, registration);
+                                        expiredEmitters.add(
+                                                new ExpiredEmitter(userId, registration));
                                     }
                                 }));
+        expiredEmitters.forEach(expired -> remove(expired.userId(), expired.registration()));
+        expiredEmitters.forEach(expired -> expired.registration().emitter().complete());
     }
 
     int activeEmitterCount(Long userId) {
@@ -74,6 +83,9 @@ public class RealtimeEventService {
     }
 
     private void register(Long userId, EmitterRegistration registration) {
+        registration.emitter().onCompletion(() -> remove(userId, registration));
+        registration.emitter().onTimeout(() -> remove(userId, registration));
+        registration.emitter().onError(error -> remove(userId, registration));
         emittersByUserId.compute(
                 userId,
                 (ignored, current) -> {
@@ -82,17 +94,21 @@ public class RealtimeEventService {
                     registrations.add(registration);
                     return registrations;
                 });
-        registration.emitter().onCompletion(() -> remove(userId, registration));
-        registration.emitter().onTimeout(() -> remove(userId, registration));
-        registration.emitter().onError(error -> remove(userId, registration));
     }
 
     private void sendOrRemove(
             Long userId, EmitterRegistration registration, RealtimeEventResponse event) {
         try {
             registration.emitter().send(SseEmitter.event().name(EVENT_NAME).data(event));
-        } catch (IOException | RuntimeException e) {
+        } catch (IOException e) {
             log.debug("SSE send failed. userId={}, eventType={}", userId, event.type(), e);
+            remove(userId, registration);
+        } catch (RuntimeException e) {
+            log.warn(
+                    "Unexpected SSE send failure. userId={}, eventType={}",
+                    userId,
+                    event.type(),
+                    e);
             remove(userId, registration);
         }
     }
@@ -106,5 +122,28 @@ public class RealtimeEventService {
                 });
     }
 
-    private record EmitterRegistration(SseEmitter emitter, long registeredAtMillis) {}
+    private record ExpiredEmitter(Long userId, EmitterRegistration registration) {}
+
+    private record EmitterRegistration(SseEmitter emitter, long registeredAtMillis) {
+
+        private EmitterRegistration {
+            Objects.requireNonNull(emitter, "emitter must not be null");
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) {
+                return true;
+            }
+            if (!(o instanceof EmitterRegistration other)) {
+                return false;
+            }
+            return emitter == other.emitter;
+        }
+
+        @Override
+        public int hashCode() {
+            return System.identityHashCode(emitter);
+        }
+    }
 }

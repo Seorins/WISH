@@ -61,15 +61,33 @@ class RealtimeEventServiceTest {
     }
 
     @Test
+    void publish_oneEmitterThrowsRuntimeException_keepsDeliveringToOtherEmitters() {
+        TestRealtimeEventService service = new TestRealtimeEventService(new AtomicLong(0));
+        service.subscribe(1L);
+        TestSseEmitter failing = service.createdEmitters().get(0);
+        service.subscribe(1L);
+        TestSseEmitter healthy = service.createdEmitters().get(1);
+        failing.failOnRuntimeException();
+
+        service.publish(
+                1L, RealtimeEventResponse.of(RealtimeEventType.GAME_STARTED, 10L, 20L, null));
+
+        assertThat(service.activeEmitterCount(1L)).isEqualTo(1);
+        assertThat(healthy.sendCount()).isEqualTo(2);
+    }
+
+    @Test
     void cleanupExpiredEmitters_removesOldEmitters() {
         AtomicLong nowMillis = new AtomicLong(0);
-        RealtimeEventService service = new TestRealtimeEventService(nowMillis);
+        TestRealtimeEventService service = new TestRealtimeEventService(nowMillis);
         service.subscribe(1L);
+        TestSseEmitter emitter = service.createdEmitters().get(0);
 
         nowMillis.set(31 * 60 * 1000L);
         service.cleanupExpiredEmitters();
 
         assertThat(service.activeEmitterCount(1L)).isZero();
+        assertThat(emitter.completeCount()).isEqualTo(1);
     }
 
     private static final class TestRealtimeEventService extends RealtimeEventService {
@@ -95,7 +113,9 @@ class RealtimeEventServiceTest {
     private static final class TestSseEmitter extends SseEmitter {
 
         private int sendCount;
+        private int completeCount;
         private boolean failOnSend;
+        private boolean failOnRuntimeException;
 
         private TestSseEmitter() {
             super(30 * 60 * 1000L);
@@ -106,15 +126,31 @@ class RealtimeEventServiceTest {
             if (failOnSend) {
                 throw new IOException("forced failure");
             }
+            if (failOnRuntimeException) {
+                throw new IllegalStateException("forced failure");
+            }
             sendCount++;
+        }
+
+        @Override
+        public void complete() {
+            completeCount++;
         }
 
         private void failOnSend() {
             failOnSend = true;
         }
 
+        private void failOnRuntimeException() {
+            failOnRuntimeException = true;
+        }
+
         private int sendCount() {
             return sendCount;
+        }
+
+        private int completeCount() {
+            return completeCount;
         }
     }
 }
