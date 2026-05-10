@@ -45,6 +45,9 @@ const CONTENT_CONFIRM_VISIBLE_MS = 1000
 const CARD_FONT_FAMILY =
   '"Pretendard Variable", Pretendard, "Noto Sans KR", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", sans-serif'
 const GYMNASTICS_BACKGROUND_TEXTURE_KEY = 'gymnastics-background-v3'
+const DEBUG_OBSTACLES = false
+const OBSTACLE_EDITOR_ENABLED = import.meta.env.DEV
+const OBSTACLE_EDITOR_MIN_SIZE = 0.003
 const gymnasticsRoomSceneConfig = {
   backgroundFitMode: 'cover',
   backgroundAnchor: 'center',
@@ -110,6 +113,59 @@ const GYMNASTICS_CONTENT_SCENE_KEYS: Record<GymnasticsContentMode, string> = {
   daniel: 'GymnasticsDanielScene',
 }
 
+type ObstacleRect = { x: number; y: number; w: number; h: number }
+type ObstacleInstance = {
+  rect: ObstacleRect
+  object: Phaser.GameObjects.Rectangle
+}
+
+const GYMNASTICS_ROOM_OBSTACLES: ObstacleRect[] = [
+  { x: 0.1896, y: 0.4019, w: 0.6625, h: 0.1999 },
+  { x: 0.2215, y: 0.5969, w: 0.0437, h: 0.0308 },
+  { x: 0.266, y: 0.5907, w: 0.0528, h: 0.0308 },
+  { x: 0, y: 0.6808, w: 0.0375, h: 0.0691 },
+  { x: 0.0417, y: 0.64, w: 0.0354, h: 0.0753 },
+  { x: 0.0757, y: 0.6302, w: 0.0569, h: 0.058 },
+  { x: 0.134, y: 0.6092, w: 0.0208, h: 0.0728 },
+  { x: 0.1458, y: 0.5944, w: 0.0368, h: 0.0654 },
+  { x: 0.1875, y: 0.5895, w: 0.0278, h: 0.0506 },
+  { x: 0.8299, y: 0.5598, w: 0.0431, h: 0.0568 },
+  { x: 0.8597, y: 0.5858, w: 0.05, h: 0.0543 },
+  { x: 0.8778, y: 0.6191, w: 0.0542, h: 0.0383 },
+  { x: 0.9056, y: 0.6314, w: 0.0549, h: 0.037 },
+  { x: 0.9333, y: 0.6623, w: 0.0486, h: 0.0296 },
+  { x: 0.9507, y: 0.6795, w: 0.0486, h: 0.0333 },
+  { x: 0.9847, y: 0.7079, w: 0.0146, h: 0.016 },
+  { x: 0.7257, y: 0.6006, w: 0.0118, h: 0.1752 },
+  { x: 0.7764, y: 0.6018, w: 0.0139, h: 0.1764 },
+  { x: 0.7833, y: 0.6697, w: 0.009, h: 0.1876 },
+  { x: 0.8431, y: 0.6536, w: 0.009, h: 0.195 },
+  { x: 0.775, y: 0.603, w: 0.016, h: 0.0148 },
+  { x: 0.7958, y: 0.6203, w: 0.016, h: 0.0247 },
+  { x: 0.8167, y: 0.6376, w: 0.0132, h: 0.016 },
+  { x: 0.8347, y: 0.6549, w: 0.0111, h: 0.0099 },
+  { x: 0.8521, y: 0.6647, w: 0.0063, h: 0.0111 },
+  { x: 0.7424, y: 0.6191, w: 0.016, h: 0.0173 },
+  { x: 0.7632, y: 0.6425, w: 0.0118, h: 0.0148 },
+  { x: 0.7854, y: 0.6647, w: 0.0132, h: 0.0136 },
+  { x: 0.8979, y: 0.819, w: 0.0486, h: 0.1024 },
+  { x: 0.8729, y: 0.8807, w: 0.0368, h: 0.0666 },
+  { x: 0.8035, y: 0.8708, w: 0.0604, h: 0.0765 },
+  { x: 0.7722, y: 0.9201, w: 0.059, h: 0.0506 },
+  { x: 0.3354, y: 0.7647, w: 0.0333, h: 0.0962 },
+  { x: 0.3694, y: 0.7708, w: 0.0132, h: 0.0531 },
+  { x: 0.3208, y: 0.7992, w: 0.0313, h: 0.0555 },
+  { x: 0.1243, y: 0.7782, w: 0.0333, h: 0.0555 },
+  { x: 0.1486, y: 0.7955, w: 0.0132, h: 0.1123 },
+  { x: 0.1465, y: 0.7622, w: 0.0243, h: 0.0345 },
+  { x: 0.1674, y: 0.7326, w: 0.0292, h: 0.0444 },
+  { x: 0.1931, y: 0.7054, w: 0.025, h: 0.0345 },
+  { x: 0.2146, y: 0.6771, w: 0.0222, h: 0.0395 },
+  { x: 0.2424, y: 0.6672, w: 0.0264, h: 0.0321 },
+  { x: 0.2542, y: 0.6413, w: 0.0229, h: 0.037 },
+  { x: 0.259, y: 0.6758, w: 0.0097, h: 0.0913 },
+]
+
 type GymnasticsSelectSceneData = {
   spawn?: RatioPoint
 }
@@ -124,6 +180,10 @@ type BackgroundDisplayArea = {
 export class GymnasticsSelectScene extends Phaser.Scene {
   private player!: PlayerSprite
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys
+  private obstacles!: Phaser.Physics.Arcade.StaticGroup
+  private obstacleInstances: ObstacleInstance[] = []
+  private obstacleEditorDraft?: Phaser.GameObjects.Rectangle
+  private obstacleEditorStart?: Phaser.Math.Vector2
   private target: Phaser.Math.Vector2 | null = null
   private lastDirection: PlayerDirection = 'down'
   private exitPortal!: Phaser.Geom.Rectangle
@@ -186,10 +246,16 @@ export class GymnasticsSelectScene extends Phaser.Scene {
     this.cards = []
     this.clearContentStartTimer()
     this.target = null
+    this.obstacleInstances = []
+    this.obstacleEditorStart = undefined
+    this.obstacleEditorDraft?.destroy()
+    this.obstacleEditorDraft = undefined
 
     this.backgroundDisplayArea = this.addContainBackground(GYMNASTICS_BACKGROUND_TEXTURE_KEY)
     createSceneWeatherLayer(this)
     this.physics.world.setBounds(0, 0, vw, vh)
+    this.obstacles = this.physics.add.staticGroup()
+    GYMNASTICS_ROOM_OBSTACLES.forEach(rect => this.addObstacleRect(rect))
 
     const npcPosition = this.toBackgroundPoint(
       gymnasticsRoomSceneConfig.npcPosition.xRatio,
@@ -225,6 +291,8 @@ export class GymnasticsSelectScene extends Phaser.Scene {
     const spawnX = vw * spawn.xRatio
     const spawnY = vh * spawn.yRatio
     this.player = createPlayer(this, spawnX, spawnY)
+    this.addRaccoonObstacle(raccoonH)
+    this.physics.add.collider(this.player, this.obstacles)
     this.dialogDismissed =
       Phaser.Math.Distance.Between(spawnX, spawnY, this.raccoonAnchor.x, this.raccoonAnchor.y) <=
       TALK_DISTANCE
@@ -238,10 +306,19 @@ export class GymnasticsSelectScene extends Phaser.Scene {
       if (this.isDialogVisible) this.closeDialog(true)
     })
     this.input.on('pointerdown', this.handlePointerDown)
+    this.input.on('pointermove', this.handleObstacleEditorPointerMove)
+    this.input.on('pointerup', this.handleObstacleEditorPointerUp)
+    this.input.keyboard!.on('keydown-E', this.exportObstacleRects)
+    this.input.keyboard!.on('keydown-R', this.clearEditedObstacleRects)
+    this.input.mouse?.disableContextMenu()
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.clearContentStartTimer()
       this.input.off('pointerdown', this.handlePointerDown)
+      this.input.off('pointermove', this.handleObstacleEditorPointerMove)
+      this.input.off('pointerup', this.handleObstacleEditorPointerUp)
+      this.input.keyboard?.off('keydown-E', this.exportObstacleRects)
+      this.input.keyboard?.off('keydown-R', this.clearEditedObstacleRects)
     })
 
     this.playerWasInExitPortal = true
@@ -277,6 +354,10 @@ export class GymnasticsSelectScene extends Phaser.Scene {
   }
 
   private readonly handlePointerDown = (pointer: Phaser.Input.Pointer) => {
+    if (this.handleObstacleEditorPointerDown(pointer)) {
+      return
+    }
+
     if (this.sessionHistoryButton.getBounds().contains(pointer.x, pointer.y)) {
       this.openSessionHistory()
       return
@@ -405,6 +486,176 @@ export class GymnasticsSelectScene extends Phaser.Scene {
       x: this.backgroundDisplayArea.x + this.backgroundDisplayArea.width * xRatio + offsetX,
       y: this.backgroundDisplayArea.y + this.backgroundDisplayArea.height * yRatio + offsetY,
     }
+  }
+
+  private addObstacleRect(rect: ObstacleRect) {
+    const x = Phaser.Math.Clamp(rect.x, 0, 1)
+    const y = Phaser.Math.Clamp(rect.y, 0, 1)
+    const w = Phaser.Math.Clamp(rect.w, 0, 1 - x)
+    const h = Phaser.Math.Clamp(rect.h, 0, 1 - y)
+    const box = this.add
+      .rectangle(
+        this.backgroundDisplayArea.x + (x + w / 2) * this.backgroundDisplayArea.width,
+        this.backgroundDisplayArea.y + (y + h / 2) * this.backgroundDisplayArea.height,
+        w * this.backgroundDisplayArea.width,
+        h * this.backgroundDisplayArea.height,
+        0xff0000,
+        DEBUG_OBSTACLES ? 0.22 : 0,
+      )
+      .setDepth(1)
+
+    if (DEBUG_OBSTACLES) {
+      box.setStrokeStyle(2, 0xff3333, 0.85)
+    }
+
+    this.physics.add.existing(box, true)
+    this.obstacles.add(box)
+    this.obstacleInstances.push({ rect: { x, y, w, h }, object: box })
+
+    return box
+  }
+
+  private addRaccoonObstacle(raccoonH: number) {
+    const box = this.add
+      .rectangle(
+        this.raccoonAnchor.x,
+        this.raccoonAnchor.y + raccoonH * 0.22,
+        raccoonH * 0.3,
+        raccoonH * 0.22,
+        0xff0000,
+        DEBUG_OBSTACLES ? 0.22 : 0,
+      )
+      .setDepth(1)
+
+    if (DEBUG_OBSTACLES) {
+      box.setStrokeStyle(2, 0xff3333, 0.85)
+    }
+
+    this.physics.add.existing(box, true)
+    this.obstacles.add(box)
+  }
+
+  private handleObstacleEditorPointerDown(pointer: Phaser.Input.Pointer) {
+    if (!OBSTACLE_EDITOR_ENABLED || !this.obstacles) {
+      return false
+    }
+
+    const event = pointer.event as MouseEvent | PointerEvent | undefined
+    const isShiftDrag = Boolean(event?.shiftKey)
+    const isRightClick = pointer.rightButtonDown() || pointer.button === 2
+
+    if (isRightClick) {
+      this.removeObstacleAt(pointer.x, pointer.y)
+      return true
+    }
+
+    if (!isShiftDrag) {
+      return false
+    }
+
+    this.obstacleEditorStart = new Phaser.Math.Vector2(pointer.x, pointer.y)
+    this.obstacleEditorDraft?.destroy()
+    this.obstacleEditorDraft = this.add
+      .rectangle(pointer.x, pointer.y, 1, 1, 0x00aaff, 0.26)
+      .setDepth(30)
+      .setStrokeStyle(2, 0x0077ff, 0.95)
+
+    return true
+  }
+
+  private readonly handleObstacleEditorPointerMove = (pointer: Phaser.Input.Pointer) => {
+    if (!this.obstacleEditorStart || !this.obstacleEditorDraft) {
+      return
+    }
+
+    const bounds = this.getObstacleDragBounds(this.obstacleEditorStart, pointer.x, pointer.y)
+    this.obstacleEditorDraft.setPosition(bounds.centerX, bounds.centerY)
+    this.obstacleEditorDraft.setSize(bounds.width, bounds.height)
+    this.obstacleEditorDraft.setDisplaySize(bounds.width, bounds.height)
+  }
+
+  private readonly handleObstacleEditorPointerUp = (pointer: Phaser.Input.Pointer) => {
+    if (!this.obstacleEditorStart || !this.obstacleEditorDraft) {
+      return
+    }
+
+    const bounds = this.getObstacleDragBounds(this.obstacleEditorStart, pointer.x, pointer.y)
+    this.obstacleEditorDraft.destroy()
+    this.obstacleEditorDraft = undefined
+    this.obstacleEditorStart = undefined
+
+    const rect = {
+      x: (bounds.x - this.backgroundDisplayArea.x) / this.backgroundDisplayArea.width,
+      y: (bounds.y - this.backgroundDisplayArea.y) / this.backgroundDisplayArea.height,
+      w: bounds.width / this.backgroundDisplayArea.width,
+      h: bounds.height / this.backgroundDisplayArea.height,
+    }
+
+    if (rect.w < OBSTACLE_EDITOR_MIN_SIZE || rect.h < OBSTACLE_EDITOR_MIN_SIZE) {
+      return
+    }
+
+    this.addObstacleRect(rect)
+  }
+
+  private getObstacleDragBounds(start: Phaser.Math.Vector2, currentX: number, currentY: number) {
+    const left = this.backgroundDisplayArea.x
+    const top = this.backgroundDisplayArea.y
+    const rightLimit = this.backgroundDisplayArea.x + this.backgroundDisplayArea.width
+    const bottomLimit = this.backgroundDisplayArea.y + this.backgroundDisplayArea.height
+    const x = Phaser.Math.Clamp(Math.min(start.x, currentX), left, rightLimit)
+    const y = Phaser.Math.Clamp(Math.min(start.y, currentY), top, bottomLimit)
+    const right = Phaser.Math.Clamp(Math.max(start.x, currentX), left, rightLimit)
+    const bottom = Phaser.Math.Clamp(Math.max(start.y, currentY), top, bottomLimit)
+    const width = Math.max(1, right - x)
+    const height = Math.max(1, bottom - y)
+
+    return new Phaser.Geom.Rectangle(x, y, width, height)
+  }
+
+  private removeObstacleAt(x: number, y: number) {
+    for (let index = this.obstacleInstances.length - 1; index >= 0; index -= 1) {
+      const instance = this.obstacleInstances[index]
+      if (!instance.object.getBounds().contains(x, y)) {
+        continue
+      }
+
+      this.obstacles.remove(instance.object, true, true)
+      this.obstacleInstances.splice(index, 1)
+      return
+    }
+  }
+
+  private readonly exportObstacleRects = () => {
+    if (!OBSTACLE_EDITOR_ENABLED) {
+      return
+    }
+
+    const lines = this.obstacleInstances.map(({ rect }) => {
+      const x = Number(rect.x.toFixed(4))
+      const y = Number(rect.y.toFixed(4))
+      const w = Number(rect.w.toFixed(4))
+      const h = Number(rect.h.toFixed(4))
+      return `  { x: ${x}, y: ${y}, w: ${w}, h: ${h} },`
+    })
+    const output = `const GYMNASTICS_ROOM_OBSTACLES: ObstacleRect[] = [\n${lines.join('\n')}\n]`
+
+    console.info('[GymnasticsSelectScene] Exported obstacle rectangles:\n' + output)
+    void navigator.clipboard?.writeText(output).catch(() => undefined)
+  }
+
+  private readonly clearEditedObstacleRects = () => {
+    if (!OBSTACLE_EDITOR_ENABLED) {
+      return
+    }
+
+    this.obstacleInstances.forEach(({ object }) => {
+      this.obstacles.remove(object, true, true)
+    })
+    this.obstacleInstances = []
+    this.obstacleEditorDraft?.destroy()
+    this.obstacleEditorDraft = undefined
+    this.obstacleEditorStart = undefined
   }
 
   private createCleanRaccoonTexture() {
