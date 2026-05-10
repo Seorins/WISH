@@ -41,8 +41,9 @@ public class DialogueController {
             summary = "대화 세션 시작",
             description =
                     "환자가 지정 NPC 와 대화 세션을 시작하고 첫 장면을 받는다."
-                            + " 등대지기 영철(YEONGCHEOL) 만 첫 화면에 'rest_today' secondaryAction 을 포함한다."
-                            + " 마을 주민 5인은 본 단계(556)에서 미지원 — DL-005 반환 (559 에서 풀림).")
+                            + " 등대지기 영철(YEONGCHEOL) 만 BE 가 scene 을 생성하고 첫 화면에 'rest_today'"
+                            + " secondaryAction 을 포함한다. 마을 주민 6인은 FE 가 정적 스크립트로 자체 진행하므로"
+                            + " 응답의 {@code scene} 필드는 {@code null} 로 내려간다.")
     @ApiResponses({
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
                 responseCode = "201",
@@ -55,10 +56,7 @@ public class DialogueController {
                 description = "인증 필요 (G-003)"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
                 responseCode = "404",
-                description = "환자 프로필이 없거나 본인 소유가 아님 (P-001)"),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                responseCode = "501",
-                description = "지원되지 않는 NPC (DL-005)")
+                description = "환자 프로필이 없거나 본인 소유가 아님 (P-001)")
     })
     @PostMapping
     public ResponseEntity<ApiResponse<StartSessionResponse>> create(

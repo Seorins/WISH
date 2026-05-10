@@ -2,10 +2,17 @@ package com.comong.backend.domain.dialogue.dto;
 
 import com.comong.backend.domain.dialogue.entity.DialogueSession;
 import com.comong.backend.domain.dialogue.entity.DialogueStatus;
+import com.fasterxml.jackson.annotation.JsonInclude;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
-/** 한 턴 처리 후 응답. 다음 장면을 포함한다 (또는 종료 신호). */
+/**
+ * 한 턴 처리 후 응답. 다음 장면을 포함한다 (또는 종료 신호).
+ *
+ * <p>{@code nextScene} 은 BE-driven NPC 에서만 값이 있다. 마을 주민이면 {@code null} 이고 응답 JSON 에서 omit 된다 — FE 가
+ * 자체 스크립트로 다음 scene 을 결정한다.
+ */
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public record SubmitTurnResponse(
         @Schema(description = "세션 ID", example = "42") Long sessionId,
         @Schema(

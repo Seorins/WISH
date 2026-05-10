@@ -10,16 +10,14 @@ import com.comong.backend.domain.dialogue.entity.DialogueFinishReason;
 import com.comong.backend.domain.dialogue.entity.DialogueSession;
 import com.comong.backend.domain.dialogue.entity.DialogueTurnGeneratedBy;
 import com.comong.backend.domain.dialogue.entity.NpcName;
-import com.comong.backend.domain.dialogue.exception.DialogueErrorCode;
-import com.comong.backend.global.exception.BusinessException;
 
 /**
  * LLM 미연동 / Claude 실패 시 사용할 정적 시나리오 트리. 등대지기 영철의 전 흐름을 결정론적으로 제공한다.
  *
  * <p>구조: (이전 선택, 누적 stepCount) → 다음 장면. 모든 라우팅은 in-memory 상수로 표현하여 외부 의존성 없이 즉시 fallback 가능.
  *
- * <p>마을 주민 5인은 이번 단계(556)에서 미지원 — {@link DialogueErrorCode#NPC_NOT_SUPPORTED_YET} 로 거부. 559 에서 정적
- * NPC 스크립트가 별도 provider 로 들어올 예정.
+ * <p>마을 주민 6인은 FE 가 정적 스크립트를 보유하므로 본 provider 는 호출되지 않는다 — 호출자({@link DialogueService})가 {@link
+ * NpcName#isBackendDriven()} 으로 분기 후 BE-driven NPC 만 진입한다.
  */
 @Component
 public class FallbackSceneProvider {
@@ -88,13 +86,10 @@ public class FallbackSceneProvider {
     private static final List<String> CLOSING_LINES_TIMEOUT =
             List.of("오늘 여기서 멈추자꾸나.", "등대 불은 조용히 켜두마.");
 
-    /** 새 세션의 첫 장면. */
+    /** 새 세션의 첫 장면. BE-driven NPC 에 한해 호출되어야 한다. */
     public SceneResponse firstScene(NpcName npcName) {
-        if (npcName == NpcName.YEONGCHEOL) {
-            return YEONGCHEOL_FIRST_SCENE;
-        }
-        // 마을 주민 5인은 559 에서 정적 스크립트로 처리. 그 전엔 거부.
-        throw new BusinessException(DialogueErrorCode.NPC_NOT_SUPPORTED_YET);
+        requireBackendDriven(npcName);
+        return YEONGCHEOL_FIRST_SCENE;
     }
 
     /**
@@ -103,9 +98,7 @@ public class FallbackSceneProvider {
      */
     public SceneResponse nextScene(
             NpcName npcName, String prevChoiceIntentId, int newStepCount, int maxSteps) {
-        if (npcName != NpcName.YEONGCHEOL) {
-            throw new BusinessException(DialogueErrorCode.NPC_NOT_SUPPORTED_YET);
-        }
+        requireBackendDriven(npcName);
         if (newStepCount >= maxSteps) {
             return SCENE_END;
         }
@@ -123,14 +116,23 @@ public class FallbackSceneProvider {
         };
     }
 
-    /** 종료 시 NPC 가 남기는 짧은 마무리 대사 (1~2 줄). */
+    /** 종료 시 NPC 가 남기는 짧은 마무리 대사 (1~2 줄). BE-driven NPC 에 한해 호출되어야 한다. */
     public List<String> closingLines(NpcName npcName, DialogueFinishReason reason) {
-        // 마을 주민도 같은 텍스트 톤으로 우선 통일 — 559 에서 NPC 별 closing 으로 분기 가능
+        requireBackendDriven(npcName);
         return switch (reason) {
             case COMPLETED -> CLOSING_LINES_COMPLETED;
             case REST_TODAY -> CLOSING_LINES_REST;
             case TIMEOUT -> CLOSING_LINES_TIMEOUT;
         };
+    }
+
+    private static void requireBackendDriven(NpcName npcName) {
+        if (!npcName.isBackendDriven()) {
+            // 호출자(DialogueService)가 NpcName.isBackendDriven() 으로 분기해야 한다.
+            // 이 시점에 도달하면 라우팅 버그.
+            throw new IllegalStateException(
+                    "FallbackSceneProvider only handles backend-driven NPC, got " + npcName);
+        }
     }
 
     private static SceneResponse scene(

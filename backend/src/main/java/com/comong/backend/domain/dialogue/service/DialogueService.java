@@ -20,7 +20,6 @@ import com.comong.backend.domain.dialogue.entity.DialogueSession;
 import com.comong.backend.domain.dialogue.entity.DialogueStatus;
 import com.comong.backend.domain.dialogue.entity.DialogueTurn;
 import com.comong.backend.domain.dialogue.entity.DialogueTurnGeneratedBy;
-import com.comong.backend.domain.dialogue.entity.NpcName;
 import com.comong.backend.domain.dialogue.exception.DialogueErrorCode;
 import com.comong.backend.domain.dialogue.repository.DialogueSessionRepository;
 import com.comong.backend.domain.dialogue.repository.DialogueTurnRepository;
@@ -33,10 +32,12 @@ import lombok.RequiredArgsConstructor;
 /**
  * NPC 대화 세션 유스케이스 (시작 / 턴 처리 / 종료 / 조회).
  *
- * <p>인가: 모든 세션 조작은 본인 소유 환자 프로필에 한정된다. 비소유/비존재는 모두 {@link DialogueErrorCode#SESSION_NOT_FOUND}(404)
- * 으로 통일하여 ID enumeration 을 방지한다 (PatientProfileService 와 동일 패턴).
+ * <p>책임 분리: 등대지기(YEONGCHEOL)는 BE 가 scene 생성·라우팅·closingLines 를 모두 책임진다 (현재는 fallback tree, 558 에서
+ * Claude 분기 추가). 마을 주민 6인은 FE 가 정적 스크립트(질문/선택지/다음 scene/closingLines)를 보유하며 BE 는 turn raw 데이터 적재만
+ * 한다 — 즉 마을 주민 응답에선 {@code scene}, {@code nextScene}, {@code closingLines} 가 모두 {@code null}.
  *
- * <p>현재 단계(556): 등대지기 영철 + Fallback scene tree 만 지원. 마을 주민 5인은 559, Claude LLM 은 558 에서 분기 추가.
+ * <p>인가: 비소유/비존재 모두 {@link DialogueErrorCode#SESSION_NOT_FOUND}(404) 으로 통일하여 ID enumeration 을 방지한다
+ * (PatientProfileService 와 동일 패턴).
  */
 @Service
 @RequiredArgsConstructor
@@ -55,17 +56,16 @@ public class DialogueService {
     public StartSessionResponse createSession(Long currentUserId, StartSessionRequest request) {
         PatientProfile profile =
                 patientProfileService.findOwnedOrThrow(currentUserId, request.patientProfileId());
-        if (request.npcName() != NpcName.YEONGCHEOL) {
-            // 마을 주민은 559 에서 정적 스크립트로 풀어줌
-            throw new BusinessException(DialogueErrorCode.NPC_NOT_SUPPORTED_YET);
-        }
         DialogueSession session =
                 sessionRepository.save(
                         DialogueSession.builder()
                                 .patientProfile(profile)
                                 .npcName(request.npcName())
                                 .build());
-        SceneResponse firstScene = fallbackSceneProvider.firstScene(request.npcName());
+        SceneResponse firstScene =
+                request.npcName().isBackendDriven()
+                        ? fallbackSceneProvider.firstScene(request.npcName())
+                        : null; // 마을 주민은 FE 가 자체 스크립트로 첫 scene 로드
         return StartSessionResponse.of(session, firstScene);
     }
 
@@ -77,20 +77,23 @@ public class DialogueService {
 
         SelectedChoiceRequest choice = request.selectedChoice();
         int stepIndex = session.getStepCount();
-        String questionText = deriveQuestionForStep(session, stepIndex);
+        DialogueTurnGeneratedBy generatedBy =
+                session.getNpcName().isBackendDriven()
+                        ? DialogueTurnGeneratedBy.FALLBACK
+                        : DialogueTurnGeneratedBy.NPC_SCRIPT;
 
         try {
             turnRepository.saveAndFlush(
                     DialogueTurn.builder()
                             .session(session)
                             .stepIndex(stepIndex)
-                            .questionText(questionText)
+                            .questionText(request.questionText())
                             .choiceIntentId(choice.choiceIntentId())
                             .choiceText(choice.text())
                             .intensity(choice.intensity())
                             .concernFlags(choice.concernFlags())
                             .protectiveFactors(choice.protectiveFactors())
-                            .generatedBy(DialogueTurnGeneratedBy.FALLBACK)
+                            .generatedBy(generatedBy)
                             .build());
         } catch (DataIntegrityViolationException e) {
             throw mapTurnConstraintViolation(e);
@@ -99,12 +102,13 @@ public class DialogueService {
         session.incrementStepCount();
 
         SceneResponse nextScene =
-                fallbackSceneProvider.nextScene(
-                        session.getNpcName(),
-                        choice.choiceIntentId(),
-                        session.getStepCount(),
-                        session.getMaxSteps());
-
+                session.getNpcName().isBackendDriven()
+                        ? fallbackSceneProvider.nextScene(
+                                session.getNpcName(),
+                                choice.choiceIntentId(),
+                                session.getStepCount(),
+                                session.getMaxSteps())
+                        : null; // 마을 주민은 FE 가 자체 라우팅
         return SubmitTurnResponse.of(session, nextScene);
     }
 
@@ -115,7 +119,10 @@ public class DialogueService {
         requireInProgress(session);
         session.finish(request.finishReason());
         List<String> closingLines =
-                fallbackSceneProvider.closingLines(session.getNpcName(), request.finishReason());
+                session.getNpcName().isBackendDriven()
+                        ? fallbackSceneProvider.closingLines(
+                                session.getNpcName(), request.finishReason())
+                        : null; // 마을 주민은 FE 가 자체 closingLines 표시
         return FinishSessionResponse.of(session, closingLines);
     }
 
@@ -140,34 +147,6 @@ public class DialogueService {
         if (session.getStatus() != DialogueStatus.IN_PROGRESS) {
             throw new BusinessException(DialogueErrorCode.SESSION_ALREADY_FINISHED);
         }
-    }
-
-    /**
-     * 주어진 stepIndex 에서 화면에 노출되었던 질문 텍스트를 결정론적으로 derive. 첫 step 은 NPC 의 firstScene, 이후는 직전 turn 의
-     * choice 를 라우팅 테이블에 통과시켜 얻는다.
-     *
-     * <p>558 에서 Claude 가 들어오면 question 이 비결정론적이라 이 derive 가 안 통한다 → 그 시점에 session 에 last_question
-     * 컬럼을 추가하거나 다른 전략으로 전환.
-     */
-    private String deriveQuestionForStep(DialogueSession session, int stepIndex) {
-        if (stepIndex == 0) {
-            return fallbackSceneProvider.firstScene(session.getNpcName()).questionText();
-        }
-        DialogueTurn previous =
-                turnRepository
-                        .findBySessionIdAndStepIndex(session.getId(), stepIndex - 1)
-                        .orElseThrow(
-                                () ->
-                                        new IllegalStateException(
-                                                "previous turn missing at stepIndex="
-                                                        + (stepIndex - 1)));
-        return fallbackSceneProvider
-                .nextScene(
-                        session.getNpcName(),
-                        previous.getChoiceIntentId(),
-                        stepIndex,
-                        session.getMaxSteps())
-                .questionText();
     }
 
     private RuntimeException mapTurnConstraintViolation(DataIntegrityViolationException e) {
