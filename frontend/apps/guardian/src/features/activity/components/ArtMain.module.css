@@ -521,3 +521,53 @@
   opacity: 0.3;
   cursor: not-allowed;
 }
+
+@media (max-width: 1024px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+  .mainColumn,
+  .sideColumn,
+  .heroCard,
+  .imageFrame,
+  .peerCard,
+  .pastCard {
+    min-width: 0;
+  }
+  .summaryCard {
+    padding: 16px;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .summaryMascot {
+    width: 110px;
+    height: 110px;
+    margin: 0;
+    align-self: center;
+  }
+  .summarySparkleA,
+  .summarySparkleB,
+  .summarySparkleC {
+    display: none;
+  }
+  .infoStatsRow {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+  }
+  .infoStatValue {
+    font-size: 16px;
+  }
+  .infoStat {
+    padding: 12px 6px;
+  }
+  .imageFrame {
+    min-height: 200px;
+  }
+}
