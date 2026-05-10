@@ -14,6 +14,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
 
+import com.comong.backend.domain.patient.repository.PatientProfileRepository;
 import com.comong.backend.domain.user.entity.User;
 import com.comong.backend.domain.user.exception.UserErrorCode;
 import com.comong.backend.domain.user.repository.UserRepository;
@@ -23,6 +24,8 @@ import com.comong.backend.global.exception.BusinessException;
 class UserServiceTest {
 
     @Mock private UserRepository userRepository;
+
+    @Mock private PatientProfileRepository patientProfileRepository;
 
     @InjectMocks private UserService userService;
 

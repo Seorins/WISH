@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { CSSProperties } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { changeUserRole, listUsers } from '@wish/api-client'
-import type { UserResponse, UserRole } from '@wish/api-client'
+import type { AdminUserResponse, UserRole } from '@wish/api-client'
 import { AdminShell } from '../shared/components/AdminShell'
 import { ConfirmModal } from '../shared/components/ConfirmModal'
 import { useAuthStore } from '../shared/auth/store'
@@ -17,11 +17,12 @@ function isRoleFilter(value: string | null): value is RoleFilter {
 }
 
 type PendingRoleChange = {
-  user: UserResponse
+  user: AdminUserResponse
   nextRole: UserRole
 }
 
 export function UsersPage() {
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const currentEmail = useAuthStore(state => state.email)
   const [searchParams, setSearchParams] = useSearchParams()
@@ -90,7 +91,7 @@ export function UsersPage() {
   )
 
   return (
-    <AdminShell title="유저 관리" description="계정과 관리자 권한 상태를 확인합니다.">
+    <AdminShell title="유저 관리" description="계정, 환자 프로필, 관리자 권한 상태를 확인합니다.">
       <section style={styles.panel}>
         <div style={styles.toolbar}>
           <label style={styles.searchLabel}>
@@ -141,9 +142,9 @@ export function UsersPage() {
                 <th style={styles.th}>ID</th>
                 <th style={styles.th}>이메일</th>
                 <th style={styles.th}>닉네임</th>
+                <th style={styles.th}>환자 프로필</th>
                 <th style={styles.th}>권한</th>
                 <th style={styles.th}>가입일</th>
-                <th style={styles.th}>권한 변경</th>
               </tr>
             </thead>
             <tbody>
@@ -166,43 +167,45 @@ export function UsersPage() {
                   : lastAdmin
                     ? '마지막 관리자 계정은 강등할 수 없습니다'
                     : null
-                const nextRole: UserRole = role === 'ADMIN' ? 'USER' : 'ADMIN'
                 return (
                   <tr key={user.id}>
                     <td style={styles.td}>{user.id}</td>
                     <td style={styles.emailCell}>{user.email}</td>
                     <td style={styles.td}>{user.nickname}</td>
                     <td style={styles.td}>
-                      <span
-                        style={{
-                          ...styles.roleBadge,
-                          ...(role === 'ADMIN' ? styles.adminBadge : styles.userBadge),
-                        }}
-                      >
-                        {roleLabel(role)}
-                      </span>
+                      <PatientProfileCell
+                        user={user}
+                        onOpen={patientProfileId =>
+                          navigate(`/dashboard/patients/${patientProfileId}`)
+                        }
+                      />
                     </td>
-                    <td style={styles.td}>{formatDate(user.createdAt)}</td>
                     <td style={styles.td}>
-                      <button
-                        type="button"
-                        title={disabledReason ?? undefined}
-                        onClick={() => {
+                      <select
+                        value={role}
+                        title={disabledReason ?? '권한 변경'}
+                        aria-label={`${user.email} 권한 변경`}
+                        onChange={event => {
+                          const nextRole = event.target.value as UserRole
+                          if (nextRole === role) return
                           setActionError(null)
                           setPendingChange({ user, nextRole })
                         }}
-                        disabled={disabledReason != null}
+                        disabled={disabledReason != null || roleMutation.isPending}
                         style={{
-                          ...styles.roleActionButton,
-                          ...(role === 'ADMIN'
-                            ? styles.roleActionDemote
-                            : styles.roleActionPromote),
-                          ...(disabledReason != null ? styles.roleActionDisabled : {}),
+                          ...styles.roleSelect,
+                          ...(role === 'ADMIN' ? styles.roleSelectAdmin : styles.roleSelectUser),
+                          ...(disabledReason != null || roleMutation.isPending
+                            ? styles.roleSelectDisabled
+                            : {}),
                         }}
                       >
-                        {role === 'ADMIN' ? '관리자 해제' : '관리자로 승격'}
-                      </button>
+                        <option value="USER">일반</option>
+                        <option value="ADMIN">관리자</option>
+                      </select>
+                      {disabledReason && <span style={styles.roleHint}>{disabledReason}</span>}
                     </td>
+                    <td style={styles.td}>{formatDate(user.createdAt)}</td>
                   </tr>
                 )
               })}
@@ -251,6 +254,28 @@ function roleLabel(role: RoleFilter) {
   if (role === 'ALL') return '전체'
   if (role === 'ADMIN') return '관리자'
   return '일반'
+}
+
+function PatientProfileCell({
+  user,
+  onOpen,
+}: {
+  user: AdminUserResponse
+  onOpen: (patientProfileId: number) => void
+}) {
+  if (user.patientProfileId == null) {
+    return <span style={styles.emptyProfile}>등록 없음</span>
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => onOpen(user.patientProfileId as number)}
+      style={styles.profileButton}
+    >
+      <strong style={styles.profileName}>{user.patientName ?? '환자 상세'}</strong>
+      {user.patientNickname && <span style={styles.profileNickname}>{user.patientNickname}</span>}
+    </button>
+  )
 }
 
 function formatDate(value?: string) {
@@ -353,7 +378,7 @@ const styles: Record<string, CSSProperties> = {
   },
   table: {
     width: '100%',
-    minWidth: 760,
+    minWidth: 840,
     borderCollapse: 'separate',
     borderSpacing: 0,
   },
@@ -380,47 +405,79 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 700,
     verticalAlign: 'middle',
   },
-  roleBadge: {
-    minWidth: 62,
+  profileButton: {
+    maxWidth: 190,
+    minWidth: 104,
     display: 'inline-flex',
-    justifyContent: 'center',
-    padding: '4px 8px',
-    borderRadius: 6,
-    border: '1px solid transparent',
-    fontSize: 12,
-    fontWeight: 700,
-  },
-  adminBadge: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: 2,
+    padding: '6px 9px',
+    background: '#fff',
     color: '#0b7285',
-    background: '#e6f6ff',
-    borderColor: '#b3ecff',
-  },
-  userBadge: {
-    color: '#5f3dc4',
-    background: '#f3f0ff',
-    borderColor: '#d0bfff',
-  },
-  roleActionButton: {
-    padding: '6px 10px',
-    border: '1px solid transparent',
+    border: '1px solid #b3ecff',
     borderRadius: 6,
+    cursor: 'pointer',
+    fontSize: 12,
+    textAlign: 'left',
+  },
+  profileName: {
+    maxWidth: '100%',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    color: '#0b7285',
+    fontSize: 12,
+  },
+  profileNickname: {
+    maxWidth: '100%',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    color: '#486581',
+    fontSize: 11,
+  },
+  emptyProfile: {
+    display: 'inline-flex',
+    padding: '5px 8px',
+    background: '#f8fafc',
+    border: '1px solid #d9e2ec',
+    borderRadius: 6,
+    color: '#829ab1',
+    fontSize: 12,
+    fontWeight: 600,
+  },
+  roleSelect: {
+    minWidth: 88,
+    height: 32,
+    padding: '0 28px 0 10px',
+    borderRadius: 6,
+    border: '1px solid transparent',
+    background: '#fff',
     cursor: 'pointer',
     fontSize: 12,
     fontWeight: 700,
   },
-  roleActionPromote: {
-    background: '#fff',
+  roleSelectAdmin: {
     color: '#0b7285',
+    background: '#e6f6ff',
     borderColor: '#b3ecff',
   },
-  roleActionDemote: {
-    background: '#fff',
-    color: '#c92a2a',
-    borderColor: '#ffc9c9',
+  roleSelectUser: {
+    color: '#5f3dc4',
+    background: '#f3f0ff',
+    borderColor: '#d0bfff',
   },
-  roleActionDisabled: {
-    opacity: 0.45,
+  roleSelectDisabled: {
+    opacity: 0.55,
     cursor: 'not-allowed',
+  },
+  roleHint: {
+    display: 'block',
+    marginTop: 4,
+    color: '#829ab1',
+    fontSize: 11,
+    lineHeight: 1.35,
   },
   emptyRow: {
     padding: '36px 16px',
