@@ -38,7 +38,6 @@ import {
   getQuestionDisplayText,
   getSecondaryAction,
   getVisibleChoices,
-  LIGHTHOUSE_EMOTION_START_SCENE_ID,
   LIGHTHOUSE_EMOTION_CLOSING_SCENE_ID,
   LIGHTHOUSE_MAX_QUESTION_SCENES,
   LIGHTHOUSE_REST_CLOSING_SCENE_ID,
@@ -221,6 +220,7 @@ export class LighthouseSelectScene extends Phaser.Scene {
   private isEmotionCheckinActive = false
   private hasPostcardBeenShown = false
   private isEmotionCheckinFinishing = false
+  private isBackendEmotionDialogueOpen = false
   private pendingAfterEngagement: (() => void) | null = null
   private soundMuted = false
   private caregiverDebugText: Phaser.GameObjects.Text | null = null
@@ -316,6 +316,8 @@ export class LighthouseSelectScene extends Phaser.Scene {
     this.input.keyboard!.on('keydown-DOWN', this.handleChoiceDown)
     this.input.keyboard!.on('keydown-ESC', this.handleEscDown)
     this.input.keyboard!.on('keydown-M', this.handleMuteToggle)
+    this.game.events.on('lighthouse-emotion:closed', this.handleLighthouseEmotionClosed, this)
+    this.game.events.on('lighthouse-emotion:text', this.handleLighthouseEmotionText, this)
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.clearReplyTimer()
@@ -326,6 +328,8 @@ export class LighthouseSelectScene extends Phaser.Scene {
       this.input.keyboard?.off('keydown-DOWN', this.handleChoiceDown)
       this.input.keyboard?.off('keydown-ESC', this.handleEscDown)
       this.input.keyboard?.off('keydown-M', this.handleMuteToggle)
+      this.game.events.off('lighthouse-emotion:closed', this.handleLighthouseEmotionClosed, this)
+      this.game.events.off('lighthouse-emotion:text', this.handleLighthouseEmotionText, this)
       this.clearEngagementTimers()
     })
 
@@ -885,8 +889,7 @@ export class LighthouseSelectScene extends Phaser.Scene {
   private startYoungcheolConversation() {
     this.resetEmotionCheckinSession()
     this.isEmotionCheckinActive = true
-    this.hasPostcardBeenShown = false
-    this.isEmotionCheckinFinishing = false
+    this.isBackendEmotionDialogueOpen = true
     this.isDialogVisible = true
     this.dialogDismissed = false
     this.dialogPhase = 'closed'
@@ -895,8 +898,9 @@ export class LighthouseSelectScene extends Phaser.Scene {
     this.hidePostcardImmediately()
     this.resetChoiceButtonsForReuse()
     setInteractionIconActive(this.talkIcon, true)
+    setCenteredDialogText(this.dialog, '등대지기가 불빛을 살피고 있어요...')
     fadeSimpleDialog(this, this.dialog, 1, 220)
-    this.loadEmotionScene(LIGHTHOUSE_EMOTION_START_SCENE_ID)
+    this.game.events.emit('lighthouse-emotion:open')
   }
 
   private loadEmotionScene(sceneId: string) {
@@ -928,6 +932,7 @@ export class LighthouseSelectScene extends Phaser.Scene {
 
   private advanceDialog() {
     if (!this.isDialogVisible) return
+    if (this.isBackendEmotionDialogueOpen) return
 
     if (this.dialogPhase === 'scene-lines') {
       if (!this.currentScene) {
@@ -1779,10 +1784,27 @@ export class LighthouseSelectScene extends Phaser.Scene {
     }
   }
 
-  private closeDialog(markDismissed: boolean) {
+  private handleLighthouseEmotionText({ text }: { text: string }) {
+    if (!this.isDialogVisible || !this.isBackendEmotionDialogueOpen) return
+    setCenteredDialogText(this.dialog, text)
+  }
+
+  private handleLighthouseEmotionClosed() {
+    this.closeDialog(true, false)
+  }
+
+  private closeDialog(markDismissed: boolean, notifyReact = true) {
+    if (this.isBackendEmotionDialogueOpen) {
+      this.isBackendEmotionDialogueOpen = false
+      if (notifyReact) this.game.events.emit('lighthouse-emotion:force-close')
+    }
     if (markDismissed && this.isEmotionCheckinActive && !this.isEmotionCheckinFinishing) {
-      this.finishEmotionCheckin({ reason: 'completed' })
-      return
+      if (!this.currentScene) {
+        this.isEmotionCheckinActive = false
+      } else {
+        this.finishEmotionCheckin({ reason: 'completed' })
+        return
+      }
     }
     this.clearReplyTimer()
     this.isDialogVisible = false
@@ -1819,6 +1841,7 @@ export class LighthouseSelectScene extends Phaser.Scene {
     this.selectedChoiceSceneCount = 0
     this.isChoiceTransitioning = false
     this.isEmotionCheckinActive = false
+    this.isBackendEmotionDialogueOpen = false
     this.hasPostcardBeenShown = false
     this.isEmotionCheckinFinishing = false
     this.selectedWaveMeterCard = undefined

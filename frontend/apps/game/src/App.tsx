@@ -17,6 +17,7 @@ import SquatDebugPage from './debug/SquatDebugPage'
 import { ensureDemoAuthToken } from './auth/demoAuth'
 import { AuthOverlay } from './features/auth'
 import { ExerciseSessionListOverlay } from './features/exerciseSessions'
+import { LighthouseEmotionController } from './features/lighthouse-emotion/components/LighthouseEmotionController'
 import { VillagerDialogueController } from './features/village-dialogue/components/VillagerDialogueController'
 import type { VillagerDialogueOpenPayload, VillagerNpcId } from './features/village-dialogue/types'
 import {
@@ -47,6 +48,7 @@ function App() {
   const [showAuth, setShowAuth] = useState(false)
   const [showExerciseSessions, setShowExerciseSessions] = useState(false)
   const [villagerNpcId, setVillagerNpcId] = useState<VillagerNpcId | null>(null)
+  const [isLighthouseEmotionOpen, setIsLighthouseEmotionOpen] = useState(false)
   const [patientProfileId, setPatientProfileId] = useState<number | undefined>(undefined)
 
   useLoginSession(patientProfileId)
@@ -93,6 +95,12 @@ function App() {
       game.events.on('villager-dialogue:force-close', () => {
         setVillagerNpcId(null)
       })
+      game.events.on('lighthouse-emotion:open', () => {
+        setIsLighthouseEmotionOpen(true)
+      })
+      game.events.on('lighthouse-emotion:force-close', () => {
+        setIsLighthouseEmotionOpen(false)
+      })
 
       const resolvedPatientProfileId = await resolvePatientProfileIdOrFetch()
       if (isCancelled) return
@@ -123,6 +131,15 @@ function App() {
 
   const handleVillagerDialogueTextChange = useCallback((text: string) => {
     gameRef.current?.events.emit('villager-dialogue:text', { text })
+  }, [])
+
+  const handleLighthouseEmotionClose = useCallback(() => {
+    setIsLighthouseEmotionOpen(false)
+    gameRef.current?.events.emit('lighthouse-emotion:closed')
+  }, [])
+
+  const handleLighthouseEmotionTextChange = useCallback((text: string) => {
+    gameRef.current?.events.emit('lighthouse-emotion:text', { text })
   }, [])
 
   if (debugMode === DEBUG_MARCH_MODE) {
@@ -194,6 +211,12 @@ function App() {
         isOpen={villagerNpcId !== null}
         onClose={handleVillagerDialogueClose}
         onTextChange={handleVillagerDialogueTextChange}
+      />
+      <LighthouseEmotionController
+        patientProfileId={patientProfileId ?? 0}
+        isOpen={isLighthouseEmotionOpen}
+        onClose={handleLighthouseEmotionClose}
+        onTextChange={handleLighthouseEmotionTextChange}
       />
       <QueryClientProvider client={queryClient}>
         <ExerciseSessionListOverlay
