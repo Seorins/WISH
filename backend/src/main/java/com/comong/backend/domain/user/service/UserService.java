@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.comong.backend.domain.user.dto.UserResponse;
 import com.comong.backend.domain.user.entity.User;
+import com.comong.backend.domain.user.entity.UserRole;
 import com.comong.backend.domain.user.exception.UserErrorCode;
 import com.comong.backend.domain.user.repository.UserRepository;
 import com.comong.backend.global.exception.BusinessException;
@@ -127,5 +128,41 @@ public class UserService {
      */
     public Optional<User> findEntityById(Long id) {
         return userRepository.findById(id);
+    }
+
+    /**
+     * 사용자 권한을 ADMIN ↔ USER 로 변경한다. 운영 콘솔의 권한 토글 화면에서 호출.
+     *
+     * <p>가드:
+     *
+     * <ul>
+     *   <li>본인 강등/승격 금지 — 자기 자신을 잘못 강등해 콘솔에서 잠겨버리는 사고 방지.
+     *   <li>마지막 ADMIN 강등 금지 — 시스템 전체에 ADMIN 이 0 명이 되는 상황 방지.
+     * </ul>
+     *
+     * 같은 role 로의 변경은 no-op 으로 통과시키되, DTO 는 최신 상태로 돌려준다. 트랜잭션 경계 내에서 dirty checking 으로 반영된다.
+     */
+    @Transactional
+    public UserResponse changeRole(Long actorUserId, Long targetUserId, UserRole nextRole) {
+        if (actorUserId != null && actorUserId.equals(targetUserId)) {
+            throw new BusinessException(UserErrorCode.CANNOT_CHANGE_OWN_ROLE);
+        }
+        User target =
+                userRepository
+                        .findById(targetUserId)
+                        .orElseThrow(() -> new BusinessException(UserErrorCode.USER_NOT_FOUND));
+        if (target.getRole() == nextRole) {
+            return UserResponse.from(target);
+        }
+        if (nextRole == UserRole.USER && target.getRole() == UserRole.ADMIN) {
+            long adminCount = userRepository.countByRole(UserRole.ADMIN);
+            if (adminCount <= 1) {
+                throw new BusinessException(UserErrorCode.LAST_ADMIN_DEMOTION_FORBIDDEN);
+            }
+            target.demoteToUser();
+        } else if (nextRole == UserRole.ADMIN) {
+            target.promoteToAdmin();
+        }
+        return UserResponse.from(target);
     }
 }

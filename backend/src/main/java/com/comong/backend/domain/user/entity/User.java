@@ -81,11 +81,18 @@ public class User {
     }
 
     /**
-     * 사용자를 ADMIN 으로 승격한다. 운영 흐름은 DB 직접 수정이며 본 메서드는 호출하지 않는다 ({@code
-     * backend/docs/admin-bootstrap.md} 참고). 향후 admin UI 또는 테스트 fixture 에서 사용한다. 이미 ADMIN 이면 호출자가 미리
-     * 걸러내는 것이 일반적.
+     * 사용자를 ADMIN 으로 승격한다. 운영 콘솔(WISH Admin)의 권한 변경 화면 또는 테스트 fixture 에서 사용한다. 이미 ADMIN 이면 호출자가 미리
+     * 걸러내는 것이 일반적. 본인 강등 / 마지막 ADMIN 강등 가드는 {@code UserService.changeRole} 에서 수행한다.
      */
     public void promoteToAdmin() {
         this.role = UserRole.ADMIN;
+    }
+
+    /**
+     * ADMIN 사용자를 일반 USER 로 강등한다. 본 메서드는 도메인 invariant 만 다루며, "본인 강등 금지", "마지막 ADMIN 강등 금지" 같은 정책은
+     * 호출 측({@code UserService.changeRole})이 책임진다.
+     */
+    public void demoteToUser() {
+        this.role = UserRole.USER;
     }
 }
