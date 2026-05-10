@@ -3,6 +3,7 @@ import type {
   DialogueSessionDetailApiResponse,
   EmotionChoiceViewModel,
   EmotionSceneViewModel,
+  FinishLighthouseEmotionApiResponse,
   FinishLighthouseEmotionRequest,
   FinishLighthouseEmotionResponse,
   StartLighthouseEmotionApiResponse,
@@ -128,10 +129,11 @@ export async function finishLighthouseEmotionSession(
   sessionId: string,
   finishReason: FinishLighthouseEmotionRequest['finishReason'],
 ): Promise<FinishLighthouseEmotionResponse> {
-  const response = await fetch(`${API_BASE_URL}/emotion-checkin/sessions/${sessionId}/finish`, {
+  const response = await fetch(`${API_BASE_URL}/dialogue/sessions/${sessionId}/finish`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      Accept: 'application/json',
       ...getAuthHeaders(),
     },
     body: JSON.stringify({
@@ -143,7 +145,16 @@ export async function finishLighthouseEmotionSession(
     throw new Error('등대지기 대화를 마치지 못했어요.')
   }
 
-  return response.json()
+  const payload = (await response.json()) as FinishLighthouseEmotionApiResponse
+  if (!payload.data) {
+    throw new Error('?ê¹…?ï§žÂ€æ¹²??Â€?ë¶¾? ï§ë‰íŠ‚ï§žÂ€ ï§ì‚µë»½?ëŒìŠ‚.')
+  }
+
+  return {
+    sessionId: String(payload.data.sessionId),
+    status: payload.data.status,
+    closingLines: payload.data.closingLines,
+  }
 }
 
 export async function getDialogueSessionDetail(
