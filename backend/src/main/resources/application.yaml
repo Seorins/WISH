@@ -56,6 +56,11 @@ security:
     access-token-ttl-seconds: ${JWT_ACCESS_TTL_SECONDS:3600}
     issuer: ${JWT_ISSUER:comong}
 
+livekit:
+  url: ${LIVEKIT_URL:}
+  api-key: ${LIVEKIT_API_KEY:}
+  api-secret: ${LIVEKIT_API_SECRET:}
+
 springdoc:
   api-docs:
     path: /v3/api-docs
