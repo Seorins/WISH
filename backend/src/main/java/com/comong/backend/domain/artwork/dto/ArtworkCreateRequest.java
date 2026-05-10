@@ -19,4 +19,10 @@ public record ArtworkCreateRequest(
                 Integer sketchCode,
         @Schema(description = "플레이 시간(초)", example = "87") @NotNull @PositiveOrZero
                 Integer playDurationSeconds,
+        @Schema(
+                        description = "작품에 사용된 distinct 색 개수. 도안 팔레트마다 상한이 달라 음수만 차단",
+                        example = "5")
+                @NotNull
+                @PositiveOrZero
+                Integer colorCount,
         @Schema(description = "공개 갤러리 노출 여부", example = "false") @NotNull Boolean isPublic) {}

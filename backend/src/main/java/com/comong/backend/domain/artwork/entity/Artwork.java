@@ -60,6 +60,13 @@ public class Artwork {
     @Column(name = "play_duration_seconds", nullable = false)
     private int playDurationSeconds;
 
+    /**
+     * 작품에서 최종적으로 사용된 distinct 색 개수. 색칠 씬은 도안 팔레트 distinct, 자유드로잉은 12 색 팔레트 중 픽셀에 남은 색 개수를 FE 가
+     * 보낸다. 도안마다 팔레트 크기가 달라 상한값은 두지 않고 음수만 차단한다.
+     */
+    @Column(name = "color_count", nullable = false)
+    private int colorCount;
+
     /** 공개 갤러리 노출 여부. false 면 본인만 조회 가능. */
     @Column(name = "is_public", nullable = false)
     private boolean isPublic;
@@ -76,6 +83,7 @@ public class Artwork {
             Integer sketchCode,
             String imageUrl,
             int playDurationSeconds,
+            int colorCount,
             boolean isPublic) {
         // 빌더 단계 invariant — @ManyToOne(optional=false) / @Column(nullable=false) 만으로는 build()
         // 시점에 null 차단이 안 되므로 fail-fast. sketchCode 는 V5 부터 자유 그리기 지원 위해 nullable 이라 제외.
@@ -86,18 +94,31 @@ public class Artwork {
         if (playDurationSeconds < 0) {
             throw new IllegalArgumentException("플레이 시간은 0 이상이어야 합니다.");
         }
+        if (colorCount < 0) {
+            throw new IllegalArgumentException("색 개수는 0 이상이어야 합니다.");
+        }
         this.sketchCode = sketchCode;
         this.playDurationSeconds = playDurationSeconds;
+        this.colorCount = colorCount;
         this.isPublic = isPublic;
     }
 
     /**
      * PATCH 시맨틱: {@code null} 인 인자는 "변경 없음" 으로 간주하고 기존 값을 유지한다. {@code sketchCode} / {@code
      * imageUrl} / {@code patientProfile} 은 본 메서드로 변경하지 않는다 (각각 고정 / 별도 메서드 / 도메인 정책).
+     *
+     * <p>{@code colorCount} 는 누적이 아닌 "이번 저장 시점 최종 색 개수" 절대값으로 교체한다 (FE 가 캔버스 전체 스캔 결과를 보냄). 음수 방어는
+     * 빌더와 동일한 invariant 로 통일.
      */
-    public void update(Boolean isPublic) {
+    public void update(Boolean isPublic, Integer colorCount) {
         if (isPublic != null) {
             this.isPublic = isPublic;
+        }
+        if (colorCount != null) {
+            if (colorCount < 0) {
+                throw new IllegalArgumentException("색 개수는 0 이상이어야 합니다.");
+            }
+            this.colorCount = colorCount;
         }
     }
 

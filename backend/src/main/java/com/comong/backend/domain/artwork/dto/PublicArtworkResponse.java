@@ -19,6 +19,7 @@ public record PublicArtworkResponse(
         Integer sketchCode,
         String imageUrl,
         int playDurationSeconds,
+        int colorCount,
         LocalDateTime createdAt,
         Author author) {
 
@@ -30,6 +31,7 @@ public record PublicArtworkResponse(
                 artwork.getSketchCode(),
                 imageStorage.toPublicUrl(artwork.getImageUrl()),
                 artwork.getPlayDurationSeconds(),
+                artwork.getColorCount(),
                 artwork.getCreatedAt(),
                 new Author(artwork.getPatientProfile().getNickname()));
     }

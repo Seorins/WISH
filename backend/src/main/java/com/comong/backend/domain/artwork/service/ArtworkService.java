@@ -71,6 +71,7 @@ public class ArtworkService {
                                 .sketchCode(request.sketchCode())
                                 .imageUrl(stored.url())
                                 .playDurationSeconds(request.playDurationSeconds())
+                                .colorCount(request.colorCount())
                                 .isPublic(request.isPublic())
                                 .build());
         return ArtworkResponse.from(saved, imageStorage);
@@ -109,7 +110,7 @@ public class ArtworkService {
         }
         registerImageReplacementCleanup(newImageUrl, oldImageUrl);
 
-        artwork.update(request.isPublic());
+        artwork.update(request.isPublic(), request.colorCount());
         if (request.additionalPlayDurationSeconds() != null) {
             artwork.addPlayDuration(request.additionalPlayDurationSeconds());
         }
