@@ -12,6 +12,7 @@ export {
   updateExerciseMotion,
 } from './exercise-motions'
 export {
+  calculateAverageCompletionRate,
   calculateAverageAccuracy,
   CREATE_EXERCISE_SESSION_ERROR_MESSAGE,
   createExerciseSession,
@@ -19,6 +20,7 @@ export {
   EXERCISE_SESSION_ERROR_MESSAGE,
   getExerciseSessionDetail,
   getExerciseSessions,
+  toCreateExerciseSessionRequest,
   validateCreateExerciseSessionRequest,
 } from './exercise-sessions'
 export {
@@ -91,7 +93,9 @@ export type {
   UpdateExerciseMotionRequest,
 } from './exercise-motions'
 export type {
+  CreateExerciseMotionRecord,
   CreateExerciseMotionResultRequest,
+  CreateExerciseSessionRecord,
   CreateExerciseSessionRequest,
   ExerciseSessionDetail,
   ExerciseSessionMotionResult,

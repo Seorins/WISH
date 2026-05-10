@@ -11,6 +11,7 @@ export { resolvePatientProfileId } from './patientProfile'
 export {
   buildExerciseSessionReportSummary,
   formatAccuracy,
+  formatCompletionRate,
   formatDateTime,
   formatDurationSec,
   formatExerciseType,
