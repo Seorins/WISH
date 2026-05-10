@@ -25,8 +25,6 @@ import lombok.RequiredArgsConstructor;
 @Transactional(readOnly = true)
 public class UsageAverageService {
 
-    private static final int DEFAULT_RANGE_DAYS = 7;
-
     private final DailyUsageStatRepository dailyUsageStatRepository;
     private final UsageAggregationQuery usageAggregationQuery;
 
@@ -36,11 +34,18 @@ public class UsageAverageService {
         Set<Long> activePatientIds = new HashSet<>();
 
         List<DailyUsageStat> cachedRows =
-                dailyUsageStatRepository.findAllWithPatientByStatDateBetween(
-                        range.from(), range.to());
+                range.from() != null
+                        ? dailyUsageStatRepository.findAllWithPatientByStatDateBetween(
+                                range.from(), range.to())
+                        : dailyUsageStatRepository.findAllWithPatientByStatDateLessThanEqual(
+                                range.to());
+        LocalDate responseFrom = range.from();
         for (DailyUsageStat row : cachedRows) {
             if (row.getStatDate().equals(range.today())) {
                 continue;
+            }
+            if (responseFrom == null || row.getStatDate().isBefore(responseFrom)) {
+                responseFrom = row.getStatDate();
             }
             addUsage(
                     totals,
@@ -54,19 +59,21 @@ public class UsageAverageService {
             Map<Long, UsageTotals> todayLive = computeLiveForDate(range.today());
             for (Map.Entry<Long, UsageTotals> entry : todayLive.entrySet()) {
                 for (ContentType type : ContentType.values()) {
-                    addUsage(
-                            totals,
-                            activePatientIds,
-                            entry.getKey(),
-                            type,
-                            entry.getValue().get(type));
+                    long seconds = entry.getValue().get(type);
+                    if (seconds > 0 && responseFrom == null) {
+                        responseFrom = range.today();
+                    }
+                    addUsage(totals, activePatientIds, entry.getKey(), type, seconds);
                 }
             }
+        }
+        if (responseFrom == null) {
+            responseFrom = range.to();
         }
 
         long activePatients = activePatientIds.size();
         return new UsageAverageResponse(
-                range.from(),
+                responseFrom,
                 range.to(),
                 activePatients,
                 toUsageAverage(totals.login, activePatients),
@@ -81,12 +88,10 @@ public class UsageAverageService {
     private DateRange resolveDateRange(LocalDate from, LocalDate to) {
         LocalDate today = LocalDate.now();
         LocalDate effectiveTo = to != null ? to : today;
-        LocalDate effectiveFrom =
-                from != null ? from : effectiveTo.minusDays(DEFAULT_RANGE_DAYS - 1L);
-        if (effectiveFrom.isAfter(effectiveTo)) {
+        if (from != null && from.isAfter(effectiveTo)) {
             throw new BusinessException(GlobalErrorCode.INVALID_INPUT);
         }
-        return new DateRange(effectiveFrom, effectiveTo, today);
+        return new DateRange(from, effectiveTo, today);
     }
 
     private void addUsage(
@@ -168,7 +173,7 @@ public class UsageAverageService {
 
     private record DateRange(LocalDate from, LocalDate to, LocalDate today) {
         private boolean includes(LocalDate date) {
-            return !date.isBefore(from) && !date.isAfter(to);
+            return (from == null || !date.isBefore(from)) && !date.isAfter(to);
         }
     }
 

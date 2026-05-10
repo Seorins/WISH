@@ -26,6 +26,12 @@ public interface DailyUsageStatRepository extends JpaRepository<DailyUsageStat, 
                     + "where s.statDate between :from and :to")
     List<DailyUsageStat> findAllWithPatientByStatDateBetween(LocalDate from, LocalDate to);
 
+    @Query(
+            "select s from DailyUsageStat s "
+                    + "join fetch s.patientProfile "
+                    + "where s.statDate <= :to")
+    List<DailyUsageStat> findAllWithPatientByStatDateLessThanEqual(LocalDate to);
+
     /** 543 누적 조회: 환자별 컨텐츠 타입별 누적 합. content_type 별 행 5개 반환. */
     @Query(
             "select new com.comong.backend.domain.usage.repository.ContentTypeTotal("

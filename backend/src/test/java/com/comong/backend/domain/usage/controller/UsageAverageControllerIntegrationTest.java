@@ -91,6 +91,27 @@ class UsageAverageControllerIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
+    @DisplayName("from/to 를 생략하면 전체 기간 평균을 조회")
+    void periodAveragesDefaultToAllTime() throws Exception {
+        LocalDate oldDate = LocalDate.now().minusDays(20);
+        LocalDate recentDate = LocalDate.now().minusDays(1);
+
+        PatientProfile first = savePatient("all-first@example.com", "all-first");
+        PatientProfile second = savePatient("all-second@example.com", "all-second");
+
+        saveDaily(first, oldDate, ContentType.LOGIN, 600);
+        saveDaily(second, recentDate, ContentType.LOGIN, 300);
+
+        mockMvc.perform(get("/usage-stats/period-averages").with(user("guardian").roles("USER")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.from").value(oldDate.toString()))
+                .andExpect(jsonPath("$.data.to").value(LocalDate.now().toString()))
+                .andExpect(jsonPath("$.data.activePatients").value(2))
+                .andExpect(jsonPath("$.data.login.totalSeconds").value(900))
+                .andExpect(jsonPath("$.data.login.averageSeconds").value(450));
+    }
+
+    @Test
     @DisplayName("활동 환자가 없으면 평균은 0초")
     void periodAveragesReturnZeroWhenNoActivePatients() throws Exception {
         LocalDate today = LocalDate.now();
