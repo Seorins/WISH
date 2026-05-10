@@ -3,6 +3,7 @@ import { ActivityPage } from './pages/ActivityPage'
 import { ChatPage } from './pages/ChatPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { FuelPage } from './pages/FuelPage'
+import { LiveMonitorPage } from './pages/LiveMonitorPage'
 import { LoginPage } from './pages/LoginPage'
 import { ROMDetailPage } from './pages/ROMDetailPage'
 import { SignupPage } from './pages/SignupPage'
@@ -52,6 +53,14 @@ function App() {
           element={
             <RequireAuth>
               <FuelPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/live"
+          element={
+            <RequireAuth>
+              <LiveMonitorPage />
             </RequireAuth>
           }
         />
