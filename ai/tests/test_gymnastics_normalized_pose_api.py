@@ -147,6 +147,13 @@ def test_evaluate_march_includes_normalized_pose(monkeypatch) -> None:
     assert response.normalized_pose is not None
     assert len(response.normalized_pose.landmarks) == 12
     assert response.frame_label == "guidance_needed"
+    assert response.replay_metadata is not None
+    assert response.replay_metadata.motion_id == "top_march"
+    assert response.replay_metadata.timestamp_ms == 1000
+    assert response.replay_metadata.frame_label == "guidance_needed"
+    assert response.replay_metadata.progress_count == 0
+    assert response.replay_metadata.hold_duration_ms is None
+    assert response.replay_metadata.baseline_status == "ready"
 
 
 def test_evaluate_march_returns_tracking_low_when_normalization_fails(monkeypatch) -> None:
@@ -170,6 +177,10 @@ def test_evaluate_march_returns_tracking_low_when_normalization_fails(monkeypatc
     assert response.tracking == "tracking_low"
     assert response.accuracy == 0.0
     assert response.normalized_pose is None
+    assert response.replay_metadata is not None
+    assert response.replay_metadata.tracking == "tracking_low"
+    assert response.replay_metadata.frame_label == "tracking_low"
+    assert response.replay_metadata.progress_count == 0
     assert response.features.left_knee_lift == 0.0
 
 
@@ -197,6 +208,9 @@ def test_evaluate_march_returns_tracking_low_when_evaluator_fails(monkeypatch) -
     assert response.tracking == "tracking_low"
     assert response.step_count == 0
     assert response.normalized_pose is None
+    assert response.replay_metadata is not None
+    assert response.replay_metadata.tracking == "tracking_low"
+    assert response.replay_metadata.guidance_code == "TRACKING_LOW"
     assert response.features.right_knee_lift == 0.0
 
 
@@ -265,6 +279,13 @@ def test_evaluate_daniel_forward_press_includes_normalized_pose(monkeypatch) -> 
 
     assert response.normalized_pose is not None
     assert len(response.normalized_pose.landmarks) == 12
+    assert response.replay_metadata is not None
+    assert response.replay_metadata.motion_id == "daniel_forward_press"
+    assert response.replay_metadata.timestamp_ms == 1000
+    assert response.replay_metadata.frame_label == "motion_present"
+    assert response.replay_metadata.progress_count is None
+    assert response.replay_metadata.hold_duration_ms == 1200
+    assert response.replay_metadata.hold_completed is False
 
 
 def test_integrated_daniel_evaluate_keeps_normalized_pose() -> None:
