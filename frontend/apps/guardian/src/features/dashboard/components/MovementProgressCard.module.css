@@ -220,3 +220,38 @@
   flex: 1;
   min-height: 0;
 }
+
+@media (max-width: 1024px) {
+  .card {
+    grid-template-columns: minmax(220px, 260px) minmax(0, 1fr);
+    column-gap: var(--dash-space-4);
+    padding: var(--dash-space-4);
+  }
+}
+
+@media (max-width: 768px) {
+  .card {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto auto;
+    column-gap: 0;
+    row-gap: var(--dash-space-3);
+    padding: var(--dash-space-4);
+    min-width: 0;
+  }
+  .leftCol {
+    grid-column: 1;
+    grid-row: 2;
+    min-width: 0;
+  }
+  .rightCol {
+    grid-column: 1;
+    grid-row: 3;
+    min-height: 320px;
+    min-width: 0;
+  }
+  .sessionLabel,
+  .toggleBtn {
+    padding: 8px 18px;
+    font-size: 12.5px;
+  }
+}
