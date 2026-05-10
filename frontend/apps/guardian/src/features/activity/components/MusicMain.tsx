@@ -7,7 +7,7 @@ import {
   type MusicResultDetail,
 } from '@wish/api-client'
 import { useMyPatientId } from '@/features/auth/hooks/useMyPatientId'
-import { useDailyUsageStats, useMyMusicResults } from '../hooks'
+import { useDailyUsageStats, useMyMusicResults, useUsageAverages } from '../hooks'
 import styles from './MusicMain.module.css'
 
 const TONE_CLASS = {
@@ -102,6 +102,15 @@ export function MusicMain() {
   const dayMusicSeconds = daily?.items[0]?.music ?? 0
   const dayMusicMs = dayMusicSeconds * 1000
   const dayMusicLabel = formatDuration(dayMusicMs)
+  // 또래 평균 — today 윈도우로 mineSeconds 와 분모/스케일 일치.
+  const { data: averages } = useUsageAverages({ from: today, to: today })
+  const peerMusic = averages?.contentAverages.find(c => c.contentType === 'MUSIC')
+  const hasPeerMusic = peerMusic != null && (averages?.activePatients ?? 0) > 0
+  const peerMusicMs = hasPeerMusic ? peerMusic.averageSeconds * 1000 : 0
+  const peerMusicLabel = hasPeerMusic ? formatDuration(peerMusicMs) : '집계 중'
+  const peerScaleMax = Math.max(dayMusicMs, peerMusicMs, 1)
+  const minePctMusic = (dayMusicMs / peerScaleMax) * 100
+  const peerPctMusic = hasPeerMusic ? (peerMusicMs / peerScaleMax) * 100 : 0
 
   // 차트 통계 (옵셔널, 실패해도 화면 안 깨짐).
   const [chartStats, setChartStats] = useState<ChartStats | undefined>(undefined)
@@ -316,17 +325,19 @@ export function MusicMain() {
           </span>
           <div className={styles.peerLabelText}>
             <strong>다른 사용자들과 비교</strong>
-            <span>평균 데이터를 모으는 중이에요.</span>
+            <span>
+              {hasPeerMusic ? '오늘 활동 환자 기준 평균이에요.' : '평균 데이터를 모으는 중이에요.'}
+            </span>
           </div>
         </div>
         <div className={styles.peerBars}>
           <div className={styles.peerSide}>
             <div className={styles.peerSideHead}>
               <span className={styles.peerSideLabel}>다른 사용자들 평균</span>
-              <strong className={styles.peerSideValue}>집계 중</strong>
+              <strong className={styles.peerSideValue}>{peerMusicLabel}</strong>
             </div>
             <div className={`${styles.peerBar} ${styles.peerBarOther}`} aria-hidden>
-              <div className={styles.peerBarFill} style={{ width: '0%' }} />
+              <div className={styles.peerBarFill} style={{ width: `${peerPctMusic}%` }} />
             </div>
           </div>
           <span className={styles.peerVs} aria-hidden>
@@ -338,10 +349,7 @@ export function MusicMain() {
               <strong className={styles.peerSideValue}>{dayMusicLabel}</strong>
             </div>
             <div className={`${styles.peerBar} ${styles.peerBarMine}`} aria-hidden>
-              <div
-                className={styles.peerBarFill}
-                style={{ width: dayMusicMs > 0 ? '100%' : '0%' }}
-              />
+              <div className={styles.peerBarFill} style={{ width: `${minePctMusic}%` }} />
             </div>
           </div>
         </div>
@@ -352,7 +360,7 @@ export function MusicMain() {
           <span>
             평균
             <br />
-            <strong>집계 중</strong>
+            <strong>{peerMusicLabel}</strong>
           </span>
         </div>
       </section>
