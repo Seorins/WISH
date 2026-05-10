@@ -2,6 +2,8 @@ package com.comong.backend.domain.user.service;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -9,6 +11,8 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.comong.backend.domain.patient.repository.PatientProfileRepository;
+import com.comong.backend.domain.user.dto.AdminUserResponse;
 import com.comong.backend.domain.user.dto.UserResponse;
 import com.comong.backend.domain.user.entity.User;
 import com.comong.backend.domain.user.entity.UserRole;
@@ -30,6 +34,7 @@ import lombok.RequiredArgsConstructor;
 public class UserService {
 
     private final UserRepository userRepository;
+    private final PatientProfileRepository patientProfileRepository;
 
     /** User 엔티티의 unique 제약 이름. {@code User} 의 {@code @UniqueConstraint} 와 반드시 일치해야 한다. */
     private static final String UK_USERS_EMAIL = "uk_users_email";
@@ -108,9 +113,17 @@ public class UserService {
         return UserResponse.from(user);
     }
 
-    public List<UserResponse> findAllUsers() {
+    public List<AdminUserResponse> findAllUsers() {
+        var patientProfilesByUserId =
+                patientProfileRepository.findAllWithUser().stream()
+                        .collect(
+                                Collectors.toMap(
+                                        profile -> profile.getUser().getId(), Function.identity()));
         return userRepository.findAll(Sort.by(Sort.Direction.DESC, "createdAt")).stream()
-                .map(UserResponse::from)
+                .map(
+                        user ->
+                                AdminUserResponse.from(
+                                        user, patientProfilesByUserId.get(user.getId())))
                 .toList();
     }
 

@@ -62,6 +62,7 @@ export {
 } from './taekwondo-sessions'
 export { changeUserRole, listUsers } from './users'
 export type { LoginRequest, SignupRequest, TokenResponse, UserResponse, UserRole } from './auth'
+export type { AdminUserResponse } from './users'
 export type {
   AdminDashboard,
   AdminDashboardAlert,

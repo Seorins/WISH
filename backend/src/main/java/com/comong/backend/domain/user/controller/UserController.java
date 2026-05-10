@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.comong.backend.domain.user.dto.AdminUserResponse;
 import com.comong.backend.domain.user.dto.ChangeUserRoleRequest;
 import com.comong.backend.domain.user.dto.UserResponse;
 import com.comong.backend.domain.user.service.UserService;
@@ -47,7 +48,7 @@ public class UserController {
     })
     @PreAuthorize("hasRole('ADMIN')")
     @GetMapping
-    public ResponseEntity<ApiResponse<List<UserResponse>>> listUsers() {
+    public ResponseEntity<ApiResponse<List<AdminUserResponse>>> listUsers() {
         return ResponseEntity.ok(ApiResponse.success(userService.findAllUsers()));
     }
 
