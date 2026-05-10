@@ -3,10 +3,11 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import gisungImg from '@/assets/gisung.png'
 import rumiImg from '@/assets/rumi.png'
 import seokjaeImg from '@/assets/seokjae.png'
+import sungsuImg from '@/assets/sungsu.png'
 import styles from './SidebarPlaceholder.module.css'
 
 type ActivityStatus = 'done' | 'planned'
-type ActivityItemId = 'music' | 'art' | 'taekwondo'
+type ActivityItemId = 'music' | 'art' | 'taekwondo' | 'gymnastics'
 
 type ActivityItem = {
   id: ActivityItemId
@@ -57,6 +58,14 @@ const PLACEHOLDER_ITEMS: ActivityItem[] = [
     name: '태권도',
     status: 'planned',
     avatarUrl: seokjaeImg,
+    thumbScale: '1.5',
+    thumbOffsetY: '-6%',
+  },
+  {
+    id: 'gymnastics',
+    name: '체조',
+    status: 'planned',
+    avatarUrl: sungsuImg,
     thumbScale: '1.5',
     thumbOffsetY: '-6%',
   },
