@@ -34,7 +34,7 @@ export {
 export { requestPresignedUploadUrls, uploadToPresignedUrl } from './uploads'
 export { createPatientProfile, listPatientProfiles } from './patient-profiles'
 export { endLoginSession, heartbeatLoginSession, startLoginSession } from './login-sessions'
-export { getCumulativeUsageStats, getDailyUsageStats } from './usage-stats'
+export { getCumulativeUsageStats, getDailyUsageStats, getUsageAverages } from './usage-stats'
 export {
   createTaekwondoMotion,
   deleteTaekwondoMotion,
@@ -132,10 +132,14 @@ export type {
 export type { Gender, PatientProfile, PatientProfileCreateRequest } from './patient-profiles'
 export type { LoginSession, LoginSessionStartRequest } from './login-sessions'
 export type {
+  ContentUsageAverage,
   CumulativeUsageStats,
   DailyUsageItem,
   DailyUsageStats,
   DailyUsageStatsParams,
+  UsageAverage,
+  UsageAverages,
+  UsageAveragesParams,
 } from './usage-stats'
 export type {
   CreateTaekwondoMotionParams,
