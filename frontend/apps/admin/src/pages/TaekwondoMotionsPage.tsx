@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { CSSProperties, DragEvent } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   createTaekwondoMotion,
@@ -10,6 +11,7 @@ import {
 } from '@wish/api-client'
 import type { Poomsae, TaekwondoMotion } from '@wish/api-client'
 import { AdminShell } from '../shared/components/AdminShell'
+import { ConfirmModal } from '../shared/components/ConfirmModal'
 import { TaekwondoMotionForm } from './TaekwondoMotionForm'
 import type { TaekwondoMotionFormSubmit } from './TaekwondoMotionForm'
 
@@ -24,13 +26,31 @@ const POOMSAE_VALUES: Poomsae[] = [
   'TAEGEUK_8',
 ]
 
+function isPoomsae(value: string | null): value is Poomsae {
+  return POOMSAE_VALUES.includes(value as Poomsae)
+}
+
 export function TaekwondoMotionsPage() {
   const queryClient = useQueryClient()
-  const [poomsae, setPoomsae] = useState<Poomsae>('TAEGEUK_1')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const initialPoomsae = isPoomsae(searchParams.get('poomsae'))
+    ? (searchParams.get('poomsae') as Poomsae)
+    : 'TAEGEUK_1'
+  const [poomsae, setPoomsae] = useState<Poomsae>(initialPoomsae)
   const [editing, setEditing] = useState<TaekwondoMotion | null>(null)
   const [creating, setCreating] = useState(false)
   const [orderedMotions, setOrderedMotions] = useState<TaekwondoMotion[]>([])
   const [draggingId, setDraggingId] = useState<number | null>(null)
+  const [dropTargetId, setDropTargetId] = useState<number | null>(null)
+  const [pendingDelete, setPendingDelete] = useState<TaekwondoMotion | null>(null)
+
+  useEffect(() => {
+    const next = new URLSearchParams(searchParams)
+    if (next.get('poomsae') !== poomsae) {
+      next.set('poomsae', poomsae)
+      setSearchParams(next, { replace: true })
+    }
+  }, [poomsae, searchParams, setSearchParams])
 
   const motionsQuery = useQuery({
     queryKey: ['taekwondo-motions', poomsae],
@@ -104,19 +124,32 @@ export function TaekwondoMotionsPage() {
     ? !isSameOrder(orderedMotions, motionsQuery.data)
     : false
   const thumbnailCount = orderedMotions.filter(motion => motion.thumbnailUrl).length
+  const missingThumbnailCount = orderedMotions.length - thumbnailCount
+  const missingVideoCount = useMemo(
+    () => orderedMotions.filter(motion => !motion.demoVideoUrl).length,
+    [orderedMotions],
+  )
 
   const onPoomsaeChange = (nextPoomsae: Poomsae) => {
     setPoomsae(nextPoomsae)
     setEditing(null)
     setCreating(false)
     setDraggingId(null)
+    setDropTargetId(null)
   }
 
   const onDelete = (motion: TaekwondoMotion) => {
-    if (!window.confirm(`"${motion.name}" 동작을 삭제할까요? 수행 기록이 있으면 거부됩니다.`)) {
-      return
+    setPendingDelete(motion)
+  }
+
+  const onConfirmDelete = async () => {
+    if (!pendingDelete) return
+    try {
+      await deleteMutation.mutateAsync(pendingDelete.id)
+      setPendingDelete(null)
+    } catch {
+      setPendingDelete(null)
     }
-    deleteMutation.mutate(motion.id)
   }
 
   const onDragStart = (event: DragEvent<HTMLTableRowElement>, motionId: number) => {
@@ -128,12 +161,17 @@ export function TaekwondoMotionsPage() {
   const onDragOver = (event: DragEvent<HTMLTableRowElement>, targetId: number) => {
     event.preventDefault()
     const activeId = draggingId ?? Number(event.dataTransfer.getData('text/plain'))
-    if (!activeId || activeId === targetId) return
+    if (!activeId || activeId === targetId) {
+      setDropTargetId(null)
+      return
+    }
+    setDropTargetId(targetId)
     setOrderedMotions(current => moveMotion(current, activeId, targetId))
   }
 
   const onDragEnd = () => {
     setDraggingId(null)
+    setDropTargetId(null)
   }
 
   const onMoveByButton = (motionId: number, direction: -1 | 1) => {
@@ -212,6 +250,12 @@ export function TaekwondoMotionsPage() {
         <div style={styles.summary}>
           <span style={styles.summaryItem}>총 {orderedMotions.length}개</span>
           <span style={styles.summaryItem}>썸네일 {thumbnailCount}개</span>
+          {missingThumbnailCount > 0 && (
+            <span style={styles.warningBadge}>썸네일 누락 {missingThumbnailCount}개</span>
+          )}
+          {missingVideoCount > 0 && (
+            <span style={styles.warningBadge}>시범영상 누락 {missingVideoCount}개</span>
+          )}
           {hasOrderChanges && <span style={styles.changedBadge}>순서 변경됨</span>}
         </div>
       </section>
@@ -245,6 +289,24 @@ export function TaekwondoMotionsPage() {
         <div style={styles.errorBox}>목록 조회 실패: {extractMessage(motionsQuery.error)}</div>
       )}
 
+      <ConfirmModal
+        open={Boolean(pendingDelete)}
+        title="동작을 삭제할까요?"
+        description={
+          pendingDelete && (
+            <span>
+              <strong>"{pendingDelete.name}"</strong> 동작을 삭제합니다. 수행 기록이 남아 있으면
+              삭제가 거부됩니다.
+            </span>
+          )
+        }
+        confirmLabel="삭제"
+        tone="danger"
+        loading={deleteMutation.isPending}
+        onConfirm={onConfirmDelete}
+        onCancel={() => setPendingDelete(null)}
+      />
+
       {motionsQuery.data && (
         <div style={styles.tableWrap}>
           <table style={styles.table}>
@@ -264,7 +326,10 @@ export function TaekwondoMotionsPage() {
               {orderedMotions.length === 0 && (
                 <tr>
                   <td colSpan={8} style={styles.emptyRow}>
-                    동작이 없습니다.
+                    <div style={styles.emptyTitle}>아직 등록된 동작이 없습니다</div>
+                    <div style={styles.emptyHint}>
+                      우측 상단의 <strong>동작 추가</strong>로 첫 동작을 등록해 보세요.
+                    </div>
                   </td>
                 </tr>
               )}
@@ -279,6 +344,9 @@ export function TaekwondoMotionsPage() {
                   style={{
                     ...styles.row,
                     ...(draggingId === motion.id ? styles.draggingRow : {}),
+                    ...(dropTargetId === motion.id && draggingId !== motion.id
+                      ? styles.dropTargetRow
+                      : {}),
                   }}
                 >
                   {editing?.id === motion.id ? (
@@ -494,6 +562,15 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 12,
     fontWeight: 700,
   },
+  warningBadge: {
+    padding: '5px 8px',
+    background: '#fff5f5',
+    border: '1px solid #ffc9c9',
+    borderRadius: 6,
+    color: '#c92a2a',
+    fontSize: 12,
+    fontWeight: 700,
+  },
   tableWrap: {
     overflowX: 'auto',
     background: '#fff',
@@ -520,6 +597,10 @@ const styles: Record<string, CSSProperties> = {
   draggingRow: {
     opacity: 0.55,
     background: '#e6f6ff',
+  },
+  dropTargetRow: {
+    boxShadow: 'inset 0 2px 0 0 #0b7285, inset 0 -2px 0 0 #0b7285',
+    background: '#f0f9fb',
   },
   td: {
     padding: 12,
@@ -651,10 +732,21 @@ const styles: Record<string, CSSProperties> = {
     borderBottom: '1px solid #edf2f7',
   },
   emptyRow: {
-    padding: 28,
+    padding: '36px 16px',
     textAlign: 'center',
     color: '#829ab1',
     fontSize: 13,
+  },
+  emptyTitle: {
+    color: '#486581',
+    fontSize: 14,
+    fontWeight: 700,
+    marginBottom: 4,
+  },
+  emptyHint: {
+    color: '#829ab1',
+    fontSize: 12,
+    lineHeight: 1.6,
   },
   loading: {
     padding: 20,
