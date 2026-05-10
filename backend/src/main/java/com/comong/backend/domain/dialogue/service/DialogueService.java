@@ -51,6 +51,7 @@ public class DialogueService {
     private final DialogueTurnRepository turnRepository;
     private final PatientProfileService patientProfileService;
     private final FallbackSceneProvider fallbackSceneProvider;
+    private final ClaudeSceneProvider claudeSceneProvider;
 
     @Transactional
     public StartSessionResponse createSession(Long currentUserId, StartSessionRequest request) {
@@ -103,13 +104,34 @@ public class DialogueService {
 
         SceneResponse nextScene =
                 session.getNpcName().isBackendDriven()
-                        ? fallbackSceneProvider.nextScene(
-                                session.getNpcName(),
-                                choice.choiceIntentId(),
-                                session.getStepCount(),
-                                session.getMaxSteps())
+                        ? buildLighthouseNextScene(session, choice.choiceIntentId())
                         : null; // 마을 주민은 FE 가 자체 라우팅
         return SubmitTurnResponse.of(session, nextScene);
+    }
+
+    /**
+     * 등대지기 다음 장면. maxSteps 도달 시는 fallback 의 종료 신호. 그렇지 않으면 Claude 시도 → 실패/검증 위반 시 fallback 라우팅 으로
+     * 위임 (PDF 정책).
+     */
+    private SceneResponse buildLighthouseNextScene(DialogueSession session, String prevChoiceId) {
+        if (session.isAtMaxSteps()) {
+            return fallbackSceneProvider.nextScene(
+                    session.getNpcName(),
+                    prevChoiceId,
+                    session.getStepCount(),
+                    session.getMaxSteps());
+        }
+        List<DialogueTurn> turns =
+                turnRepository.findAllBySessionIdOrderByStepIndexAsc(session.getId());
+        return claudeSceneProvider
+                .nextScene(session, turns)
+                .orElseGet(
+                        () ->
+                                fallbackSceneProvider.nextScene(
+                                        session.getNpcName(),
+                                        prevChoiceId,
+                                        session.getStepCount(),
+                                        session.getMaxSteps()));
     }
 
     @Transactional

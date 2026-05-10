@@ -85,3 +85,16 @@ storage:
     region: ${AWS_REGION:ap-northeast-2}
     prefix: ${AWS_S3_PRIVATE_PREFIX:local}
     presigned-ttl-seconds: ${AWS_S3_PRESIGNED_TTL_SECONDS:900}
+
+# GMS Anthropic Claude 설정 (등대지기 LLM 후속 질문 생성용, S14P31E103-558).
+# api-key 가 비어있으면 Claude 호출을 시도하지 않고 항상 FallbackSceneProvider 로 동작 — 로컬/테스트 환경에서 키 없이도
+# 컨텍스트 로드가 깨지지 않도록 한다. 운영/dev 에선 GMS_KEY 를 반드시 환경변수로 주입.
+# 키 외 파라미터(엔드포인트/모델/버전)는 GMS 운영 도메인 기본값을 yaml 에 박되 환경변수 override 가능.
+gms:
+  anthropic:
+    api-key: ${GMS_KEY:}
+    base-url: ${GMS_ANTHROPIC_BASE_URL:https://gms.ssafy.io/gmsapi/api.anthropic.com/v1}
+    model: ${GMS_ANTHROPIC_MODEL:claude-sonnet-4-5-20250929}
+    version: ${GMS_ANTHROPIC_VERSION:2023-06-01}
+    # Claude 응답 timeout. 5s 권장 — 사용자(아이) 화면이 로딩 상태로 너무 오래 멈추지 않도록.
+    timeout-seconds: ${GMS_ANTHROPIC_TIMEOUT_SECONDS:5}
