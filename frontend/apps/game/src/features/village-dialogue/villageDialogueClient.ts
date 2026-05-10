@@ -6,12 +6,14 @@ export async function saveVillagerChoiceEvent(event: VillagerChoiceEvent) {
   const mode = import.meta.env.VITE_VILLAGE_DIALOGUE_SAVE_MODE ?? 'local'
 
   if (mode === 'backend') {
-    await fetch(`/api/v1/emotion-checkin/sessions/${event.sessionId}/turns`, {
+    await fetch(`/api/v1/dialogue/sessions/${event.sessionId}/turns`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        Accept: 'application/json',
       },
       body: JSON.stringify({
+        questionText: event.questionText,
         selectedChoice: {
           choiceIntentId: event.choiceIntentId,
           text: event.choiceText,
@@ -19,9 +21,6 @@ export async function saveVillagerChoiceEvent(event: VillagerChoiceEvent) {
           concernFlags: event.concernFlags,
           protectiveFactors: event.protectiveFactors,
         },
-        sceneId: event.sceneId,
-        npcId: event.npcId,
-        questionText: event.questionText,
       }),
     })
 

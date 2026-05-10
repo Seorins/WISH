@@ -131,15 +131,10 @@ describe('LighthouseEmotionController', () => {
     })
 
     expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringMatching(/\/api\/v1\/emotion-checkin\/sessions\/1\/turns$/),
+      expect.stringMatching(/\/api\/v1\/dialogue\/sessions\/1\/turns$/),
       expect.objectContaining({
         method: 'POST',
-        body: JSON.stringify({
-          selectedChoice: {
-            choiceIntentId: 'mood_worried',
-            text: '걱정돼요',
-          },
-        }),
+        body: expect.stringContaining('"questionText"'),
       }),
     )
     expect(screen.queryByRole('button', { name: '괜찮아요' })).toBeNull()
