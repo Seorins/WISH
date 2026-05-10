@@ -1471,6 +1471,8 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
         context.fillRect(0, 0, width, height)
         context.drawImage(snapshot, 0, 0, width, height)
 
+        const colorCount = this.countPaletteColorsInCanvas(context, width, height)
+
         const dataUrl = outputCanvas.toDataURL('image/png')
         resolve({
           blob: this.dataUrlToBlob(dataUrl),
@@ -1480,7 +1482,7 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
           playDurationSeconds,
           width,
           height,
-          colorCount: 0,
+          colorCount,
         })
       }, 'image/png')
     })
@@ -1488,6 +1490,30 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
 
   private getPlayDurationSeconds() {
     return Math.max(0, Math.floor((this.time.now - this.contentStartedAt) / 1000))
+  }
+
+  private countPaletteColorsInCanvas(
+    context: CanvasRenderingContext2D,
+    width: number,
+    height: number,
+  ): number {
+    const paletteColors = new Set<number>()
+    for (const swatch of PALETTE_SWATCHES) {
+      paletteColors.add(swatch.color)
+    }
+    const totalPaletteColors = paletteColors.size
+    const found = new Set<number>()
+    const data = context.getImageData(0, 0, width, height).data
+    for (let i = 0; i < data.length; i += 4) {
+      const rgb = (data[i] << 16) | (data[i + 1] << 8) | data[i + 2]
+      if (paletteColors.has(rgb)) {
+        found.add(rgb)
+        if (found.size === totalPaletteColors) {
+          break
+        }
+      }
+    }
+    return found.size
   }
 
   private dataUrlToBlob(dataUrl: string) {
