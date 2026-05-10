@@ -10,12 +10,18 @@ import {
   CameraSuccessEffect,
   type CameraSuccessEffectOptions,
 } from '../effects/cameraSuccessEffect'
+import {
+  BELT_PROMOTION_DECORATION_KEYS,
+  BELT_PROMOTION_TEXTURE_KEYS,
+  createBeltPromotionOverlay,
+} from '../effects/beltPromotionOverlay'
 import { createPoomsaeProgressView, type PoomsaeProgressView } from './poomsaeProgress'
 import { createTaekwondoRoundedPanel } from './taekwondoPracticePanel'
 import {
   calculateTaekwondoAverageAccuracy,
   createTaekwondoSession,
   DEFAULT_TAEKWONDO_BELT_COLOR,
+  getTaekwondoBeltHistory,
   getTaekwondoPoomsaeNumber,
   listTaekwondoMotions,
   type CreateTaekwondoSessionMotionRequest,
@@ -77,6 +83,7 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
   private progressView?: PoomsaeProgressView
   private motionIntroOverlay?: Phaser.GameObjects.Container
   private guideVideoExpandOverlay?: Phaser.GameObjects.Container
+  private beltPromotionOverlay?: Phaser.GameObjects.Container
   private motions: TaekwondoMotion[] = []
   private motionResults: CreateTaekwondoSessionMotionRequest[] = []
   private recordedMotionIndexes = new Set<number>()
@@ -95,6 +102,11 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
   private beltColor: TaekwondoBeltColor = DEFAULT_TAEKWONDO_BELT_COLOR
 
   private readonly handleEscDown = () => {
+    if (this.beltPromotionOverlay) {
+      this.closeBeltPromotionOverlay()
+      return
+    }
+
     if (this.guideVideoExpandOverlay) {
       this.hideGuideVideoExpandOverlay()
       return
@@ -105,6 +117,19 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
 
   private readonly handleNextMotionTestDown = () => {
     this.advanceToNextMotion()
+  }
+
+  private readonly handleBeltPromotionPreviewDown = () => {
+    if (!import.meta.env.DEV || this.beltPromotionOverlay) {
+      return
+    }
+
+    const textureKey = BELT_PROMOTION_TEXTURE_KEYS.PURPLE
+    if (!textureKey || !this.textures.exists(textureKey)) {
+      return
+    }
+
+    this.showBeltPromotionOverlay('PURPLE', textureKey, false)
   }
 
   constructor() {
@@ -144,6 +169,32 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
       ASSET_KEYS.guidePose,
       assetPath(`images/themes/taekwondo/characters/poomsae_${this.getPoomsaeNumber()}.png`),
     )
+    this.load.image(
+      BELT_PROMOTION_DECORATION_KEYS.banner,
+      assetPath('images/themes/taekwondo/ui/banner.png'),
+    )
+    this.load.image(
+      BELT_PROMOTION_DECORATION_KEYS.complete,
+      assetPath('images/themes/taekwondo/ui/complete.png'),
+    )
+    this.load.image(
+      BELT_PROMOTION_DECORATION_KEYS.background,
+      assetPath('images/themes/taekwondo/ui/promotion_bg.png'),
+    )
+    this.load.image(
+      BELT_PROMOTION_DECORATION_KEYS.podium,
+      assetPath('images/themes/taekwondo/ui/promotion_podium.png'),
+    )
+    Object.entries(BELT_PROMOTION_TEXTURE_KEYS).forEach(([beltColor, textureKey]) => {
+      if (!textureKey) {
+        return
+      }
+
+      this.load.image(
+        textureKey,
+        assetPath(`images/themes/taekwondo/ui/belt_${beltColor.toLowerCase()}.png`),
+      )
+    })
     this.load.image(ASSET_KEYS.seokjae, assetPath('images/themes/taekwondo/characters/seokjae.png'))
     this.load.image(
       ASSET_KEYS.seokjaeProgress,
@@ -172,6 +223,7 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
 
     this.input.keyboard?.on('keydown-ESC', this.handleEscDown)
     this.input.keyboard?.on('keydown-N', this.handleNextMotionTestDown)
+    this.input.keyboard?.on('keydown-B', this.handleBeltPromotionPreviewDown)
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.cleanup())
     this.cameras.main.fadeIn(FADE_DURATION, 0, 0, 0)
   }
@@ -506,12 +558,14 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     this.isSavingSession = true
     this.hasSubmittedSession = true
     this.showFeedback('저장 중')
+    let shouldStopPractice = true
 
     try {
       console.log('[TaekwondoPoomsaePracticeScene] Saving taekwondo session.', payload)
       await createTaekwondoSession(payload)
       console.log('[TaekwondoPoomsaePracticeScene] Saved taekwondo session.')
       this.showFeedback('저장 완료')
+      shouldStopPractice = !(await this.showBeltPromotionIfNeeded(payload.patientProfileId))
     } catch (error) {
       this.hasSubmittedSession = false
       console.warn('[TaekwondoPoomsaePracticeScene] Failed to save taekwondo session.', {
@@ -524,8 +578,77 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
       this.showFeedback('저장 실패')
     } finally {
       this.isSavingSession = false
-      this.stopPractice()
+      if (shouldStopPractice) {
+        this.stopPractice()
+      }
     }
+  }
+
+  private async showBeltPromotionIfNeeded(patientProfileId: number) {
+    try {
+      const history = await getTaekwondoBeltHistory(patientProfileId)
+      const latestBeltColor = history[0]?.toBelt
+      if (!latestBeltColor || latestBeltColor === this.beltColor) {
+        return false
+      }
+
+      const textureKey = BELT_PROMOTION_TEXTURE_KEYS[latestBeltColor]
+      this.beltColor = latestBeltColor
+
+      if (!textureKey || !this.textures.exists(textureKey)) {
+        return false
+      }
+
+      return this.showBeltPromotionOverlay(latestBeltColor, textureKey, true)
+    } catch (error) {
+      console.warn('[TaekwondoPoomsaePracticeScene] Failed to check taekwondo belt promotion.', {
+        message: error instanceof Error ? error.message : String(error),
+      })
+      return false
+    }
+  }
+
+  private showBeltPromotionOverlay(
+    beltColor: TaekwondoBeltColor,
+    textureKey: string,
+    shouldReturnToSelectOnClose: boolean,
+  ) {
+    if (this.isSceneShuttingDown) {
+      return false
+    }
+
+    this.beltPromotionOverlay?.destroy(true)
+    this.beltPromotionOverlay = createBeltPromotionOverlay(this, {
+      beltColor,
+      textureKey,
+      onClose: () => this.closeBeltPromotionOverlay(shouldReturnToSelectOnClose),
+    })
+    return true
+  }
+
+  private closeBeltPromotionOverlay(shouldReturnToSelectOnClose = true) {
+    const overlay = this.beltPromotionOverlay
+    this.beltPromotionOverlay = undefined
+
+    if (!overlay) {
+      if (shouldReturnToSelectOnClose) {
+        this.stopPractice()
+      }
+      return
+    }
+
+    this.tweens.add({
+      targets: overlay,
+      alpha: 0,
+      duration: 140,
+      ease: 'Sine.easeIn',
+      onComplete: () => {
+        overlay.destroy(true)
+        if (shouldReturnToSelectOnClose) {
+          this.stopPractice()
+        }
+      },
+    })
   }
 
   private createTopStatus(vw: number, vh: number) {
@@ -1011,12 +1134,15 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     this.isSceneShuttingDown = true
     this.input.keyboard?.off('keydown-ESC', this.handleEscDown)
     this.input.keyboard?.off('keydown-N', this.handleNextMotionTestDown)
+    this.input.keyboard?.off('keydown-B', this.handleBeltPromotionPreviewDown)
     this.feedbackText = undefined
     this.currentMotionText = undefined
     this.motionIntroOverlay?.destroy(true)
     this.motionIntroOverlay = undefined
     this.guideVideoExpandOverlay?.destroy(true)
     this.guideVideoExpandOverlay = undefined
+    this.beltPromotionOverlay?.destroy(true)
+    this.beltPromotionOverlay = undefined
     this.isWaitingMotionStart = false
     this.isAiJudgementPaused = false
     this.progressView?.destroy()
