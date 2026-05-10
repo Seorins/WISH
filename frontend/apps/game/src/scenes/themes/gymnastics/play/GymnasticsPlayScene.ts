@@ -2047,7 +2047,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     }
 
     nextState.stepCount = Math.min(nextState.stepCount, motionSpec.targetSteps)
-    nextState.accuracy = nextState.stepCount / motionSpec.targetSteps
+    nextState.accuracy = this.getMotionProgressRatio(motionSpec, nextState)
     this.aiState = nextState
 
     if (this.aiState.stepCount !== previousStepCount || !this.aiError) {
@@ -2382,12 +2382,32 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
   }
 
   private updateAiState(payload: GymnasticsAiResponse) {
+    const motionSpec = this.getCurrentAiMotionSpec()
+    const nextStepCount =
+      motionSpec.type === 'top'
+        ? (payload.step_count ?? this.aiState.stepCount)
+        : this.aiState.stepCount
+    const nextHoldDurationMs =
+      motionSpec.type === 'daniel'
+        ? (payload.hold_duration_ms ?? this.aiState.holdDurationMs)
+        : this.aiState.holdDurationMs
+    const nextHoldCompleted =
+      motionSpec.type === 'daniel'
+        ? (payload.hold_completed ?? this.aiState.holdCompleted)
+        : this.aiState.holdCompleted
+    const nextStateForProgress = {
+      ...this.aiState,
+      stepCount: nextStepCount,
+      holdDurationMs: nextHoldDurationMs,
+      holdCompleted: nextHoldCompleted,
+    }
+
     this.aiState = {
       ...this.aiState,
       previousState: payload.state,
-      stepCount: payload.step_count ?? (payload.hold_completed ? 1 : this.aiState.stepCount),
-      holdDurationMs: payload.hold_duration_ms ?? this.aiState.holdDurationMs,
-      holdCompleted: payload.hold_completed ?? this.aiState.holdCompleted,
+      stepCount: nextStepCount,
+      holdDurationMs: nextHoldDurationMs,
+      holdCompleted: nextHoldCompleted,
       holdLastTimestampMs: payload.hold_last_timestamp_ms ?? null,
       lastCountedSide: payload.last_counted_side ?? null,
       lastSeenSide: payload.last_seen_side ?? null,
@@ -2416,7 +2436,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
       baselineRightWristForward:
         payload.baseline_right_wrist_forward ?? this.aiState.baselineRightWristForward,
       baselineStanceSpan: payload.baseline_stance_span ?? this.aiState.baselineStanceSpan,
-      accuracy: payload.accuracy,
+      accuracy: this.getMotionProgressRatio(motionSpec, nextStateForProgress),
       tracking: payload.tracking,
       feedback: payload.feedback,
     }
@@ -2666,6 +2686,33 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     return Phaser.Math.Clamp(value, 0, 1)
   }
 
+  private getMotionProgressRatio(
+    motionSpec: AiMotionSpec,
+    state: GymnasticsAiState = this.aiState,
+  ) {
+    if (motionSpec.type === 'daniel') {
+      return this.clampProgressValue(state.holdDurationMs / Math.max(1, motionSpec.targetHoldMs))
+    }
+
+    return this.clampProgressValue(state.stepCount / Math.max(1, motionSpec.targetSteps))
+  }
+
+  private isMotionCompleteByRecord(motionSpec: AiMotionSpec) {
+    if (motionSpec.type === 'daniel') {
+      return this.aiState.holdCompleted || this.aiState.holdDurationMs >= motionSpec.targetHoldMs
+    }
+
+    return this.aiState.stepCount >= motionSpec.targetSteps
+  }
+
+  private getCompletedRepsByRecord(motionSpec: AiMotionSpec) {
+    if (motionSpec.type === 'daniel') {
+      return this.isMotionCompleteByRecord(motionSpec) ? 1 : 0
+    }
+
+    return Math.min(this.aiState.stepCount, motionSpec.targetSteps)
+  }
+
   private updateHoldProgressUi(motionSpec: AiMotionSpec) {
     const shouldShow = this.saveState === 'idle'
     this.progressLabelText?.setVisible(shouldShow)
@@ -2675,12 +2722,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
 
     if (!shouldShow) return
 
-    const progress =
-      motionSpec.type === 'daniel'
-        ? this.clampProgressValue(
-            this.aiState.holdDurationMs / Math.max(1, motionSpec.targetHoldMs),
-          )
-        : this.clampProgressValue(this.aiState.stepCount / Math.max(1, motionSpec.targetSteps))
+    const progress = this.getMotionProgressRatio(motionSpec)
     this.holdProgressBar.setScale(progress, 1)
     this.holdProgressText.setText('')
     this.holdProgressText?.setVisible(false)
@@ -2779,13 +2821,8 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
       0,
       Math.round((this.motionAccumulatedDurationMs + activeDurationMs) / 1000),
     )
-    const accuracy = Phaser.Math.Clamp(this.aiState.accuracy, 0, 1)
-    const completedReps =
-      motionSpec.type === 'daniel'
-        ? this.aiState.holdCompleted || this.aiState.holdDurationMs >= motionSpec.targetHoldMs
-          ? 1
-          : 0
-        : this.aiState.stepCount
+    const accuracy = this.getMotionProgressRatio(motionSpec)
+    const completedReps = this.getCompletedRepsByRecord(motionSpec)
     const feedback = this.normalizeSessionFeedback(
       this.aiState.representativeFeedbackText ??
         this.aiState.displayedFeedbackText ??
@@ -2880,10 +2917,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
 
   private advanceMotionIfCompleted() {
     const motionSpec = this.getCurrentAiMotionSpec()
-    const isComplete =
-      motionSpec.type === 'daniel'
-        ? this.aiState.holdCompleted || this.aiState.holdDurationMs >= motionSpec.targetHoldMs
-        : this.aiState.stepCount >= motionSpec.targetSteps
+    const isComplete = this.isMotionCompleteByRecord(motionSpec)
     if (!isComplete || this.isMotionAdvancing) return
 
     this.isMotionAdvancing = true
