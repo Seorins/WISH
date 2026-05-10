@@ -39,6 +39,13 @@ const DIALOG_PORTRAIT_CROP_RATIO = 0.62
 const DIALOG_PORTRAIT_SCALE_BOOST = 1.18
 const VILLAGE_DIALOG_FRAME_KEY = 'village-dialog-frame'
 const VILLAGE_DIALOG_FRAME_PATH = 'images/village/ui/dialogframe.png'
+const VILLAGE_SHIP_KEY = 'village-ship'
+const VILLAGE_SHIP_PATH = 'images/themes/ferry/ui/ship.png'
+const VILLAGE_SHIP = {
+  xRatio: 0.5,
+  yRatio: 0.92,
+  scale: 0.22,
+} as const
 const DEFAULT_PLAYER_SPAWN = { xRatio: 0.5, yRatio: 0.3 }
 const MAP_TILE_ROWS = 3
 const MAP_TILE_COLUMNS = 3
@@ -159,6 +166,7 @@ export class VillageScene extends Phaser.Scene {
     })
     this.load.image(SEHYUN_NPC.portraitKey, assetPath(SEHYUN_NPC.portraitPath))
     this.load.image(VILLAGE_DIALOG_FRAME_KEY, assetPath(VILLAGE_DIALOG_FRAME_PATH))
+    this.load.image(VILLAGE_SHIP_KEY, assetPath(VILLAGE_SHIP_PATH))
     this.load.image('profile', assetPath('images/common/profile.png'))
     this.load.image('menu-frame', assetPath('images/ui/buttons/meunframe.png'))
     this.load.image('setting-frame', assetPath('images/ui/buttons/settingframe.png'))
@@ -231,6 +239,12 @@ export class VillageScene extends Phaser.Scene {
       this.physics.add.existing(box, true)
       this.obstacles.add(box)
     })
+
+    this.add
+      .image(VILLAGE_SHIP.xRatio * W, VILLAGE_SHIP.yRatio * H, VILLAGE_SHIP_KEY)
+      .setOrigin(0.5, 1)
+      .setScale(VILLAGE_SHIP.scale)
+      .setDepth(3)
 
     ensurePlayerWalkAnimations(this)
 
