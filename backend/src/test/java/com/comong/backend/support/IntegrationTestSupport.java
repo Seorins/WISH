@@ -50,6 +50,9 @@ public abstract class IntegrationTestSupport {
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
         registry.add("storage.local.upload-dir", TEST_UPLOAD_DIR::toString);
+        registry.add("livekit.url", () -> "wss://test.livekit.cloud");
+        registry.add("livekit.api-key", () -> "test-livekit-api-key");
+        registry.add("livekit.api-secret", () -> "test-livekit-api-secret");
     }
 
     /**
