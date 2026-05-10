@@ -61,8 +61,8 @@ public class Artwork {
     private int playDurationSeconds;
 
     /**
-     * 작품에서 최종적으로 사용된 distinct 색 개수. 색칠 씬은 도안 팔레트 distinct, 자유드로잉은 12 색 팔레트 중 픽셀에 남은 색 개수를 FE 가
-     * 보낸다. 도안마다 팔레트 크기가 달라 상한값은 두지 않고 음수만 차단한다.
+     * 작품에서 최종적으로 사용된 distinct 색 개수. 색칠 씬은 도안 팔레트 distinct, 자유드로잉은 12 색 팔레트 중 픽셀에 남은 색 개수를 FE 가 보낸다.
+     * 도안마다 팔레트 크기가 달라 상한값은 두지 않고 음수만 차단한다.
      */
     @Column(name = "color_count", nullable = false)
     private int colorCount;
