@@ -17,6 +17,8 @@ import SquatDebugPage from './debug/SquatDebugPage'
 import { ensureDemoAuthToken } from './auth/demoAuth'
 import { AuthOverlay } from './features/auth'
 import { ExerciseSessionListOverlay } from './features/exerciseSessions'
+import { VillagerDialogueController } from './features/village-dialogue/components/VillagerDialogueController'
+import type { VillagerDialogueOpenPayload, VillagerNpcId } from './features/village-dialogue/types'
 import {
   clearPatientProfileId,
   resolvePatientProfileIdOrFetch,
@@ -44,6 +46,7 @@ function App() {
   const gameRef = useRef<Phaser.Game | null>(null)
   const [showAuth, setShowAuth] = useState(false)
   const [showExerciseSessions, setShowExerciseSessions] = useState(false)
+  const [villagerNpcId, setVillagerNpcId] = useState<VillagerNpcId | null>(null)
   const [patientProfileId, setPatientProfileId] = useState<number | undefined>(undefined)
 
   useLoginSession(patientProfileId)
@@ -84,6 +87,12 @@ function App() {
         setPatientProfileId(id)
       })
       game.events.on('exercise-sessions:open', () => setShowExerciseSessions(true))
+      game.events.on('villager-dialogue:open', ({ npcId }: VillagerDialogueOpenPayload) => {
+        setVillagerNpcId(npcId)
+      })
+      game.events.on('villager-dialogue:force-close', () => {
+        setVillagerNpcId(null)
+      })
 
       const resolvedPatientProfileId = await resolvePatientProfileIdOrFetch()
       if (isCancelled) return
@@ -105,6 +114,15 @@ function App() {
   const handleAuthCancel = useCallback(() => {
     setShowAuth(false)
     gameRef.current?.events.emit('auth:cancelled')
+  }, [])
+
+  const handleVillagerDialogueClose = useCallback(() => {
+    setVillagerNpcId(null)
+    gameRef.current?.events.emit('villager-dialogue:closed')
+  }, [])
+
+  const handleVillagerDialogueTextChange = useCallback((text: string) => {
+    gameRef.current?.events.emit('villager-dialogue:text', { text })
   }, [])
 
   if (debugMode === DEBUG_MARCH_MODE) {
@@ -171,6 +189,12 @@ function App() {
         }}
       />
       <AuthOverlay open={showAuth} onAuthSuccess={handleAuthSuccess} onCancel={handleAuthCancel} />
+      <VillagerDialogueController
+        npcId={villagerNpcId}
+        isOpen={villagerNpcId !== null}
+        onClose={handleVillagerDialogueClose}
+        onTextChange={handleVillagerDialogueTextChange}
+      />
       <QueryClientProvider client={queryClient}>
         <ExerciseSessionListOverlay
           open={showExerciseSessions}
