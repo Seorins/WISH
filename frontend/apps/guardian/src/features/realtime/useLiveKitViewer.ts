@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   RemoteParticipant,
   RemoteTrack,
@@ -114,5 +114,11 @@ export function useLiveKitViewer({ loginSessionId, videoRef, audioRef }: Options
     }
   }, [loginSessionId, videoRef, audioRef])
 
-  return { status, hasRemoteVideo }
+  const setMicrophoneEnabled = useCallback(async (enabled: boolean) => {
+    const room = roomRef.current
+    if (!room) throw new Error('LiveKit room not connected')
+    await room.localParticipant.setMicrophoneEnabled(enabled)
+  }, [])
+
+  return { status, hasRemoteVideo, setMicrophoneEnabled }
 }

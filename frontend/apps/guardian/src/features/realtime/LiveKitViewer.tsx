@@ -1,5 +1,6 @@
 import { useRef } from 'react'
-import type { ActiveLiveSession } from '@/stores/realtimeStore'
+import { type ActiveLiveSession, useRealtimeStore } from '@/stores/realtimeStore'
+import { PttButton } from './PttButton'
 import { useLiveKitViewer, type LiveKitViewerStatus } from './useLiveKitViewer'
 import styles from './LiveKitViewer.module.css'
 
@@ -13,11 +14,13 @@ export function LiveKitViewer({ activeSession }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
-  const { status, hasRemoteVideo } = useLiveKitViewer({
+  const { status, hasRemoteVideo, setMicrophoneEnabled } = useLiveKitViewer({
     loginSessionId: activeSession.loginSessionId,
     videoRef,
     audioRef,
   })
+  const contentActive = useRealtimeStore(state => state.contentActive)
+  const pttEnabled = status === 'connected' && contentActive
 
   return (
     <div className={styles.viewer}>
@@ -45,6 +48,9 @@ export function LiveKitViewer({ activeSession }: Props) {
         >
           {statusLabel(status)}
         </span>
+      </div>
+      <div className={styles.pttSlot}>
+        <PttButton enabled={pttEnabled} setMicrophoneEnabled={setMicrophoneEnabled} />
       </div>
     </div>
   )

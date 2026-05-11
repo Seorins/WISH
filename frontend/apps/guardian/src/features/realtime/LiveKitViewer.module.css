@@ -83,6 +83,13 @@
   animation: pulse 1.2s ease-out infinite;
 }
 
+.pttSlot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 0 4px;
+}
+
 @keyframes pulse {
   0% {
     box-shadow: 0 0 0 0 rgba(255, 71, 87, 0.6);
