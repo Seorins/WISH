@@ -1,5 +1,5 @@
 import Phaser from 'phaser'
-import { clearDemoAuthToken } from '@/auth/demoAuth'
+import { useAuthStore } from '@/features/auth/store'
 import { assetPath } from '@/game/assets/assetPath'
 import {
   createClickTargetMarker,
@@ -928,7 +928,7 @@ export class VillageScene extends Phaser.Scene {
   }
 
   private logout() {
-    clearDemoAuthToken()
+    useAuthStore.getState().clear()
     this.game.events.emit('auth:logout')
     this.settingsMenu.close()
     this.isTransitioning = true

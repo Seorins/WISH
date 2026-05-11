@@ -14,7 +14,6 @@ import DiagonalFacePunchDebugPage from './debug/DiagonalFacePunchDebugPage'
 import MarchDebugPage from './debug/MarchDebugPage'
 import SideStepDebugPage from './debug/SideStepDebugPage'
 import SquatDebugPage from './debug/SquatDebugPage'
-import { ensureDemoAuthToken } from './auth/demoAuth'
 import { AuthOverlay } from './features/auth'
 import { ExerciseSessionListOverlay } from './features/exerciseSessions'
 import { LighthouseEmotionController } from './features/lighthouse-emotion/components/LighthouseEmotionController'
@@ -74,37 +73,34 @@ function App() {
 
     let isCancelled = false
 
-    void ensureDemoAuthToken().then(async () => {
-      if (isCancelled || !containerRef.current || gameRef.current) return
-      const game = createGame(containerRef.current)
-      gameRef.current = game
-      game.events.on('auth:request', () => setShowAuth(true))
-      game.events.on('auth:logout', () => {
-        clearPatientProfileId()
-        setPatientProfileId(undefined)
-      })
-      game.events.on('auth:completed', async () => {
-        const id = await resolvePatientProfileIdOrFetch()
-        if (isCancelled) return
-        setPatientProfileId(id)
-      })
-      game.events.on('exercise-sessions:open', () => setShowExerciseSessions(true))
-      game.events.on('villager-dialogue:open', ({ npcId }: VillagerDialogueOpenPayload) => {
-        setVillagerNpcId(npcId)
-      })
-      game.events.on('villager-dialogue:force-close', () => {
-        setVillagerNpcId(null)
-      })
-      game.events.on('lighthouse-emotion:open', () => {
-        setIsLighthouseEmotionOpen(true)
-      })
-      game.events.on('lighthouse-emotion:force-close', () => {
-        setIsLighthouseEmotionOpen(false)
-      })
-
-      const resolvedPatientProfileId = await resolvePatientProfileIdOrFetch()
+    const game = createGame(containerRef.current)
+    gameRef.current = game
+    game.events.on('auth:request', () => setShowAuth(true))
+    game.events.on('auth:logout', () => {
+      clearPatientProfileId()
+      setPatientProfileId(undefined)
+    })
+    game.events.on('auth:completed', async () => {
+      const id = await resolvePatientProfileIdOrFetch()
       if (isCancelled) return
-      setPatientProfileId(resolvedPatientProfileId)
+      setPatientProfileId(id)
+    })
+    game.events.on('exercise-sessions:open', () => setShowExerciseSessions(true))
+    game.events.on('villager-dialogue:open', ({ npcId }: VillagerDialogueOpenPayload) => {
+      setVillagerNpcId(npcId)
+    })
+    game.events.on('villager-dialogue:force-close', () => {
+      setVillagerNpcId(null)
+    })
+    game.events.on('lighthouse-emotion:open', () => {
+      setIsLighthouseEmotionOpen(true)
+    })
+    game.events.on('lighthouse-emotion:force-close', () => {
+      setIsLighthouseEmotionOpen(false)
+    })
+
+    void resolvePatientProfileIdOrFetch().then(resolvedPatientProfileId => {
+      if (!isCancelled) setPatientProfileId(resolvedPatientProfileId)
     })
 
     return () => {

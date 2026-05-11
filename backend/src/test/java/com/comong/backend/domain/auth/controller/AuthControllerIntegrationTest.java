@@ -135,6 +135,13 @@ class AuthControllerIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
+    void demoTokenEndpointIsNotProvided() throws Exception {
+        mockMvc.perform(post("/auth/demo-token"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("G-005"));
+    }
+
+    @Test
     void meRejectsUnauthenticatedRequest() throws Exception {
         mockMvc.perform(get("/users/me"))
                 .andExpect(status().isUnauthorized())

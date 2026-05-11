@@ -28,11 +28,6 @@ export type UserResponse = {
   createdAt?: string
 }
 
-export async function issueDemoToken() {
-  const response = await apiClient.post<ApiResponse<TokenResponse>>('/auth/demo-token')
-  return response.data
-}
-
 export async function login(request: LoginRequest) {
   const response = await apiClient.post<ApiResponse<TokenResponse>>('/auth/login', request)
   return response.data
