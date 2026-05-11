@@ -1,14 +1,23 @@
 package com.comong.backend.domain.dialogue.service;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
+
+import jakarta.persistence.criteria.Predicate;
 
 import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.comong.backend.domain.dialogue.dto.FinishSessionRequest;
 import com.comong.backend.domain.dialogue.dto.FinishSessionResponse;
+import com.comong.backend.domain.dialogue.dto.GuardianSessionListItemResponse;
 import com.comong.backend.domain.dialogue.dto.SceneResponse;
 import com.comong.backend.domain.dialogue.dto.SelectedChoiceRequest;
 import com.comong.backend.domain.dialogue.dto.SessionDetailResponse;
@@ -20,12 +29,14 @@ import com.comong.backend.domain.dialogue.entity.DialogueSession;
 import com.comong.backend.domain.dialogue.entity.DialogueStatus;
 import com.comong.backend.domain.dialogue.entity.DialogueTurn;
 import com.comong.backend.domain.dialogue.entity.DialogueTurnGeneratedBy;
+import com.comong.backend.domain.dialogue.entity.NpcName;
 import com.comong.backend.domain.dialogue.exception.DialogueErrorCode;
 import com.comong.backend.domain.dialogue.repository.DialogueSessionRepository;
 import com.comong.backend.domain.dialogue.repository.DialogueTurnRepository;
 import com.comong.backend.domain.patient.entity.PatientProfile;
 import com.comong.backend.domain.patient.service.PatientProfileService;
 import com.comong.backend.global.exception.BusinessException;
+import com.comong.backend.global.exception.GlobalErrorCode;
 
 import lombok.RequiredArgsConstructor;
 
@@ -148,8 +159,77 @@ public class DialogueService {
         return FinishSessionResponse.of(session, closingLines);
     }
 
-    public SessionDetailResponse getSession(Long currentUserId, Long sessionId) {
-        DialogueSession session = findOwnedSessionOrThrow(currentUserId, sessionId);
+    /**
+     * 보호자 페이지 대화 이력 목록 — 환자 owner 검증 후 NPC/기간 필터로 페이지 조회.
+     *
+     * <p>{@code from} / {@code to} 는 KST 기준 날짜. 서비스에서 자정 경계로 변환해 {@code started_at} 비교에 사용한다
+     * ({@code from 00:00} inclusive, {@code to+1d 00:00} exclusive). {@code to} 가 {@code null} 이면
+     * "오늘 cap" — 즉 오늘 자정 이전 (=어제까지) 끝난 데이터까지가 아니라 **오늘 분도 포함**하기 위해 내일 자정 미만으로 자른다. 이 cap 은 미래 시점
+     * 세션이 응답에 새는 것을 방지한다 (현재 운영 상으론 미래 세션이 생길 일 없지만 방어).
+     *
+     * <p>{@code from > to} 인 경우 입력값 오류 (G-001).
+     */
+    public Page<GuardianSessionListItemResponse> searchForGuardian(
+            Long currentUserId,
+            Long patientProfileId,
+            NpcName npc,
+            LocalDate from,
+            LocalDate to,
+            Pageable pageable) {
+        PatientProfile profile =
+                patientProfileService.findOwnedOrThrow(currentUserId, patientProfileId);
+
+        if (from != null && to != null && from.isAfter(to)) {
+            throw new BusinessException(GlobalErrorCode.INVALID_INPUT);
+        }
+
+        LocalDateTime fromInclusive = from != null ? from.atStartOfDay() : null;
+        LocalDate toCapped = to != null ? to : LocalDate.now();
+        LocalDateTime toExclusive = toCapped.plusDays(1).atStartOfDay();
+
+        Specification<DialogueSession> spec =
+                buildGuardianSearchSpec(profile.getId(), npc, fromInclusive, toExclusive);
+        return sessionRepository.findAll(spec, pageable).map(GuardianSessionListItemResponse::from);
+    }
+
+    /**
+     * 보호자 검색 동적 쿼리. JPQL 의 {@code :param IS NULL} 패턴은 PostgreSQL JDBC 의 untyped NULL 처리에서 SQL
+     * grammar 오류를 일으키므로 Criteria 기반 {@link Specification} 으로 작성한다. null 인자는 해당 술어 자체를 추가하지 않는 방식.
+     */
+    private Specification<DialogueSession> buildGuardianSearchSpec(
+            Long patientProfileId,
+            NpcName npc,
+            LocalDateTime fromInclusive,
+            LocalDateTime toExclusive) {
+        return (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            predicates.add(cb.equal(root.get("patientProfile").get("id"), patientProfileId));
+            if (npc != null) {
+                predicates.add(cb.equal(root.get("npcName"), npc));
+            }
+            if (fromInclusive != null) {
+                predicates.add(cb.greaterThanOrEqualTo(root.get("startedAt"), fromInclusive));
+            }
+            if (toExclusive != null) {
+                predicates.add(cb.lessThan(root.get("startedAt"), toExclusive));
+            }
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
+    }
+
+    /**
+     * 보호자 페이지 대화 세션 상세 — 환자 owner 검증 + 해당 환자 세션 여부 검증 모두 통과해야 반환. 비소유/비존재 모두 404 (enumeration 방지).
+     */
+    public SessionDetailResponse getSessionForGuardian(
+            Long currentUserId, Long patientProfileId, Long sessionId) {
+        PatientProfile profile =
+                patientProfileService.findOwnedOrThrow(currentUserId, patientProfileId);
+        DialogueSession session =
+                sessionRepository
+                        .findById(sessionId)
+                        .filter(s -> s.getPatientProfile().getId().equals(profile.getId()))
+                        .orElseThrow(
+                                () -> new BusinessException(DialogueErrorCode.SESSION_NOT_FOUND));
         List<DialogueTurn> turns =
                 turnRepository.findAllBySessionIdOrderByStepIndexAsc(session.getId());
         return SessionDetailResponse.from(session, turns);

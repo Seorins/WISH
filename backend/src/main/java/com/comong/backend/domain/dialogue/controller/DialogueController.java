@@ -5,7 +5,6 @@ import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -14,7 +13,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.comong.backend.domain.dialogue.dto.FinishSessionRequest;
 import com.comong.backend.domain.dialogue.dto.FinishSessionResponse;
-import com.comong.backend.domain.dialogue.dto.SessionDetailResponse;
 import com.comong.backend.domain.dialogue.dto.StartSessionRequest;
 import com.comong.backend.domain.dialogue.dto.StartSessionResponse;
 import com.comong.backend.domain.dialogue.dto.SubmitTurnRequest;
@@ -132,28 +130,5 @@ public class DialogueController {
         return ResponseEntity.ok(
                 ApiResponse.success(
                         dialogueService.finishSession(currentUser.userId(), sessionId, request)));
-    }
-
-    @Operation(
-            summary = "대화 세션 상세 조회 (디버그/QA)",
-            description = "세션 메타와 모든 턴 이벤트를 반환한다. 아이 화면에는 노출하지 않는다.")
-    @ApiResponses({
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                responseCode = "200",
-                description = "조회 성공"),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                responseCode = "401",
-                description = "인증 필요 (G-003)"),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                responseCode = "404",
-                description = "세션이 없거나 본인 환자 프로필 소유가 아님 (DL-001) — enumeration 방지")
-    })
-    @GetMapping("/{sessionId}")
-    public ResponseEntity<ApiResponse<SessionDetailResponse>> detail(
-            @AuthenticationPrincipal AuthenticatedUser currentUser,
-            @Parameter(description = "대화 세션 ID (본인 소유)", required = true) @PathVariable
-                    Long sessionId) {
-        return ResponseEntity.ok(
-                ApiResponse.success(dialogueService.getSession(currentUser.userId(), sessionId)));
     }
 }

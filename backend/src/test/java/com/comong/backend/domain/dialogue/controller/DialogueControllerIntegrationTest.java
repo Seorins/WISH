@@ -1,7 +1,6 @@
 package com.comong.backend.domain.dialogue.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -145,22 +144,6 @@ class DialogueControllerIntegrationTest extends IntegrationTestSupport {
                 .andExpect(jsonPath("$.data.closingLines").doesNotExist());
     }
 
-    @Test
-    @DisplayName("마을 주민 세션 상세 조회 — turns 의 generatedBy 가 NPC_SCRIPT")
-    void getDetail_villager_marksTurnsAsNpcScript() throws Exception {
-        TestUser user = setupUserWithProfile("villager-detail@example.com", "villager-detail");
-        long sessionId = startSession(user, "SEHYEON");
-        submitTurn(user, sessionId, "무엇이 가장 걱정되니?", "worry_pain", "아픈 게 걱정돼요", 3);
-
-        mockMvc.perform(
-                        get("/dialogue/sessions/{id}", sessionId)
-                                .header("Authorization", "Bearer " + user.token()))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.npcName").value("SEHYEON"))
-                .andExpect(jsonPath("$.data.turns.length()").value(1))
-                .andExpect(jsonPath("$.data.turns[0].generatedBy").value("NPC_SCRIPT"));
-    }
-
     // ===== 권한 / 인증 =====
 
     @Test
@@ -196,7 +179,6 @@ class DialogueControllerIntegrationTest extends IntegrationTestSupport {
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("{\"finishReason\":\"COMPLETED\"}"))
                 .andExpect(status().isUnauthorized());
-        mockMvc.perform(get("/dialogue/sessions/{id}", 1L)).andExpect(status().isUnauthorized());
     }
 
     // ===== 등대지기 turn 처리 / 라우팅 =====
@@ -358,34 +340,6 @@ class DialogueControllerIntegrationTest extends IntegrationTestSupport {
                                 .content("{\"finishReason\":\"COMPLETED\"}"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("DL-003"));
-    }
-
-    // ===== 상세 조회 =====
-
-    @Test
-    @DisplayName("등대지기 세션 상세 조회 — 메타 + 모든 턴 stepIndex 오름차순 + generatedBy=FALLBACK")
-    void getDetail_yeongcheol_returnsSessionAndTurnsOrdered() throws Exception {
-        TestUser user = setupUserWithProfile("detail@example.com", "detail-user");
-        long sessionId = startSession(user, "YEONGCHEOL");
-        submitTurn(user, sessionId, "오늘 기분은 어떠니?", "mood_worried", "걱정돼요", 2);
-        submitTurn(user, sessionId, "무엇이 가장 걱정되니?", "worry_pain", "아픈 게 걱정돼요", 3);
-        finishSession(user, sessionId, "COMPLETED");
-
-        mockMvc.perform(
-                        get("/dialogue/sessions/{id}", sessionId)
-                                .header("Authorization", "Bearer " + user.token()))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.sessionId").value(sessionId))
-                .andExpect(jsonPath("$.data.npcName").value("YEONGCHEOL"))
-                .andExpect(jsonPath("$.data.status").value("FINISHED"))
-                .andExpect(jsonPath("$.data.finishReason").value("COMPLETED"))
-                .andExpect(jsonPath("$.data.stepCount").value(2))
-                .andExpect(jsonPath("$.data.turns.length()").value(2))
-                .andExpect(jsonPath("$.data.turns[0].stepIndex").value(0))
-                .andExpect(jsonPath("$.data.turns[0].choiceIntentId").value("mood_worried"))
-                .andExpect(jsonPath("$.data.turns[0].generatedBy").value("FALLBACK"))
-                .andExpect(jsonPath("$.data.turns[1].stepIndex").value(1))
-                .andExpect(jsonPath("$.data.turns[1].choiceIntentId").value("worry_pain"));
     }
 
     // ===== helpers =====
