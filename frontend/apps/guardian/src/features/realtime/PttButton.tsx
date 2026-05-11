@@ -94,32 +94,32 @@ export function PttButton({ enabled, setMicrophoneEnabled }: Props) {
     }
   }, [setMicrophoneEnabled])
 
-  const label = !enabled
-    ? '콘텐츠 진행 중일 때 사용할 수 있어요'
-    : isSpeaking
-      ? '말하는 중...'
-      : '꾹 눌러서 말하세요'
+  const tooltip = error
+    ? error
+    : !enabled
+      ? '콘텐츠 진행 중일 때 사용할 수 있어요'
+      : isSpeaking
+        ? '말하는 중...'
+        : '꾹 눌러서 말하세요'
 
   return (
-    <div className={styles.wrapper}>
-      <button
-        type="button"
-        className={`${styles.button} ${isSpeaking ? styles.buttonActive : ''}`}
-        disabled={!enabled}
-        onPointerDown={event => {
-          event.preventDefault()
-          ;(event.target as HTMLElement).setPointerCapture?.(event.pointerId)
-          void handleStart()
-        }}
-        onPointerUp={() => void handleStop()}
-        onPointerLeave={() => void handleStop()}
-        onPointerCancel={() => void handleStop()}
-        aria-pressed={isSpeaking}
-        aria-label={isSpeaking ? '마이크 ON (송신 중)' : '꾹 눌러서 말하기'}
-      >
-        <MicIcon className={styles.icon} muted={!isSpeaking && !enabled} />
-      </button>
-      <p className={`${styles.hint} ${error ? styles.error : ''}`}>{error ?? label}</p>
-    </div>
+    <button
+      type="button"
+      className={`${styles.button} ${isSpeaking ? styles.buttonActive : ''}`}
+      disabled={!enabled}
+      onPointerDown={event => {
+        event.preventDefault()
+        ;(event.target as HTMLElement).setPointerCapture?.(event.pointerId)
+        void handleStart()
+      }}
+      onPointerUp={() => void handleStop()}
+      onPointerLeave={() => void handleStop()}
+      onPointerCancel={() => void handleStop()}
+      aria-pressed={isSpeaking}
+      aria-label={tooltip}
+      data-tooltip={tooltip}
+    >
+      <MicIcon className={styles.icon} muted={!isSpeaking && !enabled} />
+    </button>
   )
 }
