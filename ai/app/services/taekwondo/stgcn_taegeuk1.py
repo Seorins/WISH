@@ -8,6 +8,30 @@ from typing import Any
 
 import numpy as np
 
+from app.services.taekwondo.classification.basic_motion_classifier import BasicMotionClassifier
+from app.services.taekwondo.classification.stance_classifier import StanceClassifier
+from app.services.taekwondo.constants import (
+    ACTION_LOW_BLOCK,
+    ACTION_MIDDLE_PUNCH,
+    ACTION_READY,
+    LEFT_ANKLE,
+    LEFT_ELBOW,
+    LEFT_HIP,
+    LEFT_KNEE,
+    LEFT_SHOULDER,
+    LEFT_WRIST,
+    RIGHT_ANKLE,
+    RIGHT_ELBOW,
+    RIGHT_HIP,
+    RIGHT_KNEE,
+    RIGHT_SHOULDER,
+    RIGHT_WRIST,
+    STANCE_FRONT,
+    STANCE_READY,
+    STANCE_WALKING,
+)
+from app.services.taekwondo.types import HipCenter, NormalizedLandmark, NormalizedPoseFrame, TrackingQuality
+
 try:
     import torch
     from torch import nn
@@ -24,6 +48,48 @@ STGCN_CHECKPOINT_PATH = RESOURCE_DIR / "stgcn_taegeuk1_camera_finetuned_best.pt"
 
 TARGET_SEQUENCE_SHAPE = (3, 60, 29)
 PASS_THRESHOLD_DEFAULT = 80.0
+LEFT_SHOULDER_INDEX = 6
+RIGHT_SHOULDER_INDEX = 7
+LEFT_HIP_INDEX = 16
+RIGHT_HIP_INDEX = 17
+MIN_CAMERA_SCALE = 0.05
+FINAL_FRAME_WINDOW = 10
+RULE_SCORE_START_RATIO = 0.35
+TARGET_RULE_STANCE_WEIGHT = 0.55
+TARGET_RULE_ACTION_WEIGHT = 0.45
+TARGET_RULE_STANCE_FLOOR = 0.9
+TARGET_RULE_ACTION_FLOOR = 0.85
+CORE_SCORING_JOINT_NAMES = (
+    "코",
+    "목",
+    "왼쪽 어깨",
+    "오른쪽 어깨",
+    "왼쪽 팔꿈치",
+    "오른쪽 팔꿈치",
+    "왼쪽 손목",
+    "오른쪽 손목",
+    "왼쪽 엉덩이",
+    "오른쪽 엉덩이",
+    "가운데 엉덩이",
+    "왼쪽 무릎",
+    "오른쪽 무릎",
+    "왼쪽 발목",
+    "오른쪽 발목",
+)
+KOREAN_TO_TAEKWONDO_LANDMARK = {
+    "왼쪽 어깨": LEFT_SHOULDER,
+    "오른쪽 어깨": RIGHT_SHOULDER,
+    "왼쪽 팔꿈치": LEFT_ELBOW,
+    "오른쪽 팔꿈치": RIGHT_ELBOW,
+    "왼쪽 손목": LEFT_WRIST,
+    "오른쪽 손목": RIGHT_WRIST,
+    "왼쪽 엉덩이": LEFT_HIP,
+    "오른쪽 엉덩이": RIGHT_HIP,
+    "왼쪽 무릎": LEFT_KNEE,
+    "오른쪽 무릎": RIGHT_KNEE,
+    "왼쪽 발목": LEFT_ANKLE,
+    "오른쪽 발목": RIGHT_ANKLE,
+}
 
 
 @dataclass(slots=True)
@@ -46,6 +112,9 @@ class Taegeuk1AnalyzeResult:
     scored_movement_name: str
     classification_match: bool
     score: float
+    prototype_score: float
+    target_rule_score: float | None
+    scoring_method: str
     pass_threshold: float
     passed: bool
     distance: float
@@ -195,13 +264,20 @@ def analyze_taegeuk1_sequence(
     if not input_normalized:
         seq = _normalize_camera_sequence(seq)
 
+    scoring_joint_indexes = _core_scoring_joint_indexes(resources.keypoint_names)
+    scoring_keypoint_names = [resources.keypoint_names[index] for index in scoring_joint_indexes]
     distances = np.array(
-        [_sequence_distance(seq, prototype)[0] for prototype in resources.prototypes],
+        [
+            _sequence_distance(seq, prototype, joint_indexes=scoring_joint_indexes)[0]
+            for prototype in resources.prototypes
+        ],
         dtype=np.float32,
     )
-    probabilities = _predict_probabilities(seq)
-    if probabilities is None:
-        probabilities = _distance_probabilities(distances)
+    probabilities = _prediction_probabilities(
+        seq,
+        distances,
+        input_normalized=input_normalized,
+    )
     prediction_indexes = np.argsort(-probabilities)[:3].tolist()
     top3 = [
         Taegeuk1Prediction(
@@ -215,21 +291,42 @@ def analyze_taegeuk1_sequence(
     predicted_index = int(prediction_indexes[0])
     target_index = resources.class_names.index(movement_name)
     target_prototype = resources.prototypes[target_index]
-    distance, joint_errors = _sequence_distance(seq, target_prototype)
-    score = _score_from_distance(
+    distance, joint_errors = _sequence_distance(
+        seq,
+        target_prototype,
+        joint_indexes=scoring_joint_indexes,
+    )
+    prototype_score = _score_from_distance(
         distance,
         resources.similarity_report["per_class"][movement_name]["distance"],
     )
+    score = prototype_score
+    target_rule_score: float | None = None
+    scoring_method = "prototype_distance"
+    if not input_normalized:
+        camera_score = _camera_adjusted_score(
+            absolute_score=score,
+            target_index=target_index,
+            distances=distances,
+            probabilities=probabilities,
+        )
+        if camera_score > score:
+            score = camera_score
+            scoring_method = "camera_similarity"
+        target_rule_score = _target_rule_score(seq, resources.keypoint_names, movement_name)
+        if target_rule_score is not None and target_rule_score > score:
+            score = target_rule_score
+            scoring_method = "target_rule"
 
     joint_error_rows = [
         {"joint": joint_name, "error": round(float(error), 6)}
-        for joint_name, error in zip(resources.keypoint_names, joint_errors)
+        for joint_name, error in zip(scoring_keypoint_names, joint_errors)
     ]
     joint_error_rows.sort(key=lambda row: float(row["error"]), reverse=True)
 
     body_part_errors, body_part_scores = _body_part_scores(
         joint_errors,
-        resources.keypoint_names,
+        scoring_keypoint_names,
         resources.body_part_report,
     )
     weakest_body_part = min(body_part_scores, key=body_part_scores.get)
@@ -246,6 +343,9 @@ def analyze_taegeuk1_sequence(
         scored_movement_name=movement_name,
         classification_match=predicted_index == target_index,
         score=round(float(score), 2),
+        prototype_score=round(float(prototype_score), 2),
+        target_rule_score=round(float(target_rule_score), 2) if target_rule_score is not None else None,
+        scoring_method=scoring_method,
         pass_threshold=round(float(pass_threshold), 2),
         passed=float(score) >= float(pass_threshold),
         distance=round(float(distance), 6),
@@ -300,19 +400,52 @@ def _resample_channels_first(sequence: np.ndarray, target_len: int = 60) -> np.n
 def _normalize_camera_sequence(sequence: np.ndarray) -> np.ndarray:
     normalized = sequence.copy()
     xy = normalized[:2]
-    valid = np.isfinite(xy)
-    if valid.any():
-        median = np.nanmedian(xy[valid])
-        if median > 2.0:
-            normalized[:2] = normalized[:2] / 1000.0
+    for frame_index in range(normalized.shape[1]):
+        frame_xy = xy[:, frame_index, :]
+        left_hip = frame_xy[:, LEFT_HIP_INDEX]
+        right_hip = frame_xy[:, RIGHT_HIP_INDEX]
+        left_shoulder = frame_xy[:, LEFT_SHOULDER_INDEX]
+        right_shoulder = frame_xy[:, RIGHT_SHOULDER_INDEX]
+
+        if not (
+            np.isfinite(left_hip).all()
+            and np.isfinite(right_hip).all()
+            and np.isfinite(left_shoulder).all()
+            and np.isfinite(right_shoulder).all()
+        ):
+            continue
+
+        hip_center = (left_hip + right_hip) / 2.0
+        shoulder_scale = float(np.linalg.norm(right_shoulder - left_shoulder))
+        hip_scale = float(np.linalg.norm(right_hip - left_hip))
+        scale = max(shoulder_scale, hip_scale, MIN_CAMERA_SCALE)
+        normalized[:2, frame_index, :] = (frame_xy - hip_center[:, None]) / scale
+
     normalized[2] = np.clip(normalized[2], 0.0, 1.0)
     return normalized
 
 
-def _sequence_distance(sequence: np.ndarray, prototype: np.ndarray) -> tuple[float, np.ndarray]:
+def _core_scoring_joint_indexes(keypoint_names: list[str]) -> list[int]:
+    indexes = [
+        index
+        for index, name in enumerate(keypoint_names)
+        if name in CORE_SCORING_JOINT_NAMES
+    ]
+    return indexes or list(range(len(keypoint_names)))
+
+
+def _sequence_distance(
+    sequence: np.ndarray,
+    prototype: np.ndarray,
+    *,
+    joint_indexes: list[int] | None = None,
+) -> tuple[float, np.ndarray]:
     xy_diff = sequence[:2] - prototype[:2]
     point_errors = np.sqrt(np.sum(xy_diff * xy_diff, axis=0))
     visibility = np.clip((sequence[2] + prototype[2]) / 2.0, 0.0, 1.0)
+    if joint_indexes is not None:
+        point_errors = point_errors[:, joint_indexes]
+        visibility = visibility[:, joint_indexes]
     weight_sum = float(visibility.sum())
     if weight_sum > 1e-6:
         joint_errors = (point_errors * visibility).sum(axis=0) / np.maximum(visibility.sum(axis=0), 1e-6)
@@ -342,6 +475,20 @@ def _predict_probabilities(sequence: np.ndarray) -> np.ndarray | None:
     return probabilities.astype(np.float32)
 
 
+def _prediction_probabilities(
+    sequence: np.ndarray,
+    distances: np.ndarray,
+    *,
+    input_normalized: bool,
+) -> np.ndarray:
+    if input_normalized:
+        model_probabilities = _predict_probabilities(sequence)
+        if model_probabilities is not None:
+            return model_probabilities
+
+    return _distance_probabilities(distances)
+
+
 def _score_from_distance(distance: float, stats: dict[str, float]) -> float:
     min_distance = float(stats.get("min", 0.0))
     p50 = float(stats["p50"])
@@ -356,6 +503,173 @@ def _score_from_distance(distance: float, stats: dict[str, float]) -> float:
     if distance <= p95:
         return _interpolate(distance, p90, p95, 70.0, 50.0)
     return _interpolate(distance, p95, max_distance, 50.0, 0.0)
+
+
+def _camera_adjusted_score(
+    *,
+    absolute_score: float,
+    target_index: int,
+    distances: np.ndarray,
+    probabilities: np.ndarray,
+) -> float:
+    """Stabilize webcam scoring when absolute prototype distance is out of range.
+
+    The original score is calibrated on normalized AIHub-style data. Live webcam
+    landmarks can have different scale and camera geometry, so their absolute
+    distance may exceed the report max even when the target action is still the
+    nearest movement. For live camera input, keep the calibrated score but allow
+    target probability and target-distance rank to recover a usable game score.
+    """
+
+    target_probability = float(probabilities[target_index])
+    probability_score = target_probability * 100.0
+
+    sorted_indexes = np.argsort(distances).tolist()
+    target_rank = sorted_indexes.index(target_index) + 1
+    best_distance = max(float(distances[sorted_indexes[0]]), 1e-6)
+    target_distance = max(float(distances[target_index]), 1e-6)
+    distance_ratio = target_distance / best_distance
+
+    if target_rank == 1:
+        rank_score = _interpolate(distance_ratio, 1.0, 1.4, 95.0, 82.0)
+    elif target_rank == 2:
+        rank_score = _interpolate(distance_ratio, 1.0, 1.8, 78.0, 58.0)
+    elif target_rank == 3:
+        rank_score = _interpolate(distance_ratio, 1.0, 2.2, 68.0, 45.0)
+    else:
+        rank_score = _interpolate(distance_ratio, 1.0, 3.0, 50.0, 20.0)
+
+    return max(float(absolute_score), probability_score, rank_score)
+
+
+def _target_rule_score(
+    sequence: np.ndarray,
+    keypoint_names: list[str],
+    movement_name: str,
+) -> float | None:
+    expected_stance = _expected_stance_label(movement_name)
+    expected_action = _expected_action_label(movement_name)
+    if expected_stance is None and expected_action is None:
+        return None
+
+    candidate_scores: list[float] = []
+    for frame in _target_rule_candidate_frames(sequence, keypoint_names):
+        frame_score = _score_target_rule_frame(frame, expected_stance, expected_action)
+        if frame_score is not None:
+            candidate_scores.append(frame_score)
+
+    return max(candidate_scores) if candidate_scores else None
+
+
+def _score_target_rule_frame(
+    frame: NormalizedPoseFrame,
+    expected_stance: str | None,
+    expected_action: str | None,
+) -> float | None:
+    stance_score = None
+    action_score = None
+
+    if expected_stance is not None:
+        stance_result = StanceClassifier().classify(frame)
+        stance_score = float(stance_result.scores.get(expected_stance, 0.0))
+    if expected_action is not None:
+        action_result = BasicMotionClassifier().classify(frame)
+        action_score = float(action_result.scores.get(expected_action, 0.0))
+
+    if stance_score is not None and action_score is not None:
+        combined_score = 100.0 * (
+            (stance_score * TARGET_RULE_STANCE_WEIGHT) + (action_score * TARGET_RULE_ACTION_WEIGHT)
+        )
+        stance_floor_score = 100.0 * stance_score * TARGET_RULE_STANCE_FLOOR
+        action_floor_score = 100.0 * action_score * TARGET_RULE_ACTION_FLOOR
+        return min(100.0, max(combined_score, stance_floor_score, action_floor_score))
+    if stance_score is not None:
+        return 100.0 * stance_score
+    if action_score is not None:
+        return 100.0 * action_score
+    return None
+
+
+def _target_rule_candidate_frames(
+    sequence: np.ndarray,
+    keypoint_names: list[str],
+) -> list[NormalizedPoseFrame]:
+    start_frame = max(0, min(sequence.shape[1] - 1, int(sequence.shape[1] * RULE_SCORE_START_RATIO)))
+    candidates = [_sequence_to_pose_frame(sequence, keypoint_names)]
+    candidates.extend(
+        _sequence_frame_to_pose_frame(sequence, keypoint_names, frame_index)
+        for frame_index in range(start_frame, sequence.shape[1])
+    )
+    return candidates
+
+
+def _expected_stance_label(movement_name: str) -> str | None:
+    if movement_name == "기본준비":
+        return STANCE_READY
+    if movement_name.startswith("앞굽이"):
+        return STANCE_FRONT
+    if movement_name.startswith("앞서고") or movement_name.startswith("앞차고"):
+        return STANCE_WALKING
+    return None
+
+
+def _expected_action_label(movement_name: str) -> str | None:
+    if movement_name == "기본준비":
+        return ACTION_READY
+    if "아래막" in movement_name:
+        return ACTION_LOW_BLOCK
+    if "지르기" in movement_name:
+        return ACTION_MIDDLE_PUNCH
+    return None
+
+
+def _sequence_to_pose_frame(sequence: np.ndarray, keypoint_names: list[str]) -> NormalizedPoseFrame:
+    start = max(0, sequence.shape[1] - FINAL_FRAME_WINDOW)
+    frame_values = np.nanmedian(sequence[:, start:, :], axis=1)
+    return _frame_values_to_pose_frame(frame_values, keypoint_names)
+
+
+def _sequence_frame_to_pose_frame(
+    sequence: np.ndarray,
+    keypoint_names: list[str],
+    frame_index: int,
+) -> NormalizedPoseFrame:
+    frame_values = sequence[:, frame_index, :]
+    return _frame_values_to_pose_frame(frame_values, keypoint_names)
+
+
+def _frame_values_to_pose_frame(frame_values: np.ndarray, keypoint_names: list[str]) -> NormalizedPoseFrame:
+    landmarks: dict[str, NormalizedLandmark] = {}
+
+    for index, korean_name in enumerate(keypoint_names):
+        landmark_name = KOREAN_TO_TAEKWONDO_LANDMARK.get(korean_name)
+        if landmark_name is None:
+            continue
+        landmarks[landmark_name] = NormalizedLandmark(
+            name=landmark_name,
+            x=float(frame_values[0, index]),
+            y=float(frame_values[1, index]),
+            z=None,
+            confidence=float(frame_values[2, index]),
+        )
+
+    confidences = [landmark.confidence or 0.0 for landmark in landmarks.values()]
+    mean_confidence = float(np.mean(confidences)) if confidences else 0.0
+    quality = TrackingQuality(
+        status="tracking_ok",
+        quality_score=mean_confidence,
+        missing_landmarks=[],
+        landmark_completeness=1.0,
+        mean_confidence=mean_confidence,
+    )
+    return NormalizedPoseFrame(
+        tracking="tracking_ok",
+        quality=quality,
+        timestamp_ms=0,
+        scale_reference=1.0,
+        hip_center=HipCenter(x=0.0, y=0.0),
+        landmarks=landmarks,
+    )
 
 
 def _interpolate(value: float, x0: float, x1: float, y0: float, y1: float) -> float:

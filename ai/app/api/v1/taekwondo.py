@@ -24,8 +24,6 @@ from app.schemas.taekwondo import (
     TaekwondoStanceFeaturesResponse,
     Taegeuk1AnalyzeRequest,
     Taegeuk1AnalyzeResponse,
-    Taegeuk1JointErrorResponse,
-    Taegeuk1PredictionResponse,
     TrackingQualityResponse,
 )
 from app.services.taekwondo.calibration.calibration_service import CalibrationService
@@ -255,31 +253,11 @@ def to_taegeuk1_analyze_response(result: Taegeuk1AnalyzeResult) -> Taegeuk1Analy
         session_id=result.session_id,
         target_movement_index=result.target_movement_index,
         target_movement_name=result.target_movement_name,
-        predicted_movement_index=result.predicted_movement_index,
-        predicted_movement_name=result.predicted_movement_name,
-        confidence=result.confidence,
-        top3_predictions=[
-            Taegeuk1PredictionResponse(
-                movement_index=item.movement_index,
-                movement_name=item.movement_name,
-                probability=item.probability,
-            )
-            for item in result.top3_predictions
-        ],
-        scored_movement_index=result.scored_movement_index,
-        scored_movement_name=result.scored_movement_name,
-        classification_match=result.classification_match,
         score=result.score,
         pass_threshold=result.pass_threshold,
         passed=result.passed,
-        distance=result.distance,
+        scoring_method=result.scoring_method,
         worst_joint=result.worst_joint,
-        joint_errors_top5=[
-            Taegeuk1JointErrorResponse(joint=str(item["joint"]), error=float(item["error"]))
-            for item in result.joint_errors_top5
-        ],
-        body_part_scores=result.body_part_scores,
-        body_part_errors=result.body_part_errors,
         weakest_body_part=result.weakest_body_part,
         feedback_summary=result.feedback_summary,
     )
