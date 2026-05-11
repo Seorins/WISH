@@ -264,11 +264,15 @@ backend:build:
     - backend:test
   script:
     - ./gradlew build -x test --no-daemon
+    - rm -rf build-artifacts
+    - mkdir -p build-artifacts
+    - find build/libs -maxdepth 1 -type f -name '*.jar' ! -name '*-plain.jar' -exec cp {} build-artifacts/ \;
+    - test "$(find build-artifacts -maxdepth 1 -type f -name '*.jar' | wc -l)" -eq 1
   artifacts:
     when: on_success
     expire_in: 1 week
     paths:
-      - backend/build/libs/*.jar
+      - backend/build-artifacts/*.jar
 
 backend:image:
   stage: package
@@ -303,6 +307,7 @@ backend:image:
         --cache-repo "${BACKEND_IMAGE_NAME}" \
         --context "${CI_PROJECT_DIR}/backend" \
         --dockerfile "${CI_PROJECT_DIR}/backend/Dockerfile" \
+        --build-arg JAR_DIR=build-artifacts/ \
         ${DESTINATIONS}
   rules:
     - if: $CI_COMMIT_BRANCH == "develop" || $CI_COMMIT_BRANCH == "master" || $CI_COMMIT_BRANCH == "main"
