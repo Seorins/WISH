@@ -103,7 +103,9 @@ export function EmotionPanel({
   return (
     <div className={styles.stack}>
       <div className={styles.card}>
-        <h3 className={styles.cardTitle}>오늘의 감정 요약 {summarySample && <SampleBadge />}</h3>
+        <h3 className={styles.cardTitle}>
+          이번 대화의 감정 요약 {summarySample && <SampleBadge />}
+        </h3>
         <div className={styles.summaryRow}>
           <ScoreRing score={todayScore} />
           <div className={styles.shareList}>
