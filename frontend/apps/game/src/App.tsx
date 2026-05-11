@@ -24,7 +24,7 @@ import {
   resolvePatientProfileIdOrFetch,
 } from './features/exerciseSessions/patientProfile'
 import { useLoginSession } from './features/loginSession'
-import { useRealtimePublisher } from './features/realtime'
+import { useContentLifecycleSync, useRealtimePublisher } from './features/realtime'
 import { queryClient } from './queryClient'
 
 const DEBUG_MARCH_MODE = 'march'
@@ -51,9 +51,11 @@ function App() {
   const [isLighthouseEmotionOpen, setIsLighthouseEmotionOpen] = useState(false)
   const [patientProfileId, setPatientProfileId] = useState<number | undefined>(undefined)
   const [gameCanvas, setGameCanvas] = useState<HTMLCanvasElement | null>(null)
+  const [gameInstance, setGameInstance] = useState<Phaser.Game | null>(null)
 
   useLoginSession(patientProfileId)
   useRealtimePublisher(gameCanvas)
+  useContentLifecycleSync(gameInstance)
 
   useEffect(() => {
     if (
@@ -79,6 +81,7 @@ function App() {
     const game = createGame(containerRef.current)
     gameRef.current = game
     setGameCanvas(game.canvas)
+    setGameInstance(game)
     game.events.on('auth:request', () => setShowAuth(true))
     game.events.on('auth:logout', () => {
       clearPatientProfileId()
@@ -112,6 +115,7 @@ function App() {
       gameRef.current?.destroy(true)
       gameRef.current = null
       setGameCanvas(null)
+      setGameInstance(null)
     }
   }, [debugMode])
 
