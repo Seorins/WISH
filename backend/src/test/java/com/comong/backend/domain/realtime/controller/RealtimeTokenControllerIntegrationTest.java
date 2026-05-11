@@ -65,7 +65,9 @@ class RealtimeTokenControllerIntegrationTest extends IntegrationTestSupport {
                                         .header("Authorization", "Bearer " + token))
                         .andExpect(status().isOk())
                         .andExpect(jsonPath("$.code").value("SUCCESS"))
-                        .andExpect(jsonPath("$.data.serverUrl").value("wss://test.livekit.cloud"))
+                        .andExpect(jsonPath("$.data.loginSessionId").value(sessionId))
+                        .andExpect(jsonPath("$.data.patientProfileId").value(patientProfileId))
+                        .andExpect(jsonPath("$.data.livekitUrl").value("wss://test.livekit.cloud"))
                         .andExpect(
                                 jsonPath("$.data.roomName")
                                         .value(
@@ -83,6 +85,8 @@ class RealtimeTokenControllerIntegrationTest extends IntegrationTestSupport {
                         .andExpect(jsonPath("$.data.participantName").value("game"))
                         .andExpect(jsonPath("$.data.token").isString())
                         .andExpect(jsonPath("$.data.expiresInSeconds").value(3600))
+                        .andExpect(jsonPath("$.data.contentActive").value(false))
+                        .andExpect(jsonPath("$.data.contentType").isEmpty())
                         .andReturn()
                         .getResponse()
                         .getContentAsString();
@@ -104,6 +108,7 @@ class RealtimeTokenControllerIntegrationTest extends IntegrationTestSupport {
     void issueGuardianToken_returnsSubscribeOnlyLiveKitToken() throws Exception {
         String token = setupUserWithProfile("rt-guardian@example.com", "rt-guardian");
         long sessionId = startSession(token);
+        long patientProfileId = ownProfileId(token);
 
         String body =
                 mockMvc.perform(
@@ -113,7 +118,28 @@ class RealtimeTokenControllerIntegrationTest extends IntegrationTestSupport {
                                         .header("Authorization", "Bearer " + token))
                         .andExpect(status().isOk())
                         .andExpect(jsonPath("$.code").value("SUCCESS"))
+                        .andExpect(jsonPath("$.data.loginSessionId").value(sessionId))
+                        .andExpect(jsonPath("$.data.patientProfileId").value(patientProfileId))
+                        .andExpect(jsonPath("$.data.livekitUrl").value("wss://test.livekit.cloud"))
+                        .andExpect(
+                                jsonPath("$.data.roomName")
+                                        .value(
+                                                "patient-"
+                                                        + patientProfileId
+                                                        + "-login-"
+                                                        + sessionId))
+                        .andExpect(
+                                jsonPath("$.data.participantIdentity")
+                                        .value(
+                                                "guardian-user-"
+                                                        + userIdFromToken(token)
+                                                        + "-login-"
+                                                        + sessionId))
                         .andExpect(jsonPath("$.data.participantName").value("guardian"))
+                        .andExpect(jsonPath("$.data.token").isString())
+                        .andExpect(jsonPath("$.data.expiresInSeconds").value(3600))
+                        .andExpect(jsonPath("$.data.contentActive").value(false))
+                        .andExpect(jsonPath("$.data.contentType").isEmpty())
                         .andReturn()
                         .getResponse()
                         .getContentAsString();
@@ -196,6 +222,11 @@ class RealtimeTokenControllerIntegrationTest extends IntegrationTestSupport {
                         .getResponse()
                         .getContentAsString();
         return objectMapper.readTree(body).get("data").get(0).get("id").asLong();
+    }
+
+    private long userIdFromToken(String token) throws Exception {
+        JsonNode payload = decodeTokenPayload(token);
+        return payload.get("sub").asLong();
     }
 
     private String setupUserWithProfile(String email, String nickname) throws Exception {

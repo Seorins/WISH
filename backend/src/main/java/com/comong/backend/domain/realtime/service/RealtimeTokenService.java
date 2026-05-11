@@ -36,7 +36,16 @@ public class RealtimeTokenService {
         Long patientProfileId = session.getPatientProfile().getId();
         String roomName = roomName(patientProfileId, session.getId());
         String identity = "game-patient-%d-login-%d".formatted(patientProfileId, session.getId());
-        return issueToken(roomName, identity, "game", true, true);
+        return issueToken(
+                session.getId(),
+                patientProfileId,
+                roomName,
+                identity,
+                "game",
+                true,
+                true,
+                false,
+                null);
     }
 
     public LiveKitTokenResponse issueGuardianToken(Long userId, Long loginSessionId) {
@@ -44,7 +53,16 @@ public class RealtimeTokenService {
         Long patientProfileId = session.getPatientProfile().getId();
         String roomName = roomName(patientProfileId, session.getId());
         String identity = "guardian-user-%d-login-%d".formatted(userId, session.getId());
-        return issueToken(roomName, identity, "guardian", false, false);
+        return issueToken(
+                session.getId(),
+                patientProfileId,
+                roomName,
+                identity,
+                "guardian",
+                false,
+                false,
+                false,
+                null);
     }
 
     private LoginSession findActiveOwnedSession(Long userId, Long loginSessionId) {
@@ -56,11 +74,15 @@ public class RealtimeTokenService {
     }
 
     private LiveKitTokenResponse issueToken(
+            Long loginSessionId,
+            Long patientProfileId,
             String roomName,
             String participantIdentity,
             String participantName,
             boolean canPublish,
-            boolean canPublishData) {
+            boolean canPublishData,
+            boolean contentActive,
+            String contentType) {
         liveKitProperties.validateConfigured();
 
         AccessToken token =
@@ -77,12 +99,16 @@ public class RealtimeTokenService {
         String jwt = createJwt(token, roomName, participantIdentity);
 
         return new LiveKitTokenResponse(
-                liveKitProperties.url(),
+                loginSessionId,
+                patientProfileId,
                 roomName,
+                liveKitProperties.url(),
                 participantIdentity,
                 participantName,
                 jwt,
-                TOKEN_TTL_SECONDS);
+                TOKEN_TTL_SECONDS,
+                contentActive,
+                contentType);
     }
 
     private String createJwt(AccessToken token, String roomName, String participantIdentity) {
