@@ -13,7 +13,8 @@ import lombok.RequiredArgsConstructor;
 public enum RealtimeErrorCode implements ErrorCode {
     LIVEKIT_NOT_CONFIGURED(HttpStatus.SERVICE_UNAVAILABLE, "RT-001", "LiveKit 설정이 완료되지 않았습니다."),
     LOGIN_SESSION_ALREADY_ENDED(HttpStatus.CONFLICT, "RT-002", "이미 종료된 접속 세션입니다."),
-    LIVEKIT_TOKEN_ISSUE_FAILED(HttpStatus.SERVICE_UNAVAILABLE, "RT-003", "LiveKit 토큰 발급에 실패했습니다.");
+    LIVEKIT_TOKEN_ISSUE_FAILED(HttpStatus.SERVICE_UNAVAILABLE, "RT-003", "LiveKit 토큰 발급에 실패했습니다."),
+    INVALID_CONTENT_TYPE(HttpStatus.BAD_REQUEST, "RT-004", "실시간 콘텐츠 타입이 아닙니다.");
 
     private final HttpStatus status;
     private final String code;

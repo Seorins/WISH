@@ -20,6 +20,8 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.comong.backend.domain.patient.repository.PatientProfileRepository;
+import com.comong.backend.domain.realtime.service.RealtimeContentStateService;
+import com.comong.backend.domain.usage.entity.ContentType;
 import com.comong.backend.domain.usage.repository.LoginSessionRepository;
 import com.comong.backend.domain.user.repository.UserRepository;
 import com.comong.backend.support.IntegrationTestSupport;
@@ -35,6 +37,7 @@ class RealtimeTokenControllerIntegrationTest extends IntegrationTestSupport {
     @Autowired private LoginSessionRepository loginSessionRepository;
     @Autowired private PatientProfileRepository patientProfileRepository;
     @Autowired private UserRepository userRepository;
+    @Autowired private RealtimeContentStateService realtimeContentStateService;
 
     @BeforeEach
     void cleanDb() {
@@ -151,6 +154,21 @@ class RealtimeTokenControllerIntegrationTest extends IntegrationTestSupport {
         assertThat(video.get("canPublish").asBoolean()).isFalse();
         assertThat(video.get("canSubscribe").asBoolean()).isTrue();
         assertThat(video.get("canPublishData").asBoolean()).isFalse();
+    }
+
+    @Test
+    void issueGuardianToken_activeContent_returnsContentState() throws Exception {
+        String token = setupUserWithProfile("rt-content@example.com", "rt-content");
+        long sessionId = startSession(token);
+        realtimeContentStateService.start(sessionId, ContentType.MUSIC);
+
+        mockMvc.perform(
+                        post("/realtime/login-sessions/{loginSessionId}/guardian-token", sessionId)
+                                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.contentActive").value(true))
+                .andExpect(jsonPath("$.data.contentType").value("MUSIC"));
     }
 
     @Test
