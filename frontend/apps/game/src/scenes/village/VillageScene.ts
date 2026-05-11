@@ -147,6 +147,7 @@ export class VillageScene extends Phaser.Scene {
   private isTransitioning = false
   private target: Phaser.Math.Vector2 | null = null
   private lastDirection: PlayerDirection = 'down'
+  private lastSafePlayerPosition?: Phaser.Math.Vector2
   private isVillagerDialogueOpen = false
   private dialogDismissed = false
   private activeDialogNpcId: VillagerNpcId | null = null
@@ -292,6 +293,7 @@ export class VillageScene extends Phaser.Scene {
 
     const spawn = data.spawn ?? DEFAULT_PLAYER_SPAWN
     this.player = createPlayer(this, W * spawn.xRatio, H * spawn.yRatio, { depth: 5 })
+    this.lastSafePlayerPosition = new Phaser.Math.Vector2(this.player.x, this.player.y)
 
     this.physics.add.collider(this.player, this.obstacles)
 
@@ -324,6 +326,10 @@ export class VillageScene extends Phaser.Scene {
         return
       }
 
+      if (this.isPolygonObstacleTarget(pointer.worldX, pointer.worldY)) {
+        return
+      }
+
       this.target = new Phaser.Math.Vector2(pointer.worldX, pointer.worldY)
       createClickTargetMarker(this, pointer.worldX, pointer.worldY)
     })
@@ -332,6 +338,8 @@ export class VillageScene extends Phaser.Scene {
     this.input.mouse?.disableContextMenu()
     this.input.keyboard!.on('keydown-E', this.exportObstacleRects, this)
     this.input.keyboard!.on('keydown-R', this.clearEditedObstacleRects, this)
+    this.input.keyboard!.on('keydown-ENTER', this.commitObstaclePolygon, this)
+    this.input.keyboard!.on('keydown-BACKSPACE', this.undoObstaclePolygonPoint, this)
 
     this.cameras.main.fadeIn(400, 0, 0, 0)
     this.game.events.on('villager-dialogue:closed', this.handleVillagerDialogueClosed, this)
@@ -343,10 +351,12 @@ export class VillageScene extends Phaser.Scene {
       this.input.off('pointerup', this.handleObstacleEditorPointerUp, this)
       this.input.keyboard?.off('keydown-E', this.exportObstacleRects, this)
       this.input.keyboard?.off('keydown-R', this.clearEditedObstacleRects, this)
+      this.input.keyboard?.off('keydown-ENTER', this.commitObstaclePolygon, this)
+      this.input.keyboard?.off('keydown-BACKSPACE', this.undoObstaclePolygonPoint, this)
     })
   }
 
-  update() {
+  update(_time: number, delta: number) {
     const movement = updatePlayerMovement({
       player: this.player,
       cursors: this.cursors,
@@ -357,6 +367,8 @@ export class VillageScene extends Phaser.Scene {
     })
     this.target = movement.target
     this.lastDirection = movement.lastDirection
+    this.preventPolygonObstaclePenetration(delta)
+    this.resolvePolygonObstacleCollision()
 
     const nearestNpc = this.getNearestNpcInTalkDistance()
     const near = nearestNpc !== null
@@ -389,6 +401,126 @@ export class VillageScene extends Phaser.Scene {
 
   private readonly clearEditedObstacleRects = () => {
     this.obstacleManager?.clearEditedObstacleRects()
+  }
+
+  private readonly commitObstaclePolygon = () => {
+    this.obstacleManager?.commitPolygonEditor()
+  }
+
+  private readonly undoObstaclePolygonPoint = () => {
+    this.obstacleManager?.undoPolygonEditorPoint()
+  }
+
+  private preventPolygonObstaclePenetration(delta: number) {
+    if (!this.player.body || !this.obstacleManager) {
+      return
+    }
+
+    const footRadius = 0
+    const dt = Math.min(delta, 50) / 1000
+    const velocity = this.player.body.velocity
+
+    if (velocity.x === 0 && velocity.y === 0) {
+      return
+    }
+
+    const nextX = this.player.x + velocity.x * dt
+    const nextY = this.player.y + velocity.y * dt
+
+    if (!this.isPlayerFootBlockedAt(nextX, nextY, footRadius)) {
+      return
+    }
+
+    const canMoveX =
+      velocity.x !== 0 && !this.isPlayerFootBlockedAt(nextX, this.player.y, footRadius)
+    const canMoveY =
+      velocity.y !== 0 && !this.isPlayerFootBlockedAt(this.player.x, nextY, footRadius)
+
+    if (canMoveX && canMoveY) {
+      if (Math.abs(velocity.x) >= Math.abs(velocity.y)) {
+        this.player.setVelocityY(0)
+      } else {
+        this.player.setVelocityX(0)
+      }
+      return
+    }
+
+    if (canMoveX) {
+      this.player.setVelocityY(0)
+      return
+    }
+
+    if (canMoveY) {
+      this.player.setVelocityX(0)
+      return
+    }
+
+    this.player.setVelocity(0, 0)
+    this.target = null
+  }
+
+  private resolvePolygonObstacleCollision() {
+    if (!this.player.body || !this.obstacleManager) {
+      return
+    }
+
+    const footRadius = 0
+
+    if (!this.isPlayerFootBlockedAt(this.player.x, this.player.y, footRadius)) {
+      this.lastSafePlayerPosition?.set(this.player.x, this.player.y)
+      return
+    }
+
+    const fallback =
+      this.lastSafePlayerPosition ?? new Phaser.Math.Vector2(this.player.x, this.player.y)
+    const current = new Phaser.Math.Vector2(this.player.x, this.player.y)
+    const candidates =
+      Math.abs(current.x - fallback.x) > Math.abs(current.y - fallback.y)
+        ? [
+            new Phaser.Math.Vector2(current.x, fallback.y),
+            new Phaser.Math.Vector2(fallback.x, current.y),
+          ]
+        : [
+            new Phaser.Math.Vector2(fallback.x, current.y),
+            new Phaser.Math.Vector2(current.x, fallback.y),
+          ]
+    const slidePosition = candidates.find(
+      candidate => !this.isPlayerFootBlockedAt(candidate.x, candidate.y, footRadius),
+    )
+    const nextPosition = slidePosition ?? fallback
+
+    this.player.body.reset(nextPosition.x, nextPosition.y)
+    this.player.setVelocity(0, 0)
+    this.lastSafePlayerPosition ??= new Phaser.Math.Vector2(nextPosition.x, nextPosition.y)
+    this.lastSafePlayerPosition.set(nextPosition.x, nextPosition.y)
+
+    if (!slidePosition) {
+      this.target = null
+    }
+  }
+
+  private isPolygonObstacleTarget(worldX: number, worldY: number) {
+    if (!this.player.body || !this.obstacleManager) {
+      return false
+    }
+
+    const footRadius = 0
+    return this.obstacleManager.containsBlockedFoot(worldX, worldY, footRadius)
+  }
+
+  private isPlayerFootBlockedAt(playerX: number, playerY: number, radius: number) {
+    if (!this.player.body || !this.obstacleManager) {
+      return false
+    }
+
+    const footOffsetX = this.player.body.center.x - this.player.x
+    const footOffsetY = this.player.body.bottom - this.player.y
+
+    return this.obstacleManager.containsBlockedFoot(
+      playerX + footOffsetX,
+      playerY + footOffsetY,
+      radius,
+    )
   }
 
   private showNpcDialog(npcId: VillagerNpcId) {
