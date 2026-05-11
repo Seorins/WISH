@@ -186,24 +186,6 @@ export function DashboardPage() {
               detail={`오늘 신규 ${formatNumber(dashboard.summary.newPatientsToday)}명`}
             />
             <KpiCard
-              label="오늘 활성 환자"
-              value={`${formatNumber(dashboard.summary.todayActivePatients)}명`}
-              detail={`앱 사용 ${formatDuration(dashboard.summary.todayTotalSeconds)}`}
-            />
-            <KpiCard
-              label="기간 앱 사용"
-              value={formatDuration(dashboard.summary.periodTotalSeconds)}
-              detail={`조회 기간 ${formatDateRange(dashboard.from, dashboard.to)}`}
-              delta={
-                <DeltaBadge
-                  label="직전 동기간"
-                  type="percent"
-                  value={periodSecondsDelta}
-                  positiveIsGood
-                />
-              }
-            />
-            <KpiCard
               label="기간 활성 환자"
               value={`${formatNumber(dashboard.summary.periodActivePatients)}명`}
               detail={`오늘 활성 ${formatNumber(dashboard.summary.todayActivePatients)}명`}
@@ -222,6 +204,19 @@ export function DashboardPage() {
               value={`${formatNumber(dashboard.summary.atRiskPatients)}명`}
               detail="최근 7일 비활동 기준"
               tone={dashboard.summary.atRiskPatients > 0 ? 'risk' : 'normal'}
+            />
+            <KpiCard
+              label="기간 앱 사용"
+              value={formatDuration(dashboard.summary.periodTotalSeconds)}
+              detail={`조회 기간 ${formatDateRange(dashboard.from, dashboard.to)}`}
+              delta={
+                <DeltaBadge
+                  label="직전 동기간"
+                  type="percent"
+                  value={periodSecondsDelta}
+                  positiveIsGood
+                />
+              }
             />
             <KpiCard
               label="일 평균 앱 사용"
@@ -798,7 +793,7 @@ const styles: Record<string, CSSProperties> = {
   },
   kpiGrid: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
     gap: 12,
   },
   kpiCard: {
