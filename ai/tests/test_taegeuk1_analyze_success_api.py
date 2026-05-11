@@ -30,10 +30,22 @@ def test_taegeuk1_analyze_response_exposes_success_decision_fields() -> None:
 
     assert data["session_id"] == "success-field-test"
     assert data["target_movement_name"] == movement_name
-    assert data["scored_movement_name"] == movement_name
     assert data["pass_threshold"] == 80.0
+    assert data["scoring_method"] in {"prototype_distance", "camera_similarity", "target_rule"}
     assert isinstance(data["passed"], bool)
     assert data["passed"] == (data["score"] >= data["pass_threshold"])
+    assert set(data) == {
+        "session_id",
+        "target_movement_index",
+        "target_movement_name",
+        "score",
+        "pass_threshold",
+        "passed",
+        "scoring_method",
+        "worst_joint",
+        "weakest_body_part",
+        "feedback_summary",
+    }
 
 
 def test_taegeuk1_analyze_rejects_invalid_pass_threshold() -> None:

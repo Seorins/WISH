@@ -1,6 +1,8 @@
 from fastapi.testclient import TestClient
 
 from app.main import create_app
+from app.services.taekwondo.classification.basic_motion_classifier import BasicMotionClassifier
+from app.services.taekwondo.features.basic_motion_features import BasicMotionFeatureSet
 
 
 client = TestClient(create_app())
@@ -99,3 +101,43 @@ def test_classify_returns_unclassified_when_tracking_is_not_ok() -> None:
     assert body["tracking"] == "tracking_low"
     assert body["action_label"] == "unclassified"
     assert body["confidence"] == 0.0
+
+
+def test_low_block_score_uses_best_arm_when_dominant_side_is_ambiguous() -> None:
+    features = BasicMotionFeatureSet(
+        left_wrist_y=0.65,
+        right_wrist_y=0.10,
+        left_wrist_far_from_center=0.70,
+        right_wrist_far_from_center=0.55,
+        left_wrist_to_hip_distance=0.80,
+        right_wrist_to_hip_distance=0.20,
+        left_elbow_angle=160.0,
+        right_elbow_angle=90.0,
+        left_wrist_near_hip=False,
+        right_wrist_near_hip=True,
+        dominant_action_side=None,
+    )
+
+    score = BasicMotionClassifier()._score_low_block(features)
+
+    assert score >= 0.70
+
+
+def test_middle_punch_score_uses_best_arm_when_dominant_side_is_ambiguous() -> None:
+    features = BasicMotionFeatureSet(
+        left_wrist_y=0.10,
+        right_wrist_y=-0.45,
+        left_wrist_far_from_center=0.30,
+        right_wrist_far_from_center=0.85,
+        left_wrist_to_hip_distance=0.30,
+        right_wrist_to_hip_distance=0.80,
+        left_elbow_angle=90.0,
+        right_elbow_angle=165.0,
+        left_wrist_near_hip=True,
+        right_wrist_near_hip=False,
+        dominant_action_side=None,
+    )
+
+    score = BasicMotionClassifier()._score_middle_punch(features)
+
+    assert score >= 0.70

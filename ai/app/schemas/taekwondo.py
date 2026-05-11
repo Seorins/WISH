@@ -208,35 +208,14 @@ class Taegeuk1AnalyzeRequest(BaseModel):
     pass_threshold: float = Field(default=80.0, ge=0.0, le=100.0, description="Success threshold")
 
 
-class Taegeuk1PredictionResponse(BaseModel):
-    movement_index: int
-    movement_name: str
-    probability: float = Field(..., ge=0.0, le=1.0)
-
-
-class Taegeuk1JointErrorResponse(BaseModel):
-    joint: str
-    error: float = Field(..., ge=0.0)
-
-
 class Taegeuk1AnalyzeResponse(BaseModel):
     session_id: str | None = None
     target_movement_index: int
     target_movement_name: str
-    predicted_movement_index: int
-    predicted_movement_name: str
-    confidence: float = Field(..., ge=0.0, le=1.0)
-    top3_predictions: list[Taegeuk1PredictionResponse]
-    scored_movement_index: int
-    scored_movement_name: str
-    classification_match: bool
     score: float = Field(..., ge=0.0, le=100.0)
     pass_threshold: float = Field(..., ge=0.0, le=100.0)
     passed: bool
-    distance: float = Field(..., ge=0.0)
+    scoring_method: str
     worst_joint: str
-    joint_errors_top5: list[Taegeuk1JointErrorResponse]
-    body_part_scores: dict[str, float]
-    body_part_errors: dict[str, float]
     weakest_body_part: str
     feedback_summary: str

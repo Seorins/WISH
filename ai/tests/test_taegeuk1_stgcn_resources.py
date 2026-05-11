@@ -6,7 +6,11 @@ import pytest
 from app.services.taekwondo import stgcn_taegeuk1
 from app.services.taekwondo.stgcn_taegeuk1 import (
     TARGET_SEQUENCE_SHAPE,
+    CORE_SCORING_JOINT_NAMES,
     STGCN_CHECKPOINT_PATH,
+    _camera_adjusted_score,
+    _prediction_probabilities,
+    _target_rule_score,
     analyze_taegeuk1_sequence,
     load_taegeuk1_resources,
     load_stgcn_model,
@@ -105,3 +109,128 @@ def test_taegeuk1_success_decision_uses_pass_threshold() -> None:
     assert failed_result.pass_threshold == 100.0
     assert failed_result.score < failed_result.pass_threshold
     assert failed_result.passed is False
+
+
+def test_taegeuk1_scoring_ignores_small_unstable_joints() -> None:
+    resources = load_taegeuk1_resources()
+    movement_name = resources.class_names[0]
+    sequence = resources.prototypes[0].copy()
+    core_joint_names = set(CORE_SCORING_JOINT_NAMES)
+
+    for index, joint_name in enumerate(resources.keypoint_names):
+        if joint_name not in core_joint_names:
+            sequence[:2, :, index] += 10.0
+
+    result = analyze_taegeuk1_sequence(
+        sequence.tolist(),
+        movement_name,
+        input_normalized=True,
+        pass_threshold=80.0,
+    )
+
+    assert result.score >= 80.0
+    assert result.worst_joint in core_joint_names
+    assert {str(row["joint"]) for row in result.joint_errors_top5}.issubset(core_joint_names)
+
+
+def test_camera_adjusted_score_recovers_when_target_is_nearest() -> None:
+    score = _camera_adjusted_score(
+        absolute_score=0.0,
+        target_index=1,
+        distances=np.array([1.9, 1.0, 1.7, 2.2], dtype=np.float32),
+        probabilities=np.array([0.02, 0.84, 0.1, 0.04], dtype=np.float32),
+    )
+
+    assert score >= 80.0
+
+
+def test_camera_adjusted_score_stays_low_when_target_is_not_close() -> None:
+    score = _camera_adjusted_score(
+        absolute_score=0.0,
+        target_index=3,
+        distances=np.array([1.0, 1.2, 1.4, 3.2], dtype=np.float32),
+        probabilities=np.array([0.64, 0.2, 0.12, 0.04], dtype=np.float32),
+    )
+
+    assert score < 80.0
+
+
+def test_camera_prediction_probabilities_ignore_overconfident_softmax(monkeypatch: pytest.MonkeyPatch) -> None:
+    def overconfident_model_prediction(_sequence: np.ndarray) -> np.ndarray:
+        probabilities = np.zeros(9, dtype=np.float32)
+        probabilities[8] = 1.0
+        return probabilities
+
+    monkeypatch.setattr(stgcn_taegeuk1, "_predict_probabilities", overconfident_model_prediction)
+
+    distances = np.array([0.10, 0.70, 0.80, 0.90, 1.00, 1.10, 1.20, 1.30, 1.40], dtype=np.float32)
+    probabilities = _prediction_probabilities(
+        np.zeros(TARGET_SEQUENCE_SHAPE, dtype=np.float32),
+        distances,
+        input_normalized=False,
+    )
+
+    assert int(np.argmax(probabilities)) == 0
+    assert float(probabilities[8]) < 0.01
+
+
+def test_target_rule_score_detects_walking_low_block_pose() -> None:
+    resources = load_taegeuk1_resources()
+    sequence = np.zeros(TARGET_SEQUENCE_SHAPE, dtype=np.float32)
+    sequence[2, :, :] = 1.0
+
+    points = {
+        "왼쪽 어깨": (-0.2, -1.0),
+        "오른쪽 어깨": (0.2, -1.0),
+        "왼쪽 엉덩이": (-0.2, 0.0),
+        "오른쪽 엉덩이": (0.2, 0.0),
+        "왼쪽 무릎": (-0.35, 0.75),
+        "오른쪽 무릎": (0.35, 0.75),
+        "왼쪽 발목": (-0.5, 1.5),
+        "오른쪽 발목": (0.5, 1.5),
+        "왼쪽 팔꿈치": (-0.6, -0.2),
+        "왼쪽 손목": (-1.0, 0.6),
+        "오른쪽 팔꿈치": (0.25, -0.3),
+        "오른쪽 손목": (0.2, 0.1),
+    }
+    name_to_index = {name: index for index, name in enumerate(resources.keypoint_names)}
+    for name, (x, y) in points.items():
+        index = name_to_index[name]
+        sequence[0, :, index] = x
+        sequence[1, :, index] = y
+
+    score = _target_rule_score(sequence, resources.keypoint_names, "앞서고 아래막기")
+
+    assert score is not None
+    assert score >= 80.0
+
+
+def test_target_rule_score_uses_best_late_camera_frame() -> None:
+    resources = load_taegeuk1_resources()
+    sequence = np.zeros(TARGET_SEQUENCE_SHAPE, dtype=np.float32)
+    sequence[2, :, :] = 1.0
+
+    points = {
+        "왼쪽 어깨": (-0.2, -1.0),
+        "오른쪽 어깨": (0.2, -1.0),
+        "왼쪽 엉덩이": (-0.2, 0.0),
+        "오른쪽 엉덩이": (0.2, 0.0),
+        "왼쪽 무릎": (-0.35, 0.75),
+        "오른쪽 무릎": (0.35, 0.75),
+        "왼쪽 발목": (-0.5, 1.5),
+        "오른쪽 발목": (0.5, 1.5),
+        "왼쪽 팔꿈치": (-0.6, -0.2),
+        "왼쪽 손목": (-1.0, 0.6),
+        "오른쪽 팔꿈치": (0.25, -0.3),
+        "오른쪽 손목": (0.2, 0.1),
+    }
+    name_to_index = {name: index for index, name in enumerate(resources.keypoint_names)}
+    for name, (x, y) in points.items():
+        index = name_to_index[name]
+        sequence[0, 35, index] = x
+        sequence[1, 35, index] = y
+
+    score = _target_rule_score(sequence, resources.keypoint_names, "앞서고 아래막기")
+
+    assert score is not None
+    assert score >= 80.0
