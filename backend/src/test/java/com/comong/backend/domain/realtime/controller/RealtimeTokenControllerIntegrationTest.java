@@ -1,6 +1,7 @@
 package com.comong.backend.domain.realtime.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -86,7 +87,7 @@ class RealtimeTokenControllerIntegrationTest extends IntegrationTestSupport {
                         .andExpect(jsonPath("$.data.token").isString())
                         .andExpect(jsonPath("$.data.expiresInSeconds").value(3600))
                         .andExpect(jsonPath("$.data.contentActive").value(false))
-                        .andExpect(jsonPath("$.data.contentType").isEmpty())
+                        .andExpect(jsonPath("$.data.contentType").value(nullValue()))
                         .andReturn()
                         .getResponse()
                         .getContentAsString();
@@ -139,7 +140,7 @@ class RealtimeTokenControllerIntegrationTest extends IntegrationTestSupport {
                         .andExpect(jsonPath("$.data.token").isString())
                         .andExpect(jsonPath("$.data.expiresInSeconds").value(3600))
                         .andExpect(jsonPath("$.data.contentActive").value(false))
-                        .andExpect(jsonPath("$.data.contentType").isEmpty())
+                        .andExpect(jsonPath("$.data.contentType").value(nullValue()))
                         .andReturn()
                         .getResponse()
                         .getContentAsString();

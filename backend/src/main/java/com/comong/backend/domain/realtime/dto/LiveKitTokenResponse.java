@@ -6,8 +6,8 @@ import io.swagger.v3.oas.annotations.media.Schema;
 
 @JsonInclude(JsonInclude.Include.ALWAYS)
 public record LiveKitTokenResponse(
-        @Schema(description = "접속 세션 ID") Long loginSessionId,
-        @Schema(description = "환자 프로필 ID") Long patientProfileId,
+        @Schema(description = "접속 세션 ID") long loginSessionId,
+        @Schema(description = "환자 프로필 ID") long patientProfileId,
         @Schema(description = "LiveKit 룸 이름") String roomName,
         @Schema(description = "LiveKit 서버 URL") String livekitUrl,
         @Schema(description = "LiveKit 참가자 identity") String participantIdentity,
