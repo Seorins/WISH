@@ -38,6 +38,16 @@ public record RealtimeEventResponse(
                 LocalDateTime.now());
     }
 
+    public static RealtimeEventResponse contentStarted(
+            Long loginSessionId, Long patientProfileId, String contentType) {
+        return of(RealtimeEventType.CONTENT_STARTED, loginSessionId, patientProfileId, contentType);
+    }
+
+    public static RealtimeEventResponse contentEnded(
+            Long loginSessionId, Long patientProfileId, String contentType) {
+        return of(RealtimeEventType.CONTENT_ENDED, loginSessionId, patientProfileId, contentType);
+    }
+
     public static RealtimeEventResponse of(
             RealtimeEventType type,
             Long loginSessionId,

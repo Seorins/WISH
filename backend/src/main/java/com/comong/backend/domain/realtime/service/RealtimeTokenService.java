@@ -6,6 +6,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.comong.backend.domain.realtime.config.LiveKitProperties;
 import com.comong.backend.domain.realtime.dto.LiveKitTokenResponse;
 import com.comong.backend.domain.realtime.exception.RealtimeErrorCode;
+import com.comong.backend.domain.realtime.service.RealtimeContentStateService.ContentState;
 import com.comong.backend.domain.usage.entity.LoginSession;
 import com.comong.backend.domain.usage.service.LoginSessionService;
 import com.comong.backend.global.exception.BusinessException;
@@ -30,6 +31,7 @@ public class RealtimeTokenService {
 
     private final LoginSessionService loginSessionService;
     private final LiveKitProperties liveKitProperties;
+    private final RealtimeContentStateService realtimeContentStateService;
 
     public LiveKitTokenResponse issueGameToken(Long userId, Long loginSessionId) {
         LoginSession session = findActiveOwnedSession(userId, loginSessionId);
@@ -78,11 +80,11 @@ public class RealtimeTokenService {
                 command.contentType());
     }
 
-    private static TokenIssueCommand gameTokenCommand(LoginSession session) {
+    private TokenIssueCommand gameTokenCommand(LoginSession session) {
         long loginSessionId = session.getId();
         long patientProfileId = session.getPatientProfile().getId();
         String roomName = roomName(patientProfileId, loginSessionId);
-        ContentState contentState = inactiveContentState();
+        ContentState contentState = realtimeContentStateService.find(loginSessionId);
 
         return new TokenIssueCommand(
                 loginSessionId,
@@ -93,14 +95,14 @@ public class RealtimeTokenService {
                 true,
                 true,
                 contentState.active(),
-                contentState.type());
+                contentState.contentTypeName());
     }
 
-    private static TokenIssueCommand guardianTokenCommand(Long userId, LoginSession session) {
+    private TokenIssueCommand guardianTokenCommand(Long userId, LoginSession session) {
         long loginSessionId = session.getId();
         long patientProfileId = session.getPatientProfile().getId();
         String roomName = roomName(patientProfileId, loginSessionId);
-        ContentState contentState = inactiveContentState();
+        ContentState contentState = realtimeContentStateService.find(loginSessionId);
 
         return new TokenIssueCommand(
                 loginSessionId,
@@ -111,12 +113,7 @@ public class RealtimeTokenService {
                 false,
                 false,
                 contentState.active(),
-                contentState.type());
-    }
-
-    private static ContentState inactiveContentState() {
-        // TODO(S14P31E103-629): 콘텐츠 라이프사이클 상태와 연동되면 실제 진행 상태로 교체한다.
-        return new ContentState(false, null);
+                contentState.contentTypeName());
     }
 
     private String createJwt(AccessToken token, String roomName, String participantIdentity) {
@@ -146,6 +143,4 @@ public class RealtimeTokenService {
             boolean canPublishData,
             boolean contentActive,
             String contentType) {}
-
-    private record ContentState(boolean active, String type) {}
 }

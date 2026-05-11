@@ -10,6 +10,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import com.comong.backend.domain.patient.entity.PatientProfile;
 import com.comong.backend.domain.patient.service.PatientProfileService;
 import com.comong.backend.domain.realtime.dto.RealtimeEventResponse;
+import com.comong.backend.domain.realtime.service.RealtimeContentStateService;
 import com.comong.backend.domain.realtime.service.RealtimeEventService;
 import com.comong.backend.domain.usage.dto.LoginSessionResponse;
 import com.comong.backend.domain.usage.entity.LoginSession;
@@ -37,6 +38,7 @@ public class LoginSessionService {
     private final LoginSessionRepository loginSessionRepository;
     private final PatientProfileService patientProfileService;
     private final RealtimeEventService realtimeEventService;
+    private final RealtimeContentStateService realtimeContentStateService;
 
     @Transactional
     public LoginSessionResponse start(Long userId, Long patientProfileId) {
@@ -72,6 +74,7 @@ public class LoginSessionService {
                     userId,
                     RealtimeEventResponse.gameEnded(
                             session.getId(), session.getPatientProfile().getId()));
+            clearContentStateAfterCommit(session.getId());
         }
         return LoginSessionResponse.from(session);
     }
@@ -117,6 +120,27 @@ public class LoginSessionService {
         }
     }
 
+    private void clearContentStateAfterCommit(Long loginSessionId) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            clearContentStateSafely(loginSessionId);
+            return;
+        }
+        try {
+            TransactionSynchronizationManager.registerSynchronization(
+                    new TransactionSynchronization() {
+                        @Override
+                        public void afterCommit() {
+                            clearContentStateSafely(loginSessionId);
+                        }
+                    });
+        } catch (IllegalStateException e) {
+            log.warn(
+                    "Realtime content state cleanup registration failed. loginSessionId={}",
+                    loginSessionId,
+                    e);
+        }
+    }
+
     private void publishSafely(Long userId, RealtimeEventResponse event) {
         try {
             realtimeEventService.publish(userId, event);
@@ -126,6 +150,14 @@ public class LoginSessionService {
                     userId,
                     event.type(),
                     e);
+        }
+    }
+
+    private void clearContentStateSafely(Long loginSessionId) {
+        try {
+            realtimeContentStateService.clear(loginSessionId);
+        } catch (RuntimeException e) {
+            log.warn("Realtime content state cleanup failed. loginSessionId={}", loginSessionId, e);
         }
     }
 }
