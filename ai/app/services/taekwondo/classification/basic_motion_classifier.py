@@ -107,10 +107,12 @@ class BasicMotionClassifier:
         return min(score, 1.0)
 
     def _score_low_block(self, features: BasicMotionFeatureSet) -> float:
-        side = features.dominant_action_side
-        if side is None:
-            return 0.0
+        return max(
+            self._score_low_block_side(features, "left"),
+            self._score_low_block_side(features, "right"),
+        )
 
+    def _score_low_block_side(self, features: BasicMotionFeatureSet, side: str) -> float:
         wrist_y = features.left_wrist_y if side == "left" else features.right_wrist_y
         far_from_center = (
             features.left_wrist_far_from_center
@@ -128,10 +130,12 @@ class BasicMotionClassifier:
         return min(score, 1.0)
 
     def _score_middle_punch(self, features: BasicMotionFeatureSet) -> float:
-        side = features.dominant_action_side
-        if side is None:
-            return 0.0
+        return max(
+            self._score_middle_punch_side(features, "left"),
+            self._score_middle_punch_side(features, "right"),
+        )
 
+    def _score_middle_punch_side(self, features: BasicMotionFeatureSet, side: str) -> float:
         wrist_y = features.left_wrist_y if side == "left" else features.right_wrist_y
         far_from_center = (
             features.left_wrist_far_from_center
