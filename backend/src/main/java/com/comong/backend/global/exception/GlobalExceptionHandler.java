@@ -12,6 +12,8 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.MultipartException;
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
+import org.springframework.web.servlet.NoHandlerFoundException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import com.comong.backend.global.common.response.ApiResponse;
 import com.comong.backend.global.storage.StorageErrorCode;
@@ -95,6 +97,13 @@ public class GlobalExceptionHandler {
         log.warn("multipart 한도 초과: {}", e.getMessage(), e);
         return ResponseEntity.status(StorageErrorCode.PAYLOAD_TOO_LARGE.getStatus())
                 .body(ApiResponse.error(StorageErrorCode.PAYLOAD_TOO_LARGE));
+    }
+
+    @ExceptionHandler({NoHandlerFoundException.class, NoResourceFoundException.class})
+    public ResponseEntity<ApiResponse<Void>> handleNotFound(Exception e) {
+        log.warn("No resource found: {}", e.getMessage());
+        return ResponseEntity.status(GlobalErrorCode.NOT_FOUND.getStatus())
+                .body(ApiResponse.error(GlobalErrorCode.NOT_FOUND));
     }
 
     @ExceptionHandler(Exception.class)

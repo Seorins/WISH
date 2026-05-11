@@ -1,7 +1,7 @@
 export { apiClient } from './client'
 export { getAdminDashboard, getAdminPatientDashboard, notifyGuardian } from './admin-dashboard'
 export { authInterceptor } from './interceptors/auth'
-export { issueDemoToken, login, signup } from './auth'
+export { login, signup } from './auth'
 export { createArtwork, deleteArtwork, getArtwork, getMyArtworks, updateArtwork } from './artworks'
 export {
   createExerciseMotion,
