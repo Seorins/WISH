@@ -178,6 +178,10 @@
   border: 2px solid var(--dash-color-surface);
 }
 
+.notificationWrap {
+  position: relative;
+}
+
 .profileWrap {
   position: relative;
 }

@@ -1,7 +1,6 @@
 export { LiveKitViewer } from './LiveKitViewer'
 export { PttButton } from './PttButton'
 export { RealtimeBridge } from './RealtimeBridge'
-export { RealtimeToaster } from './RealtimeToaster'
 export { useLiveKitViewer } from './useLiveKitViewer'
 export type { LiveKitViewerStatus } from './useLiveKitViewer'
 export { useRealtimeEvents } from './useRealtimeEvents'

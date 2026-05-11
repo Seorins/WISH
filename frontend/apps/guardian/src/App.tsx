@@ -1,5 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
-import { RealtimeBridge, RealtimeToaster } from './features/realtime'
+import { RealtimeNotificationBridge } from './features/notifications'
+import { RealtimeBridge } from './features/realtime'
 import { ActivityPage } from './pages/ActivityPage'
 import { ChatPage } from './pages/ChatPage'
 import { DashboardPage } from './pages/DashboardPage'
@@ -15,7 +16,7 @@ function App() {
   return (
     <BrowserRouter basename={basename}>
       <RealtimeBridge />
-      <RealtimeToaster />
+      <RealtimeNotificationBridge />
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />
