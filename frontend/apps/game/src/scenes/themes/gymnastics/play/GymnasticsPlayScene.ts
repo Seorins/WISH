@@ -1887,15 +1887,15 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     const video = document.createElement('video')
     video.src = videoUrl
     video.muted = true
-    video.loop = true
+    video.loop = false
     video.autoplay = true
     video.playsInline = true
     video.preload = 'auto'
     video.style.position = 'fixed'
-    video.style.objectFit = 'cover'
+    video.style.objectFit = 'fill'
     video.style.pointerEvents = 'none'
     video.style.borderRadius = '18px'
-    video.style.backgroundColor = '#20160c'
+    video.style.backgroundColor = '#fff8df'
     video.style.zIndex = '20'
 
     const positionVideo = () => {
@@ -1921,6 +1921,15 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
       () => {
         loadingText?.setVisible(true)
         loadingText?.setText('가이드 영상을 재생할 수 없어요')
+      },
+      { once: true },
+    )
+    video.addEventListener(
+      'ended',
+      () => {
+        if (this.phase === 'GUIDE_PREVIEW') {
+          this.handleGuideStart()
+        }
       },
       { once: true },
     )
