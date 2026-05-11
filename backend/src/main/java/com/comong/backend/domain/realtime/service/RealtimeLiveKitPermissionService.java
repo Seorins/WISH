@@ -20,6 +20,7 @@ import retrofit2.Response;
 public class RealtimeLiveKitPermissionService {
 
     private final LiveKitProperties liveKitProperties;
+    private volatile RoomServiceClient roomServiceClient;
 
     public void setGuardianMicrophonePermission(
             long userId, long loginSessionId, long patientProfileId, boolean canPublishAudio) {
@@ -62,8 +63,21 @@ public class RealtimeLiveKitPermissionService {
     }
 
     private RoomServiceClient roomServiceClient() {
-        return RoomServiceClient.createClient(
-                liveKitProperties.url(), liveKitProperties.apiKey(), liveKitProperties.apiSecret());
+        RoomServiceClient cachedClient = roomServiceClient;
+        if (cachedClient != null) {
+            return cachedClient;
+        }
+
+        synchronized (this) {
+            if (roomServiceClient == null) {
+                roomServiceClient =
+                        RoomServiceClient.createClient(
+                                liveKitProperties.url(),
+                                liveKitProperties.apiKey(),
+                                liveKitProperties.apiSecret());
+            }
+            return roomServiceClient;
+        }
     }
 
     private static ParticipantPermission guardianPermission(boolean canPublishAudio) {

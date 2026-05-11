@@ -1,6 +1,7 @@
 package com.comong.backend.domain.realtime.service;
 
 import java.util.List;
+import java.util.Objects;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -149,5 +150,10 @@ public class RealtimeTokenService {
             boolean canPublishData,
             List<String> canPublishSources,
             boolean contentActive,
-            String contentType) {}
+            String contentType) {
+
+        private TokenIssueCommand {
+            canPublishSources = List.copyOf(Objects.requireNonNull(canPublishSources));
+        }
+    }
 }
