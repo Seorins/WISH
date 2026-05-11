@@ -10,6 +10,10 @@ type Props = {
 
 // 활성 LoginSession 에 대응되는 LiveKit room 의 게임 화면을 보여주는 viewer.
 // 부모(LiveMonitorPage) 가 activeSession 이 null 인 경우엔 아예 이 컴포넌트를 마운트하지 않는다.
+//
+// 레이아웃: stage 가 viewport 의 대부분을 차지하고, 환자 라벨/상태/소리/PTT 는 모두
+// stage 위의 absolute overlay 로 떠 있다. 별도의 status bar 가 아래로 빠지지 않아
+// PTT 까지 한 화면에 들어온다.
 export function LiveKitViewer({ activeSession }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
@@ -22,7 +26,7 @@ export function LiveKitViewer({ activeSession }: Props) {
   const contentActive = useRealtimeStore(state => state.contentActive)
   const pttEnabled = status === 'connected' && contentActive
 
-  // 첫 진입 시엔 brower autoplay 정책상 muted=true 로 두고, 사용자가 '소리 켜기' 를
+  // 첫 진입 시엔 browser autoplay 정책상 muted=true 로 두고, 사용자가 '소리 켜기' 를
   // 누르면 그때 unmute + play 명시 호출. 재연결로 srcObject 가 교체되면 element 의
   // muted 상태가 풀려도 audioUnmuted 가 false 면 다시 mute 시킨다.
   const [audioUnmuted, setAudioUnmuted] = useState(false)
@@ -64,16 +68,15 @@ export function LiveKitViewer({ activeSession }: Props) {
           controls={false}
         />
         {/* muted 기본값으로 autoplay 차단 우회 — 소리 켜기 버튼이 unmute 한다. */}
-        <audio ref={audioRef} autoPlay muted />
-        {hasRemoteVideo ? null : (
-          <div className={styles.overlay}>{overlayMessage(status, activeSession.patientName)}</div>
-        )}
-      </div>
-      <div className={styles.statusBar}>
-        <span className={styles.statusText}>
-          {activeSession.patientName} 님이 게임에 접속해 있어요
-        </span>
-        <div className={styles.statusActions}>
+        <audio ref={audioRef} className={styles.audio} autoPlay muted />
+
+        <div className={styles.topLeftBar}>
+          <span className={styles.patientLabel}>
+            {activeSession.patientName} 님이 게임에 접속해 있어요
+          </span>
+        </div>
+
+        <div className={styles.topRightBar}>
           {status === 'connected' ? (
             <button
               type="button"
@@ -90,9 +93,16 @@ export function LiveKitViewer({ activeSession }: Props) {
             {statusLabel(status)}
           </span>
         </div>
-      </div>
-      <div className={styles.pttSlot}>
-        <PttButton enabled={pttEnabled} setMicrophoneEnabled={setMicrophoneEnabled} />
+
+        <div className={styles.bottomCenterBar}>
+          <PttButton enabled={pttEnabled} setMicrophoneEnabled={setMicrophoneEnabled} />
+        </div>
+
+        {hasRemoteVideo ? null : (
+          <div className={styles.waitingOverlay}>
+            {overlayMessage(status, activeSession.patientName)}
+          </div>
+        )}
       </div>
     </div>
   )

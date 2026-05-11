@@ -8,15 +8,12 @@
 .button {
   appearance: none;
   -webkit-appearance: none;
-  width: 96px;
-  height: 96px;
+  width: 56px;
+  height: 56px;
   border-radius: 50%;
   border: none;
   background: var(--dash-gradient-primary);
   color: #ffffff;
-  font-size: 14px;
-  font-weight: 800;
-  letter-spacing: 0.02em;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -25,10 +22,16 @@
   -webkit-user-select: none;
   -webkit-touch-callout: none;
   touch-action: none;
-  box-shadow: 0 12px 32px rgba(76, 56, 128, 0.22);
+  box-shadow: 0 8px 20px rgba(76, 56, 128, 0.22);
   transition:
     transform 120ms ease-out,
-    box-shadow 120ms ease-out;
+    box-shadow 120ms ease-out,
+    background 120ms ease-out;
+}
+
+.icon {
+  width: 22px;
+  height: 22px;
 }
 
 .button:disabled {
@@ -40,7 +43,7 @@
 
 .buttonActive {
   transform: scale(0.94);
-  box-shadow: 0 8px 16px rgba(255, 71, 87, 0.32);
+  box-shadow: 0 6px 14px rgba(255, 71, 87, 0.32);
   background: linear-gradient(135deg, #ff7a90 0%, #ff4757 100%);
 }
 

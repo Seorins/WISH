@@ -1,6 +1,27 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import styles from './PttButton.module.css'
 
+function MicIcon({ className, muted }: { className?: string; muted?: boolean }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <rect x="9" y="3" width="6" height="11" rx="3" />
+      <path d="M6 11a6 6 0 0 0 12 0" />
+      <line x1="12" y1="17" x2="12" y2="21" />
+      <line x1="9" y1="21" x2="15" y2="21" />
+      {muted ? <line x1="3" y1="3" x2="21" y2="21" /> : null}
+    </svg>
+  )
+}
+
 type Props = {
   /** 콘텐츠 진행 중일 때만 true — false 면 버튼이 disabled 로 노출되어 PTT 불가. */
   enabled: boolean
@@ -96,7 +117,7 @@ export function PttButton({ enabled, setMicrophoneEnabled }: Props) {
         aria-pressed={isSpeaking}
         aria-label={isSpeaking ? '마이크 ON (송신 중)' : '꾹 눌러서 말하기'}
       >
-        {isSpeaking ? 'ON' : 'PTT'}
+        <MicIcon className={styles.icon} muted={!isSpeaking && !enabled} />
       </button>
       <p className={`${styles.hint} ${error ? styles.error : ''}`}>{error ?? label}</p>
     </div>

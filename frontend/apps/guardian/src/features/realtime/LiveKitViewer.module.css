@@ -1,18 +1,16 @@
 .viewer {
   width: 100%;
-  /* 비디오를 viewport 세로 공간에 맞춰 줄어들게 하려고 max-width 를 두 가지 중 작은 값으로:
-     1) 960px (기존 디자인 cap)
-     2) calc((100vh - 360px) * 16/9) — 상태바/PTT/헤더/패딩 예약 후 남는 세로를 16:9 로 환산.
-     aspect-ratio 가 width 로부터 height 를 도출하므로 max-width 를 줄이면 height 도 따라 줄어든다. */
-  max-width: min(960px, calc((100vh - 360px) * 16 / 9));
   display: flex;
-  flex-direction: column;
-  gap: 16px;
+  align-items: center;
+  justify-content: center;
 }
 
+/* stage 가 viewport 의 대부분을 차지하도록 width 를 viewport 세로 공간 기반으로 잡는다.
+   reserved 영역: 헤더(66) + body padding 위/아래(36) + 여유(18) ≈ 120px. */
 .stage {
   position: relative;
   width: 100%;
+  max-width: calc((100vh - 120px) * 16 / 9);
   aspect-ratio: 16 / 9;
   background: #0b0b1a;
   border-radius: 24px;
@@ -25,39 +23,70 @@
   height: 100%;
   object-fit: contain;
   background: #0b0b1a;
+  display: block;
 }
 
-.overlay {
+.audio {
+  display: none;
+}
+
+.waitingOverlay {
   position: absolute;
   inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: rgba(255, 255, 255, 0.78);
+  color: rgba(255, 255, 255, 0.84);
   font-size: 14px;
   font-weight: 600;
   letter-spacing: 0.02em;
   text-align: center;
   padding: 16px;
-  background: linear-gradient(180deg, rgba(11, 11, 26, 0.55) 0%, rgba(11, 11, 26, 0.85) 100%);
+  background: linear-gradient(180deg, rgba(11, 11, 26, 0.5) 0%, rgba(11, 11, 26, 0.82) 100%);
+  pointer-events: none;
 }
 
-.statusBar {
+/* 영상 위 overlay 들 — z-index 로 video 위에 띄움. */
+.topLeftBar,
+.topRightBar,
+.bottomCenterBar {
+  position: absolute;
+  z-index: 2;
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px 18px;
-  background: var(--dash-color-surface);
-  border: 1px solid var(--dash-color-border);
-  border-radius: 16px;
+  gap: 10px;
 }
 
-.statusText {
-  font-size: 14px;
+.topLeftBar {
+  top: 16px;
+  left: 16px;
+}
+
+.topRightBar {
+  top: 16px;
+  right: 16px;
+}
+
+.bottomCenterBar {
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(255, 255, 255, 0.94);
+  padding: 12px 20px 10px;
+  border-radius: 28px;
+  box-shadow: 0 12px 28px rgba(11, 11, 26, 0.24);
+  backdrop-filter: blur(10px);
+}
+
+.patientLabel {
+  background: rgba(11, 11, 26, 0.55);
+  color: #ffffff;
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 13px;
   font-weight: 700;
-  color: var(--dash-color-text-strong);
+  letter-spacing: 0.01em;
+  backdrop-filter: blur(8px);
 }
 
 .statusBadge {
@@ -66,14 +95,14 @@
   gap: 6px;
   font-size: 12px;
   font-weight: 700;
-  padding: 6px 10px;
+  padding: 7px 12px;
   border-radius: 999px;
-  color: var(--dash-color-text-muted);
-  background: var(--dash-color-surface-muted);
+  color: #ffffff;
+  background: rgba(11, 11, 26, 0.6);
+  backdrop-filter: blur(8px);
 }
 
 .statusBadgeLive {
-  color: #ffffff;
   background: var(--dash-gradient-primary);
 }
 
@@ -87,38 +116,26 @@
   animation: pulse 1.2s ease-out infinite;
 }
 
-.pttSlot {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 4px 0 0;
-}
-
-.statusActions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
 .audioToggle {
   appearance: none;
-  border: 1px solid var(--dash-color-border-strong);
-  background: var(--dash-color-surface);
+  border: none;
+  background: rgba(255, 255, 255, 0.92);
   color: var(--dash-color-text-strong);
   font-size: 12px;
   font-weight: 700;
-  padding: 6px 12px;
+  padding: 7px 14px;
   border-radius: 999px;
   cursor: pointer;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 2px 8px rgba(11, 11, 26, 0.16);
 }
 
 .audioToggle:hover {
-  background: var(--dash-color-surface-muted);
+  background: #ffffff;
 }
 
 .audioToggleOn {
   background: var(--dash-color-primary-50);
-  border-color: var(--dash-color-primary-soft);
   color: var(--dash-color-primary);
 }
 
@@ -131,5 +148,30 @@
   }
   100% {
     box-shadow: 0 0 0 0 rgba(255, 71, 87, 0);
+  }
+}
+
+@media (max-width: 768px) {
+  .stage {
+    max-width: 100%;
+    border-radius: 18px;
+  }
+  .topLeftBar,
+  .topRightBar {
+    top: 10px;
+  }
+  .topLeftBar {
+    left: 10px;
+  }
+  .topRightBar {
+    right: 10px;
+  }
+  .patientLabel {
+    font-size: 12px;
+    padding: 6px 10px;
+  }
+  .bottomCenterBar {
+    bottom: 16px;
+    padding: 10px 14px 8px;
   }
 }
