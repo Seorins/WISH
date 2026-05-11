@@ -3,3 +3,4 @@ export {
   getContentTypeForSceneKey,
   isContentScene,
 } from './contentSceneRegistry'
+export { useRealtimePublisher } from './useRealtimePublisher'
