@@ -33,36 +33,12 @@ public class RealtimeTokenService {
 
     public LiveKitTokenResponse issueGameToken(Long userId, Long loginSessionId) {
         LoginSession session = findActiveOwnedSession(userId, loginSessionId);
-        Long patientProfileId = session.getPatientProfile().getId();
-        String roomName = roomName(patientProfileId, session.getId());
-        String identity = "game-patient-%d-login-%d".formatted(patientProfileId, session.getId());
-        return issueToken(
-                session.getId(),
-                patientProfileId,
-                roomName,
-                identity,
-                "game",
-                true,
-                true,
-                false,
-                null);
+        return issueToken(gameTokenCommand(session));
     }
 
     public LiveKitTokenResponse issueGuardianToken(Long userId, Long loginSessionId) {
         LoginSession session = findActiveOwnedSession(userId, loginSessionId);
-        Long patientProfileId = session.getPatientProfile().getId();
-        String roomName = roomName(patientProfileId, session.getId());
-        String identity = "guardian-user-%d-login-%d".formatted(userId, session.getId());
-        return issueToken(
-                session.getId(),
-                patientProfileId,
-                roomName,
-                identity,
-                "guardian",
-                false,
-                false,
-                false,
-                null);
+        return issueToken(guardianTokenCommand(userId, session));
     }
 
     private LoginSession findActiveOwnedSession(Long userId, Long loginSessionId) {
@@ -73,42 +49,74 @@ public class RealtimeTokenService {
         return session;
     }
 
-    private LiveKitTokenResponse issueToken(
-            Long loginSessionId,
-            Long patientProfileId,
-            String roomName,
-            String participantIdentity,
-            String participantName,
-            boolean canPublish,
-            boolean canPublishData,
-            boolean contentActive,
-            String contentType) {
+    private LiveKitTokenResponse issueToken(TokenIssueCommand command) {
         liveKitProperties.validateConfigured();
 
         AccessToken token =
                 new AccessToken(liveKitProperties.apiKey(), liveKitProperties.apiSecret());
-        token.setIdentity(participantIdentity);
-        token.setName(participantName);
+        token.setIdentity(command.participantIdentity());
+        token.setName(command.participantName());
         token.setTtl(TOKEN_TTL_MILLIS);
         token.addGrants(
                 new RoomJoin(true),
-                new RoomName(roomName),
-                new CanPublish(canPublish),
+                new RoomName(command.roomName()),
+                new CanPublish(command.canPublish()),
                 new CanSubscribe(true),
-                new CanPublishData(canPublishData));
-        String jwt = createJwt(token, roomName, participantIdentity);
+                new CanPublishData(command.canPublishData()));
+        String jwt = createJwt(token, command.roomName(), command.participantIdentity());
 
         return new LiveKitTokenResponse(
+                command.loginSessionId(),
+                command.patientProfileId(),
+                command.roomName(),
+                liveKitProperties.url(),
+                command.participantIdentity(),
+                command.participantName(),
+                jwt,
+                TOKEN_TTL_SECONDS,
+                command.contentActive(),
+                command.contentType());
+    }
+
+    private static TokenIssueCommand gameTokenCommand(LoginSession session) {
+        long loginSessionId = session.getId();
+        long patientProfileId = session.getPatientProfile().getId();
+        String roomName = roomName(patientProfileId, loginSessionId);
+        ContentState contentState = inactiveContentState();
+
+        return new TokenIssueCommand(
                 loginSessionId,
                 patientProfileId,
                 roomName,
-                liveKitProperties.url(),
-                participantIdentity,
-                participantName,
-                jwt,
-                TOKEN_TTL_SECONDS,
-                contentActive,
-                contentType);
+                "game-patient-%d-login-%d".formatted(patientProfileId, loginSessionId),
+                "game",
+                true,
+                true,
+                contentState.active(),
+                contentState.type());
+    }
+
+    private static TokenIssueCommand guardianTokenCommand(Long userId, LoginSession session) {
+        long loginSessionId = session.getId();
+        long patientProfileId = session.getPatientProfile().getId();
+        String roomName = roomName(patientProfileId, loginSessionId);
+        ContentState contentState = inactiveContentState();
+
+        return new TokenIssueCommand(
+                loginSessionId,
+                patientProfileId,
+                roomName,
+                "guardian-user-%d-login-%d".formatted(userId, loginSessionId),
+                "guardian",
+                false,
+                false,
+                contentState.active(),
+                contentState.type());
+    }
+
+    private static ContentState inactiveContentState() {
+        // TODO(S14P31E103-629): 콘텐츠 라이프사이클 상태와 연동되면 실제 진행 상태로 교체한다.
+        return new ContentState(false, null);
     }
 
     private String createJwt(AccessToken token, String roomName, String participantIdentity) {
@@ -124,7 +132,20 @@ public class RealtimeTokenService {
         }
     }
 
-    private static String roomName(Long patientProfileId, Long loginSessionId) {
+    private static String roomName(long patientProfileId, long loginSessionId) {
         return "patient-%d-login-%d".formatted(patientProfileId, loginSessionId);
     }
+
+    private record TokenIssueCommand(
+            long loginSessionId,
+            long patientProfileId,
+            String roomName,
+            String participantIdentity,
+            String participantName,
+            boolean canPublish,
+            boolean canPublishData,
+            boolean contentActive,
+            String contentType) {}
+
+    private record ContentState(boolean active, String type) {}
 }
