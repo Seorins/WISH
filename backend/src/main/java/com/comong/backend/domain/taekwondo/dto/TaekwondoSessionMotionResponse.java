@@ -2,6 +2,8 @@ package com.comong.backend.domain.taekwondo.dto;
 
 import java.time.LocalDateTime;
 
+import com.comong.backend.domain.performance.entity.PerformanceVideo;
+import com.comong.backend.domain.performance.service.PerformanceVideoService;
 import com.comong.backend.domain.taekwondo.entity.TaekwondoSessionMotion;
 
 public record TaekwondoSessionMotionResponse(
@@ -13,9 +15,13 @@ public record TaekwondoSessionMotionResponse(
         double accuracy,
         int completedReps,
         String feedback,
+        String videoUrl,
+        String thumbUrl,
         LocalDateTime createdAt) {
 
-    public static TaekwondoSessionMotionResponse from(TaekwondoSessionMotion sessionMotion) {
+    public static TaekwondoSessionMotionResponse from(
+            TaekwondoSessionMotion sessionMotion, PerformanceVideoService performanceVideoService) {
+        PerformanceVideo performanceVideo = sessionMotion.getPerformanceVideo();
         return new TaekwondoSessionMotionResponse(
                 sessionMotion.getId(),
                 sessionMotion.getMotion().getId(),
@@ -25,6 +31,12 @@ public record TaekwondoSessionMotionResponse(
                 sessionMotion.getAccuracy(),
                 sessionMotion.getCompletedReps(),
                 sessionMotion.getFeedback(),
+                performanceVideo == null
+                        ? null
+                        : performanceVideoService.toPublicUrl(performanceVideo.getVideoKey()),
+                performanceVideo == null
+                        ? null
+                        : performanceVideoService.toPublicUrl(performanceVideo.getThumbKey()),
                 sessionMotion.getCreatedAt());
     }
 }

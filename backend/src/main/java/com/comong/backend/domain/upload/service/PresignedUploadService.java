@@ -14,6 +14,7 @@ import com.comong.backend.domain.patient.service.PatientProfileService;
 import com.comong.backend.domain.upload.dto.PresignedUploadRequest;
 import com.comong.backend.domain.upload.dto.PresignedUploadResponse;
 import com.comong.backend.domain.upload.dto.PresignedUploadResponse.PresignedUploadItem;
+import com.comong.backend.domain.upload.dto.UploadPurpose;
 import com.comong.backend.global.exception.BusinessException;
 import com.comong.backend.global.storage.StorageErrorCode;
 import com.comong.backend.global.storage.StorageProperties;
@@ -29,7 +30,6 @@ import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignReques
 @Transactional(readOnly = true)
 public class PresignedUploadService {
 
-    private static final String MUSIC_RESULT_PREFIX = "music/results";
     private static final String VIDEO_WEBM = "video/webm";
     private static final String VIDEO_MP4 = "video/mp4";
     private static final String IMAGE_JPEG = "image/jpeg";
@@ -59,9 +59,11 @@ public class PresignedUploadService {
             throw new BusinessException(StorageErrorCode.STORAGE_FAILURE);
         }
 
+        UploadPurpose purpose =
+                request.purpose() == null ? UploadPurpose.MUSIC_RESULT : request.purpose();
         String resultUploadId = UUID.randomUUID().toString();
         String objectPrefix =
-                buildObjectPrefix(s3.prefix(), patientProfile.getId(), resultUploadId);
+                buildObjectPrefix(s3.prefix(), purpose, patientProfile.getId(), resultUploadId);
         long expiresInSeconds = s3.presignedTtlSeconds();
 
         PresignedUploadItem video =
@@ -107,14 +109,14 @@ public class PresignedUploadService {
         }
     }
 
-    private String buildObjectPrefix(String storagePrefix, Long patientProfileId, String uploadId) {
-        return normalizePrefix(storagePrefix)
-                + "/"
-                + MUSIC_RESULT_PREFIX
-                + "/"
-                + patientProfileId
-                + "/"
-                + uploadId;
+    private String buildObjectPrefix(
+            String storagePrefix, UploadPurpose purpose, Long patientProfileId, String uploadId) {
+        String normalizedPrefix = normalizePrefix(storagePrefix);
+        String objectPrefix = purpose.storagePath() + "/" + patientProfileId + "/" + uploadId;
+        if (normalizedPrefix.isBlank()) {
+            return objectPrefix;
+        }
+        return normalizedPrefix + "/" + objectPrefix;
     }
 
     private String normalizePrefix(String prefix) {

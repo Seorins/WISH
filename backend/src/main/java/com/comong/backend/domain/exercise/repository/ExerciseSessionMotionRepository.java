@@ -16,6 +16,7 @@ public interface ExerciseSessionMotionRepository
     @Query(
             "select sm from ExerciseSessionMotion sm "
                     + "join fetch sm.exerciseMotion m "
+                    + "left join fetch sm.performanceVideo "
                     + "where sm.session.id = :sessionId "
                     + "order by m.routineOrder asc")
     List<ExerciseSessionMotion> findAllBySessionIdWithExerciseMotionOrderByRoutineOrderAsc(

@@ -14,6 +14,7 @@ public interface TaekwondoSessionMotionRepository
     @Query(
             "select sm from TaekwondoSessionMotion sm "
                     + "join fetch sm.motion m "
+                    + "left join fetch sm.performanceVideo "
                     + "where sm.session.id = :sessionId "
                     + "order by m.routineOrder asc")
     List<TaekwondoSessionMotion> findAllBySessionIdWithMotionOrderByRoutineOrderAsc(
