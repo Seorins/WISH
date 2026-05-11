@@ -28,6 +28,7 @@ import com.comong.backend.domain.patient.repository.PatientProfileRepository;
 import com.comong.backend.domain.realtime.dto.RealtimeEventResponse;
 import com.comong.backend.domain.realtime.dto.RealtimeEventType;
 import com.comong.backend.domain.realtime.service.RealtimeEventService;
+import com.comong.backend.domain.realtime.service.RealtimeLiveKitPermissionService;
 import com.comong.backend.domain.usage.repository.LoginSessionRepository;
 import com.comong.backend.domain.user.repository.UserRepository;
 import com.comong.backend.support.IntegrationTestSupport;
@@ -44,6 +45,7 @@ class RealtimeContentControllerIntegrationTest extends IntegrationTestSupport {
     @Autowired private PatientProfileRepository patientProfileRepository;
     @Autowired private UserRepository userRepository;
     @MockitoBean private RealtimeEventService realtimeEventService;
+    @MockitoBean private RealtimeLiveKitPermissionService realtimeLiveKitPermissionService;
 
     @BeforeEach
     void cleanDb() {
@@ -80,6 +82,8 @@ class RealtimeContentControllerIntegrationTest extends IntegrationTestSupport {
         ArgumentCaptor<RealtimeEventResponse> eventCaptor =
                 ArgumentCaptor.forClass(RealtimeEventResponse.class);
         verify(realtimeEventService).publish(eq(userId), eventCaptor.capture());
+        verify(realtimeLiveKitPermissionService)
+                .setGuardianMicrophonePermission(userId, sessionId, patientProfileId, true);
 
         RealtimeEventResponse event = eventCaptor.getValue();
         assertThat(event.type()).isEqualTo(RealtimeEventType.CONTENT_STARTED);
@@ -96,9 +100,11 @@ class RealtimeContentControllerIntegrationTest extends IntegrationTestSupport {
 
         startContent(token, sessionId, "ART");
         clearInvocations(realtimeEventService);
+        clearInvocations(realtimeLiveKitPermissionService);
         startContent(token, sessionId, "ART");
 
         verifyNoInteractions(realtimeEventService);
+        verifyNoInteractions(realtimeLiveKitPermissionService);
     }
 
     @Test
@@ -119,6 +125,8 @@ class RealtimeContentControllerIntegrationTest extends IntegrationTestSupport {
         ArgumentCaptor<RealtimeEventResponse> eventCaptor =
                 ArgumentCaptor.forClass(RealtimeEventResponse.class);
         verify(realtimeEventService).publish(eq(userId), eventCaptor.capture());
+        verify(realtimeLiveKitPermissionService)
+                .setGuardianMicrophonePermission(userId, sessionId, patientProfileId, false);
 
         RealtimeEventResponse event = eventCaptor.getValue();
         assertThat(event.type()).isEqualTo(RealtimeEventType.CONTENT_ENDED);
@@ -140,6 +148,7 @@ class RealtimeContentControllerIntegrationTest extends IntegrationTestSupport {
                 .andExpect(jsonPath("$.code").value("SUCCESS"));
 
         verifyNoInteractions(realtimeEventService);
+        verifyNoInteractions(realtimeLiveKitPermissionService);
     }
 
     @Test

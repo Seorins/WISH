@@ -1,5 +1,8 @@
 package com.comong.backend.domain.realtime.service;
 
+import java.util.List;
+import java.util.Objects;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -14,6 +17,7 @@ import com.comong.backend.global.exception.BusinessException;
 import io.livekit.server.AccessToken;
 import io.livekit.server.CanPublish;
 import io.livekit.server.CanPublishData;
+import io.livekit.server.CanPublishSources;
 import io.livekit.server.CanSubscribe;
 import io.livekit.server.RoomJoin;
 import io.livekit.server.RoomName;
@@ -28,6 +32,7 @@ public class RealtimeTokenService {
 
     private static final long TOKEN_TTL_SECONDS = 3600;
     private static final long TOKEN_TTL_MILLIS = TOKEN_TTL_SECONDS * 1000;
+    private static final List<String> GUARDIAN_PUBLISH_SOURCES = List.of("microphone");
 
     private final LoginSessionService loginSessionService;
     private final LiveKitProperties liveKitProperties;
@@ -65,6 +70,9 @@ public class RealtimeTokenService {
                 new CanPublish(command.canPublish()),
                 new CanSubscribe(true),
                 new CanPublishData(command.canPublishData()));
+        if (!command.canPublishSources().isEmpty()) {
+            token.addGrants(new CanPublishSources(command.canPublishSources()));
+        }
         String jwt = createJwt(token, command.roomName(), command.participantIdentity());
 
         return new LiveKitTokenResponse(
@@ -83,17 +91,18 @@ public class RealtimeTokenService {
     private TokenIssueCommand gameTokenCommand(LoginSession session) {
         long loginSessionId = session.getId();
         long patientProfileId = session.getPatientProfile().getId();
-        String roomName = roomName(patientProfileId, loginSessionId);
+        String roomName = RealtimeLiveKitNaming.roomName(patientProfileId, loginSessionId);
         ContentState contentState = realtimeContentStateService.find(loginSessionId);
 
         return new TokenIssueCommand(
                 loginSessionId,
                 patientProfileId,
                 roomName,
-                "game-patient-%d-login-%d".formatted(patientProfileId, loginSessionId),
+                RealtimeLiveKitNaming.gameIdentity(patientProfileId, loginSessionId),
                 "game",
                 true,
                 true,
+                List.of(),
                 contentState.active(),
                 contentState.contentTypeName());
     }
@@ -101,17 +110,19 @@ public class RealtimeTokenService {
     private TokenIssueCommand guardianTokenCommand(Long userId, LoginSession session) {
         long loginSessionId = session.getId();
         long patientProfileId = session.getPatientProfile().getId();
-        String roomName = roomName(patientProfileId, loginSessionId);
+        String roomName = RealtimeLiveKitNaming.roomName(patientProfileId, loginSessionId);
         ContentState contentState = realtimeContentStateService.find(loginSessionId);
+        boolean canPublishAudio = contentState.active();
 
         return new TokenIssueCommand(
                 loginSessionId,
                 patientProfileId,
                 roomName,
-                "guardian-user-%d-login-%d".formatted(userId, loginSessionId),
+                RealtimeLiveKitNaming.guardianIdentity(userId, loginSessionId),
                 "guardian",
+                canPublishAudio,
                 false,
-                false,
+                canPublishAudio ? GUARDIAN_PUBLISH_SOURCES : List.of(),
                 contentState.active(),
                 contentState.contentTypeName());
     }
@@ -129,10 +140,6 @@ public class RealtimeTokenService {
         }
     }
 
-    private static String roomName(long patientProfileId, long loginSessionId) {
-        return "patient-%d-login-%d".formatted(patientProfileId, loginSessionId);
-    }
-
     private record TokenIssueCommand(
             long loginSessionId,
             long patientProfileId,
@@ -141,6 +148,12 @@ public class RealtimeTokenService {
             String participantName,
             boolean canPublish,
             boolean canPublishData,
+            List<String> canPublishSources,
             boolean contentActive,
-            String contentType) {}
+            String contentType) {
+
+        private TokenIssueCommand {
+            canPublishSources = List.copyOf(Objects.requireNonNull(canPublishSources));
+        }
+    }
 }

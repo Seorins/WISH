@@ -154,21 +154,35 @@ class RealtimeTokenControllerIntegrationTest extends IntegrationTestSupport {
         assertThat(video.get("canPublish").asBoolean()).isFalse();
         assertThat(video.get("canSubscribe").asBoolean()).isTrue();
         assertThat(video.get("canPublishData").asBoolean()).isFalse();
+        assertThat(video.has("canPublishSources")).isFalse();
     }
 
     @Test
-    void issueGuardianToken_activeContent_returnsContentState() throws Exception {
+    void issueGuardianToken_activeContent_returnsContentStateAndMicrophonePublishGrant()
+            throws Exception {
         String token = setupUserWithProfile("rt-content@example.com", "rt-content");
         long sessionId = startSession(token);
         realtimeContentStateService.start(sessionId, ContentType.MUSIC);
 
-        mockMvc.perform(
-                        post("/realtime/login-sessions/{loginSessionId}/guardian-token", sessionId)
-                                .header("Authorization", "Bearer " + token))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value("SUCCESS"))
-                .andExpect(jsonPath("$.data.contentActive").value(true))
-                .andExpect(jsonPath("$.data.contentType").value("MUSIC"));
+        String body =
+                mockMvc.perform(
+                                post(
+                                                "/realtime/login-sessions/{loginSessionId}/guardian-token",
+                                                sessionId)
+                                        .header("Authorization", "Bearer " + token))
+                        .andExpect(status().isOk())
+                        .andExpect(jsonPath("$.code").value("SUCCESS"))
+                        .andExpect(jsonPath("$.data.contentActive").value(true))
+                        .andExpect(jsonPath("$.data.contentType").value("MUSIC"))
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString();
+
+        JsonNode payload = decodeTokenPayload(responseToken(body));
+        JsonNode video = payload.get("video");
+        assertThat(video.get("canPublish").asBoolean()).isTrue();
+        assertThat(video.get("canPublishData").asBoolean()).isFalse();
+        assertThat(video.get("canPublishSources").get(0).asString()).isEqualTo("microphone");
     }
 
     @Test
