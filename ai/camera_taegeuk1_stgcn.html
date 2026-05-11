@@ -359,6 +359,41 @@
               <label for="passThreshold">성공 기준 점수</label>
               <input id="passThreshold" type="number" min="0" max="100" step="1" value="80" />
             </div>
+            <div>
+              <label for="participantId">촬영자 ID</label>
+              <input id="participantId" type="text" value="p07" placeholder="p04, p05, p07" />
+            </div>
+            <div>
+              <label for="cameraType">카메라 종류</label>
+              <select id="cameraType">
+                <option value="laptop">노트북 카메라</option>
+                <option value="tablet">태블릿 카메라</option>
+                <option value="webcam">외장 웹캠</option>
+                <option value="phone">휴대폰 카메라</option>
+                <option value="other">기타</option>
+              </select>
+            </div>
+            <div>
+              <label for="captureDirection">촬영 방향</label>
+              <select id="captureDirection">
+                <option value="front">front</option>
+                <option value="left">left</option>
+                <option value="right">right</option>
+                <option value="back">back</option>
+              </select>
+            </div>
+            <div>
+              <label for="actionSide">사용 팔</label>
+              <select id="actionSide">
+                <option value="left">left</option>
+                <option value="right">right</option>
+                <option value="unknown">unknown</option>
+              </select>
+            </div>
+            <div>
+              <label for="takeNo">회차</label>
+              <input id="takeNo" type="number" min="1" step="1" value="1" />
+            </div>
             <div class="full">
               <label for="sessionId">세션 ID</label>
               <input id="sessionId" type="text" value="camera-test-001" />
@@ -500,10 +535,6 @@
     let isPreparingRecording = false;
     let recordTimer = null;
     let progressTimer = null;
-    let countdownTimer = null;
-    let delayTimer = null;
-
-    const RECORD_DELAY_SECONDS = 3;
     const API_TIMEOUT_MS = 20000;
 
     function getDefaultApiUrl() {
@@ -658,13 +689,23 @@
     function buildPayload() {
       const movementName = document.getElementById("movementName").value;
       const passThreshold = Number(document.getElementById("passThreshold").value);
+      const takeNo = Number(document.getElementById("takeNo").value);
+      const recordSeconds = Math.max(1, Number(document.getElementById("recordSeconds").value) || 3);
       return {
+        schema_version: "taegeuk1_camera_sample.v2",
+        captured_at: new Date().toISOString(),
         session_id: document.getElementById("sessionId").value || null,
+        participant_id: document.getElementById("participantId").value.trim() || null,
+        camera_type: document.getElementById("cameraType").value,
+        direction: document.getElementById("captureDirection").value,
+        action_side: document.getElementById("actionSide").value,
+        take_no: Number.isFinite(takeNo) ? takeNo : null,
         movement_name: movementName,
         pass_threshold: Number.isFinite(passThreshold) ? passThreshold : 80,
         sequence: capturedFrames,
         input_normalized: false,
         frame_count: capturedFrames.length,
+        duration_ms: Math.round(recordSeconds * 1000),
         source: "webcam_mediapipe_pose",
         mapping: "mediapipe_33_to_aihub_29_approx",
         keypoint_names: stgcnKeypoints.map((item) => item.name),
@@ -687,46 +728,32 @@
       isPreparingRecording = true;
       recordBtn.disabled = true;
       recordAnalyzeBtn.disabled = true;
-      setStatus(`${RECORD_DELAY_SECONDS}초 후 녹화 시작`);
+      setStatus("녹화 중");
 
       return new Promise((resolve) => {
-        let remaining = RECORD_DELAY_SECONDS;
-        countdownTimer = window.setInterval(() => {
-          remaining -= 1;
-          if (remaining > 0) {
-            setStatus(`${remaining}초 후 녹화 시작`);
-          }
-        }, 1000);
+        isPreparingRecording = false;
+        isRecording = true;
+        const startedAt = Date.now();
 
-        delayTimer = window.setTimeout(() => {
-          window.clearInterval(countdownTimer);
-          countdownTimer = null;
-          delayTimer = null;
-          isPreparingRecording = false;
-          isRecording = true;
-          const startedAt = Date.now();
-          setStatus("녹화 중");
+        progressTimer = window.setInterval(() => {
+          const elapsed = Date.now() - startedAt;
+          const progress = Math.min(100, (elapsed / durationMs) * 100);
+          progressBar.style.width = `${progress}%`;
+        }, 100);
 
-          progressTimer = window.setInterval(() => {
-            const elapsed = Date.now() - startedAt;
-            const progress = Math.min(100, (elapsed / durationMs) * 100);
-            progressBar.style.width = `${progress}%`;
-          }, 100);
-
-          recordTimer = window.setTimeout(() => {
-            isRecording = false;
-            window.clearInterval(progressTimer);
-            progressTimer = null;
-            recordTimer = null;
-            progressBar.style.width = "100%";
-            setStatus(`녹화 완료 (${capturedFrames.length}프레임)`);
-            recordBtn.disabled = false;
-            recordAnalyzeBtn.disabled = false;
-            analyzeBtn.disabled = capturedFrames.length === 0;
-            downloadBtn.disabled = capturedFrames.length === 0;
-            resolve();
-          }, durationMs);
-        }, RECORD_DELAY_SECONDS * 1000);
+        recordTimer = window.setTimeout(() => {
+          isRecording = false;
+          window.clearInterval(progressTimer);
+          progressTimer = null;
+          recordTimer = null;
+          progressBar.style.width = "100%";
+          setStatus(`녹화 완료 (${capturedFrames.length}프레임)`);
+          recordBtn.disabled = false;
+          recordAnalyzeBtn.disabled = false;
+          analyzeBtn.disabled = capturedFrames.length === 0;
+          downloadBtn.disabled = capturedFrames.length === 0;
+          resolve();
+        }, durationMs);
       });
     }
 
@@ -739,16 +766,8 @@
       if (progressTimer) {
         window.clearInterval(progressTimer);
       }
-      if (countdownTimer) {
-        window.clearInterval(countdownTimer);
-      }
-      if (delayTimer) {
-        window.clearTimeout(delayTimer);
-      }
       recordTimer = null;
       progressTimer = null;
-      countdownTimer = null;
-      delayTimer = null;
       if (camera && typeof camera.stop === "function") {
         camera.stop();
       }
@@ -871,19 +890,39 @@
       }
     }
 
+    function safeFilenamePart(value, fallback = "unknown") {
+      return String(value || fallback)
+        .trim()
+        .replace(/\s+/g, "_")
+        .replace(/[\\/:*?"<>|]+/g, "_");
+    }
+
+    function incrementTakeNo() {
+      const takeNoInput = document.getElementById("takeNo");
+      const currentTakeNo = Number(takeNoInput.value);
+      takeNoInput.value = String(Number.isFinite(currentTakeNo) ? Math.floor(currentTakeNo) + 1 : 1);
+    }
+
     function downloadSampleJson() {
       if (!lastPayload) {
         lastPayload = buildPayload();
       }
-      const movement = document.getElementById("movementName").value.replace(/\s+/g, "_");
+      const movement = safeFilenamePart(lastPayload.movement_name);
+      const participant = safeFilenamePart(lastPayload.participant_id);
+      const cameraType = safeFilenamePart(lastPayload.camera_type);
+      const direction = safeFilenamePart(lastPayload.direction);
+      const actionSide = safeFilenamePart(lastPayload.action_side);
+      const takeNo = String(lastPayload.take_no || "00").padStart(2, "0");
       const stamp = new Date().toISOString().replace(/[:.]/g, "").slice(0, 15);
       const blob = new Blob([JSON.stringify(lastPayload, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `taegeuk1_${movement}_${stamp}.json`;
+      link.download = `taegeuk1_${movement}_${direction}_${actionSide}_${participant}_${cameraType}_take${takeNo}_${stamp}.json`;
       link.click();
       URL.revokeObjectURL(url);
+      incrementTakeNo();
+      lastPayload = null;
     }
 
     startBtn.addEventListener("click", () => {
@@ -903,7 +942,7 @@
 
     recordAnalyzeBtn.addEventListener("click", async () => {
       try {
-        showResultMessage("녹화 준비 중", `${RECORD_DELAY_SECONDS}초 후 녹화를 시작하고, 녹화가 끝나면 자동으로 분석합니다.`);
+        showResultMessage("녹화 중", "바로 녹화를 시작하고, 녹화가 끝나면 자동으로 분석합니다.");
         await startRecording();
         await analyze();
       } catch (error) {
