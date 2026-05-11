@@ -18,12 +18,18 @@ import {
 import { createPoomsaeProgressView, type PoomsaeProgressView } from './poomsaeProgress'
 import { createTaekwondoRoundedPanel } from './taekwondoPracticePanel'
 import {
+  startMusicRecording as startScreenRecording,
+  type MusicRecorderHandle as ScreenRecorderHandle,
+} from '@/game/systems/musicRecorder'
+import {
   calculateTaekwondoAverageAccuracy,
   createTaekwondoSession,
   DEFAULT_TAEKWONDO_BELT_COLOR,
   getTaekwondoBeltHistory,
   getTaekwondoPoomsaeNumber,
   listTaekwondoMotions,
+  requestPresignedUploadUrls,
+  uploadToPresignedUrl,
   type CreateTaekwondoSessionMotionRequest,
   type CreateTaekwondoSessionRequest,
   type Poomsae,
@@ -100,6 +106,8 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
   private motions: TaekwondoMotion[] = []
   private motionResults: CreateTaekwondoSessionMotionRequest[] = []
   private recordedMotionIndexes = new Set<number>()
+  private motionRecorderHandle: ScreenRecorderHandle | null = null
+  private pendingMotionUploads: Promise<void>[] = []
   private currentMotionIndex = 0
   private practiceStartedAtMs = 0
   private motionStartedAtMs = 0
@@ -521,6 +529,7 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
 
     this.isWaitingMotionStart = false
     this.motionStartedAtMs = Date.now()
+    this.motionRecorderHandle = startScreenRecording({ scene: this })
     const overlay = this.motionIntroOverlay
     this.motionIntroOverlay = undefined
     this.destroyGuideVideoElement()
@@ -575,13 +584,40 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     const now = Date.now()
     const durationSec = Math.max(1, Math.round((now - this.motionStartedAtMs) / 1000))
     this.recordedMotionIndexes.add(this.currentMotionIndex)
-    this.motionResults.push({
+    const motionResult: CreateTaekwondoSessionMotionRequest = {
       taekwondoMotionId: motion.id,
       durationSec,
       accuracy: 1,
       completedReps: motion.targetReps,
       feedback: DEFAULT_MOTION_COMPLETE_FEEDBACK,
-    })
+    }
+    this.motionResults.push(motionResult)
+
+    const handle = this.motionRecorderHandle
+    this.motionRecorderHandle = null
+    if (handle) {
+      const uploadPromise = (async () => {
+        try {
+          const rec = await handle.stop()
+          const presigned = await requestPresignedUploadUrls({
+            videoContentType: rec.videoMimeType,
+            thumbContentType: rec.thumbMimeType,
+            purpose: 'TAEKWONDO_PERFORMANCE',
+          })
+          const { video, thumb } = presigned.data
+          await Promise.all([
+            uploadToPresignedUrl(video, rec.videoBlob),
+            uploadToPresignedUrl(thumb, rec.thumbBlob),
+          ])
+          motionResult.videoKey = video.key
+          motionResult.thumbKey = thumb.key
+        } catch (err) {
+          console.warn('[TaekwondoPoomsaePracticeScene] motion recording upload failed', err)
+        }
+      })()
+      this.pendingMotionUploads.push(uploadPromise)
+    }
+
     this.updatePoomsaeProgress()
   }
 
@@ -642,6 +678,11 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
 
     if (recordCurrentMotion) {
       this.recordCurrentMotionResult()
+    }
+
+    if (this.pendingMotionUploads.length > 0) {
+      await Promise.allSettled(this.pendingMotionUploads)
+      this.pendingMotionUploads = []
     }
 
     const payload = await this.buildTaekwondoSessionPayload()
@@ -1470,6 +1511,9 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     this.motions = []
     this.motionResults = []
     this.recordedMotionIndexes.clear()
+    this.motionRecorderHandle?.cancel()
+    this.motionRecorderHandle = null
+    this.pendingMotionUploads = []
     this.stopCamera()
     this.cleanupCameraEffects()
 

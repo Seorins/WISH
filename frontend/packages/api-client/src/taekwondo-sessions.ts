@@ -9,6 +9,8 @@ export type CreateTaekwondoSessionMotionRequest = {
   accuracy: number
   completedReps: number
   feedback: string
+  videoKey?: string
+  thumbKey?: string
 }
 
 export type CreateTaekwondoSessionRequest = {
