@@ -48,6 +48,9 @@ const DIALOG_TEXT_BOX = { x: 580, y: 180, width: 1500, height: 400 }
 const DIALOG_NAME_BOX = { x: 505, y: 107, width: 390, height: 150 }
 const CONTENT_CONFIRM_VISIBLE_MS = 1300
 const RHYTHM_TARGET_SCENE_KEY = 'MusicSongSelectScene'
+const DEBUG_OBSTACLES = false
+const OBSTACLE_EDITOR_ENABLED = import.meta.env.DEV
+const OBSTACLE_EDITOR_MIN_SIZE = 0.003
 
 // Flow: 인사 → 게임 설명 → 출발 신호. Picked from existing dialog pool so
 // the lines flow naturally (no repeated phrases like "귀를 쫑긋").
@@ -62,10 +65,77 @@ type MusicSelectSceneData = {
 }
 
 type MusicDialogPhase = 'closed' | 'intro' | 'confirm'
+type ObstacleRect = { x: number; y: number; w: number; h: number }
+type ObstacleInstance = {
+  rect: ObstacleRect
+  object: Phaser.GameObjects.Rectangle
+}
+type BackgroundDisplayArea = {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+const MUSIC_ROOM_OBSTACLES: ObstacleRect[] = [
+  { x: 0, y: 0, w: 1, h: 0.32 },
+  { x: 0.345, y: 0.04, w: 0.05, h: 0.33 },
+  { x: 0.595, y: 0.04, w: 0.055, h: 0.33 },
+  { x: 0.1096, y: 0.302, w: 0.0312, h: 0.1085 },
+  { x: 0.1321, y: 0.302, w: 0.2251, h: 0.0562 },
+  { x: 0.17, y: 0.332, w: 0.1527, h: 0.0588 },
+  { x: 0.3838, y: 0.3085, w: 0.3008, h: 0.0523 },
+  { x: 0.6773, y: 0.3242, w: 0.1673, h: 0.0928 },
+  { x: 0.7756, y: 0.4, w: 0.0744, h: 0.0444 },
+  { x: 0.8074, y: 0.4405, w: 0.0226, h: 0.0248 },
+  { x: 0.6985, y: 0.4144, w: 0.079, h: 0.0288 },
+  { x: 0.7463, y: 0.4353, w: 0.0153, h: 0.0549 },
+  { x: 0.7663, y: 0.4327, w: 0.008, h: 0.0431 },
+  { x: 0.6985, y: 0.434, w: 0.006, h: 0.034 },
+  { x: 0.8479, y: 0.3582, w: 0.0452, h: 0.1673 },
+  { x: 0.9044, y: 0.3739, w: 0.073, h: 0.1085 },
+  { x: 0.9163, y: 0.4876, w: 0.0611, h: 0.0314 },
+  { x: 0.9276, y: 0.5216, w: 0.0498, h: 0.0183 },
+  { x: 0.9402, y: 0.5399, w: 0.0372, h: 0.0314 },
+  { x: 0.9475, y: 0.5595, w: 0.0299, h: 0.0327 },
+  { x: 0.8991, y: 0.6471, w: 0.0339, h: 0.1673 },
+  { x: 0.9475, y: 0.6601, w: 0.0299, h: 0.1804 },
+  { x: 0.9064, y: 0.6314, w: 0.0252, h: 0.0288 },
+  { x: 0.8845, y: 0.834, w: 0.075, h: 0.0863 },
+  { x: 0.7105, y: 0.783, w: 0.1574, h: 0.1373 },
+  { x: 0.8021, y: 0.7608, w: 0.0126, h: 0.0261 },
+  { x: 0.822, y: 0.7542, w: 0.0106, h: 0.0327 },
+  { x: 0.7304, y: 0.7255, w: 0.0292, h: 0.0758 },
+  { x: 0.2032, y: 0.7281, w: 0.0299, h: 0.102 },
+  { x: 0.2311, y: 0.7503, w: 0.0697, h: 0.081 },
+  { x: 0.3048, y: 0.7712, w: 0.0299, h: 0.0719 },
+  { x: 0.3207, y: 0.8418, w: 0.0033, h: 0.0601 },
+  { x: 0.166, y: 0.8444, w: 0.0452, h: 0.0771 },
+  { x: 0.0731, y: 0.8092, w: 0.0425, h: 0.0954 },
+  { x: 0.1102, y: 0.7608, w: 0.0452, h: 0.1007 },
+  { x: 0.0611, y: 0.651, w: 0.0438, h: 0.0536 },
+  { x: 0.075, y: 0.6314, w: 0.0232, h: 0.0471 },
+  { x: 0.0697, y: 0.6876, w: 0.0272, h: 0.0915 },
+  { x: 0.0306, y: 0.7072, w: 0.0305, h: 0.1176 },
+  { x: 0.0219, y: 0.3425, w: 0.087, h: 0.0667 },
+  { x: 0.0219, y: 0.4052, w: 0.0691, h: 0.0536 },
+  { x: 0.0233, y: 0.4549, w: 0.0525, h: 0.0366 },
+  { x: 0.0219, y: 0.502, w: 0.0339, h: 0.0353 },
+  { x: 0.0219, y: 0.5399, w: 0.0193, h: 0.0392 },
+  { x: 0.34, y: 0.8641, w: 0.0511, h: 0.1346 },
+  { x: 0.4084, y: 0.8863, w: 0.0093, h: 0.1085 },
+  { x: 0.6315, y: 0.8732, w: 0.0352, h: 0.1203 },
+  { x: 0.5943, y: 0.8863, w: 0.0086, h: 0.1098 },
+  { x: 0.8327, y: 0.3163, w: 0.1448, h: 0.0562 },
+]
 
 export class MusicSelectScene extends Phaser.Scene {
   private player!: PlayerSprite
   private gisungNpc!: Phaser.GameObjects.Sprite
+  private obstacles!: Phaser.Physics.Arcade.StaticGroup
+  private obstacleInstances: ObstacleInstance[] = []
+  private obstacleEditorDraft?: Phaser.GameObjects.Rectangle
+  private obstacleEditorStart?: Phaser.Math.Vector2
   private gisungAnchor = new Phaser.Math.Vector2()
   private gisungInteractionRadius = 0
   private talkIcon!: Phaser.GameObjects.Image
@@ -82,8 +152,13 @@ export class MusicSelectScene extends Phaser.Scene {
   private introStep = 0
   private isWaitingContentStart = false
   private contentStartTimer: Phaser.Time.TimerEvent | null = null
+  private backgroundDisplayArea!: BackgroundDisplayArea
 
   private readonly handlePointerDown = (pointer: Phaser.Input.Pointer) => {
+    if (this.handleObstacleEditorPointerDown(pointer)) {
+      return
+    }
+
     if (this.isDialogVisible) {
       if (this.isWaitingContentStart) {
         return
@@ -147,30 +222,48 @@ export class MusicSelectScene extends Phaser.Scene {
     this.isWaitingContentStart = false
     this.target = null
     this.playerWasInExitPortal = true
+    this.obstacleInstances = []
+    this.obstacleEditorStart = undefined
+    this.obstacleEditorDraft?.destroy()
+    this.obstacleEditorDraft = undefined
     this.clearContentStartTimer()
 
     const background = addCoverBackground(this, 'music-background')
+    this.backgroundDisplayArea = this.getBackgroundDisplayArea(background)
     this.setupGisungFrames()
     this.createGisungAnimation()
     this.createGisungOnWindow(background)
     this.createDialogUi()
 
     this.physics.world.setBounds(0, 0, vw, vh)
+    this.obstacles = this.physics.add.staticGroup()
+    MUSIC_ROOM_OBSTACLES.forEach(rect => this.addObstacleRect(rect))
     ensurePlayerWalkAnimations(this)
 
     const spawn = data.spawn ?? MUSIC_ROOM_SPAWN
     this.player = createPlayer(this, vw * spawn.xRatio, vh * spawn.yRatio)
+    this.addGisungObstacle()
+    this.physics.add.collider(this.player, this.obstacles)
     this.exitPortal = createRatioRectangle(vw, vh, MUSIC_EXIT_PORTAL)
 
     this.cursors = this.input.keyboard!.createCursorKeys()
     this.input.on('pointerdown', this.handlePointerDown)
+    this.input.on('pointermove', this.handleObstacleEditorPointerMove)
+    this.input.on('pointerup', this.handleObstacleEditorPointerUp)
     this.input.keyboard!.on('keydown-ENTER', this.handleEnterDown)
     this.input.keyboard!.on('keydown-ESC', this.handleEscDown)
+    this.input.keyboard!.on('keydown-E', this.exportObstacleRects)
+    this.input.keyboard!.on('keydown-R', this.clearEditedObstacleRects)
+    this.input.mouse?.disableContextMenu()
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.clearContentStartTimer()
       this.input.off('pointerdown', this.handlePointerDown)
+      this.input.off('pointermove', this.handleObstacleEditorPointerMove)
+      this.input.off('pointerup', this.handleObstacleEditorPointerUp)
       this.input.keyboard?.off('keydown-ENTER', this.handleEnterDown)
       this.input.keyboard?.off('keydown-ESC', this.handleEscDown)
+      this.input.keyboard?.off('keydown-E', this.exportObstacleRects)
+      this.input.keyboard?.off('keydown-R', this.clearEditedObstacleRects)
     })
 
     this.cameras.main.fadeIn(250, 0, 0, 0)
@@ -263,6 +356,185 @@ export class MusicSelectScene extends Phaser.Scene {
       depth: 6,
       bobOffset: 8,
     })
+  }
+
+  private getBackgroundDisplayArea(background: Phaser.GameObjects.Image): BackgroundDisplayArea {
+    return {
+      x: background.x - background.displayWidth / 2,
+      y: background.y - background.displayHeight / 2,
+      width: background.displayWidth,
+      height: background.displayHeight,
+    }
+  }
+
+  private addObstacleRect(rect: ObstacleRect) {
+    const x = Phaser.Math.Clamp(rect.x, 0, 1)
+    const y = Phaser.Math.Clamp(rect.y, 0, 1)
+    const w = Phaser.Math.Clamp(rect.w, 0, 1 - x)
+    const h = Phaser.Math.Clamp(rect.h, 0, 1 - y)
+    const box = this.add
+      .rectangle(
+        this.backgroundDisplayArea.x + (x + w / 2) * this.backgroundDisplayArea.width,
+        this.backgroundDisplayArea.y + (y + h / 2) * this.backgroundDisplayArea.height,
+        w * this.backgroundDisplayArea.width,
+        h * this.backgroundDisplayArea.height,
+        0xff0000,
+        DEBUG_OBSTACLES ? 0.22 : 0,
+      )
+      .setDepth(1)
+
+    if (DEBUG_OBSTACLES) {
+      box.setStrokeStyle(2, 0xff3333, 0.85)
+    }
+
+    this.physics.add.existing(box, true)
+    this.obstacles.add(box)
+    this.obstacleInstances.push({ rect: { x, y, w, h }, object: box })
+
+    return box
+  }
+
+  private addGisungObstacle() {
+    const box = this.add
+      .rectangle(
+        this.gisungAnchor.x,
+        this.gisungAnchor.y + this.gisungNpc.displayHeight * 0.18,
+        this.gisungNpc.displayWidth * 0.32,
+        this.gisungNpc.displayHeight * 0.22,
+        0xff0000,
+        DEBUG_OBSTACLES ? 0.22 : 0,
+      )
+      .setDepth(1)
+
+    if (DEBUG_OBSTACLES) {
+      box.setStrokeStyle(2, 0xff3333, 0.85)
+    }
+
+    this.physics.add.existing(box, true)
+    this.obstacles.add(box)
+  }
+
+  private handleObstacleEditorPointerDown(pointer: Phaser.Input.Pointer) {
+    if (!OBSTACLE_EDITOR_ENABLED || !this.obstacles) {
+      return false
+    }
+
+    const event = pointer.event as MouseEvent | PointerEvent | undefined
+    const isShiftDrag = Boolean(event?.shiftKey)
+    const isRightClick = pointer.rightButtonDown() || pointer.button === 2
+
+    if (isRightClick) {
+      this.removeObstacleAt(pointer.x, pointer.y)
+      return true
+    }
+
+    if (!isShiftDrag) {
+      return false
+    }
+
+    this.obstacleEditorStart = new Phaser.Math.Vector2(pointer.x, pointer.y)
+    this.obstacleEditorDraft?.destroy()
+    this.obstacleEditorDraft = this.add
+      .rectangle(pointer.x, pointer.y, 1, 1, 0x00aaff, 0.26)
+      .setDepth(30)
+      .setStrokeStyle(2, 0x0077ff, 0.95)
+
+    return true
+  }
+
+  private readonly handleObstacleEditorPointerMove = (pointer: Phaser.Input.Pointer) => {
+    if (!this.obstacleEditorStart || !this.obstacleEditorDraft) {
+      return
+    }
+
+    const bounds = this.getObstacleDragBounds(this.obstacleEditorStart, pointer.x, pointer.y)
+    this.obstacleEditorDraft.setPosition(bounds.centerX, bounds.centerY)
+    this.obstacleEditorDraft.setSize(bounds.width, bounds.height)
+    this.obstacleEditorDraft.setDisplaySize(bounds.width, bounds.height)
+  }
+
+  private readonly handleObstacleEditorPointerUp = (pointer: Phaser.Input.Pointer) => {
+    if (!this.obstacleEditorStart || !this.obstacleEditorDraft) {
+      return
+    }
+
+    const bounds = this.getObstacleDragBounds(this.obstacleEditorStart, pointer.x, pointer.y)
+    this.obstacleEditorDraft.destroy()
+    this.obstacleEditorDraft = undefined
+    this.obstacleEditorStart = undefined
+
+    const rect = {
+      x: (bounds.x - this.backgroundDisplayArea.x) / this.backgroundDisplayArea.width,
+      y: (bounds.y - this.backgroundDisplayArea.y) / this.backgroundDisplayArea.height,
+      w: bounds.width / this.backgroundDisplayArea.width,
+      h: bounds.height / this.backgroundDisplayArea.height,
+    }
+
+    if (rect.w < OBSTACLE_EDITOR_MIN_SIZE || rect.h < OBSTACLE_EDITOR_MIN_SIZE) {
+      return
+    }
+
+    this.addObstacleRect(rect)
+  }
+
+  private getObstacleDragBounds(start: Phaser.Math.Vector2, currentX: number, currentY: number) {
+    const left = this.backgroundDisplayArea.x
+    const top = this.backgroundDisplayArea.y
+    const rightLimit = this.backgroundDisplayArea.x + this.backgroundDisplayArea.width
+    const bottomLimit = this.backgroundDisplayArea.y + this.backgroundDisplayArea.height
+    const x = Phaser.Math.Clamp(Math.min(start.x, currentX), left, rightLimit)
+    const y = Phaser.Math.Clamp(Math.min(start.y, currentY), top, bottomLimit)
+    const right = Phaser.Math.Clamp(Math.max(start.x, currentX), left, rightLimit)
+    const bottom = Phaser.Math.Clamp(Math.max(start.y, currentY), top, bottomLimit)
+    const width = Math.max(1, right - x)
+    const height = Math.max(1, bottom - y)
+
+    return new Phaser.Geom.Rectangle(x, y, width, height)
+  }
+
+  private removeObstacleAt(x: number, y: number) {
+    for (let index = this.obstacleInstances.length - 1; index >= 0; index -= 1) {
+      const instance = this.obstacleInstances[index]
+      if (!instance.object.getBounds().contains(x, y)) {
+        continue
+      }
+
+      this.obstacles.remove(instance.object, true, true)
+      this.obstacleInstances.splice(index, 1)
+      return
+    }
+  }
+
+  private readonly exportObstacleRects = () => {
+    if (!OBSTACLE_EDITOR_ENABLED) {
+      return
+    }
+
+    const lines = this.obstacleInstances.map(({ rect }) => {
+      const x = Number(rect.x.toFixed(4))
+      const y = Number(rect.y.toFixed(4))
+      const w = Number(rect.w.toFixed(4))
+      const h = Number(rect.h.toFixed(4))
+      return `  { x: ${x}, y: ${y}, w: ${w}, h: ${h} },`
+    })
+    const output = `const MUSIC_ROOM_OBSTACLES: ObstacleRect[] = [\n${lines.join('\n')}\n]`
+
+    console.info('[MusicSelectScene] Exported obstacle rectangles:\n' + output)
+    void navigator.clipboard?.writeText(output).catch(() => undefined)
+  }
+
+  private readonly clearEditedObstacleRects = () => {
+    if (!OBSTACLE_EDITOR_ENABLED) {
+      return
+    }
+
+    this.obstacleInstances.forEach(({ object }) => {
+      this.obstacles.remove(object, true, true)
+    })
+    this.obstacleInstances = []
+    this.obstacleEditorDraft?.destroy()
+    this.obstacleEditorDraft = undefined
+    this.obstacleEditorStart = undefined
   }
 
   private createDialogUi() {
