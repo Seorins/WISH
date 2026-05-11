@@ -1,10 +1,14 @@
+import type { BackendNpcName, FrontNpcId } from '../npcIdentity'
+
 export type LighthouseDialogueStatus =
   | 'idle'
   | 'starting'
   | 'waiting_choice'
   | 'submitting_choice'
+  | 'loading_next'
   | 'showing_response'
-  | 'closing'
+  | 'finishing'
+  | 'showing_closing'
   | 'finished'
   | 'error'
 
@@ -28,7 +32,7 @@ export interface EmotionSceneViewModel {
 
 export interface StartLighthouseEmotionRequest {
   patientProfileId: number
-  npcName: 'YEONGCHEOL'
+  npcName: Extract<BackendNpcName, 'YEONGCHEOL'>
 }
 
 export interface StartLighthouseEmotionResponse {
@@ -97,7 +101,8 @@ export interface DialogueTurnDetail {
 export interface DialogueSessionDetail {
   sessionId: number
   patientProfileId: number
-  npcName: 'YEONGCHEOL' | string
+  npcId?: FrontNpcId
+  npcName: BackendNpcName | string
   status: 'IN_PROGRESS' | 'FINISHED' | 'CANCELLED'
   stepCount: number
   maxSteps: number

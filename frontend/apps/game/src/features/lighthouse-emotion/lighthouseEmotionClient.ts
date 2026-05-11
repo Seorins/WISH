@@ -12,8 +12,10 @@ import type {
   SubmitLighthouseTurnRequest,
   SubmitLighthouseTurnResponse,
 } from './types'
+import { getNpcIdentity } from '../npcIdentity'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api/v1'
+const LIGHTHOUSE_IDENTITY = getNpcIdentity('lighthouse_keeper')
 const FALLBACK_QUESTION = '오늘 기분은 어떠니?'
 const REST_TODAY_CHOICE_ID = 'rest_today'
 const ACCESS_TOKEN_STORAGE_KEY = 'wish_access_token'
@@ -53,6 +55,11 @@ export function sanitizeEmotionScene(
   scene: Partial<EmotionSceneViewModel> | null | undefined,
   isFirstScene: boolean,
 ): EmotionSceneViewModel {
+  const fallbackChoices: EmotionChoiceViewModel[] = [
+    { choiceIntentId: 'mood_okay', text: '괜찮아요' },
+    { choiceIntentId: 'mood_worried', text: '걱정돼요' },
+    { choiceIntentId: 'mood_hard', text: '힘들어요' },
+  ]
   const safeChoices = Array.isArray(scene?.choices)
     ? scene.choices
         .filter(isDisplayChoice)
@@ -72,7 +79,12 @@ export function sanitizeEmotionScene(
           choiceIntentId: scene.secondaryAction.choiceIntentId,
           text: scene.secondaryAction.text,
         }
-      : null
+      : isFirstScene
+        ? {
+            choiceIntentId: REST_TODAY_CHOICE_ID,
+            text: '오늘은 쉬고 싶어요',
+          }
+        : null
 
   const questionText =
     typeof scene?.questionText === 'string' && scene.questionText.trim()
@@ -82,7 +94,7 @@ export function sanitizeEmotionScene(
   return {
     sceneId: typeof scene?.sceneId === 'string' ? scene.sceneId : null,
     questionText,
-    choices: safeChoices,
+    choices: safeChoices.length > 0 ? safeChoices : isFirstScene ? fallbackChoices : safeChoices,
     secondaryAction,
     shouldEndSession: Boolean(scene?.shouldEndSession),
   }
@@ -99,17 +111,19 @@ export async function startLighthouseEmotionSession(
     },
     body: JSON.stringify({
       patientProfileId,
-      npcName: 'YEONGCHEOL',
+      npcId: LIGHTHOUSE_IDENTITY.npcId,
+      npcName: LIGHTHOUSE_IDENTITY.backendNpcName,
+      mode: 'LIGHTHOUSE_LLM',
     }),
   })
 
   if (!response.ok) {
-    throw new Error('등대지기 대화를 시작하지 못했어요.')
+    throw new Error('등대지기 대화를 시작하지 못했습니다.')
   }
 
   const payload = (await response.json()) as StartLighthouseEmotionApiResponse
   if (!payload.data || payload.data.scene === null) {
-    throw new Error('?ê¹…?ï§žÂ€æ¹²??Â€?ë¶¾? ?ì’–ì˜‰?ì„? ï§ì‚µë»½?ëŒìŠ‚.')
+    throw new Error('Dialogue session start response is invalid.')
   }
 
   return {
@@ -131,13 +145,15 @@ export async function submitLighthouseEmotionTurn(
       ...getAuthHeaders(),
     },
     body: JSON.stringify({
+      npcId: LIGHTHOUSE_IDENTITY.npcId,
+      npcName: LIGHTHOUSE_IDENTITY.backendNpcName,
       ...request,
       selectedChoice: normalizeSelectedChoiceForRequest(request.selectedChoice),
     }),
   })
 
   if (!response.ok) {
-    throw new Error('선택을 저장하지 못했어요.')
+    throw new Error('등대지기 대화를 이어가지 못했습니다.')
   }
 
   const payload = (await response.json()) as
@@ -145,9 +161,7 @@ export async function submitLighthouseEmotionTurn(
     | SubmitLighthouseTurnResponse
   const data = 'data' in payload ? payload.data : payload
   if (!data?.nextScene) {
-    throw new Error(
-      '?ì±—ì¨”??ì±¦ì§ íƒ‘íš‚??â”‘ë®¤??íš‚??ì±˜ì¨‹ì©? ì±¦ì§ í˜§ì±™?ìŠ¿ë¤ãƒ‚ë¼˜?ì±˜í¸í˜–ì±™íž‹??',
-    )
+    throw new Error('Dialogue turn response is invalid.')
   }
 
   return {
@@ -174,12 +188,12 @@ export async function finishLighthouseEmotionSession(
   })
 
   if (!response.ok) {
-    throw new Error('등대지기 대화를 마치지 못했어요.')
+    throw new Error('등대지기 대화를 마무리하지 못했습니다.')
   }
 
   const payload = (await response.json()) as FinishLighthouseEmotionApiResponse
   if (!payload.data) {
-    throw new Error('?ê¹…?ï§žÂ€æ¹²??Â€?ë¶¾? ï§ë‰íŠ‚ï§žÂ€ ï§ì‚µë»½?ëŒìŠ‚.')
+    throw new Error('Dialogue finish response is invalid.')
   }
 
   return {

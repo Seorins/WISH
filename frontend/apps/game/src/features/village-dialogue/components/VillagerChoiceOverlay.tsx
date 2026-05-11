@@ -7,6 +7,7 @@ type VillagerChoiceOverlayProps = {
   disabled: boolean
   selectedChoiceId: string | null
   onSelect: (choice: VillagerChoice) => void
+  onCancel: () => void
 }
 
 const overlayStyle: CSSProperties = {
@@ -32,6 +33,7 @@ export function VillagerChoiceOverlay({
   disabled,
   selectedChoiceId,
   onSelect,
+  onCancel,
 }: VillagerChoiceOverlayProps) {
   const visibleChoices = useMemo(() => choices.slice(0, 3), [choices])
   const [focusedIndex, setFocusedIndex] = useState(0)
@@ -58,6 +60,12 @@ export function VillagerChoiceOverlay({
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault()
       onSelect(visibleChoices[focusedIndex])
+      return
+    }
+
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      onCancel()
     }
   }
 

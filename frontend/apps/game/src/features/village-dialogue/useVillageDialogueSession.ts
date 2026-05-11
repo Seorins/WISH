@@ -1,23 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { saveVillagerChoiceEvent } from './villageDialogueClient'
-import { villageDialogues } from './villageDialogues'
+import { cancelVillagerDialogueSession, saveVillagerChoiceEvent } from './villageDialogueClient'
+import { pickRandomCounselingScript, SHARED_COUNSELING_SCRIPTS } from './sharedCounselingScripts'
+import { VILLAGER_FIRST_GREETING, villageDialogues } from './villageDialogues'
 import type {
+  CounselingScript,
   VillagerChoice,
   VillagerChoiceEvent,
-  VillagerDialogueScript,
+  VillagerDialogueNode,
   VillagerDialogueStatus,
   VillagerNpcId,
-  VillagerScene,
 } from './types'
 
-const OPENING_DELAY_MS = 2200
-const QUESTION_READING_DELAY_MS = 1400
-const RESPONSE_DELAY_MS = 1800
-const CLOSING_DELAY_MS = 2200
-
-function buildOpeningLine(script: VillagerDialogueScript) {
-  return `안녕! ${script.greetingLine}`
-}
+const OPENING_STEP_DELAY_MS = 1500
+const RESPONSE_LINE_DELAY_MS = 1800
+const MIN_RESPONSE_DELAY_MS = 1800
+const SAVE_ERROR_LINE = '잠시 후 다시 말을 걸어줘.'
 
 function createLocalSessionId(npcId: VillagerNpcId) {
   const randomId =
@@ -27,17 +24,26 @@ function createLocalSessionId(npcId: VillagerNpcId) {
   return `villager-${npcId}-${randomId}`
 }
 
-function findScene(script: VillagerDialogueScript, sceneId: string | null): VillagerScene | null {
-  if (!sceneId) return null
-  return script.scenes.find(scene => scene.sceneId === sceneId) ?? null
+function createClientEventId() {
+  return typeof crypto !== 'undefined' && 'randomUUID' in crypto
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
+
+function getStartNode(script: CounselingScript) {
+  const node = script.nodes[script.startNodeId]
+  if (!node) throw new Error(`No start node for ${script.scriptId}`)
+  return node
 }
 
 export function useVillageDialogueSession(onFinished?: () => void) {
   const [status, setStatus] = useState<VillagerDialogueStatus>('idle')
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [currentNpcId, setCurrentNpcId] = useState<VillagerNpcId | null>(null)
-  const [currentScene, setCurrentScene] = useState<VillagerScene | null>(null)
-  const [currentResponse, setCurrentResponse] = useState<string | null>(null)
+  const [currentScript, setCurrentScript] = useState<CounselingScript | null>(null)
+  const [currentNode, setCurrentNode] = useState<VillagerDialogueNode | null>(null)
+  const [visibleLines, setVisibleLines] = useState<string[]>([])
+  const [selectedChoiceIntentId, setSelectedChoiceIntentId] = useState<string | null>(null)
   const [selectedEvents, setSelectedEvents] = useState<VillagerChoiceEvent[]>([])
   const timeoutIds = useRef<number[]>([])
 
@@ -56,13 +62,38 @@ export function useVillageDialogueSession(onFinished?: () => void) {
     timeoutIds.current.push(timeoutId)
   }, [])
 
+  const showQuestion = useCallback((node: VillagerDialogueNode) => {
+    setCurrentNode(node)
+    setVisibleLines([node.questionText])
+    setSelectedChoiceIntentId(null)
+    setStatus('waiting_choice')
+  }, [])
+
+  const scheduleOpening = useCallback(
+    (sharedScript: CounselingScript, startNode: VillagerDialogueNode) => {
+      queueTimer(() => {
+        if (sharedScript.contextLine) {
+          setVisibleLines([sharedScript.contextLine])
+          setStatus('opening_context')
+          queueTimer(() => showQuestion(startNode), OPENING_STEP_DELAY_MS)
+          return
+        }
+
+        showQuestion(startNode)
+      }, OPENING_STEP_DELAY_MS)
+    },
+    [queueTimer, showQuestion],
+  )
+
   const resetSession = useCallback(() => {
     clearTimers()
     setStatus('idle')
     setSessionId(null)
     setCurrentNpcId(null)
-    setCurrentScene(null)
-    setCurrentResponse(null)
+    setCurrentScript(null)
+    setCurrentNode(null)
+    setVisibleLines([])
+    setSelectedChoiceIntentId(null)
     setSelectedEvents([])
   }, [clearTimers])
 
@@ -71,37 +102,77 @@ export function useVillageDialogueSession(onFinished?: () => void) {
     onFinished?.()
   }, [onFinished, resetSession])
 
+  const cancelDialogue = useCallback(() => {
+    if (sessionId) {
+      void cancelVillagerDialogueSession(sessionId).catch(() => undefined)
+    }
+    closeDialogue()
+  }, [closeDialogue, sessionId])
+
   const startVillagerDialogue = useCallback(
     (npcId: VillagerNpcId) => {
-      const nextScript = villageDialogues[npcId]
+      const sharedScript = pickRandomCounselingScript(SHARED_COUNSELING_SCRIPTS)
+      const startNode = getStartNode(sharedScript)
+
       clearTimers()
       setSessionId(createLocalSessionId(npcId))
       setCurrentNpcId(npcId)
-      setCurrentScene(nextScript.scenes[0])
-      setCurrentResponse(buildOpeningLine(nextScript))
+      setCurrentScript(sharedScript)
+      setCurrentNode(startNode)
+      setSelectedChoiceIntentId(null)
       setSelectedEvents([])
-      setStatus('opening')
-      queueTimer(() => {
-        setCurrentResponse(null)
-        setStatus('opening')
-        queueTimer(() => {
-          setStatus('waiting_choice')
-        }, QUESTION_READING_DELAY_MS)
-      }, OPENING_DELAY_MS)
+      setStatus('opening_greeting')
+      setVisibleLines([VILLAGER_FIRST_GREETING[npcId]])
+      scheduleOpening(sharedScript, startNode)
     },
-    [clearTimers, queueTimer],
+    [clearTimers, scheduleOpening],
   )
+
+  const advanceDialogue = useCallback(() => {
+    if (status === 'opening_greeting' && currentScript && currentNode) {
+      clearTimers()
+      if (currentScript.contextLine) {
+        setVisibleLines([currentScript.contextLine])
+        setStatus('opening_context')
+        queueTimer(() => showQuestion(currentNode), OPENING_STEP_DELAY_MS)
+        return
+      }
+
+      showQuestion(currentNode)
+      return
+    }
+
+    if (status === 'opening_context' && currentNode) {
+      clearTimers()
+      showQuestion(currentNode)
+      return
+    }
+
+    if (status === 'ending_wait') {
+      closeDialogue()
+    }
+  }, [clearTimers, closeDialogue, currentNode, currentScript, queueTimer, showQuestion, status])
 
   const selectChoice = useCallback(
     async (choice: VillagerChoice) => {
-      if (status !== 'waiting_choice' || !sessionId || !script || !currentScene) return
+      if (status !== 'waiting_choice' || !sessionId || !script || !currentScript || !currentNode) {
+        return
+      }
 
+      clearTimers()
       setStatus('submitting_choice')
+      setSelectedChoiceIntentId(choice.choiceIntentId)
+
       const event: VillagerChoiceEvent = {
         sessionId,
+        clientEventId: createClientEventId(),
         npcId: script.npcId,
-        sceneId: currentScene.sceneId,
-        questionText: currentScene.questionText,
+        displayName: script.displayName,
+        npcName: script.backendNpcName,
+        topicId: currentScript.scriptId,
+        sceneId: currentNode.nodeId,
+        nodeId: currentNode.nodeId,
+        questionText: currentNode.questionText,
         choiceIntentId: choice.choiceIntentId,
         choiceText: choice.text,
         intensity: choice.intensity,
@@ -114,34 +185,62 @@ export function useVillageDialogueSession(onFinished?: () => void) {
       try {
         await saveVillagerChoiceEvent(event)
         setSelectedEvents(prev => [...prev, event])
-        setCurrentResponse(choice.npcResponse)
+
+        const responseLines =
+          choice.responseLines.length > 0 ? choice.responseLines : ['말해줘서 고마워.']
+        setVisibleLines([responseLines[0]])
         setStatus('showing_response')
 
+        responseLines.slice(1).forEach((line, index) => {
+          queueTimer(
+            () => {
+              setVisibleLines(prev => [...prev, line].slice(-2))
+            },
+            (index + 1) * RESPONSE_LINE_DELAY_MS,
+          )
+        })
+
+        const delayMs = Math.max(
+          MIN_RESPONSE_DELAY_MS,
+          responseLines.length * RESPONSE_LINE_DELAY_MS,
+        )
         queueTimer(() => {
-          const nextScene = findScene(script, choice.nextSceneId)
-          if (nextScene) {
-            setCurrentScene(nextScene)
-            setCurrentResponse(null)
-            setStatus('showing_response')
-            queueTimer(() => {
-              setStatus('waiting_choice')
-            }, QUESTION_READING_DELAY_MS)
+          if (!choice.nextNodeId || choice.endAfterSelect) {
+            const endingLines =
+              choice.endingLines && choice.endingLines.length > 0
+                ? choice.endingLines
+                : [currentScript.fallbackEndingLine ?? '필요하면 다시 와.']
+
+            setVisibleLines(endingLines.slice(0, 2))
+            setSelectedChoiceIntentId(null)
+            setStatus('ending_wait')
             return
           }
 
-          setCurrentResponse(script.closingLine)
-          setStatus('closing')
-          queueTimer(() => {
-            setStatus('finished')
+          const nextNode = currentScript.nodes[choice.nextNodeId]
+          if (!nextNode) {
             closeDialogue()
-          }, CLOSING_DELAY_MS)
-        }, RESPONSE_DELAY_MS)
+            return
+          }
+
+          showQuestion(nextNode)
+        }, delayMs)
       } catch {
         setStatus('error')
-        setCurrentResponse('저장에 실패했어요. 잠시 후 다시 시도해줘.')
+        setVisibleLines([SAVE_ERROR_LINE])
       }
     },
-    [closeDialogue, currentScene, queueTimer, script, sessionId, status],
+    [
+      clearTimers,
+      closeDialogue,
+      currentNode,
+      currentScript,
+      queueTimer,
+      script,
+      sessionId,
+      showQuestion,
+      status,
+    ],
   )
 
   useEffect(() => clearTimers, [clearTimers])
@@ -150,12 +249,17 @@ export function useVillageDialogueSession(onFinished?: () => void) {
     status,
     sessionId,
     currentNpcId,
-    currentScene,
-    currentResponse,
+    currentTopic: currentScript,
+    currentNode,
+    visibleLines,
+    visibleText: visibleLines.join('\n'),
+    selectedChoiceIntentId,
     selectedEvents,
     script,
     startVillagerDialogue,
     selectChoice,
+    advanceDialogue,
     closeDialogue,
+    cancelDialogue,
   }
 }
