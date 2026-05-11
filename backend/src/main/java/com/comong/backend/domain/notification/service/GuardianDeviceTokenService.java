@@ -39,11 +39,11 @@ public class GuardianDeviceTokenService {
 
         GuardianDeviceToken savedDeviceToken =
                 guardianDeviceTokenRepository
-                        .findByDeviceToken(request.token())
+                        .findByUserIdAndDeviceToken(userId, request.token())
                         .orElseThrow(
                                 () ->
                                         new IllegalStateException(
-                                                "Device token upsert completed but row was not found"));
+                                                "Device token ownership changed during registration"));
 
         return DeviceTokenResponse.from(savedDeviceToken);
     }
