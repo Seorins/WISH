@@ -28,5 +28,7 @@ public interface PatientProfileRepository extends JpaRepository<PatientProfile, 
 
     boolean existsByUserId(Long userId);
 
+    boolean existsByIdAndUserId(Long id, Long userId);
+
     long countByCreatedAtBetween(java.time.LocalDateTime start, java.time.LocalDateTime end);
 }
