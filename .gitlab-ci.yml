@@ -256,28 +256,14 @@ backend:test:
     paths:
       - backend/build/reports/tests/test/
 
-backend:build:
-  extends: .backend-base
-  stage: build
-  needs:
-    - backend:format
-    - backend:test
-  script:
-    - ./gradlew build -x test --no-daemon
-  artifacts:
-    when: on_success
-    expire_in: 1 week
-    paths:
-      - backend/build/libs/*.jar
-
 backend:image:
   stage: package
   image:
     name: gcr.io/kaniko-project/executor:v1.23.2-debug
     entrypoint: [""]
   needs:
-    - job: backend:build
-      artifacts: true
+    - backend:format
+    - backend:test
   variables:
     BACKEND_IMAGE_NAME: ${DOCKER_HUB_IMAGE}
   before_script:

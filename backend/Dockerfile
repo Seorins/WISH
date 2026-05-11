@@ -1,10 +1,18 @@
+FROM gradle:9.4.1-jdk21 AS builder
+
+WORKDIR /workspace
+
+COPY . .
+
+RUN chmod +x ./gradlew
+
+RUN ./gradlew bootJar -x test --no-daemon
+
 FROM eclipse-temurin:21-jre-alpine
 
 WORKDIR /app
 
-ARG JAR_DIR=build/libs/
-
-COPY ${JAR_DIR} /tmp/libs/
+COPY --from=builder /workspace/build/libs/ /tmp/libs/
 
 RUN set -eux; \
     jars="$(find /tmp/libs -maxdepth 1 -type f -name '*.jar' ! -name '*-plain.jar')"; \

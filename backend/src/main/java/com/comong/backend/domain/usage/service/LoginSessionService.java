@@ -7,6 +7,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
+import com.comong.backend.domain.notification.service.GuardianPushNotificationService;
 import com.comong.backend.domain.patient.entity.PatientProfile;
 import com.comong.backend.domain.patient.service.PatientProfileService;
 import com.comong.backend.domain.realtime.dto.RealtimeEventResponse;
@@ -39,6 +40,7 @@ public class LoginSessionService {
     private final PatientProfileService patientProfileService;
     private final RealtimeEventService realtimeEventService;
     private final RealtimeContentStateService realtimeContentStateService;
+    private final GuardianPushNotificationService guardianPushNotificationService;
 
     @Transactional
     public LoginSessionResponse start(Long userId, Long patientProfileId) {
@@ -55,6 +57,8 @@ public class LoginSessionService {
                 userId,
                 RealtimeEventResponse.gameStarted(
                         saved.getId(), patientProfile.getId(), patientProfile.getName()));
+        sendGameStartedPushAfterCommit(
+                userId, saved.getId(), patientProfile.getId(), patientProfile.getName());
         return LoginSessionResponse.from(saved);
     }
 
@@ -142,6 +146,31 @@ public class LoginSessionService {
         }
     }
 
+    private void sendGameStartedPushAfterCommit(
+            Long userId, Long loginSessionId, Long patientProfileId, String patientName) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            sendGameStartedPushSafely(userId, loginSessionId, patientProfileId, patientName);
+            return;
+        }
+        try {
+            TransactionSynchronizationManager.registerSynchronization(
+                    new TransactionSynchronization() {
+                        @Override
+                        public void afterCommit() {
+                            sendGameStartedPushSafely(
+                                    userId, loginSessionId, patientProfileId, patientName);
+                        }
+                    });
+        } catch (IllegalStateException e) {
+            log.warn(
+                    "Guardian push synchronization registration failed. Fallback to immediate send. userId={}, loginSessionId={}",
+                    userId,
+                    loginSessionId,
+                    e);
+            sendGameStartedPushSafely(userId, loginSessionId, patientProfileId, patientName);
+        }
+    }
+
     private void publishSafely(Long userId, RealtimeEventResponse event) {
         try {
             realtimeEventService.publish(userId, event);
@@ -159,6 +188,20 @@ public class LoginSessionService {
             realtimeContentStateService.clear(loginSessionId);
         } catch (RuntimeException e) {
             log.warn("Realtime content state cleanup failed. loginSessionId={}", loginSessionId, e);
+        }
+    }
+
+    private void sendGameStartedPushSafely(
+            Long userId, Long loginSessionId, Long patientProfileId, String patientName) {
+        try {
+            guardianPushNotificationService.sendGameStarted(
+                    userId, loginSessionId, patientProfileId, patientName);
+        } catch (RuntimeException e) {
+            log.warn(
+                    "Guardian push notification failed. userId={}, loginSessionId={}",
+                    userId,
+                    loginSessionId,
+                    e);
         }
     }
 }

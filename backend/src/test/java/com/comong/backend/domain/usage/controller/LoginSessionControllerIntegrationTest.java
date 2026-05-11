@@ -29,6 +29,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import com.comong.backend.domain.notification.service.GuardianPushNotificationService;
 import com.comong.backend.domain.patient.repository.PatientProfileRepository;
 import com.comong.backend.domain.realtime.dto.RealtimeEventResponse;
 import com.comong.backend.domain.realtime.dto.RealtimeEventType;
@@ -54,6 +55,7 @@ class LoginSessionControllerIntegrationTest extends IntegrationTestSupport {
     @Autowired private PatientProfileRepository patientProfileRepository;
     @Autowired private UserRepository userRepository;
     @MockitoBean private RealtimeEventService realtimeEventService;
+    @MockitoBean private GuardianPushNotificationService guardianPushNotificationService;
 
     @BeforeEach
     void cleanDb() {
@@ -121,6 +123,28 @@ class LoginSessionControllerIntegrationTest extends IntegrationTestSupport {
         assertThat(event.patientProfileId()).isEqualTo(patientProfileId);
         assertThat(event.patientName()).isEqualTo("Patient");
         assertThat(event.contentType()).isNull();
+    }
+
+    @Test
+    void start_sendsGameStartedPushNotification() throws Exception {
+        String token = setupUserWithProfile("login-start-push@example.com", "login-start-push");
+        long userId = userIdFromToken(token);
+        long patientProfileId = ownProfileId(token);
+
+        String body =
+                mockMvc.perform(
+                                post("/login-sessions")
+                                        .header("Authorization", "Bearer " + token)
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .content("{\"patientProfileId\":" + patientProfileId + "}"))
+                        .andExpect(status().isCreated())
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString();
+        long sessionId = objectMapper.readTree(body).get("data").get("id").asLong();
+
+        verify(guardianPushNotificationService)
+                .sendGameStarted(userId, sessionId, patientProfileId, "Patient");
     }
 
     @Test
