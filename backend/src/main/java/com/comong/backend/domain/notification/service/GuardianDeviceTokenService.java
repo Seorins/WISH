@@ -30,8 +30,12 @@ public class GuardianDeviceTokenService {
         validatePatientProfileOwnership(userId, request.patientProfileId());
         validateUserExists(userId);
 
-        guardianDeviceTokenRepository.upsertDeviceToken(
-                userId, request.token(), request.platform().name(), request.userAgent());
+        int affectedRows =
+                guardianDeviceTokenRepository.upsertDeviceToken(
+                        userId, request.token(), request.platform().name(), request.userAgent());
+        if (affectedRows <= 0) {
+            throw new IllegalStateException("Device token upsert did not affect any rows");
+        }
 
         GuardianDeviceToken savedDeviceToken =
                 guardianDeviceTokenRepository
