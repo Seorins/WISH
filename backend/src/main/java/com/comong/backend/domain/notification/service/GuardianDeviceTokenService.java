@@ -30,20 +30,17 @@ public class GuardianDeviceTokenService {
         validatePatientProfileOwnership(userId, request.patientProfileId());
         validateUserExists(userId);
 
-        int affectedRows =
+        Long deviceTokenId =
                 guardianDeviceTokenRepository.upsertDeviceToken(
                         userId, request.token(), request.platform().name(), request.userAgent());
-        if (affectedRows <= 0) {
-            throw new IllegalStateException("Device token upsert did not affect any rows");
-        }
 
         GuardianDeviceToken savedDeviceToken =
                 guardianDeviceTokenRepository
-                        .findByUserIdAndDeviceToken(userId, request.token())
+                        .findById(deviceTokenId)
                         .orElseThrow(
                                 () ->
                                         new IllegalStateException(
-                                                "Device token ownership changed during registration"));
+                                                "Device token upsert returned missing row"));
 
         return DeviceTokenResponse.from(savedDeviceToken);
     }

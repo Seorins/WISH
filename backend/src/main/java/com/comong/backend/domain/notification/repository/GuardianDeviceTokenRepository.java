@@ -4,7 +4,6 @@ import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -12,7 +11,6 @@ import com.comong.backend.domain.notification.entity.GuardianDeviceToken;
 
 public interface GuardianDeviceTokenRepository extends JpaRepository<GuardianDeviceToken, Long> {
 
-    @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query(
             value =
                     """
@@ -44,9 +42,10 @@ public interface GuardianDeviceTokenRepository extends JpaRepository<GuardianDev
                         active = TRUE,
                         updated_at = CURRENT_TIMESTAMP,
                         deactivated_at = NULL
+                    RETURNING id
                     """,
             nativeQuery = true)
-    int upsertDeviceToken(
+    Long upsertDeviceToken(
             @Param("userId") Long userId,
             @Param("deviceToken") String deviceToken,
             @Param("platform") String platform,
