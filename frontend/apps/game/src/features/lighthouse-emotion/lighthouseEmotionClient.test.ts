@@ -200,4 +200,52 @@ describe('submitLighthouseEmotionTurn', () => {
       },
     )
   })
+
+  it('fills backend-required choice metadata when backend scene omits it', async () => {
+    localStorage.setItem('wish_access_token', 'token-1')
+    const nextScene = {
+      questionText: '다음 질문',
+      choices: [{ choiceIntentId: 'next', text: '다음 선택' }],
+      secondaryAction: null,
+      shouldEndSession: false,
+    }
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        code: 'OK',
+        message: 'ok',
+        data: {
+          sessionId: 42,
+          status: 'IN_PROGRESS',
+          nextScene,
+        },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(
+      submitLighthouseEmotionTurn('42', {
+        questionText: '오늘 기분은 어떠니?',
+        selectedChoice: {
+          choiceIntentId: 'mood_okay',
+          text: '괜찮아요',
+        },
+      }),
+    ).resolves.toEqual({ nextScene })
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringMatching(/\/api\/v1\/dialogue\/sessions\/42\/turns$/),
+      expect.objectContaining({
+        body: JSON.stringify({
+          questionText: '오늘 기분은 어떠니?',
+          selectedChoice: {
+            choiceIntentId: 'mood_okay',
+            text: '괜찮아요',
+            intensity: 0,
+            concernFlags: [],
+            protectiveFactors: [],
+          },
+        }),
+      }),
+    )
+  })
 })

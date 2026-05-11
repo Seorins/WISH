@@ -104,7 +104,7 @@ describe('LighthouseEmotionController', () => {
     })
 
     expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringMatching(/\/api\/v1\/emotion-checkin\/sessions$/),
+      expect.stringMatching(/\/api\/v1\/dialogue\/sessions$/),
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({
