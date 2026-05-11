@@ -8,6 +8,7 @@ import {
 } from '@wish/api-client'
 import { useMyPatientId } from '@/features/auth/hooks/useMyPatientId'
 import { useDailyUsageStats, useMyMusicResults, useUsageAverages } from '../hooks'
+import { ActivityEmptyState } from './ActivityEmptyState'
 import styles from './MusicMain.module.css'
 
 const TONE_CLASS = {
@@ -187,19 +188,34 @@ export function MusicMain() {
   }, [safeIndex])
 
   if (isLoading) {
-    return <div className={styles.fullStatus}>활동 결과를 불러오는 중...</div>
+    return <ActivityEmptyState variant="loading" icon="🎵" title="활동 결과를 불러오는 중..." />
   }
   if (error) {
-    return <div className={`${styles.fullStatus} ${styles.error}`}>활동을 불러오지 못했어요</div>
+    return (
+      <ActivityEmptyState
+        variant="error"
+        icon="⚠️"
+        title="활동을 불러오지 못했어요"
+        description="잠시 후 다시 시도해주세요"
+      />
+    )
   }
   if (allResults.length === 0) {
-    return <div className={styles.fullStatus}>아직 음악 활동 기록이 없어요</div>
+    return (
+      <ActivityEmptyState
+        icon="🎵"
+        title="아직 음악 활동 기록이 없어요"
+        description="아이와 함께 음악실에서 연주를 시작해보세요"
+      />
+    )
   }
   if (dayResults.length === 0 || !current) {
     return (
-      <section className={styles.heroCard}>
-        <div className={styles.emptyDay}>오늘 음악 활동 기록이 없어요</div>
-      </section>
+      <ActivityEmptyState
+        icon="🎵"
+        title="오늘 음악 활동 기록이 없어요"
+        description="오늘도 음악실에서 즐거운 연주를!"
+      />
     )
   }
 

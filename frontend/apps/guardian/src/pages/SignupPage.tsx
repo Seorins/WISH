@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Link, useNavigate } from 'react-router-dom'
@@ -53,6 +53,54 @@ export function SignupPage() {
   })
 
   const selectedGender = watch('gender')
+
+  const [birthInput, setBirthInput] = useState('')
+  const hiddenDateRef = useRef<HTMLInputElement>(null)
+
+  register('birthDate')
+
+  const formatBirth = (raw: string): string => {
+    const digits = raw.replace(/\D/g, '').slice(0, 8)
+    if (digits.length <= 4) return digits
+    if (digits.length <= 6) return `${digits.slice(0, 4)}-${digits.slice(4)}`
+    return `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6, 8)}`
+  }
+
+  const commitBirth = (formatted: string) => {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(formatted)) {
+      setValue('birthDate', formatted, { shouldValidate: true })
+    } else {
+      setValue('birthDate', '', { shouldValidate: formState.isSubmitted })
+    }
+  }
+
+  const onBirthChange = (raw: string) => {
+    const formatted = formatBirth(raw)
+    setBirthInput(formatted)
+    commitBirth(formatted)
+  }
+
+  const openBirthPicker = () => {
+    const el = hiddenDateRef.current
+    if (!el) return
+    if (typeof el.showPicker === 'function') {
+      try {
+        el.showPicker()
+        return
+      } catch {
+        // fall through
+      }
+    }
+    el.focus()
+    el.click()
+  }
+
+  const onBirthPicked = (raw: string) => {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+      setBirthInput(raw)
+      setValue('birthDate', raw, { shouldValidate: true })
+    }
+  }
 
   useEffect(() => {
     if (token) {
@@ -111,6 +159,7 @@ export function SignupPage() {
             <h1 className={styles.title}>회원가입</h1>
 
             <form onSubmit={handleSubmit(onSubmit)} className={styles.form}>
+              <div className={styles.sectionHeader}>보호자 정보</div>
               <div className={styles.field}>
                 <span className={styles.label}>이메일</span>
                 <input
@@ -156,15 +205,19 @@ export function SignupPage() {
                 )}
               </div>
 
+              <div className={styles.sectionHeader}>
+                아이 정보
+                <span className={styles.sectionHint}>회원가입 시 등록되는 자녀(환자) 프로필</span>
+              </div>
               <div className={styles.field}>
-                <span className={styles.label}>이름</span>
+                <span className={styles.label}>아이 이름</span>
                 <input
                   type="text"
                   autoComplete="name"
                   {...register('name')}
                   className={styles.input}
                   disabled={submitting}
-                  placeholder="실명"
+                  placeholder="아이 실명"
                 />
                 {formState.errors.name && (
                   <span className={styles.errorText}>{formState.errors.name.message}</span>
@@ -173,20 +226,60 @@ export function SignupPage() {
 
               <div className={styles.row}>
                 <div className={styles.field}>
-                  <span className={styles.label}>생년월일</span>
-                  <input
-                    type="date"
-                    {...register('birthDate')}
-                    className={styles.input}
-                    disabled={submitting}
-                  />
+                  <span className={styles.label}>아이 생년월일</span>
+                  <div className={styles.birthCombo}>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={10}
+                      value={birthInput}
+                      onChange={event => onBirthChange(event.target.value)}
+                      className={`${styles.input} ${styles.birthTextInput}`}
+                      disabled={submitting}
+                      placeholder="YYYY-MM-DD"
+                      aria-label="생년월일"
+                    />
+                    <button
+                      type="button"
+                      onClick={openBirthPicker}
+                      className={styles.birthPickerBtn}
+                      disabled={submitting}
+                      aria-label="달력으로 생년월일 선택"
+                    >
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden="true"
+                      >
+                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                        <line x1="16" y1="2" x2="16" y2="6"></line>
+                        <line x1="8" y1="2" x2="8" y2="6"></line>
+                        <line x1="3" y1="10" x2="21" y2="10"></line>
+                      </svg>
+                    </button>
+                    <input
+                      ref={hiddenDateRef}
+                      type="date"
+                      value={/^\d{4}-\d{2}-\d{2}$/.test(birthInput) ? birthInput : ''}
+                      onChange={event => onBirthPicked(event.target.value)}
+                      className={styles.hiddenDateInput}
+                      tabIndex={-1}
+                      aria-hidden="true"
+                    />
+                  </div>
                   {formState.errors.birthDate && (
                     <span className={styles.errorText}>{formState.errors.birthDate.message}</span>
                   )}
                 </div>
 
                 <div className={styles.field}>
-                  <span className={styles.label}>성별</span>
+                  <span className={styles.label}>아이 성별</span>
                   <div className={styles.genderGroup}>
                     {GENDER_OPTIONS.map(option => (
                       <button
