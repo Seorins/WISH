@@ -180,8 +180,9 @@
 
 .bellCount {
   position: absolute;
-  top: 2px;
-  right: 2px;
+  /* 종 원 안쪽이 아니라 우상단 모서리 바깥에 살짝 걸치게 — 가시성 ↑. */
+  top: -4px;
+  right: -4px;
   min-width: 18px;
   height: 18px;
   padding: 0 5px;

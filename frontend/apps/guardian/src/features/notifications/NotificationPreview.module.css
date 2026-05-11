@@ -1,17 +1,25 @@
 .preview {
-  position: absolute;
-  top: calc(100% + 10px);
-  right: 0;
-  width: min(320px, 92vw);
+  /* 종 아래가 아니라 viewport 의 우측 가장자리에 고정 — 헤더 라우트와 독립적으로 같은 위치. */
+  position: fixed;
+  top: 80px;
+  right: 16px;
+  width: min(320px, calc(100vw - 32px));
   background: var(--dash-color-surface);
   border: 1px solid var(--dash-color-border);
   border-left: 3px solid var(--dash-color-primary);
   border-radius: 14px;
   box-shadow: 0 12px 32px rgba(60, 50, 120, 0.18);
   padding: 12px 16px;
-  z-index: 25;
-  animation: previewIn 200ms ease-out;
+  z-index: 35;
+  animation: previewIn 220ms ease-out;
   pointer-events: none;
+}
+
+@media (max-width: 768px) {
+  .preview {
+    top: 64px;
+    right: 12px;
+  }
 }
 
 .title {
