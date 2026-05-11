@@ -390,11 +390,49 @@ backend:notify-failure:
 # AI
 # ----------------------------------------------------------------------------
 
-.ai-dev-rules: &ai_dev_rules
+.ai-base-dev-rules: &ai_base_dev_rules
   - if: $CI_COMMIT_BRANCH == "develop"
     changes:
-      - ai/**/*
-      - .gitlab-ci.yml
+      - ai/Dockerfile
+      - ai/requirements.txt
+
+.ai-app-dev-rules: &ai_app_dev_rules
+  - if: $CI_COMMIT_BRANCH == "develop"
+    changes:
+      - ai/app/**/*
+      - ai/Dockerfile
+      - ai/requirements.txt
+
+ai:base-image:
+  stage: build
+  image:
+    name: gcr.io/kaniko-project/executor:v1.23.2-debug
+    entrypoint: [""]
+  variables:
+    AI_BASE_IMAGE_NAME: ${DOCKER_HUB_IMAGE}
+  before_script:
+    - echo "DOCKER_HUB_IMAGE=${DOCKER_HUB_IMAGE:-<empty>}"
+    - if [ -n "${DOCKER_HUB_USER}" ]; then echo "DOCKER_HUB_USER=set"; else echo "DOCKER_HUB_USER=<empty>"; fi
+    - if [ -n "${DOCKER_HUB_TOKEN}" ]; then echo "DOCKER_HUB_TOKEN=set"; else echo "DOCKER_HUB_TOKEN=<empty>"; fi
+    - test -n "${DOCKER_HUB_IMAGE}" || (echo "DOCKER_HUB_IMAGE is empty" && exit 1)
+    - test -n "${DOCKER_HUB_USER}" || (echo "DOCKER_HUB_USER is empty" && exit 1)
+    - test -n "${DOCKER_HUB_TOKEN}" || (echo "DOCKER_HUB_TOKEN is empty" && exit 1)
+    - mkdir -p /kaniko/.docker
+    - echo "{\"auths\":{\"https://index.docker.io/v1/\":{\"username\":\"${DOCKER_HUB_USER}\",\"password\":\"${DOCKER_HUB_TOKEN}\"}}}" > /kaniko/.docker/config.json
+  script:
+    - |
+      echo "AI_BASE_IMAGE_NAME=${AI_BASE_IMAGE_NAME:-<empty>}"
+      DESTINATIONS="--destination ${AI_BASE_IMAGE_NAME}:ai-base-${CI_COMMIT_SHORT_SHA}"
+      if [ -n "${CI_COMMIT_BRANCH}" ]; then
+        DESTINATIONS="${DESTINATIONS} --destination ${AI_BASE_IMAGE_NAME}:ai-base-${CI_COMMIT_REF_SLUG}-latest"
+      fi
+
+      /kaniko/executor \
+        --context "${CI_PROJECT_DIR}/ai" \
+        --dockerfile "${CI_PROJECT_DIR}/ai/Dockerfile" \
+        --target ai-base \
+        ${DESTINATIONS}
+  rules: *ai_base_dev_rules
 
 ai:image:
   stage: package
@@ -403,6 +441,10 @@ ai:image:
     entrypoint: [""]
   variables:
     AI_IMAGE_NAME: ${DOCKER_HUB_IMAGE}
+    AI_BASE_IMAGE: ${DOCKER_HUB_IMAGE}:ai-base-${CI_COMMIT_REF_SLUG}-latest
+  needs:
+    - job: ai:base-image
+      optional: true
   before_script:
     - echo "DOCKER_HUB_IMAGE=${DOCKER_HUB_IMAGE:-<empty>}"
     - if [ -n "${DOCKER_HUB_USER}" ]; then echo "DOCKER_HUB_USER=set"; else echo "DOCKER_HUB_USER=<empty>"; fi
@@ -415,6 +457,7 @@ ai:image:
   script:
     - |
       echo "AI_IMAGE_NAME=${AI_IMAGE_NAME:-<empty>}"
+      echo "AI_BASE_IMAGE=${AI_BASE_IMAGE:-<empty>}"
       DESTINATIONS="--destination ${AI_IMAGE_NAME}:ai-${CI_COMMIT_SHORT_SHA}"
       if [ -n "${CI_COMMIT_BRANCH}" ]; then
         DESTINATIONS="${DESTINATIONS} --destination ${AI_IMAGE_NAME}:ai-${CI_COMMIT_REF_SLUG}-latest"
@@ -423,8 +466,10 @@ ai:image:
       /kaniko/executor \
         --context "${CI_PROJECT_DIR}/ai" \
         --dockerfile "${CI_PROJECT_DIR}/ai/Dockerfile" \
+        --target ci-runtime \
+        --build-arg AI_BASE_IMAGE="${AI_BASE_IMAGE}" \
         ${DESTINATIONS}
-  rules: *ai_dev_rules
+  rules: *ai_app_dev_rules
 
 ai:deploy-dev:
   stage: deploy
@@ -477,7 +522,7 @@ ai:deploy-dev:
       with urllib.request.urlopen(request, timeout=20) as response:
           response.read()
       PY
-  rules: *ai_dev_rules
+  rules: *ai_app_dev_rules
 
 # ----------------------------------------------------------------------------
 # Frontend
