@@ -139,7 +139,10 @@ export function HeaderBar() {
           >
             <BellIcon width={20} height={20} />
             {itemCount > 0 && !notificationsOpen ? (
-              <span className={styles.bellCount} aria-hidden>
+              <span
+                className={`${styles.bellCount} ${itemCount > 9 ? styles.bellCountWide : ''}`}
+                aria-hidden
+              >
                 {itemCount > 9 ? '9+' : itemCount}
               </span>
             ) : null}
