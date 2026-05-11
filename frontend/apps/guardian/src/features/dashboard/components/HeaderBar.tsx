@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import logoUrl from '@/assets/logo.png'
 import { useAuthStore } from '@/shared/auth/store'
+import { calcKoreanAge, useMyPatient } from '@/features/auth/hooks/useMyPatient'
 import { PATIENT } from '../data/mock'
 import {
   ActivityIcon,
@@ -44,6 +45,11 @@ export function HeaderBar() {
   const profileRef = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
   const clearAuth = useAuthStore(s => s.clear)
+  const { data: patient } = useMyPatient()
+
+  const displayName = patient?.name ?? ''
+  const ageValue = patient?.birthDate ? calcKoreanAge(patient.birthDate) : null
+  const displayMeta = patient ? (ageValue != null ? `아이 · ${ageValue}세` : '아이') : ''
 
   useEffect(() => {
     if (!menuOpen) return
@@ -111,8 +117,8 @@ export function HeaderBar() {
               <img src={PATIENT.avatarUrl} alt="" />
             </span>
             <span className={styles.profileText}>
-              <span className={styles.profileName}>{PATIENT.name}</span>
-              <span className={styles.profileMeta}>{PATIENT.age}세</span>
+              <span className={styles.profileName}>{displayName}</span>
+              <span className={styles.profileMeta}>{displayMeta}</span>
             </span>
             <ChevronDownIcon className={`${styles.chev} ${menuOpen ? styles.chevOpen : ''}`} />
           </button>
