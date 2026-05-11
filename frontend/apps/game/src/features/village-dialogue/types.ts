@@ -42,7 +42,7 @@ export interface VillagerDialogueScript {
 }
 
 export interface VillagerChoiceEvent {
-  sessionId: string
+  sessionId: number
   npcId: VillagerNpcId
   sceneId: string
   questionText: string

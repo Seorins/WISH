@@ -5,6 +5,7 @@ import { VillagerChoiceOverlay } from './VillagerChoiceOverlay'
 
 interface VillagerDialogueControllerProps {
   npcId: VillagerNpcId | null
+  patientProfileId: number | undefined
   isOpen: boolean
   onClose: () => void
   onTextChange?: (text: string) => void
@@ -12,6 +13,7 @@ interface VillagerDialogueControllerProps {
 
 export function VillagerDialogueController({
   npcId,
+  patientProfileId,
   isOpen,
   onClose,
   onTextChange,
@@ -24,12 +26,12 @@ export function VillagerDialogueController({
     startVillagerDialogue,
     selectChoice,
     closeDialogue,
-  } = useVillageDialogueSession(onClose)
+  } = useVillageDialogueSession(patientProfileId, onClose)
   const [selectedChoiceId, setSelectedChoiceId] = useState<string | null>(null)
 
   useEffect(() => {
     if (!isOpen || !npcId) return
-    startVillagerDialogue(npcId)
+    void startVillagerDialogue(npcId)
   }, [isOpen, npcId, startVillagerDialogue])
 
   const visibleText = currentResponse ?? currentScene?.questionText ?? ''

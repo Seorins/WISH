@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { saveVillagerChoiceEvent } from './villageDialogueClient'
+import {
+  finishVillageDialogueSession,
+  saveVillagerChoiceEvent,
+  startVillageDialogueSession,
+  type VillageDialogueFinishReason,
+} from './villageDialogueClient'
+import { VILLAGE_NPC_TO_API_ENUM } from './npcMapping'
 import { villageDialogues } from './villageDialogues'
 import type {
   VillagerChoice,
@@ -19,27 +25,24 @@ function buildOpeningLine(script: VillagerDialogueScript) {
   return `안녕! ${script.greetingLine}`
 }
 
-function createLocalSessionId(npcId: VillagerNpcId) {
-  const randomId =
-    typeof crypto !== 'undefined' && 'randomUUID' in crypto
-      ? crypto.randomUUID()
-      : `${Date.now()}-${Math.random().toString(36).slice(2)}`
-  return `villager-${npcId}-${randomId}`
-}
-
 function findScene(script: VillagerDialogueScript, sceneId: string | null): VillagerScene | null {
   if (!sceneId) return null
   return script.scenes.find(scene => scene.sceneId === sceneId) ?? null
 }
 
-export function useVillageDialogueSession(onFinished?: () => void) {
+export function useVillageDialogueSession(
+  patientProfileId: number | undefined,
+  onFinished?: () => void,
+) {
   const [status, setStatus] = useState<VillagerDialogueStatus>('idle')
-  const [sessionId, setSessionId] = useState<string | null>(null)
+  const [sessionId, setSessionId] = useState<number | null>(null)
   const [currentNpcId, setCurrentNpcId] = useState<VillagerNpcId | null>(null)
   const [currentScene, setCurrentScene] = useState<VillagerScene | null>(null)
   const [currentResponse, setCurrentResponse] = useState<string | null>(null)
   const [selectedEvents, setSelectedEvents] = useState<VillagerChoiceEvent[]>([])
   const timeoutIds = useRef<number[]>([])
+  const sessionIdRef = useRef<number | null>(null)
+  const startInFlightRef = useRef(false)
 
   const script = useMemo(
     () => (currentNpcId ? villageDialogues[currentNpcId] : null),
@@ -58,6 +61,7 @@ export function useVillageDialogueSession(onFinished?: () => void) {
 
   const resetSession = useCallback(() => {
     clearTimers()
+    sessionIdRef.current = null
     setStatus('idle')
     setSessionId(null)
     setCurrentNpcId(null)
@@ -66,39 +70,74 @@ export function useVillageDialogueSession(onFinished?: () => void) {
     setSelectedEvents([])
   }, [clearTimers])
 
-  const closeDialogue = useCallback(() => {
-    resetSession()
-    onFinished?.()
-  }, [onFinished, resetSession])
+  const finishSession = useCallback(async (reason: VillageDialogueFinishReason) => {
+    const target = sessionIdRef.current
+    if (!target) return
+    try {
+      await finishVillageDialogueSession(target, reason)
+    } catch {
+      // 마감 실패는 UX 흐름을 막지 않음. 백엔드 상태는 stale 될 수 있지만 다음 세션 시작에는 영향 없음.
+    }
+  }, [])
+
+  const closeDialogue = useCallback(
+    (reason: VillageDialogueFinishReason = 'COMPLETED') => {
+      void finishSession(reason)
+      resetSession()
+      onFinished?.()
+    },
+    [finishSession, onFinished, resetSession],
+  )
 
   const startVillagerDialogue = useCallback(
-    (npcId: VillagerNpcId) => {
+    async (npcId: VillagerNpcId) => {
+      if (startInFlightRef.current || sessionIdRef.current) return
+      if (!Number.isInteger(patientProfileId) || (patientProfileId ?? 0) <= 0) {
+        setStatus('error')
+        setCurrentResponse('잠시 후 다시 말을 걸어줘.')
+        return
+      }
+
       const nextScript = villageDialogues[npcId]
+      const npcEnum = VILLAGE_NPC_TO_API_ENUM[npcId]
       clearTimers()
-      setSessionId(createLocalSessionId(npcId))
       setCurrentNpcId(npcId)
       setCurrentScene(nextScript.scenes[0])
       setCurrentResponse(buildOpeningLine(nextScript))
       setSelectedEvents([])
       setStatus('opening')
-      queueTimer(() => {
-        setCurrentResponse(null)
-        setStatus('opening')
+
+      try {
+        startInFlightRef.current = true
+        const result = await startVillageDialogueSession(patientProfileId as number, npcEnum)
+        sessionIdRef.current = result.sessionId
+        setSessionId(result.sessionId)
+
         queueTimer(() => {
-          setStatus('waiting_choice')
-        }, QUESTION_READING_DELAY_MS)
-      }, OPENING_DELAY_MS)
+          setCurrentResponse(null)
+          setStatus('opening')
+          queueTimer(() => {
+            setStatus('waiting_choice')
+          }, QUESTION_READING_DELAY_MS)
+        }, OPENING_DELAY_MS)
+      } catch {
+        setStatus('error')
+        setCurrentResponse('잠시 후 다시 말을 걸어줘.')
+      } finally {
+        startInFlightRef.current = false
+      }
     },
-    [clearTimers, queueTimer],
+    [clearTimers, patientProfileId, queueTimer],
   )
 
   const selectChoice = useCallback(
     async (choice: VillagerChoice) => {
-      if (status !== 'waiting_choice' || !sessionId || !script || !currentScene) return
+      const targetSessionId = sessionIdRef.current
+      if (status !== 'waiting_choice' || !targetSessionId || !script || !currentScene) return
 
       setStatus('submitting_choice')
       const event: VillagerChoiceEvent = {
-        sessionId,
+        sessionId: targetSessionId,
         npcId: script.npcId,
         sceneId: currentScene.sceneId,
         questionText: currentScene.questionText,
@@ -133,7 +172,7 @@ export function useVillageDialogueSession(onFinished?: () => void) {
           setStatus('closing')
           queueTimer(() => {
             setStatus('finished')
-            closeDialogue()
+            closeDialogue('COMPLETED')
           }, CLOSING_DELAY_MS)
         }, RESPONSE_DELAY_MS)
       } catch {
@@ -141,8 +180,12 @@ export function useVillageDialogueSession(onFinished?: () => void) {
         setCurrentResponse('저장에 실패했어요. 잠시 후 다시 시도해줘.')
       }
     },
-    [closeDialogue, currentScene, queueTimer, script, sessionId, status],
+    [closeDialogue, currentScene, queueTimer, script, status],
   )
+
+  const cancelDialogue = useCallback(() => {
+    closeDialogue('CANCELLED')
+  }, [closeDialogue])
 
   useEffect(() => clearTimers, [clearTimers])
 
@@ -156,6 +199,6 @@ export function useVillageDialogueSession(onFinished?: () => void) {
     script,
     startVillagerDialogue,
     selectChoice,
-    closeDialogue,
+    closeDialogue: cancelDialogue,
   }
 }
