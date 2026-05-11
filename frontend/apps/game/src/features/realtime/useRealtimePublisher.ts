@@ -15,9 +15,10 @@ import { useLoginSessionStore } from '../../stores/loginSessionStore'
 const GUARDIAN_IDENTITY_PREFIX = 'guardian-'
 
 // 캔버스 publish 시 사용할 인코딩 캡. dev 시연 환경(MacBook + 가정용 와이파이) 기준
-// 1.5Mbps / 24fps 면 화면 가독성 충분 + 업링크 부담 적음. 운영 모니터링하며 조정.
-const PUBLISH_MAX_BITRATE = 1_500_000
-const PUBLISH_FRAMERATE = 24
+// 3Mbps / 30fps + h264 코덱으로 픽셀 도트 그래픽이 흐려지지 않게 한다. 업링크 여유가
+// 부족한 환경이라면 캡을 다시 내릴 것.
+const PUBLISH_MAX_BITRATE = 3_000_000
+const PUBLISH_FRAMERATE = 30
 
 // 게임앱 LiveKit publisher 훅.
 // 1) loginSessionId(activeSession) + canvas 가 둘 다 준비되면 game-token 받아 room.connect
@@ -55,6 +56,10 @@ export function useRealtimePublisher(canvas: HTMLCanvasElement | null) {
       try {
         await room.localParticipant.publishTrack(localTrack, {
           source: Track.Source.Camera,
+          // h264 가 하드웨어 디코딩 지원이 넓어 보호자 측 끊김/지터에 유리. vp8 보다 같은 bitrate
+          // 에서 도트 그래픽 가독성도 양호. simulcast 는 단일 viewer 라 비활성.
+          videoCodec: 'h264',
+          simulcast: false,
           videoEncoding: {
             maxBitrate: PUBLISH_MAX_BITRATE,
             maxFramerate: PUBLISH_FRAMERATE,

@@ -23,6 +23,28 @@ export function LiveKitViewer({ activeSession }: Props) {
     videoRef,
     audioRef,
   })
+
+  // 게임앱 Phaser canvas 가 항상 16:9 인 건 아니라(개발자 도구/멀티모니터/특이 비율 환경)
+  // stage 비율을 source 의 videoWidth/videoHeight 로 동적 매핑한다. 비율이 맞으면
+  // letterbox(검은 여백) 도 없고 가로 잘림도 없다. 메타데이터 도착 전엔 16:9 폴백.
+  const [videoAspect, setVideoAspect] = useState(16 / 9)
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video) return
+    const sync = () => {
+      const { videoWidth, videoHeight } = video
+      if (videoWidth > 0 && videoHeight > 0) {
+        setVideoAspect(videoWidth / videoHeight)
+      }
+    }
+    video.addEventListener('loadedmetadata', sync)
+    video.addEventListener('resize', sync)
+    sync()
+    return () => {
+      video.removeEventListener('loadedmetadata', sync)
+      video.removeEventListener('resize', sync)
+    }
+  }, [hasRemoteVideo])
   const contentActive = useRealtimeStore(state => state.contentActive)
   const pttEnabled = status === 'connected' && contentActive
 
@@ -55,9 +77,16 @@ export function LiveKitViewer({ activeSession }: Props) {
     setAudioUnmuted(prev => !prev)
   }, [])
 
+  // stage 의 aspect-ratio 와 max-width 둘 다 source 비율에 맞춰 inline 설정.
+  // 세로 100vh - 100px(헤더/패딩) 공간 안에서 source 비율에 따라 가로 한도 결정.
+  const stageStyle = {
+    aspectRatio: String(videoAspect),
+    maxWidth: `calc((100vh - 100px) * ${videoAspect})`,
+  }
+
   return (
     <div className={styles.viewer}>
-      <div className={styles.stage}>
+      <div className={styles.stage} style={stageStyle}>
         <video
           ref={videoRef}
           className={styles.video}
@@ -69,12 +98,6 @@ export function LiveKitViewer({ activeSession }: Props) {
         />
         {/* muted 기본값으로 autoplay 차단 우회 — 소리 켜기 버튼이 unmute 한다. */}
         <audio ref={audioRef} className={styles.audio} autoPlay muted />
-
-        <div className={styles.topLeftBar}>
-          <span className={styles.patientLabel}>
-            {activeSession.patientName} 님이 게임에 접속해 있어요
-          </span>
-        </div>
 
         <div className={styles.topRightBar}>
           {status === 'connected' ? (
