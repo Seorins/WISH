@@ -114,7 +114,6 @@ public class LoginSessionService {
                     userId,
                     event.type(),
                     e);
-            publishSafely(userId, event);
         }
     }
 
