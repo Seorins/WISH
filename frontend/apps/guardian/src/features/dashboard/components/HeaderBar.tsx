@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import logoUrl from '@/assets/logo.png'
-import { NotificationPanel } from '@/features/notifications'
+import { NotificationPanel, NotificationPreview } from '@/features/notifications'
 import { useAuthStore } from '@/shared/auth/store'
 import { useNotificationStore } from '@/stores/notificationStore'
 import { calcKoreanAge, useMyPatient } from '@/features/auth/hooks/useMyPatient'
@@ -50,9 +50,7 @@ export function HeaderBar() {
   const navigate = useNavigate()
   const clearAuth = useAuthStore(s => s.clear)
   const { data: patient } = useMyPatient()
-  const unreadCount = useNotificationStore(s => s.unreadCount)
   const itemCount = useNotificationStore(s => s.items.length)
-  const markAllRead = useNotificationStore(s => s.markAllRead)
 
   const displayName = patient?.name ?? ''
   const ageValue = patient?.birthDate ? calcKoreanAge(patient.birthDate) : null
@@ -101,12 +99,8 @@ export function HeaderBar() {
   }
 
   const handleBellClick = useCallback(() => {
-    setNotificationsOpen(prev => {
-      const next = !prev
-      if (next) markAllRead()
-      return next
-    })
-  }, [markAllRead])
+    setNotificationsOpen(prev => !prev)
+  }, [])
 
   return (
     <header className={styles.header}>
@@ -138,19 +132,23 @@ export function HeaderBar() {
           <button
             type="button"
             className={styles.iconBtn}
-            aria-label="알림"
+            aria-label={itemCount > 0 ? `알림 ${itemCount}개` : '알림'}
             aria-haspopup="dialog"
             aria-expanded={notificationsOpen}
             onClick={handleBellClick}
           >
             <BellIcon width={20} height={20} />
-            {unreadCount > 0 || (itemCount > 0 && !notificationsOpen) ? (
-              <span className={styles.bellDot} />
+            {itemCount > 0 && !notificationsOpen ? (
+              <span className={styles.bellCount} aria-hidden>
+                {itemCount > 9 ? '9+' : itemCount}
+              </span>
             ) : null}
           </button>
           {notificationsOpen ? (
             <NotificationPanel onClose={() => setNotificationsOpen(false)} />
-          ) : null}
+          ) : (
+            <NotificationPreview />
+          )}
         </div>
         <div className={styles.profileWrap} ref={profileRef}>
           <button
