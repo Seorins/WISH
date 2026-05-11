@@ -74,14 +74,6 @@ public class GuardianDeviceToken {
         this.active = true;
     }
 
-    public void reactivate(User user, DevicePlatform platform, String userAgent) {
-        this.user = Objects.requireNonNull(user, "user must not be null");
-        this.platform = Objects.requireNonNull(platform, "platform must not be null");
-        this.userAgent = userAgent;
-        this.active = true;
-        this.deactivatedAt = null;
-    }
-
     public void deactivate() {
         if (!active) {
             return;

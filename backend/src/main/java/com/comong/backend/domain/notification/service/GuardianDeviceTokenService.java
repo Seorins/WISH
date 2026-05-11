@@ -10,7 +10,6 @@ import com.comong.backend.domain.notification.entity.GuardianDeviceToken;
 import com.comong.backend.domain.notification.repository.GuardianDeviceTokenRepository;
 import com.comong.backend.domain.patient.exception.PatientErrorCode;
 import com.comong.backend.domain.patient.repository.PatientProfileRepository;
-import com.comong.backend.domain.user.entity.User;
 import com.comong.backend.domain.user.exception.UserErrorCode;
 import com.comong.backend.domain.user.repository.UserRepository;
 import com.comong.backend.global.exception.BusinessException;
@@ -29,31 +28,20 @@ public class GuardianDeviceTokenService {
     @Transactional
     public DeviceTokenResponse register(Long userId, DeviceTokenRegisterRequest request) {
         validatePatientProfileOwnership(userId, request.patientProfileId());
-        User user =
-                userRepository
-                        .findById(userId)
-                        .orElseThrow(() -> new BusinessException(UserErrorCode.USER_NOT_FOUND));
+        validateUserExists(userId);
 
-        GuardianDeviceToken deviceToken =
+        guardianDeviceTokenRepository.upsertDeviceToken(
+                userId, request.token(), request.platform().name(), request.userAgent());
+
+        GuardianDeviceToken savedDeviceToken =
                 guardianDeviceTokenRepository
                         .findByDeviceToken(request.token())
-                        .map(
-                                existing -> {
-                                    existing.reactivate(
-                                            user, request.platform(), request.userAgent());
-                                    return existing;
-                                })
-                        .orElseGet(
+                        .orElseThrow(
                                 () ->
-                                        guardianDeviceTokenRepository.save(
-                                                GuardianDeviceToken.builder()
-                                                        .user(user)
-                                                        .deviceToken(request.token())
-                                                        .platform(request.platform())
-                                                        .userAgent(request.userAgent())
-                                                        .build()));
+                                        new IllegalStateException(
+                                                "Device token upsert completed but row was not found"));
 
-        return DeviceTokenResponse.from(deviceToken);
+        return DeviceTokenResponse.from(savedDeviceToken);
     }
 
     @Transactional
@@ -69,6 +57,12 @@ public class GuardianDeviceTokenService {
         }
         if (!patientProfileRepository.existsByIdAndUserId(patientProfileId, userId)) {
             throw new BusinessException(PatientErrorCode.PATIENT_PROFILE_NOT_FOUND);
+        }
+    }
+
+    private void validateUserExists(Long userId) {
+        if (!userRepository.existsById(userId)) {
+            throw new BusinessException(UserErrorCode.USER_NOT_FOUND);
         }
     }
 }

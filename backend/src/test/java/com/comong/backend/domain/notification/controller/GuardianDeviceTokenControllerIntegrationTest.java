@@ -9,6 +9,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -100,6 +105,59 @@ class GuardianDeviceTokenControllerIntegrationTest extends IntegrationTestSuppor
                 guardianDeviceTokenRepository.findByDeviceToken("fcm-token-2").orElseThrow();
         assertThat(saved.getPlatform()).isEqualTo(DevicePlatform.IOS);
         assertThat(saved.getUserAgent()).isEqualTo("second-agent");
+        assertThat(saved.isActive()).isTrue();
+        assertThat(saved.getDeactivatedAt()).isNull();
+    }
+
+    @Test
+    void registerSameTokenConcurrently_keepsSingleRow() throws Exception {
+        String firstToken = setupUserWithProfile("device-race-first@example.com", "device-race-1");
+        String secondToken =
+                setupUserWithProfile("device-race-second@example.com", "device-race-2");
+        long firstUserId = userIdFromToken(firstToken);
+        long secondUserId = userIdFromToken(secondToken);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+
+        try {
+            Future<Void> firstRegister =
+                    executor.submit(
+                            () -> {
+                                awaitConcurrentStart(ready, start);
+                                registerDeviceToken(
+                                        firstToken, "fcm-token-race", "WEB", "first-agent", null);
+                                return null;
+                            });
+            Future<Void> secondRegister =
+                    executor.submit(
+                            () -> {
+                                awaitConcurrentStart(ready, start);
+                                registerDeviceToken(
+                                        secondToken, "fcm-token-race", "IOS", "second-agent", null);
+                                return null;
+                            });
+
+            assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+            firstRegister.get(10, TimeUnit.SECONDS);
+            secondRegister.get(10, TimeUnit.SECONDS);
+        } finally {
+            executor.shutdownNow();
+        }
+
+        assertThat(guardianDeviceTokenRepository.findAll()).hasSize(1);
+        GuardianDeviceToken saved =
+                guardianDeviceTokenRepository.findByDeviceToken("fcm-token-race").orElseThrow();
+        boolean belongsToFirst =
+                guardianDeviceTokenRepository
+                        .findByUserIdAndDeviceToken(firstUserId, "fcm-token-race")
+                        .isPresent();
+        boolean belongsToSecond =
+                guardianDeviceTokenRepository
+                        .findByUserIdAndDeviceToken(secondUserId, "fcm-token-race")
+                        .isPresent();
+        assertThat(belongsToFirst || belongsToSecond).isTrue();
         assertThat(saved.isActive()).isTrue();
         assertThat(saved.getDeactivatedAt()).isNull();
     }
@@ -212,6 +270,12 @@ class GuardianDeviceTokenControllerIntegrationTest extends IntegrationTestSuppor
                                                 + patientProfileField
                                                 + "}"))
                 .andExpect(status().isOk());
+    }
+
+    private void awaitConcurrentStart(CountDownLatch ready, CountDownLatch start)
+            throws InterruptedException {
+        ready.countDown();
+        assertThat(start.await(5, TimeUnit.SECONDS)).isTrue();
     }
 
     private long ownProfileId(String token) throws Exception {
