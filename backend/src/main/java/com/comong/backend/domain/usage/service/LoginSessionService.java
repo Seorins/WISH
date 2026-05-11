@@ -4,9 +4,13 @@ import java.time.LocalDateTime;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import com.comong.backend.domain.patient.entity.PatientProfile;
 import com.comong.backend.domain.patient.service.PatientProfileService;
+import com.comong.backend.domain.realtime.dto.RealtimeEventResponse;
+import com.comong.backend.domain.realtime.service.RealtimeEventService;
 import com.comong.backend.domain.usage.dto.LoginSessionResponse;
 import com.comong.backend.domain.usage.entity.LoginSession;
 import com.comong.backend.domain.usage.exception.UsageErrorCode;
@@ -14,6 +18,7 @@ import com.comong.backend.domain.usage.repository.LoginSessionRepository;
 import com.comong.backend.global.exception.BusinessException;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * 접속 세션 라이프사이클 (시작/heartbeat/종료) 유스케이스.
@@ -23,6 +28,7 @@ import lombok.RequiredArgsConstructor;
  *
  * <p>현재 시각은 서버의 {@code LocalDateTime.now()} 를 사용 — 클라이언트가 보낸 시각은 신뢰하지 않는다 (시계 변조/시차).
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -30,6 +36,7 @@ public class LoginSessionService {
 
     private final LoginSessionRepository loginSessionRepository;
     private final PatientProfileService patientProfileService;
+    private final RealtimeEventService realtimeEventService;
 
     @Transactional
     public LoginSessionResponse start(Long userId, Long patientProfileId) {
@@ -41,6 +48,10 @@ public class LoginSessionService {
                                 .patientProfile(patientProfile)
                                 .startedAt(LocalDateTime.now())
                                 .build());
+        publishAfterCommit(
+                userId,
+                RealtimeEventResponse.gameStarted(
+                        saved.getId(), patientProfile.getId(), patientProfile.getName()));
         return LoginSessionResponse.from(saved);
     }
 
@@ -54,7 +65,14 @@ public class LoginSessionService {
     @Transactional
     public LoginSessionResponse end(Long userId, Long sessionId) {
         LoginSession session = findOwnedForUpdateOrThrow(userId, sessionId);
+        boolean wasEnded = session.isEnded();
         session.end(LocalDateTime.now());
+        if (!wasEnded) {
+            publishAfterCommit(
+                    userId,
+                    RealtimeEventResponse.gameEnded(
+                            session.getId(), session.getPatientProfile().getId()));
+        }
         return LoginSessionResponse.from(session);
     }
 
@@ -75,5 +93,39 @@ public class LoginSessionService {
                 .findByIdForUpdate(sessionId)
                 .filter(s -> s.isOwnedBy(userId))
                 .orElseThrow(() -> new BusinessException(UsageErrorCode.LOGIN_SESSION_NOT_FOUND));
+    }
+
+    private void publishAfterCommit(Long userId, RealtimeEventResponse event) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            publishSafely(userId, event);
+            return;
+        }
+        try {
+            TransactionSynchronizationManager.registerSynchronization(
+                    new TransactionSynchronization() {
+                        @Override
+                        public void afterCommit() {
+                            publishSafely(userId, event);
+                        }
+                    });
+        } catch (IllegalStateException e) {
+            log.warn(
+                    "Realtime event synchronization registration failed. userId={}, eventType={}",
+                    userId,
+                    event.type(),
+                    e);
+        }
+    }
+
+    private void publishSafely(Long userId, RealtimeEventResponse event) {
+        try {
+            realtimeEventService.publish(userId, event);
+        } catch (RuntimeException e) {
+            log.warn(
+                    "Realtime event publish failed. userId={}, eventType={}",
+                    userId,
+                    event.type(),
+                    e);
+        }
     }
 }
