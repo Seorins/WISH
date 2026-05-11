@@ -4,9 +4,13 @@ import java.time.LocalDateTime;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import com.comong.backend.domain.patient.entity.PatientProfile;
 import com.comong.backend.domain.patient.service.PatientProfileService;
+import com.comong.backend.domain.realtime.dto.RealtimeEventResponse;
+import com.comong.backend.domain.realtime.service.RealtimeEventService;
 import com.comong.backend.domain.usage.dto.LoginSessionResponse;
 import com.comong.backend.domain.usage.entity.LoginSession;
 import com.comong.backend.domain.usage.exception.UsageErrorCode;
@@ -30,6 +34,7 @@ public class LoginSessionService {
 
     private final LoginSessionRepository loginSessionRepository;
     private final PatientProfileService patientProfileService;
+    private final RealtimeEventService realtimeEventService;
 
     @Transactional
     public LoginSessionResponse start(Long userId, Long patientProfileId) {
@@ -41,6 +46,10 @@ public class LoginSessionService {
                                 .patientProfile(patientProfile)
                                 .startedAt(LocalDateTime.now())
                                 .build());
+        publishAfterCommit(
+                userId,
+                RealtimeEventResponse.gameStarted(
+                        saved.getId(), patientProfile.getId(), patientProfile.getName()));
         return LoginSessionResponse.from(saved);
     }
 
@@ -54,7 +63,14 @@ public class LoginSessionService {
     @Transactional
     public LoginSessionResponse end(Long userId, Long sessionId) {
         LoginSession session = findOwnedForUpdateOrThrow(userId, sessionId);
+        boolean wasEnded = session.isEnded();
         session.end(LocalDateTime.now());
+        if (!wasEnded) {
+            publishAfterCommit(
+                    userId,
+                    RealtimeEventResponse.gameEnded(
+                            session.getId(), session.getPatientProfile().getId()));
+        }
         return LoginSessionResponse.from(session);
     }
 
@@ -75,5 +91,19 @@ public class LoginSessionService {
                 .findByIdForUpdate(sessionId)
                 .filter(s -> s.isOwnedBy(userId))
                 .orElseThrow(() -> new BusinessException(UsageErrorCode.LOGIN_SESSION_NOT_FOUND));
+    }
+
+    private void publishAfterCommit(Long userId, RealtimeEventResponse event) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            realtimeEventService.publish(userId, event);
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(
+                new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        realtimeEventService.publish(userId, event);
+                    }
+                });
     }
 }

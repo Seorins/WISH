@@ -1,12 +1,18 @@
 package com.comong.backend.domain.usage.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -16,17 +22,23 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.comong.backend.domain.patient.repository.PatientProfileRepository;
+import com.comong.backend.domain.realtime.dto.RealtimeEventResponse;
+import com.comong.backend.domain.realtime.dto.RealtimeEventType;
+import com.comong.backend.domain.realtime.service.RealtimeEventService;
 import com.comong.backend.domain.usage.entity.LoginSession;
 import com.comong.backend.domain.usage.repository.LoginSessionRepository;
 import com.comong.backend.domain.user.repository.UserRepository;
 import com.comong.backend.support.IntegrationTestSupport;
 
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -41,6 +53,7 @@ class LoginSessionControllerIntegrationTest extends IntegrationTestSupport {
     @Autowired private LoginSessionRepository loginSessionRepository;
     @Autowired private PatientProfileRepository patientProfileRepository;
     @Autowired private UserRepository userRepository;
+    @MockitoBean private RealtimeEventService realtimeEventService;
 
     @BeforeEach
     void cleanDb() {
@@ -81,6 +94,36 @@ class LoginSessionControllerIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
+    void start_publishesGameStartedRealtimeEvent() throws Exception {
+        String token = setupUserWithProfile("login-start-sse@example.com", "login-start-sse");
+        long userId = userIdFromToken(token);
+        long patientProfileId = ownProfileId(token);
+
+        String body =
+                mockMvc.perform(
+                                post("/login-sessions")
+                                        .header("Authorization", "Bearer " + token)
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .content("{\"patientProfileId\":" + patientProfileId + "}"))
+                        .andExpect(status().isCreated())
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString();
+        long sessionId = objectMapper.readTree(body).get("data").get("id").asLong();
+
+        ArgumentCaptor<RealtimeEventResponse> eventCaptor =
+                ArgumentCaptor.forClass(RealtimeEventResponse.class);
+        verify(realtimeEventService).publish(eq(userId), eventCaptor.capture());
+
+        RealtimeEventResponse event = eventCaptor.getValue();
+        assertThat(event.type()).isEqualTo(RealtimeEventType.GAME_STARTED);
+        assertThat(event.loginSessionId()).isEqualTo(sessionId);
+        assertThat(event.patientProfileId()).isEqualTo(patientProfileId);
+        assertThat(event.patientName()).isEqualTo("Patient");
+        assertThat(event.contentType()).isNull();
+    }
+
+    @Test
     void heartbeat_returnsActiveSession() throws Exception {
         String token = setupUserWithProfile("login-hb@example.com", "login-hb");
         long sessionId = startSession(token);
@@ -111,6 +154,51 @@ class LoginSessionControllerIntegrationTest extends IntegrationTestSupport {
 
         LoginSession session = loginSessionRepository.findById(sessionId).orElseThrow();
         assertThat(session.getEndedAt()).isNotNull();
+    }
+
+    @Test
+    void end_publishesGameEndedRealtimeEvent() throws Exception {
+        String token = setupUserWithProfile("login-end-sse@example.com", "login-end-sse");
+        long userId = userIdFromToken(token);
+        long sessionId = startSession(token);
+        long patientProfileId = ownProfileId(token);
+        clearInvocations(realtimeEventService);
+
+        mockMvc.perform(
+                        patch("/login-sessions/{id}/end", sessionId)
+                                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<RealtimeEventResponse> eventCaptor =
+                ArgumentCaptor.forClass(RealtimeEventResponse.class);
+        verify(realtimeEventService).publish(eq(userId), eventCaptor.capture());
+
+        RealtimeEventResponse event = eventCaptor.getValue();
+        assertThat(event.type()).isEqualTo(RealtimeEventType.GAME_ENDED);
+        assertThat(event.loginSessionId()).isEqualTo(sessionId);
+        assertThat(event.patientProfileId()).isEqualTo(patientProfileId);
+        assertThat(event.patientName()).isNull();
+        assertThat(event.contentType()).isNull();
+    }
+
+    @Test
+    void end_alreadyEndedSession_doesNotPublishDuplicateGameEndedEvent() throws Exception {
+        String token = setupUserWithProfile("login-end-once@example.com", "login-end-once");
+        long sessionId = startSession(token);
+
+        mockMvc.perform(
+                        patch("/login-sessions/{id}/end", sessionId)
+                                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
+
+        clearInvocations(realtimeEventService);
+
+        mockMvc.perform(
+                        patch("/login-sessions/{id}/end", sessionId)
+                                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
+
+        verifyNoInteractions(realtimeEventService);
     }
 
     @Test
@@ -258,6 +346,17 @@ class LoginSessionControllerIntegrationTest extends IntegrationTestSupport {
                         .getResponse()
                         .getContentAsString();
         return objectMapper.readTree(body).get("data").get(0).get("id").asLong();
+    }
+
+    private long userIdFromToken(String token) throws Exception {
+        JsonNode payload = decodeTokenPayload(token);
+        return payload.get("sub").asLong();
+    }
+
+    private JsonNode decodeTokenPayload(String token) throws Exception {
+        String[] parts = token.split("\\.");
+        byte[] payload = Base64.getUrlDecoder().decode(parts[1]);
+        return objectMapper.readTree(new String(payload, StandardCharsets.UTF_8));
     }
 
     private String setupUserWithProfile(String email, String nickname) throws Exception {
