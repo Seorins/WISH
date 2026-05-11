@@ -50,6 +50,7 @@ public class LoginSessionService {
                                 .patientProfile(patientProfile)
                                 .startedAt(LocalDateTime.now())
                                 .build());
+        clearContentStateSafely(saved.getId());
         publishAfterCommit(
                 userId,
                 RealtimeEventResponse.gameStarted(

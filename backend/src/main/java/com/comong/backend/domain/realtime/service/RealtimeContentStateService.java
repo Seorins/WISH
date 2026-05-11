@@ -2,6 +2,7 @@ package com.comong.backend.domain.realtime.service;
 
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.springframework.stereotype.Service;
 
@@ -19,7 +20,14 @@ public class RealtimeContentStateService {
     }
 
     public ContentChange start(Long loginSessionId, ContentType contentType) {
-        ContentType previous = activeContentByLoginSessionId.put(loginSessionId, contentType);
+        AtomicReference<ContentType> previousRef = new AtomicReference<>();
+        activeContentByLoginSessionId.compute(
+                loginSessionId,
+                (ignored, previous) -> {
+                    previousRef.set(previous);
+                    return contentType;
+                });
+        ContentType previous = previousRef.get();
         return new ContentChange(previous, contentType);
     }
 
