@@ -20,6 +20,7 @@ public class RealtimeContentService {
     private final LoginSessionService loginSessionService;
     private final RealtimeContentStateService realtimeContentStateService;
     private final RealtimeEventService realtimeEventService;
+    private final RealtimeLiveKitPermissionService realtimeLiveKitPermissionService;
 
     public void start(Long userId, Long loginSessionId, ContentType contentType) {
         validateRealtimeContentType(contentType);
@@ -27,6 +28,8 @@ public class RealtimeContentService {
         RealtimeContentStateService.ContentChange change =
                 realtimeContentStateService.start(session.getId(), contentType);
         if (change.changed()) {
+            realtimeLiveKitPermissionService.setGuardianMicrophonePermission(
+                    userId, session.getId(), session.getPatientProfile().getId(), true);
             realtimeEventService.publish(
                     userId,
                     RealtimeEventResponse.contentStarted(
@@ -41,13 +44,19 @@ public class RealtimeContentService {
         realtimeContentStateService
                 .end(session.getId())
                 .ifPresent(
-                        contentType ->
-                                realtimeEventService.publish(
-                                        userId,
-                                        RealtimeEventResponse.contentEnded(
-                                                session.getId(),
-                                                session.getPatientProfile().getId(),
-                                                contentType.name())));
+                        contentType -> {
+                            realtimeLiveKitPermissionService.setGuardianMicrophonePermission(
+                                    userId,
+                                    session.getId(),
+                                    session.getPatientProfile().getId(),
+                                    false);
+                            realtimeEventService.publish(
+                                    userId,
+                                    RealtimeEventResponse.contentEnded(
+                                            session.getId(),
+                                            session.getPatientProfile().getId(),
+                                            contentType.name()));
+                        });
     }
 
     private LoginSession findActiveOwnedSession(Long userId, Long loginSessionId) {
