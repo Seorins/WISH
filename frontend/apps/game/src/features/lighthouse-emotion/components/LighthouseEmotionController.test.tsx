@@ -9,6 +9,17 @@ function jsonResponse(body: unknown, ok = true) {
   } as Response
 }
 
+async function flushStartOpening() {
+  await act(async () => {
+    await Promise.resolve()
+  })
+
+  await act(async () => {
+    vi.advanceTimersByTime(3000)
+    await Promise.resolve()
+  })
+}
+
 describe('LighthouseEmotionController', () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -29,19 +40,19 @@ describe('LighthouseEmotionController', () => {
       .mockResolvedValueOnce(
         jsonResponse({
           code: 'CREATED',
-          message: '세션 생성',
+          message: 'created',
           data: {
             sessionId: 1,
             status: 'IN_PROGRESS',
             scene: {
               sceneId: 'first',
-              questionText: '오늘 마음은 어때?',
+              questionText: '오늘 기분은 어떠니?',
               choices: [
                 { choiceIntentId: 'mood_okay', text: '괜찮아요' },
-                { choiceIntentId: 'rest_today', text: '숨겨야 해요' },
+                { choiceIntentId: 'rest_today', text: '오늘은 쉬고 싶어요' },
                 { choiceIntentId: 'mood_worried', text: '걱정돼요' },
                 { choiceIntentId: 'mood_hard', text: '힘들어요' },
-                { choiceIntentId: 'extra', text: '네 번째' },
+                { choiceIntentId: 'extra', text: '더보기' },
               ],
               secondaryAction: { choiceIntentId: 'rest_today', text: '오늘은 쉬고 싶어요' },
               shouldEndSession: false,
@@ -53,12 +64,12 @@ describe('LighthouseEmotionController', () => {
       )
       .mockResolvedValueOnce(
         jsonResponse({
-          npcResponse: ['걱정된다고 말해줘서 고맙구나.'],
+          npcResponse: ['걱정이 찾아온 날이구나.', '괜찮아, 천천히 골라도 돼.'],
           nextScene: {
             sceneId: 'follow-up',
-            questionText: '걱정은 어디에 가까워?',
+            questionText: '무엇이 가장 걱정되니?',
             choices: [
-              { choiceIntentId: 'rest_today', text: '후속 쉬기 숨김' },
+              { choiceIntentId: 'rest_today', text: '오늘은 쉬고 싶어요' },
               { choiceIntentId: 'worry_body', text: '몸이 걱정돼요' },
               { choiceIntentId: 'worry_family', text: '가족이 걱정돼요' },
             ],
@@ -69,9 +80,9 @@ describe('LighthouseEmotionController', () => {
       )
       .mockResolvedValueOnce(
         jsonResponse({
-          npcResponse: ['말해줘서 고마워.'],
+          npcResponse: ['말해줘서 고맙구나.'],
           nextScene: {
-            questionText: '마무리',
+            questionText: '',
             choices: [],
             secondaryAction: null,
             shouldEndSession: true,
@@ -85,7 +96,7 @@ describe('LighthouseEmotionController', () => {
           data: {
             sessionId: 1,
             status: 'FINISHED',
-            closingLines: ['오늘 이야기를 들려줘서 고맙구나.'],
+            closingLines: ['오늘 이야기해줘서 고맙구나.', '등대 불은 계속 켜둘게.'],
           },
         }),
       )
@@ -109,16 +120,26 @@ describe('LighthouseEmotionController', () => {
         method: 'POST',
         body: JSON.stringify({
           patientProfileId: 7,
+          npcId: 'lighthouse_keeper',
           npcName: 'YEONGCHEOL',
+          mode: 'LIGHTHOUSE_LLM',
         }),
       }),
     )
-    expect(onTextChange).toHaveBeenCalledWith('오늘 마음은 어때?')
+    expect(onTextChange).toHaveBeenCalledWith(
+      '안녕, 또 와줬구나.\n오늘 등대 불은 잔잔하게 켜져 있어.\n괜찮다면 지금 마음을 조금 나눠볼래?',
+    )
+
+    await act(async () => {
+      vi.advanceTimersByTime(3000)
+      await Promise.resolve()
+    })
+
+    expect(onTextChange).toHaveBeenCalledWith('오늘 기분은 어떠니?')
     expect(screen.getByRole('button', { name: '괜찮아요' })).toBeTruthy()
     expect(screen.getByRole('button', { name: '걱정돼요' })).toBeTruthy()
     expect(screen.getByRole('button', { name: '힘들어요' })).toBeTruthy()
     expect(screen.getByRole('button', { name: '오늘은 쉬고 싶어요' })).toBeTruthy()
-    expect(screen.queryByRole('button', { name: '숨겨야 해요' })).toBeNull()
     expect(screen.queryByText('choiceIntentId')).toBeNull()
     expect(screen.queryByText('CLAUDE')).toBeNull()
     expect(screen.queryByText('safe_reason')).toBeNull()
@@ -138,17 +159,15 @@ describe('LighthouseEmotionController', () => {
       }),
     )
     expect(screen.queryByRole('button', { name: '괜찮아요' })).toBeNull()
-    expect(onTextChange).toHaveBeenCalledWith('걱정된다고 말해줘서 고맙구나.')
+    expect(onTextChange).toHaveBeenCalledWith('걱정이 찾아온 날이구나.\n괜찮아, 천천히 골라도 돼.')
 
     await act(async () => {
-      vi.advanceTimersByTime(900)
+      vi.advanceTimersByTime(1700)
       await Promise.resolve()
     })
 
-    expect(onTextChange).toHaveBeenCalledWith('걱정은 어디에 가까워?')
+    expect(onTextChange).toHaveBeenCalledWith('무엇이 가장 걱정되니?')
     expect(screen.getByRole('button', { name: '몸이 걱정돼요' })).toBeTruthy()
-    expect(screen.queryByRole('button', { name: '오늘은 쉬고 싶어요' })).toBeNull()
-    expect(screen.queryByRole('button', { name: '후속 쉬기 숨김' })).toBeNull()
 
     fireEvent.click(screen.getByRole('button', { name: '몸이 걱정돼요' }))
 
@@ -156,7 +175,7 @@ describe('LighthouseEmotionController', () => {
       await Promise.resolve()
     })
     await act(async () => {
-      vi.advanceTimersByTime(900)
+      vi.advanceTimersByTime(1700)
       await Promise.resolve()
     })
 
@@ -167,12 +186,13 @@ describe('LighthouseEmotionController', () => {
         body: JSON.stringify({ finishReason: 'COMPLETED' }),
       }),
     )
-    expect(onTextChange).toHaveBeenCalledWith('오늘 이야기를 들려줘서 고맙구나.')
+    expect(onTextChange).toHaveBeenCalledWith('오늘 이야기해줘서 고맙구나.\n등대 불은 계속 켜둘게.')
 
-    act(() => {
-      vi.advanceTimersByTime(1500)
+    expect(screen.queryByRole('button', { name: '마을로 돌아가기' })).toBeNull()
+    await act(async () => {
+      vi.advanceTimersByTime(3200)
+      await Promise.resolve()
     })
-
     expect(onClose).toHaveBeenCalled()
   })
 
@@ -183,12 +203,12 @@ describe('LighthouseEmotionController', () => {
       .mockResolvedValueOnce(
         jsonResponse({
           code: 'CREATED',
-          message: '세션 생성',
+          message: 'created',
           data: {
             sessionId: 2,
             status: 'IN_PROGRESS',
             scene: {
-              questionText: '오늘 마음은 어때?',
+              questionText: '오늘 기분은 어떠니?',
               choices: [{ choiceIntentId: 'mood_okay', text: '괜찮아요' }],
               secondaryAction: { choiceIntentId: 'rest_today', text: '오늘은 쉬고 싶어요' },
               shouldEndSession: false,
@@ -198,7 +218,7 @@ describe('LighthouseEmotionController', () => {
       )
       .mockResolvedValueOnce(
         jsonResponse({
-          npcResponse: ['쉬고 싶다고 말해줘서 고맙구나.'],
+          npcResponse: ['알겠다. 오늘은 쉬어도 괜찮단다.'],
           nextScene: {
             questionText: '',
             choices: [],
@@ -214,7 +234,7 @@ describe('LighthouseEmotionController', () => {
           data: {
             sessionId: 2,
             status: 'FINISHED',
-            closingLines: ['편히 쉬어도 괜찮아.'],
+            closingLines: ['편할 때 다시 와.'],
           },
         }),
       )
@@ -228,9 +248,7 @@ describe('LighthouseEmotionController', () => {
       />,
     )
 
-    await act(async () => {
-      await Promise.resolve()
-    })
+    await flushStartOpening()
 
     fireEvent.click(screen.getByRole('button', { name: '오늘은 쉬고 싶어요' }))
 
@@ -238,7 +256,7 @@ describe('LighthouseEmotionController', () => {
       await Promise.resolve()
     })
     await act(async () => {
-      vi.advanceTimersByTime(900)
+      vi.advanceTimersByTime(1700)
       await Promise.resolve()
     })
 

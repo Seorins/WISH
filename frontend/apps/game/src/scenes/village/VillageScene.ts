@@ -21,9 +21,13 @@ import {
   type SimpleDialogUi,
 } from '@/game/ui/simpleDialog'
 import { createSettingsMenu } from '@/game/ui/settingsMenu'
+import { NpcInteractionHintUi } from '@/game/ui/npcInteractionHint'
 import { getRectangleEntryState } from '@/game/world/portal'
 import type { VillagerNpcId } from '@/features/village-dialogue/types'
-import { villageDialogues } from '@/features/village-dialogue/villageDialogues'
+import {
+  VILLAGER_FIRST_GREETING,
+  villageDialogues,
+} from '@/features/village-dialogue/villageDialogues'
 import {
   createInitialVillagePortalState,
   createVillagePortalRectangles,
@@ -59,6 +63,7 @@ const MAP_TILE_KEYS = Array.from({ length: MAP_TILE_ROWS * MAP_TILE_COLUMNS }, (
     column: index % MAP_TILE_COLUMNS,
   }
 })
+
 type VillageCharacterConfig = {
   id: VillagerNpcId
   key: string
@@ -126,8 +131,9 @@ const SEHYUN_NPC = {
 
 type VillageNpcInstance = {
   id: VillagerNpcId
-  object: Phaser.GameObjects.Components.Transform
+  object: Phaser.GameObjects.Image | Phaser.GameObjects.Sprite
 }
+
 type VillageSceneData = {
   spawn?: RatioPoint
   portalCooldownMs?: number
@@ -150,8 +156,10 @@ export class VillageScene extends Phaser.Scene {
   private lastSafePlayerPosition?: Phaser.Math.Vector2
   private isVillagerDialogueOpen = false
   private dialogDismissed = false
+  private nearestNpcId: VillagerNpcId | null = null
   private activeDialogNpcId: VillagerNpcId | null = null
   private settingsMenu!: ReturnType<typeof createSettingsMenu>
+  private interactionHint!: NpcInteractionHintUi
 
   constructor() {
     super({ key: 'VillageScene' })
@@ -191,6 +199,7 @@ export class VillageScene extends Phaser.Scene {
     this.dialogs.clear()
     this.isVillagerDialogueOpen = false
     this.activeDialogNpcId = null
+    this.nearestNpcId = null
     this.portalCooldownUntil = this.time.now + (data.portalCooldownMs ?? 0)
 
     const firstTile = this.textures.get(MAP_TILE_KEYS[0].key).getSourceImage() as HTMLImageElement
@@ -232,6 +241,19 @@ export class VillageScene extends Phaser.Scene {
         .setOrigin(0.5, 1)
         .setScale(character.scale)
         .setDepth(4)
+        .setInteractive({ useHandCursor: true })
+      npc.on(
+        'pointerdown',
+        (
+          _pointer: Phaser.Input.Pointer,
+          _localX: number,
+          _localY: number,
+          event: Phaser.Types.Input.EventData,
+        ) => {
+          event.stopPropagation()
+          this.tryOpenNpcDialogue(character.id)
+        },
+      )
       this.villageNpcs.push({ id: character.id, object: npc })
 
       const box = this.add.rectangle(x, y - 18, 48, 36, 0xff0000, 0).setDepth(1)
@@ -255,6 +277,19 @@ export class VillageScene extends Phaser.Scene {
     })
     this.sehyunNpc = this.add.sprite(0.38 * W, 0.3 * H, 'sehyun').setDepth(4)
     this.sehyunNpc.setScale(0.38)
+    this.sehyunNpc.setInteractive({ useHandCursor: true })
+    this.sehyunNpc.on(
+      'pointerdown',
+      (
+        _pointer: Phaser.Input.Pointer,
+        _localX: number,
+        _localY: number,
+        event: Phaser.Types.Input.EventData,
+      ) => {
+        event.stopPropagation()
+        this.tryOpenNpcDialogue(SEHYUN_NPC.id)
+      },
+    )
     this.sehyunNpc.anims.play('sehyun-loop')
     this.villageNpcs.push({ id: SEHYUN_NPC.id, object: this.sehyunNpc })
 
@@ -268,7 +303,7 @@ export class VillageScene extends Phaser.Scene {
       this.dialogs.set(
         character.id,
         this.createVillageDialog(
-          villageDialogues[character.id].npcName,
+          villageDialogues[character.id].displayName,
           character.key,
           character.portraitScale,
         ),
@@ -277,7 +312,7 @@ export class VillageScene extends Phaser.Scene {
     this.dialogs.set(
       SEHYUN_NPC.id,
       this.createVillageDialog(
-        villageDialogues[SEHYUN_NPC.id].npcName,
+        villageDialogues[SEHYUN_NPC.id].displayName,
         SEHYUN_NPC.portraitKey,
         SEHYUN_NPC.portraitScale,
       ),
@@ -304,6 +339,7 @@ export class VillageScene extends Phaser.Scene {
     this.settingsMenu = createSettingsMenu(this, {
       onLogout: () => this.logout(),
     })
+    this.interactionHint = new NpcInteractionHintUi(this)
 
     this.input.keyboard!.on('keydown-ESC', () => {
       if (this.isVillagerDialogueOpen) {
@@ -336,9 +372,9 @@ export class VillageScene extends Phaser.Scene {
     this.input.on('pointermove', this.handleObstacleEditorPointerMove, this)
     this.input.on('pointerup', this.handleObstacleEditorPointerUp, this)
     this.input.mouse?.disableContextMenu()
-    this.input.keyboard!.on('keydown-E', this.exportObstacleRects, this)
+    this.input.keyboard!.on('keydown-E', this.handleNpcInteract, this)
+    this.input.keyboard!.on('keydown-ENTER', this.handleNpcInteract, this)
     this.input.keyboard!.on('keydown-R', this.clearEditedObstacleRects, this)
-    this.input.keyboard!.on('keydown-ENTER', this.commitObstaclePolygon, this)
     this.input.keyboard!.on('keydown-BACKSPACE', this.undoObstaclePolygonPoint, this)
 
     this.cameras.main.fadeIn(400, 0, 0, 0)
@@ -349,9 +385,9 @@ export class VillageScene extends Phaser.Scene {
       this.game.events.off('villager-dialogue:text', this.handleVillagerDialogueText, this)
       this.input.off('pointermove', this.handleObstacleEditorPointerMove, this)
       this.input.off('pointerup', this.handleObstacleEditorPointerUp, this)
-      this.input.keyboard?.off('keydown-E', this.exportObstacleRects, this)
+      this.input.keyboard?.off('keydown-E', this.handleNpcInteract, this)
+      this.input.keyboard?.off('keydown-ENTER', this.handleNpcInteract, this)
       this.input.keyboard?.off('keydown-R', this.clearEditedObstacleRects, this)
-      this.input.keyboard?.off('keydown-ENTER', this.commitObstaclePolygon, this)
       this.input.keyboard?.off('keydown-BACKSPACE', this.undoObstaclePolygonPoint, this)
     })
   }
@@ -371,13 +407,10 @@ export class VillageScene extends Phaser.Scene {
     this.resolvePolygonObstacleCollision()
 
     const nearestNpc = this.getNearestNpcInTalkDistance()
-    const near = nearestNpc !== null
+    this.nearestNpcId = nearestNpc?.id ?? null
+    this.updateInteractionHint(nearestNpc)
 
-    if (near) {
-      if (!this.isVillagerDialogueOpen && !this.dialogDismissed && nearestNpc) {
-        this.showNpcDialog(nearestNpc.id)
-      }
-    } else {
+    if (!nearestNpc) {
       this.dialogDismissed = false
       if (this.isVillagerDialogueOpen) {
         this.hideDialog(false)
@@ -395,20 +428,31 @@ export class VillageScene extends Phaser.Scene {
     this.obstacleManager?.handlePointerUp(pointer)
   }
 
-  private readonly exportObstacleRects = () => {
-    this.obstacleManager?.exportObstacleRects()
-  }
-
   private readonly clearEditedObstacleRects = () => {
     this.obstacleManager?.clearEditedObstacleRects()
   }
 
-  private readonly commitObstaclePolygon = () => {
-    this.obstacleManager?.commitPolygonEditor()
-  }
-
   private readonly undoObstaclePolygonPoint = () => {
     this.obstacleManager?.undoPolygonEditorPoint()
+  }
+
+  private readonly handleNpcInteract = (event?: KeyboardEvent) => {
+    if (!this.isVillagerDialogueOpen && !this.settingsMenu.isOpen() && !this.dialogDismissed) {
+      if (this.nearestNpcId) {
+        event?.preventDefault()
+        this.tryOpenNpcDialogue(this.nearestNpcId)
+        return
+      }
+    }
+
+    if (event?.key === 'e' || event?.key === 'E') {
+      this.obstacleManager?.exportObstacleRects()
+      return
+    }
+
+    if (event?.key === 'Enter') {
+      this.obstacleManager?.commitPolygonEditor()
+    }
   }
 
   private preventPolygonObstaclePenetration(delta: number) {
@@ -523,16 +567,34 @@ export class VillageScene extends Phaser.Scene {
     )
   }
 
+  private tryOpenNpcDialogue(npcId: VillagerNpcId) {
+    if (this.isVillagerDialogueOpen || this.settingsMenu.isOpen() || this.dialogDismissed) return
+
+    const npc = this.villageNpcs.find(candidate => candidate.id === npcId)
+    if (!npc) return
+
+    const distance = Phaser.Math.Distance.Between(
+      this.player.x,
+      this.player.y,
+      npc.object.x,
+      npc.object.y,
+    )
+    if (distance > NPC_DIALOG_DISTANCE) return
+
+    this.showNpcDialog(npcId)
+  }
+
   private showNpcDialog(npcId: VillagerNpcId) {
     const dialog = this.dialogs.get(npcId)
     if (!dialog) return
 
-    setCenteredDialogText(dialog, villageDialogues[npcId].greetingLine)
+    setCenteredDialogText(dialog, VILLAGER_FIRST_GREETING[npcId] ?? '안녕, 와줬구나.')
     this.isVillagerDialogueOpen = true
     this.activeDialogNpcId = npcId
     this.target = null
     this.player.setVelocity(0, 0)
-    fadeSimpleDialog(this, dialog, 1, 300)
+    this.interactionHint.hide()
+    fadeSimpleDialog(this, dialog, 1, 120)
     this.game.events.emit('villager-dialogue:open', { npcId })
   }
 
@@ -558,6 +620,19 @@ export class VillageScene extends Phaser.Scene {
     const dialog = this.getActiveDialog()
     if (!dialog) return
     setCenteredDialogText(dialog, text)
+  }
+
+  private updateInteractionHint(nearestNpc: VillageNpcInstance | null) {
+    if (!nearestNpc || this.isVillagerDialogueOpen || this.settingsMenu.isOpen()) {
+      this.interactionHint.hide()
+      return
+    }
+
+    this.interactionHint.show(
+      nearestNpc.object.x,
+      nearestNpc.object.y - nearestNpc.object.displayHeight,
+      villageDialogues[nearestNpc.id].displayName,
+    )
   }
 
   private getActiveDialog() {

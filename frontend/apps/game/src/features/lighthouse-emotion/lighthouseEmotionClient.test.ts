@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+﻿import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   getDialogueSessionDetail,
   sanitizeEmotionScene,
@@ -188,6 +188,8 @@ describe('submitLighthouseEmotionTurn', () => {
           Authorization: 'Bearer token-1',
         },
         body: JSON.stringify({
+          npcId: 'lighthouse_keeper',
+          npcName: 'YEONGCHEOL',
           questionText: '?ã…»ë’› æ¹²ê³•í…‡?Â€ ?ëŒ€ë¼š??',
           selectedChoice: {
             choiceIntentId: 'mood_worried',
@@ -236,6 +238,8 @@ describe('submitLighthouseEmotionTurn', () => {
       expect.stringMatching(/\/api\/v1\/dialogue\/sessions\/42\/turns$/),
       expect.objectContaining({
         body: JSON.stringify({
+          npcId: 'lighthouse_keeper',
+          npcName: 'YEONGCHEOL',
           questionText: '오늘 기분은 어떠니?',
           selectedChoice: {
             choiceIntentId: 'mood_okay',

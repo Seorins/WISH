@@ -13,6 +13,8 @@ describe('VillagerDialogueController', () => {
 
   beforeEach(() => {
     vi.useFakeTimers()
+    vi.spyOn(Math, 'random').mockReturnValue(0)
+    localStorage.clear()
     calls = []
     originalFetch = globalThis.fetch
     globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -37,10 +39,78 @@ describe('VillagerDialogueController', () => {
 
   afterEach(() => {
     vi.useRealTimers()
+    vi.restoreAllMocks()
     globalThis.fetch = originalFetch
+    localStorage.clear()
   })
 
-  it('starts a real session and POSTs the selected turn with the session id', async () => {
+  it('starts a backend session, separates opening steps, and sends enum npcName in turn payload', async () => {
+    const onClose = vi.fn()
+    const onTextChange = vi.fn()
+
+    render(
+      <VillagerDialogueController
+        npcId="nurse_bunny"
+        patientProfileId={PATIENT_PROFILE_ID}
+        isOpen
+        onClose={onClose}
+        onTextChange={onTextChange}
+      />,
+    )
+
+    expect(onTextChange).toHaveBeenCalledWith('안녕, 와줬구나.')
+
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    const startCall = calls.find(c => c.url.endsWith('/dialogue/sessions'))
+    expect(startCall).toBeTruthy()
+    expect(startCall!.init?.method).toBe('POST')
+    expect(JSON.parse(startCall!.init!.body as string)).toEqual({
+      patientProfileId: PATIENT_PROFILE_ID,
+      npcName: 'JOEUN',
+    })
+
+    act(() => {
+      vi.advanceTimersByTime(1500)
+    })
+    expect(onTextChange).toHaveBeenCalledWith('잠깐 쉬어가도 돼.')
+
+    act(() => {
+      vi.advanceTimersByTime(1500)
+    })
+    expect(onTextChange).toHaveBeenCalledWith('지금 몸은 어때?')
+    expect(screen.getByRole('button', { name: '괜찮아요' })).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: '괜찮아요' }))
+
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    const turnCall = calls.find(c => c.url.endsWith(`/dialogue/sessions/${SESSION_ID}/turns`))
+    expect(turnCall).toBeTruthy()
+    expect(turnCall!.init?.method).toBe('POST')
+    expect(JSON.parse(turnCall!.init!.body as string)).toMatchObject({
+      npcId: 'nurse_bunny',
+      npcName: 'JOEUN',
+      topicId: 'body_discomfort_support',
+      sceneId: 'body_01',
+      nodeId: 'body_01',
+      questionText: '지금 몸은 어때?',
+      selectedChoice: {
+        choiceIntentId: 'body_okay_now',
+        text: '괜찮아요',
+      },
+      intensity: 0,
+      concernFlags: [],
+      protectiveFactors: ['positive_body_state'],
+      generatedBy: 'STATIC',
+    })
+  })
+
+  it('waits on ending lines and does not close with E', async () => {
     const onClose = vi.fn()
     const onTextChange = vi.fn()
 
@@ -57,45 +127,30 @@ describe('VillagerDialogueController', () => {
     await act(async () => {
       await Promise.resolve()
     })
-
-    const startCall = calls.find(c => c.url.endsWith('/dialogue/sessions'))
-    expect(startCall).toBeTruthy()
-    expect(startCall!.init?.method).toBe('POST')
-    expect(JSON.parse(startCall!.init!.body as string)).toEqual({
-      patientProfileId: PATIENT_PROFILE_ID,
-      npcName: 'JOEUN',
+    act(() => {
+      vi.advanceTimersByTime(3000)
     })
-
-    expect(onTextChange).toHaveBeenCalledWith('안녕! 오늘 몸이 어떤지 같이 살펴볼까?')
-
-    await act(async () => {
-      vi.advanceTimersByTime(2200)
-    })
-
-    await act(async () => {
-      vi.advanceTimersByTime(1400)
-    })
-
-    const okayButton = screen.getByRole('button', { name: '괜찮아요' })
-    fireEvent.click(okayButton)
-
+    fireEvent.click(screen.getByRole('button', { name: '괜찮아요' }))
     await act(async () => {
       await Promise.resolve()
     })
 
-    const turnCall = calls.find(c => c.url.endsWith(`/dialogue/sessions/${SESSION_ID}/turns`))
-    expect(turnCall).toBeTruthy()
-    expect(turnCall!.init?.method).toBe('POST')
-    expect(JSON.parse(turnCall!.init!.body as string)).toEqual({
-      questionText: '오늘 몸은 어때?',
-      selectedChoice: {
-        choiceIntentId: 'nurse_body_okay',
-        text: '괜찮아요',
-        intensity: 0,
-        concernFlags: [],
-        protectiveFactors: ['positive_body_state'],
-      },
+    act(() => {
+      vi.advanceTimersByTime(3600)
     })
-    expect(onTextChange).toHaveBeenCalledWith('좋아. 괜찮다고 느끼는구나.')
+
+    expect(onTextChange).toHaveBeenCalledWith('천천히 둘러보고 와.\n필요하면 다시 들러.')
+    expect(screen.queryByRole('button', { name: '마을로 돌아가기' })).toBeNull()
+
+    act(() => {
+      vi.advanceTimersByTime(5000)
+    })
+    expect(onClose).not.toHaveBeenCalled()
+
+    fireEvent.keyDown(window, { key: 'e' })
+    expect(onClose).not.toHaveBeenCalled()
+
+    fireEvent.keyDown(window, { key: 'Enter' })
+    expect(onClose).toHaveBeenCalled()
   })
 })

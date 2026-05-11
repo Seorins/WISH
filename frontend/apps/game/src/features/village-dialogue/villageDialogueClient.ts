@@ -3,6 +3,8 @@ import type { VillageDialogueNpcEnum } from './npcMapping'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api/v1'
 const ACCESS_TOKEN_STORAGE_KEY = 'wish_access_token'
+const LOCAL_STORAGE_KEY = 'villager_dialogue_events'
+const LOCAL_SESSION_STORAGE_KEY = 'villager_dialogue_sessions'
 
 function getAuthHeaders(): Record<string, string> {
   const token = localStorage.getItem(ACCESS_TOKEN_STORAGE_KEY)
@@ -40,12 +42,12 @@ export async function startVillageDialogueSession(
   })
 
   if (!response.ok) {
-    throw new Error('마을 친구와의 대화를 시작하지 못했어요.')
+    throw new Error('대화 세션을 시작하지 못했습니다.')
   }
 
   const payload = (await response.json()) as StartApiResponse
   if (!payload.data?.sessionId) {
-    throw new Error('대화 세션을 만들지 못했어요.')
+    throw new Error('대화 세션 응답이 올바르지 않습니다.')
   }
 
   return {
@@ -55,28 +57,44 @@ export async function startVillageDialogueSession(
 }
 
 export async function saveVillagerChoiceEvent(event: VillagerChoiceEvent) {
-  const response = await fetch(`${API_BASE_URL}/dialogue/sessions/${event.sessionId}/turns`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-      ...getAuthHeaders(),
-    },
-    body: JSON.stringify({
-      questionText: event.questionText,
-      selectedChoice: {
-        choiceIntentId: event.choiceIntentId,
-        text: event.choiceText,
+  const mode = import.meta.env.VITE_VILLAGE_DIALOGUE_SAVE_MODE ?? 'local'
+
+  if (mode === 'backend' || typeof event.sessionId === 'number') {
+    const response = await fetch(`${API_BASE_URL}/dialogue/sessions/${event.sessionId}/turns`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        ...getAuthHeaders(),
+      },
+      body: JSON.stringify({
+        clientEventId: event.clientEventId,
+        npcId: event.npcId,
+        npcName: event.npcName,
+        topicId: event.topicId,
+        sceneId: event.sceneId,
+        nodeId: event.nodeId,
+        questionText: event.questionText,
+        selectedChoice: {
+          choiceIntentId: event.choiceIntentId,
+          text: event.choiceText,
+        },
         intensity: event.intensity,
         concernFlags: event.concernFlags,
         protectiveFactors: event.protectiveFactors,
-      },
-    }),
-  })
+        generatedBy: event.generatedBy,
+      }),
+    })
 
-  if (!response.ok) {
-    throw new Error('선택을 저장하지 못했어요.')
+    if (!response.ok) {
+      throw new Error('대화 선택을 저장하지 못했습니다.')
+    }
+
+    return
   }
+
+  const prev = JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY) ?? '[]') as VillagerChoiceEvent[]
+  localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify([...prev, event]))
 }
 
 export type VillageDialogueFinishReason = 'COMPLETED' | 'CANCELLED' | 'ERROR'
@@ -96,6 +114,30 @@ export async function finishVillageDialogueSession(
   })
 
   if (!response.ok) {
-    throw new Error('대화를 마치지 못했어요.')
+    throw new Error('대화 세션을 종료하지 못했습니다.')
   }
+}
+
+export async function cancelVillagerDialogueSession(sessionId: string | number) {
+  if (typeof sessionId === 'number') {
+    await finishVillageDialogueSession(sessionId, 'CANCELLED')
+    return
+  }
+
+  const prev = JSON.parse(localStorage.getItem(LOCAL_SESSION_STORAGE_KEY) ?? '[]') as Array<{
+    sessionId: string
+    status: string
+    finishedAt: string
+  }>
+  localStorage.setItem(
+    LOCAL_SESSION_STORAGE_KEY,
+    JSON.stringify([
+      ...prev,
+      {
+        sessionId,
+        status: 'CANCELLED',
+        finishedAt: new Date().toISOString(),
+      },
+    ]),
+  )
 }

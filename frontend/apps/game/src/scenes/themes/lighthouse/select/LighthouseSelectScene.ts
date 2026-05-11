@@ -25,6 +25,7 @@ import {
   setCenteredDialogText,
   type SimpleDialogUi,
 } from '@/game/ui/simpleDialog'
+import { NpcInteractionHintUi } from '@/game/ui/npcInteractionHint'
 import { addCoverBackground } from '@/game/world/background'
 import { createRatioRectangle, isPointInRectangle } from '@/game/world/portal'
 import {
@@ -260,6 +261,7 @@ export class LighthouseSelectScene extends Phaser.Scene {
   private hasPostcardBeenShown = false
   private isEmotionCheckinFinishing = false
   private isBackendEmotionDialogueOpen = false
+  private interactionHint!: NpcInteractionHintUi
   private pendingAfterEngagement: (() => void) | null = null
   private soundMuted = false
   private caregiverDebugText: Phaser.GameObjects.Text | null = null
@@ -354,6 +356,7 @@ export class LighthouseSelectScene extends Phaser.Scene {
     this.createEngagementUi()
     this.createPostcardUi()
     this.createCaregiverDebugUi()
+    this.interactionHint = new NpcInteractionHintUi(this)
     this.validateDialogueGraphForDevelopment()
 
     const spawn = data.spawn ?? LIGHTHOUSE_ROOM_SPAWN
@@ -372,7 +375,7 @@ export class LighthouseSelectScene extends Phaser.Scene {
     this.input.keyboard!.on('keydown-DOWN', this.handleChoiceDown)
     this.input.keyboard!.on('keydown-ESC', this.handleEscDown)
     this.input.keyboard!.on('keydown-M', this.handleMuteToggle)
-    this.input.keyboard!.on('keydown-E', this.exportObstacleRects)
+    this.input.keyboard!.on('keydown-E', this.handleInteractDown)
     this.input.keyboard!.on('keydown-R', this.clearEditedObstacleRects)
     this.input.mouse?.disableContextMenu()
     this.game.events.on('lighthouse-emotion:closed', this.handleLighthouseEmotionClosed, this)
@@ -389,7 +392,7 @@ export class LighthouseSelectScene extends Phaser.Scene {
       this.input.keyboard?.off('keydown-DOWN', this.handleChoiceDown)
       this.input.keyboard?.off('keydown-ESC', this.handleEscDown)
       this.input.keyboard?.off('keydown-M', this.handleMuteToggle)
-      this.input.keyboard?.off('keydown-E', this.exportObstacleRects)
+      this.input.keyboard?.off('keydown-E', this.handleInteractDown)
       this.input.keyboard?.off('keydown-R', this.clearEditedObstacleRects)
       this.game.events.off('lighthouse-emotion:closed', this.handleLighthouseEmotionClosed, this)
       this.game.events.off('lighthouse-emotion:text', this.handleLighthouseEmotionText, this)
@@ -466,6 +469,11 @@ export class LighthouseSelectScene extends Phaser.Scene {
       return
     }
 
+    if (this.isNearYoungcheol(pointer.x, pointer.y)) {
+      this.startYoungcheolConversation()
+      return
+    }
+
     this.target = new Phaser.Math.Vector2(pointer.x, pointer.y)
     createClickTargetMarker(this, pointer.x, pointer.y)
   }
@@ -475,9 +483,18 @@ export class LighthouseSelectScene extends Phaser.Scene {
       this.activateFocusedPostcardAction()
       return
     }
-    if (!this.isDialogVisible) return
+    if (!this.isDialogVisible) {
+      this.handleInteractDown()
+      return
+    }
     if (this.uiMode === 'PLAYER_CHOICE') this.selectFocusedChoice()
     else this.advanceDialog()
+  }
+
+  private readonly handleInteractDown = () => {
+    if (this.isDialogVisible || this.isTransitioning || this.dialogDismissed) return
+    if (!this.isNearYoungcheol(this.player.x, this.player.y)) return
+    this.startYoungcheolConversation()
   }
 
   private readonly handleSpaceDown = () => {
@@ -662,24 +679,6 @@ export class LighthouseSelectScene extends Phaser.Scene {
       this.obstacleInstances.splice(index, 1)
       return
     }
-  }
-
-  private readonly exportObstacleRects = () => {
-    if (!OBSTACLE_EDITOR_ENABLED) {
-      return
-    }
-
-    const lines = this.obstacleInstances.map(({ rect }) => {
-      const x = Number(rect.x.toFixed(4))
-      const y = Number(rect.y.toFixed(4))
-      const w = Number(rect.w.toFixed(4))
-      const h = Number(rect.h.toFixed(4))
-      return `  { x: ${x}, y: ${y}, w: ${w}, h: ${h} },`
-    })
-    const output = `const LIGHTHOUSE_OBSTACLES: ObstacleRect[] = [\n${lines.join('\n')}\n]`
-
-    console.info('[LighthouseSelectScene] Exported obstacle rectangles:\n' + output)
-    void navigator.clipboard?.writeText(output).catch(() => undefined)
   }
 
   private readonly clearEditedObstacleRects = () => {
@@ -1097,22 +1096,33 @@ export class LighthouseSelectScene extends Phaser.Scene {
   private updateYoungcheolConversation() {
     if (this.isTransitioning) return
 
-    const distanceToYoungcheol = Phaser.Math.Distance.Between(
-      this.player.x,
-      this.player.y,
-      this.youngcheolAnchor.x,
-      this.youngcheolAnchor.y,
-    )
-    const isNearYoungcheol = distanceToYoungcheol <= this.youngcheolInteractionRadius
+    const isNearYoungcheol = this.isNearYoungcheol(this.player.x, this.player.y)
 
-    setInteractionIconActive(this.talkIcon, this.isDialogVisible)
+    setInteractionIconActive(this.talkIcon, false)
 
     if (!isNearYoungcheol) {
       this.dialogDismissed = false
+      this.interactionHint.hide()
       return
     }
 
-    if (!this.isDialogVisible && !this.dialogDismissed) this.startYoungcheolConversation()
+    if (!this.isDialogVisible && !this.dialogDismissed) {
+      this.interactionHint.show(
+        this.youngcheolAnchor.x,
+        this.youngcheolAnchor.y - 86,
+        '등대지기 영철',
+      )
+      return
+    }
+
+    this.interactionHint.hide()
+  }
+
+  private isNearYoungcheol(x: number, y: number) {
+    return (
+      Phaser.Math.Distance.Between(x, y, this.youngcheolAnchor.x, this.youngcheolAnchor.y) <=
+      this.youngcheolInteractionRadius
+    )
   }
 
   private validateDialogueGraphForDevelopment() {
@@ -1136,8 +1146,9 @@ export class LighthouseSelectScene extends Phaser.Scene {
     this.hidePostcardImmediately()
     this.resetChoiceButtonsForReuse()
     setInteractionIconActive(this.talkIcon, true)
+    this.interactionHint.hide()
     setCenteredDialogText(this.dialog, '등대지기가 불빛을 살피고 있어요...')
-    fadeSimpleDialog(this, this.dialog, 1, 220)
+    fadeSimpleDialog(this, this.dialog, 1, 120)
     this.game.events.emit('lighthouse-emotion:open')
   }
 
