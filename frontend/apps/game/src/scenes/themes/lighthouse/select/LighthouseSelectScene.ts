@@ -79,6 +79,9 @@ const WAVE_METER_PROMPT = '마음 파도계\n지난 며칠 동안 마음의 파�
 const WAVE_METER_LAST_SHOWN_KEY = 'lighthouseWaveMeterLastShownDate'
 const LIGHTHOUSE_BACKGROUND_KEY = 'lighthouse-background'
 const LIGHTHOUSE_CLOUDY_BACKGROUND_KEY = 'lighthouse-background-cloudy'
+const DEBUG_OBSTACLES = false
+const OBSTACLE_EDITOR_ENABLED = import.meta.env.DEV
+const OBSTACLE_EDITOR_MIN_SIZE = 0.003
 const CHOICE_BUTTON = {
   gap: 10,
   widthRatio: 0.48,
@@ -162,6 +165,38 @@ type LighthouseSelectSceneData = {
   spawn?: RatioPoint
 }
 
+type ObstacleRect = { x: number; y: number; w: number; h: number }
+type ObstacleInstance = {
+  rect: ObstacleRect
+  object: Phaser.GameObjects.Rectangle
+}
+type BackgroundDisplayArea = {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+const LIGHTHOUSE_OBSTACLES: ObstacleRect[] = [
+  { x: 0, y: 0, w: 1, h: 0.37 },
+  { x: 0, y: 0.37, w: 0.22, h: 0.2 },
+  { x: 0.67, y: 0.66, w: 0.33, h: 0.25 },
+  { x: 0.86, y: 0.89, w: 0.14, h: 0.11 },
+  { x: 0.2118, y: 0.3686, w: 0.1743, h: 0.1468 },
+  { x: 0.3424, y: 0.4673, w: 0.0833, h: 0.1172 },
+  { x: 0.3882, y: 0.5426, w: 0.0722, h: 0.0814 },
+  { x: 0.434, y: 0.5969, w: 0.0736, h: 0.0642 },
+  { x: 0.4951, y: 0.6499, w: 0.1181, h: 0.0938 },
+  { x: 0.5701, y: 0.724, w: 0.1208, h: 0.095 },
+  { x: 0.6292, y: 0.7955, w: 0.0611, h: 0.0975 },
+  { x: 0.7854, y: 0.8807, w: 0.1028, h: 0.0888 },
+  { x: 0, y: 0.5709, w: 0.1368, h: 0.0494 },
+  { x: 0, y: 0.6265, w: 0.1139, h: 0.0345 },
+  { x: 0, y: 0.6647, w: 0.0764, h: 0.0247 },
+  { x: 0, y: 0.6832, w: 0.0688, h: 0.1271 },
+  { x: 0.0799, y: 0.7659, w: 0.0556, h: 0.0494 },
+]
+
 type FinishEmotionCheckinReason =
   | 'completed'
   | 'rest'
@@ -184,6 +219,10 @@ function isLighthouseCloudyWeather(condition: WeatherCondition) {
 export class LighthouseSelectScene extends Phaser.Scene {
   private player!: PlayerSprite
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys
+  private obstacles!: Phaser.Physics.Arcade.StaticGroup
+  private obstacleInstances: ObstacleInstance[] = []
+  private obstacleEditorDraft?: Phaser.GameObjects.Rectangle
+  private obstacleEditorStart?: Phaser.Math.Vector2
   private target: Phaser.Math.Vector2 | null = null
   private lastDirection: PlayerDirection = 'down'
   private exitPortal!: Phaser.Geom.Rectangle
@@ -224,6 +263,7 @@ export class LighthouseSelectScene extends Phaser.Scene {
   private pendingAfterEngagement: (() => void) | null = null
   private soundMuted = false
   private caregiverDebugText: Phaser.GameObjects.Text | null = null
+  private backgroundDisplayArea!: BackgroundDisplayArea
 
   constructor() {
     super({ key: 'LighthouseSelectScene' })
@@ -263,12 +303,22 @@ export class LighthouseSelectScene extends Phaser.Scene {
     this.focusedChoiceIndex = 0
     this.focusedPostcardActionIndex = 0
     this.target = null
+    this.obstacleInstances = []
+    this.obstacleEditorStart = undefined
+    this.obstacleEditorDraft?.destroy()
+    this.obstacleEditorDraft = undefined
     this.resetEmotionCheckinSession()
 
     const background = addCoverBackground(this, LIGHTHOUSE_BACKGROUND_KEY)
     this.applyWeatherBackground(background)
     const backgroundLeft = background.x - background.displayWidth / 2
     const backgroundTop = background.y - background.displayHeight / 2
+    this.backgroundDisplayArea = {
+      x: backgroundLeft,
+      y: backgroundTop,
+      width: background.displayWidth,
+      height: background.displayHeight,
+    }
 
     this.createYoungcheolCharacter(
       backgroundLeft,
@@ -296,6 +346,8 @@ export class LighthouseSelectScene extends Phaser.Scene {
       YOUNGCHEOL_INTERACTION.radiusRatio
 
     this.physics.world.setBounds(0, 0, vw, vh)
+    this.obstacles = this.physics.add.staticGroup()
+    LIGHTHOUSE_OBSTACLES.forEach(rect => this.addObstacleRect(rect))
     ensurePlayerWalkAnimations(this)
     this.createDialogUi()
     this.createSystemPromptUi()
@@ -306,28 +358,39 @@ export class LighthouseSelectScene extends Phaser.Scene {
 
     const spawn = data.spawn ?? LIGHTHOUSE_ROOM_SPAWN
     this.player = createPlayer(this, vw * spawn.xRatio, vh * spawn.yRatio)
+    this.addYoungcheolObstacle()
+    this.physics.add.collider(this.player, this.obstacles)
     this.exitPortal = createRatioRectangle(vw, vh, LIGHTHOUSE_EXIT_PORTAL)
 
     this.cursors = this.input.keyboard!.createCursorKeys()
     this.input.on('pointerdown', this.handlePointerDown)
+    this.input.on('pointermove', this.handleObstacleEditorPointerMove)
+    this.input.on('pointerup', this.handleObstacleEditorPointerUp)
     this.input.keyboard!.on('keydown-ENTER', this.handleEnterDown)
     this.input.keyboard!.on('keydown-SPACE', this.handleSpaceDown)
     this.input.keyboard!.on('keydown-UP', this.handleChoiceUp)
     this.input.keyboard!.on('keydown-DOWN', this.handleChoiceDown)
     this.input.keyboard!.on('keydown-ESC', this.handleEscDown)
     this.input.keyboard!.on('keydown-M', this.handleMuteToggle)
+    this.input.keyboard!.on('keydown-E', this.exportObstacleRects)
+    this.input.keyboard!.on('keydown-R', this.clearEditedObstacleRects)
+    this.input.mouse?.disableContextMenu()
     this.game.events.on('lighthouse-emotion:closed', this.handleLighthouseEmotionClosed, this)
     this.game.events.on('lighthouse-emotion:text', this.handleLighthouseEmotionText, this)
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.clearReplyTimer()
       this.input.off('pointerdown', this.handlePointerDown)
+      this.input.off('pointermove', this.handleObstacleEditorPointerMove)
+      this.input.off('pointerup', this.handleObstacleEditorPointerUp)
       this.input.keyboard?.off('keydown-ENTER', this.handleEnterDown)
       this.input.keyboard?.off('keydown-SPACE', this.handleSpaceDown)
       this.input.keyboard?.off('keydown-UP', this.handleChoiceUp)
       this.input.keyboard?.off('keydown-DOWN', this.handleChoiceDown)
       this.input.keyboard?.off('keydown-ESC', this.handleEscDown)
       this.input.keyboard?.off('keydown-M', this.handleMuteToggle)
+      this.input.keyboard?.off('keydown-E', this.exportObstacleRects)
+      this.input.keyboard?.off('keydown-R', this.clearEditedObstacleRects)
       this.game.events.off('lighthouse-emotion:closed', this.handleLighthouseEmotionClosed, this)
       this.game.events.off('lighthouse-emotion:text', this.handleLighthouseEmotionText, this)
       this.clearEngagementTimers()
@@ -375,6 +438,10 @@ export class LighthouseSelectScene extends Phaser.Scene {
   }
 
   private readonly handlePointerDown = (pointer: Phaser.Input.Pointer) => {
+    if (this.handleObstacleEditorPointerDown(pointer)) {
+      return
+    }
+
     if (this.uiMode === 'POSTCARD') {
       const clickedPostcardButton = this.getPostcardButtons().some(button =>
         button.getBounds().contains(pointer.x, pointer.y),
@@ -456,6 +523,177 @@ export class LighthouseSelectScene extends Phaser.Scene {
   private readonly handleMuteToggle = () => {
     if (!childComfortSettings.allowMute) return
     this.soundMuted = !this.soundMuted
+  }
+
+  private addObstacleRect(rect: ObstacleRect) {
+    const x = Phaser.Math.Clamp(rect.x, 0, 1)
+    const y = Phaser.Math.Clamp(rect.y, 0, 1)
+    const w = Phaser.Math.Clamp(rect.w, 0, 1 - x)
+    const h = Phaser.Math.Clamp(rect.h, 0, 1 - y)
+    const box = this.add
+      .rectangle(
+        this.backgroundDisplayArea.x + (x + w / 2) * this.backgroundDisplayArea.width,
+        this.backgroundDisplayArea.y + (y + h / 2) * this.backgroundDisplayArea.height,
+        w * this.backgroundDisplayArea.width,
+        h * this.backgroundDisplayArea.height,
+        0xff0000,
+        DEBUG_OBSTACLES ? 0.22 : 0,
+      )
+      .setDepth(1)
+
+    if (DEBUG_OBSTACLES) {
+      box.setStrokeStyle(2, 0xff3333, 0.85)
+    }
+
+    this.physics.add.existing(box, true)
+    this.obstacles.add(box)
+    this.obstacleInstances.push({ rect: { x, y, w, h }, object: box })
+
+    return box
+  }
+
+  private addYoungcheolObstacle() {
+    const size = Math.min(this.backgroundDisplayArea.width, this.backgroundDisplayArea.height)
+    const box = this.add
+      .rectangle(
+        this.youngcheolAnchor.x,
+        this.youngcheolAnchor.y + size * 0.025,
+        size * 0.05,
+        size * 0.055,
+        0xff0000,
+        DEBUG_OBSTACLES ? 0.22 : 0,
+      )
+      .setDepth(1)
+
+    if (DEBUG_OBSTACLES) {
+      box.setStrokeStyle(2, 0xff3333, 0.85)
+    }
+
+    this.physics.add.existing(box, true)
+    this.obstacles.add(box)
+  }
+
+  private handleObstacleEditorPointerDown(pointer: Phaser.Input.Pointer) {
+    if (!OBSTACLE_EDITOR_ENABLED || !this.obstacles) {
+      return false
+    }
+
+    const event = pointer.event as MouseEvent | PointerEvent | undefined
+    const isShiftDrag = Boolean(event?.shiftKey)
+    const isRightClick = pointer.rightButtonDown() || pointer.button === 2
+
+    if (isRightClick) {
+      this.removeObstacleAt(pointer.x, pointer.y)
+      return true
+    }
+
+    if (!isShiftDrag) {
+      return false
+    }
+
+    this.obstacleEditorStart = new Phaser.Math.Vector2(pointer.x, pointer.y)
+    this.obstacleEditorDraft?.destroy()
+    this.obstacleEditorDraft = this.add
+      .rectangle(pointer.x, pointer.y, 1, 1, 0x00aaff, 0.26)
+      .setDepth(30)
+      .setStrokeStyle(2, 0x0077ff, 0.95)
+
+    return true
+  }
+
+  private readonly handleObstacleEditorPointerMove = (pointer: Phaser.Input.Pointer) => {
+    if (!this.obstacleEditorStart || !this.obstacleEditorDraft) {
+      return
+    }
+
+    const bounds = this.getObstacleDragBounds(this.obstacleEditorStart, pointer.x, pointer.y)
+    this.obstacleEditorDraft.setPosition(bounds.centerX, bounds.centerY)
+    this.obstacleEditorDraft.setSize(bounds.width, bounds.height)
+    this.obstacleEditorDraft.setDisplaySize(bounds.width, bounds.height)
+  }
+
+  private readonly handleObstacleEditorPointerUp = (pointer: Phaser.Input.Pointer) => {
+    if (!this.obstacleEditorStart || !this.obstacleEditorDraft) {
+      return
+    }
+
+    const bounds = this.getObstacleDragBounds(this.obstacleEditorStart, pointer.x, pointer.y)
+    this.obstacleEditorDraft.destroy()
+    this.obstacleEditorDraft = undefined
+    this.obstacleEditorStart = undefined
+
+    const rect = {
+      x: (bounds.x - this.backgroundDisplayArea.x) / this.backgroundDisplayArea.width,
+      y: (bounds.y - this.backgroundDisplayArea.y) / this.backgroundDisplayArea.height,
+      w: bounds.width / this.backgroundDisplayArea.width,
+      h: bounds.height / this.backgroundDisplayArea.height,
+    }
+
+    if (rect.w < OBSTACLE_EDITOR_MIN_SIZE || rect.h < OBSTACLE_EDITOR_MIN_SIZE) {
+      return
+    }
+
+    this.addObstacleRect(rect)
+  }
+
+  private getObstacleDragBounds(start: Phaser.Math.Vector2, currentX: number, currentY: number) {
+    const left = this.backgroundDisplayArea.x
+    const top = this.backgroundDisplayArea.y
+    const rightLimit = this.backgroundDisplayArea.x + this.backgroundDisplayArea.width
+    const bottomLimit = this.backgroundDisplayArea.y + this.backgroundDisplayArea.height
+    const x = Phaser.Math.Clamp(Math.min(start.x, currentX), left, rightLimit)
+    const y = Phaser.Math.Clamp(Math.min(start.y, currentY), top, bottomLimit)
+    const right = Phaser.Math.Clamp(Math.max(start.x, currentX), left, rightLimit)
+    const bottom = Phaser.Math.Clamp(Math.max(start.y, currentY), top, bottomLimit)
+    const width = Math.max(1, right - x)
+    const height = Math.max(1, bottom - y)
+
+    return new Phaser.Geom.Rectangle(x, y, width, height)
+  }
+
+  private removeObstacleAt(x: number, y: number) {
+    for (let index = this.obstacleInstances.length - 1; index >= 0; index -= 1) {
+      const instance = this.obstacleInstances[index]
+      if (!instance.object.getBounds().contains(x, y)) {
+        continue
+      }
+
+      this.obstacles.remove(instance.object, true, true)
+      this.obstacleInstances.splice(index, 1)
+      return
+    }
+  }
+
+  private readonly exportObstacleRects = () => {
+    if (!OBSTACLE_EDITOR_ENABLED) {
+      return
+    }
+
+    const lines = this.obstacleInstances.map(({ rect }) => {
+      const x = Number(rect.x.toFixed(4))
+      const y = Number(rect.y.toFixed(4))
+      const w = Number(rect.w.toFixed(4))
+      const h = Number(rect.h.toFixed(4))
+      return `  { x: ${x}, y: ${y}, w: ${w}, h: ${h} },`
+    })
+    const output = `const LIGHTHOUSE_OBSTACLES: ObstacleRect[] = [\n${lines.join('\n')}\n]`
+
+    console.info('[LighthouseSelectScene] Exported obstacle rectangles:\n' + output)
+    void navigator.clipboard?.writeText(output).catch(() => undefined)
+  }
+
+  private readonly clearEditedObstacleRects = () => {
+    if (!OBSTACLE_EDITOR_ENABLED) {
+      return
+    }
+
+    this.obstacleInstances.forEach(({ object }) => {
+      this.obstacles.remove(object, true, true)
+    })
+    this.obstacleInstances = []
+    this.obstacleEditorDraft?.destroy()
+    this.obstacleEditorDraft = undefined
+    this.obstacleEditorStart = undefined
   }
 
   private createYoungcheolCharacter(
