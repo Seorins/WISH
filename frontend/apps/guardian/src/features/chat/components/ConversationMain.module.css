@@ -182,7 +182,7 @@
 
 .summaryRow {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -197,12 +197,36 @@
   font-size: 12px;
   color: var(--dash-color-text, #2a264a);
   line-height: 1.4;
+  height: 96px;
+  overflow: hidden;
+}
+
+.summaryBody {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  min-height: 0;
 }
 
 .summaryTitle {
   font-size: 13px;
   font-weight: 700;
   color: var(--dash-color-text-strong, #1f1b3a);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sampleBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #fff4e0;
+  color: #b07b1a;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
 .summaryDelta {
@@ -217,6 +241,8 @@
   gap: 5px;
   flex-wrap: wrap;
   margin-top: 2px;
+  max-height: 49px;
+  overflow: hidden;
 }
 
 .tag {

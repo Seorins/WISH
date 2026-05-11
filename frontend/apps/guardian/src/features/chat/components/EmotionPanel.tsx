@@ -52,7 +52,7 @@ function TrendLine({ points }: { points: EmotionTrendPoint[] }) {
   const ys = points.map(p => h - padY - (p.score / 100) * (h - padY * 2))
   const d = points.map((_, i) => `${i === 0 ? 'M' : 'L'} ${xs[i]} ${ys[i]}`).join(' ')
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="xMidYMid meet" className={styles.chartWrap}>
+    <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className={styles.chartWrap}>
       {[0, 25, 50, 75, 100].map(g => {
         const y = h - padY - (g / 100) * (h - padY * 2)
         return (
@@ -82,13 +82,28 @@ type Props = {
   shares: EmotionShare[]
   trend: EmotionTrendPoint[]
   signals: EmotionSignal[]
+  summarySample?: boolean
+  trendSample?: boolean
+  signalsSample?: boolean
 }
 
-export function EmotionPanel({ todayScore, shares, trend, signals }: Props) {
+function SampleBadge() {
+  return <span className={styles.sampleBadge}>샘플</span>
+}
+
+export function EmotionPanel({
+  todayScore,
+  shares,
+  trend,
+  signals,
+  summarySample = false,
+  trendSample = false,
+  signalsSample = false,
+}: Props) {
   return (
     <div className={styles.stack}>
       <div className={styles.card}>
-        <h3 className={styles.cardTitle}>오늘의 감정 요약</h3>
+        <h3 className={styles.cardTitle}>오늘의 감정 요약 {summarySample && <SampleBadge />}</h3>
         <div className={styles.summaryRow}>
           <ScoreRing score={todayScore} />
           <div className={styles.shareList}>
@@ -105,12 +120,12 @@ export function EmotionPanel({ todayScore, shares, trend, signals }: Props) {
       </div>
 
       <div className={`${styles.card} ${styles.cardTrend}`}>
-        <h3 className={styles.cardTitle}>감정 변화</h3>
+        <h3 className={styles.cardTitle}>감정 변화 {trendSample && <SampleBadge />}</h3>
         <TrendLine points={trend} />
       </div>
 
       <div className={styles.card}>
-        <h3 className={styles.cardTitle}>오늘 보인 감정 신호</h3>
+        <h3 className={styles.cardTitle}>오늘 보인 감정 신호 {signalsSample && <SampleBadge />}</h3>
         <div className={styles.signalList}>
           {signals.map(sig => (
             <div key={sig.id} className={styles.signal}>
