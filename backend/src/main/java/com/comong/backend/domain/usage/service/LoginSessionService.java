@@ -163,10 +163,11 @@ public class LoginSessionService {
                     });
         } catch (IllegalStateException e) {
             log.warn(
-                    "Guardian push synchronization registration failed. userId={}, loginSessionId={}",
+                    "Guardian push synchronization registration failed. Fallback to immediate send. userId={}, loginSessionId={}",
                     userId,
                     loginSessionId,
                     e);
+            sendGameStartedPushSafely(userId, loginSessionId, patientProfileId, patientName);
         }
     }
 

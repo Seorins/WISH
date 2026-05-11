@@ -23,6 +23,7 @@ import com.google.firebase.messaging.FirebaseMessaging;
 public class FirebaseAdminConfig {
 
     private static final String FIREBASE_APP_NAME = "comong-fcm";
+    private static final Object FIREBASE_APP_LOCK = new Object();
 
     @Bean
     @ConditionalOnProperty(prefix = "firebase.push", name = "enabled", havingValue = "true")
@@ -35,10 +36,12 @@ public class FirebaseAdminConfig {
                             .setCredentials(GoogleCredentials.fromStream(credentialsStream))
                             .setProjectId(properties.projectId())
                             .build();
-            return FirebaseApp.getApps().stream()
-                    .filter(app -> FIREBASE_APP_NAME.equals(app.getName()))
-                    .findFirst()
-                    .orElseGet(() -> FirebaseApp.initializeApp(options, FIREBASE_APP_NAME));
+            synchronized (FIREBASE_APP_LOCK) {
+                return FirebaseApp.getApps().stream()
+                        .filter(app -> FIREBASE_APP_NAME.equals(app.getName()))
+                        .findFirst()
+                        .orElseGet(() -> FirebaseApp.initializeApp(options, FIREBASE_APP_NAME));
+            }
         } catch (IOException e) {
             throw new IllegalStateException("Firebase service account initialization failed", e);
         }

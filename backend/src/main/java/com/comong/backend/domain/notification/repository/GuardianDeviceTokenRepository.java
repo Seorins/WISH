@@ -3,11 +3,12 @@ package com.comong.backend.domain.notification.repository;
 import java.util.List;
 import java.util.Optional;
 
+import jakarta.persistence.LockModeType;
+
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
-import org.springframework.transaction.annotation.Transactional;
 
 import com.comong.backend.domain.notification.entity.GuardianDeviceToken;
 
@@ -59,19 +60,7 @@ public interface GuardianDeviceTokenRepository extends JpaRepository<GuardianDev
 
     List<GuardianDeviceToken> findAllByUserIdAndActiveTrue(Long userId);
 
-    @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Transactional
-    @Query(
-            value =
-                    """
-                    UPDATE guardian_device_token
-                    SET
-                        active = FALSE,
-                        updated_at = CURRENT_TIMESTAMP,
-                        deactivated_at = COALESCE(deactivated_at, CURRENT_TIMESTAMP)
-                    WHERE id = :id
-                      AND active = TRUE
-                    """,
-            nativeQuery = true)
-    int deactivateActiveById(@Param("id") Long id);
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select token from GuardianDeviceToken token where token.id = :id")
+    Optional<GuardianDeviceToken> findByIdForUpdate(@Param("id") Long id);
 }

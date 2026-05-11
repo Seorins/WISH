@@ -21,15 +21,19 @@ class GuardianPushNotificationServiceTest {
 
     private GuardianDeviceTokenRepository guardianDeviceTokenRepository;
     private FirebasePushSender firebasePushSender;
+    private GuardianDeviceTokenInvalidationService guardianDeviceTokenInvalidationService;
     private GuardianPushNotificationService service;
 
     @BeforeEach
     void setUp() {
         guardianDeviceTokenRepository = mock(GuardianDeviceTokenRepository.class);
         firebasePushSender = mock(FirebasePushSender.class);
+        guardianDeviceTokenInvalidationService = mock(GuardianDeviceTokenInvalidationService.class);
         service =
                 new GuardianPushNotificationService(
-                        guardianDeviceTokenRepository, firebasePushSender);
+                        guardianDeviceTokenRepository,
+                        firebasePushSender,
+                        guardianDeviceTokenInvalidationService);
     }
 
     @Test
@@ -64,7 +68,7 @@ class GuardianPushNotificationServiceTest {
                 .containsEntry("patientProfileId", "20")
                 .containsEntry("patientName", "Patient")
                 .containsEntry("path", "/live?loginSessionId=10&patientProfileId=20");
-        verify(guardianDeviceTokenRepository, never()).deactivateActiveById(100L);
+        verify(guardianDeviceTokenInvalidationService, never()).deactivateInvalidToken(100L);
     }
 
     @Test
@@ -77,7 +81,7 @@ class GuardianPushNotificationServiceTest {
 
         service.sendGameStarted(1L, 10L, 20L, "Patient");
 
-        verify(guardianDeviceTokenRepository).deactivateActiveById(100L);
+        verify(guardianDeviceTokenInvalidationService).deactivateInvalidToken(100L);
     }
 
     private GuardianDeviceToken deviceToken(Long id, String token) {

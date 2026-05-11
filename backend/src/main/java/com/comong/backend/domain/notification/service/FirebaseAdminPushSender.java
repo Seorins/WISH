@@ -40,6 +40,9 @@ public class FirebaseAdminPushSender implements FirebasePushSender {
                     invalidToken,
                     e);
             return FirebasePushResult.failed(failureCode, invalidToken);
+        } catch (RuntimeException e) {
+            log.warn("Unexpected FCM send failure.", e);
+            return FirebasePushResult.failed("UNEXPECTED", false);
         }
     }
 

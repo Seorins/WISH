@@ -21,6 +21,7 @@ public class GuardianPushNotificationService {
 
     private final GuardianDeviceTokenRepository guardianDeviceTokenRepository;
     private final FirebasePushSender firebasePushSender;
+    private final GuardianDeviceTokenInvalidationService guardianDeviceTokenInvalidationService;
 
     public void sendGameStarted(
             Long guardianUserId, Long loginSessionId, Long patientProfileId, String patientName) {
@@ -37,21 +38,39 @@ public class GuardianPushNotificationService {
         Map<String, String> data =
                 gameStartedData(loginSessionId, patientProfileId, patientName, path);
 
+        int successCount = 0;
+        int failureCount = 0;
+        int invalidTokenCount = 0;
         for (GuardianDeviceToken deviceToken : deviceTokens) {
             FirebasePushResult result =
                     firebasePushSender.send(
                             new FirebasePushMessage(
                                     deviceToken.getDeviceToken(), title, body, data));
+            if (result.successful()) {
+                successCount++;
+                continue;
+            }
+            failureCount++;
             if (result.invalidToken()) {
-                int deactivated =
-                        guardianDeviceTokenRepository.deactivateActiveById(deviceToken.getId());
+                invalidTokenCount++;
+                boolean deactivated =
+                        guardianDeviceTokenInvalidationService.deactivateInvalidToken(
+                                deviceToken.getId());
                 log.info(
-                        "Invalid FCM token deactivated. deviceTokenId={}, failureCode={}, updatedRows={}",
+                        "Invalid FCM token deactivated. deviceTokenId={}, failureCode={}, deactivated={}",
                         deviceToken.getId(),
                         result.failureCode(),
                         deactivated);
             }
         }
+        log.info(
+                "Game started FCM send completed. userId={}, loginSessionId={}, targetCount={}, successCount={}, failureCount={}, invalidTokenCount={}",
+                guardianUserId,
+                loginSessionId,
+                deviceTokens.size(),
+                successCount,
+                failureCount,
+                invalidTokenCount);
     }
 
     private String liveMonitorPath(Long loginSessionId, Long patientProfileId) {
