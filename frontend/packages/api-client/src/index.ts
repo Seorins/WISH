@@ -31,7 +31,7 @@ export {
   getMyMusicResults,
   saveMusicResult,
 } from './music-results'
-export { getFuelStatus, sendFuel } from './fuel'
+export { consumeFuel, getFuelInbox, getFuelStatus, sendFuel } from './fuel'
 export { requestPresignedUploadUrls, uploadToPresignedUrl } from './uploads'
 export { createPatientProfile, listPatientProfiles } from './patient-profiles'
 export { endLoginSession, heartbeatLoginSession, startLoginSession } from './login-sessions'
@@ -133,7 +133,14 @@ export type {
   MusicResultPage,
   MusicResultRequest,
 } from './music-results'
-export type { FuelEvent, FuelSendRequest, FuelStatus } from './fuel'
+export type {
+  FuelConsumeRequest,
+  FuelConsumeResponse,
+  FuelEvent,
+  FuelInboxEvent,
+  FuelSendRequest,
+  FuelStatus,
+} from './fuel'
 export type {
   PresignedUploadItem,
   PresignedUploadRequest,
