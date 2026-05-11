@@ -1,6 +1,30 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import styles from './PttButton.module.css'
 
+// LiveKit/getUserMedia 가 던지는 흔한 에러를 사용자 친화 메시지로 변환.
+// 분류 안 되는 케이스는 generic 메시지 — devtools 콘솔의 원본 에러로 보강.
+function toUserMessage(error: unknown): string {
+  if (error instanceof DOMException) {
+    switch (error.name) {
+      case 'NotAllowedError':
+        return '마이크 권한을 허용해 주세요'
+      case 'NotFoundError':
+      case 'OverconstrainedError':
+        return '마이크 장치를 찾을 수 없어요'
+      case 'NotReadableError':
+        return '다른 앱이 마이크를 사용 중이에요'
+      case 'SecurityError':
+        return 'HTTPS 환경에서만 사용할 수 있어요'
+    }
+  }
+  if (error instanceof Error && /timed out|pending|publi|permission/i.test(error.message)) {
+    // BE 가 canPublish 권한을 아직 안 내려준 상태에서 publish 시도하거나
+    // 직전 publish 가 끝나기 전에 다시 토글한 경우.
+    return '잠시 후 다시 눌러주세요'
+  }
+  return '마이크를 켤 수 없어요'
+}
+
 function MicIcon({ className, muted }: { className?: string; muted?: boolean }) {
   return (
     <svg
@@ -36,63 +60,65 @@ type Props = {
 export function PttButton({ enabled, setMicrophoneEnabled }: Props) {
   const [isSpeaking, setIsSpeaking] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  // 빠른 pointerdown→up 의 race 와 cleanup 시 잔여 마이크 켜짐 방지용.
-  // pressed=true 인 동안만 publish 의도가 살아있다. pressGeneration 은 매 press 마다
-  // 증가시켜 async 콜백이 자기 세대 이후로 들어왔는지 비교한다.
   const pressedRef = useRef(false)
-  const pressGenerationRef = useRef(0)
+  // setMicrophoneEnabled 호출을 promise 체인으로 직렬화. 빠른 press→release→press 가
+  // LiveKit 의 'pending publication promise timed out' race 를 만드는 걸 막는다.
+  // catch(() => {}) 로 이전 작업의 에러가 다음 작업을 막지 않도록.
+  const pendingRef = useRef<Promise<unknown>>(Promise.resolve())
+  const queueMic = useCallback(
+    (target: boolean) => {
+      const next = pendingRef.current.catch(() => {}).then(() => setMicrophoneEnabled(target))
+      pendingRef.current = next
+      return next
+    },
+    [setMicrophoneEnabled],
+  )
 
   useEffect(() => {
     if (!enabled && isSpeaking) {
       // 콘텐츠가 끝나는 등 외부 이유로 enabled 가 false 가 되면 즉시 mute.
       pressedRef.current = false
-      void setMicrophoneEnabled(false).catch(() => {})
+      void queueMic(false).catch(() => {})
       setIsSpeaking(false)
     }
-  }, [enabled, isSpeaking, setMicrophoneEnabled])
+  }, [enabled, isSpeaking, queueMic])
 
   // 언마운트 시 잔여 publish 방지.
   useEffect(
     () => () => {
-      void setMicrophoneEnabled(false).catch(() => {})
+      void queueMic(false).catch(() => {})
     },
-    [setMicrophoneEnabled],
+    [queueMic],
   )
 
   const handleStart = useCallback(async () => {
     if (!enabled || pressedRef.current) return
-    const generation = ++pressGenerationRef.current
     pressedRef.current = true
     setError(null)
     setIsSpeaking(true)
     try {
-      await setMicrophoneEnabled(true)
-      // 누르고 있는 사이에 release 가 발생해 generation 이 바뀌었으면 즉시 다시 mute.
-      if (pressGenerationRef.current !== generation) {
-        await setMicrophoneEnabled(false)
-      }
+      await queueMic(true)
     } catch (e) {
       pressedRef.current = false
       setIsSpeaking(false)
-      const message =
-        e instanceof DOMException && e.name === 'NotAllowedError'
-          ? '마이크 권한을 허용해 주세요'
-          : '마이크를 켤 수 없어요'
-      setError(message)
+      // 진단용 — devtools 에서 원인 분류 가능하도록 항상 콘솔에 남긴다.
+      console.warn('[PTT] setMicrophoneEnabled failed', e)
+      setError(toUserMessage(e))
+      // 백그라운드에서 publish 가 늦게 성공했을 가능성 대비 — 다시 한 번 mute 큐잉.
+      void queueMic(false).catch(() => {})
     }
-  }, [enabled, setMicrophoneEnabled])
+  }, [enabled, queueMic])
 
   const handleStop = useCallback(async () => {
     if (!pressedRef.current) return
     pressedRef.current = false
-    pressGenerationRef.current++
     setIsSpeaking(false)
     try {
-      await setMicrophoneEnabled(false)
+      await queueMic(false)
     } catch {
       // mute 실패는 사용자 알림 가치 낮음.
     }
-  }, [setMicrophoneEnabled])
+  }, [queueMic])
 
   const tooltip = error
     ? error
