@@ -2,8 +2,11 @@ import Phaser from 'phaser'
 import {
   calculateAverageCompletionRate,
   createExerciseSession,
+  listExerciseMotions,
   toCreateExerciseSessionRequest,
   type CreateExerciseSessionRecord,
+  type ExerciseMotion,
+  type ExerciseType,
 } from '@wish/api-client'
 import { assetPath } from '@/game/assets/assetPath'
 import { POSE_LANDMARK_NAMES, PoseTracker } from '@/game/motion/poseTracker'
@@ -464,6 +467,10 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
   private lastTtsKey: string | null = null
   private lastTtsPlayedAtMs = 0
   private guideOverlay?: Phaser.GameObjects.Container
+  private guideVideoElement?: HTMLVideoElement
+  private guideVideoResizeHandler?: () => void
+  private adminMotionsById = new Map<number, ExerciseMotion>()
+  private exerciseMotionsLoaded = false
   private countdownOverlay?: Phaser.GameObjects.Container
   private countdownTimers: Phaser.Time.TimerEvent[] = []
 
@@ -471,7 +478,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     sceneKey: string,
     private readonly motions: GymnasticsMotion[],
     private readonly modeLabel: string,
-    private readonly exerciseType: string,
+    private readonly exerciseType: ExerciseType,
     private readonly aiSequence: AiMotionSpec[],
   ) {
     super({ key: sceneKey })
@@ -531,6 +538,8 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     this.saveState = 'idle'
     this.lastTtsKey = null
     this.lastTtsPlayedAtMs = 0
+    this.adminMotionsById.clear()
+    this.exerciseMotionsLoaded = false
     stopFeedbackSpeech()
 
     addCoverBackground(this, GYMNASTICS_PLAY_BACKGROUND_TEXTURE_KEY).setDepth(0)
@@ -540,6 +549,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     this.createHeaderFrameTexture()
     this.createLayout(vw, vh)
     this.renderMotion()
+    void this.loadExerciseMotionGuides()
     void this.checkAiServiceHealth()
     this.startPoseTracker()
     this.showGuidePreview()
@@ -1562,6 +1572,28 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     )
   }
 
+  private async loadExerciseMotionGuides() {
+    try {
+      const response = await listExerciseMotions(this.exerciseType)
+      const motions = response.data ?? []
+      this.adminMotionsById = new Map(motions.map(motion => [motion.id, motion]))
+    } catch (error) {
+      console.warn('[GymnasticsPlayScene] Failed to load exercise guide videos.', error)
+    } finally {
+      this.exerciseMotionsLoaded = true
+
+      if (this.phase === 'GUIDE_PREVIEW' && this.scene.isActive()) {
+        this.showGuidePreview()
+      }
+    }
+  }
+
+  private getCurrentGuideVideoUrl() {
+    const motionSpec = this.getCurrentAiMotionSpec()
+    const adminMotion = this.adminMotionsById.get(motionSpec.exerciseMotionId)
+    return adminMotion?.demoVideoUrl?.trim() || null
+  }
+
   private showGuidePreview() {
     this.clearCountdownOverlay()
     this.clearGuideOverlay()
@@ -1654,6 +1686,23 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     guideFrame.lineStyle(2, 0xffffff, 0.54)
     guideFrame.strokeRoundedRect(guideX + 8, guideY + 8, guideW - 16, guideH - 16, 18)
 
+    const guideVideoUrl = this.getCurrentGuideVideoUrl()
+    const guideStatusText = guideVideoUrl
+      ? '가이드 영상을 불러오는 중'
+      : this.exerciseMotionsLoaded
+        ? '등록된 가이드 영상이 없어요'
+        : '가이드 영상 확인 중'
+    const guideText = this.add
+      .text(guideX + guideW / 2, guideY + guideH / 2, guideStatusText, {
+        fontFamily: 'sans-serif',
+        fontSize: `${Math.round(Phaser.Math.Clamp(guideH * 0.05, 24, 34))}px`,
+        color: '#7a4d24',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5)
+      .setMaxLines(1)
+    this.fitTextToWidth(guideText, guideW - 80, 34, 20)
+
     const buttonW = Math.min(panelW * 0.24, 320)
     const buttonH = Math.round(Phaser.Math.Clamp(footerH * 0.68, 64, 76))
     const buttonY = footerTop + footerH / 2
@@ -1694,11 +1743,25 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
       progress,
       motionTitle,
       guideFrame,
+      guideText,
       buttonBg,
       buttonText,
       hitArea,
     ])
     this.guideOverlay = overlay
+
+    if (guideVideoUrl) {
+      this.createGuideVideoElement(
+        {
+          x: guideX + 12,
+          y: guideY + 12,
+          width: guideW - 24,
+          height: guideH - 24,
+        },
+        guideVideoUrl,
+        guideText,
+      )
+    }
   }
 
   private handleGuideStart() {
@@ -1809,8 +1872,84 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
   }
 
   private clearGuideOverlay() {
+    this.destroyGuideVideoElement()
     this.guideOverlay?.destroy(true)
     this.guideOverlay = undefined
+  }
+
+  private createGuideVideoElement(
+    bounds: PanelBounds,
+    videoUrl: string,
+    loadingText?: Phaser.GameObjects.Text,
+  ) {
+    this.destroyGuideVideoElement()
+
+    const video = document.createElement('video')
+    video.src = videoUrl
+    video.muted = true
+    video.loop = true
+    video.autoplay = true
+    video.playsInline = true
+    video.preload = 'auto'
+    video.style.position = 'fixed'
+    video.style.objectFit = 'cover'
+    video.style.pointerEvents = 'none'
+    video.style.borderRadius = '18px'
+    video.style.backgroundColor = '#20160c'
+    video.style.zIndex = '20'
+
+    const positionVideo = () => {
+      const canvasRect = this.game.canvas.getBoundingClientRect()
+      const scaleX = canvasRect.width / this.scale.width
+      const scaleY = canvasRect.height / this.scale.height
+
+      video.style.left = `${canvasRect.left + bounds.x * scaleX}px`
+      video.style.top = `${canvasRect.top + bounds.y * scaleY}px`
+      video.style.width = `${bounds.width * scaleX}px`
+      video.style.height = `${bounds.height * scaleY}px`
+    }
+
+    video.addEventListener(
+      'loadeddata',
+      () => {
+        loadingText?.setVisible(false)
+      },
+      { once: true },
+    )
+    video.addEventListener(
+      'error',
+      () => {
+        loadingText?.setVisible(true)
+        loadingText?.setText('가이드 영상을 재생할 수 없어요')
+      },
+      { once: true },
+    )
+
+    positionVideo()
+    document.body.appendChild(video)
+    this.guideVideoElement = video
+    this.guideVideoResizeHandler = positionVideo
+    window.addEventListener('resize', positionVideo)
+
+    void video.play().catch(() => {
+      loadingText?.setVisible(true)
+      loadingText?.setText('가이드 영상을 재생하려면 화면을 눌러주세요')
+    })
+  }
+
+  private destroyGuideVideoElement() {
+    if (this.guideVideoResizeHandler) {
+      window.removeEventListener('resize', this.guideVideoResizeHandler)
+      this.guideVideoResizeHandler = undefined
+    }
+
+    if (!this.guideVideoElement) return
+
+    this.guideVideoElement.pause()
+    this.guideVideoElement.removeAttribute('src')
+    this.guideVideoElement.load()
+    this.guideVideoElement.remove()
+    this.guideVideoElement = undefined
   }
 
   private clearCountdownOverlay() {
