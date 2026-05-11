@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import warnings
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -55,6 +56,8 @@ RIGHT_HIP_INDEX = 17
 MIN_CAMERA_SCALE = 0.05
 FINAL_FRAME_WINDOW = 10
 RULE_SCORE_START_RATIO = 0.35
+RULE_SCORE_CANDIDATE_FRAME_COUNT = 12
+TARGET_RULE_EARLY_EXIT_SCORE = 95.0
 TARGET_RULE_STANCE_WEIGHT = 0.55
 TARGET_RULE_ACTION_WEIGHT = 0.45
 TARGET_RULE_STANCE_FLOOR = 0.9
@@ -400,6 +403,9 @@ def _resample_channels_first(sequence: np.ndarray, target_len: int = 60) -> np.n
 def _normalize_camera_sequence(sequence: np.ndarray) -> np.ndarray:
     normalized = sequence.copy()
     xy = normalized[:2]
+    hip_centers: list[np.ndarray] = []
+    scales: list[float] = []
+
     for frame_index in range(normalized.shape[1]):
         frame_xy = xy[:, frame_index, :]
         left_hip = frame_xy[:, LEFT_HIP_INDEX]
@@ -418,10 +424,18 @@ def _normalize_camera_sequence(sequence: np.ndarray) -> np.ndarray:
         hip_center = (left_hip + right_hip) / 2.0
         shoulder_scale = float(np.linalg.norm(right_shoulder - left_shoulder))
         hip_scale = float(np.linalg.norm(right_hip - left_hip))
-        scale = max(shoulder_scale, hip_scale, MIN_CAMERA_SCALE)
-        normalized[:2, frame_index, :] = (frame_xy - hip_center[:, None]) / scale
+        scale = max(shoulder_scale, hip_scale)
+        if np.isfinite(scale) and scale > 0.0:
+            hip_centers.append(hip_center)
+            scales.append(max(scale, MIN_CAMERA_SCALE))
 
-    normalized[2] = np.clip(normalized[2], 0.0, 1.0)
+    if hip_centers and scales:
+        sequence_hip_center = np.median(np.stack(hip_centers), axis=0)
+        sequence_scale = max(float(np.median(scales)), MIN_CAMERA_SCALE)
+        normalized[:2] = (xy - sequence_hip_center[:, None, None]) / sequence_scale
+
+    normalized[:2] = np.nan_to_num(normalized[:2], nan=0.0, posinf=0.0, neginf=0.0)
+    normalized[2] = np.nan_to_num(np.clip(normalized[2], 0.0, 1.0), nan=0.0, posinf=1.0, neginf=0.0)
     return normalized
 
 
@@ -554,9 +568,14 @@ def _target_rule_score(
 
     candidate_scores: list[float] = []
     for frame in _target_rule_candidate_frames(sequence, keypoint_names):
-        frame_score = _score_target_rule_frame(frame, expected_stance, expected_action)
+        try:
+            frame_score = _score_target_rule_frame(frame, expected_stance, expected_action)
+        except (FloatingPointError, IndexError, ValueError):
+            continue
         if frame_score is not None:
             candidate_scores.append(frame_score)
+            if frame_score >= TARGET_RULE_EARLY_EXIT_SCORE:
+                return frame_score
 
     return max(candidate_scores) if candidate_scores else None
 
@@ -594,13 +613,36 @@ def _target_rule_candidate_frames(
     sequence: np.ndarray,
     keypoint_names: list[str],
 ) -> list[NormalizedPoseFrame]:
+    if sequence.ndim != 3 or sequence.shape[1] <= 0:
+        return []
+
     start_frame = max(0, min(sequence.shape[1] - 1, int(sequence.shape[1] * RULE_SCORE_START_RATIO)))
-    candidates = [_sequence_to_pose_frame(sequence, keypoint_names)]
-    candidates.extend(
-        _sequence_frame_to_pose_frame(sequence, keypoint_names, frame_index)
-        for frame_index in range(start_frame, sequence.shape[1])
-    )
+    candidates: list[NormalizedPoseFrame] = []
+
+    final_frame = _sequence_to_pose_frame(sequence, keypoint_names)
+    if final_frame.landmarks:
+        candidates.append(final_frame)
+
+    for frame_index in _target_rule_candidate_frame_indexes(sequence.shape[1], start_frame):
+        frame = _sequence_frame_to_pose_frame(sequence, keypoint_names, frame_index)
+        if frame.landmarks:
+            candidates.append(frame)
+
     return candidates
+
+
+def _target_rule_candidate_frame_indexes(frame_count: int, start_frame: int) -> list[int]:
+    if frame_count <= 0:
+        return []
+
+    start_frame = max(0, min(frame_count - 1, start_frame))
+    end_frame = frame_count - 1
+    span = end_frame - start_frame + 1
+    if span <= RULE_SCORE_CANDIDATE_FRAME_COUNT:
+        return list(range(start_frame, end_frame + 1))
+
+    sampled = np.linspace(start_frame, end_frame, RULE_SCORE_CANDIDATE_FRAME_COUNT)
+    return sorted({int(round(frame_index)) for frame_index in sampled})
 
 
 def _expected_stance_label(movement_name: str) -> str | None:
@@ -625,7 +667,7 @@ def _expected_action_label(movement_name: str) -> str | None:
 
 def _sequence_to_pose_frame(sequence: np.ndarray, keypoint_names: list[str]) -> NormalizedPoseFrame:
     start = max(0, sequence.shape[1] - FINAL_FRAME_WINDOW)
-    frame_values = np.nanmedian(sequence[:, start:, :], axis=1)
+    frame_values = _safe_nanmedian(sequence[:, start:, :], axis=1)
     return _frame_values_to_pose_frame(frame_values, keypoint_names)
 
 
@@ -639,37 +681,74 @@ def _sequence_frame_to_pose_frame(
 
 
 def _frame_values_to_pose_frame(frame_values: np.ndarray, keypoint_names: list[str]) -> NormalizedPoseFrame:
+    if frame_values.ndim != 2 or frame_values.shape[0] < 2:
+        raise ValueError(f"frame_values must have shape (channels, joints), got {frame_values.shape}")
+
     landmarks: dict[str, NormalizedLandmark] = {}
+    missing_landmarks: list[str] = []
+    expected_landmark_count = 0
 
     for index, korean_name in enumerate(keypoint_names):
         landmark_name = KOREAN_TO_TAEKWONDO_LANDMARK.get(korean_name)
         if landmark_name is None:
             continue
+        expected_landmark_count += 1
+        if index >= frame_values.shape[1]:
+            missing_landmarks.append(landmark_name)
+            continue
+
+        x = float(frame_values[0, index])
+        y = float(frame_values[1, index])
+        if not (np.isfinite(x) and np.isfinite(y)):
+            missing_landmarks.append(landmark_name)
+            continue
+
+        confidence = float(frame_values[2, index]) if frame_values.shape[0] > 2 else 0.0
+        if not np.isfinite(confidence):
+            confidence = 0.0
+        confidence = min(max(confidence, 0.0), 1.0)
+
         landmarks[landmark_name] = NormalizedLandmark(
             name=landmark_name,
-            x=float(frame_values[0, index]),
-            y=float(frame_values[1, index]),
+            x=x,
+            y=y,
             z=None,
-            confidence=float(frame_values[2, index]),
+            confidence=confidence,
         )
 
     confidences = [landmark.confidence or 0.0 for landmark in landmarks.values()]
     mean_confidence = float(np.mean(confidences)) if confidences else 0.0
+    landmark_completeness = (
+        len(landmarks) / expected_landmark_count if expected_landmark_count > 0 else 0.0
+    )
+    tracking_status = "tracking_ok" if landmarks else "tracking_lost"
     quality = TrackingQuality(
-        status="tracking_ok",
+        status=tracking_status,
         quality_score=mean_confidence,
-        missing_landmarks=[],
-        landmark_completeness=1.0,
+        missing_landmarks=missing_landmarks,
+        landmark_completeness=landmark_completeness,
         mean_confidence=mean_confidence,
     )
     return NormalizedPoseFrame(
-        tracking="tracking_ok",
+        tracking=tracking_status,
         quality=quality,
         timestamp_ms=0,
         scale_reference=1.0,
         hip_center=HipCenter(x=0.0, y=0.0),
         landmarks=landmarks,
     )
+
+
+def _safe_nanmedian(values: np.ndarray, axis: int) -> np.ndarray:
+    if values.size == 0:
+        channels = values.shape[0] if values.ndim >= 1 else TARGET_SEQUENCE_SHAPE[0]
+        joints = values.shape[2] if values.ndim >= 3 else TARGET_SEQUENCE_SHAPE[2]
+        return np.full((channels, joints), np.nan, dtype=np.float32)
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=RuntimeWarning)
+        median = np.nanmedian(values, axis=axis)
+    return median.astype(np.float32)
 
 
 def _interpolate(value: float, x0: float, x1: float, y0: float, y1: float) -> float:

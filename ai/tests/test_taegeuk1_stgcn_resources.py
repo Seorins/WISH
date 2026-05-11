@@ -9,7 +9,9 @@ from app.services.taekwondo.stgcn_taegeuk1 import (
     CORE_SCORING_JOINT_NAMES,
     STGCN_CHECKPOINT_PATH,
     _camera_adjusted_score,
+    _normalize_camera_sequence,
     _prediction_probabilities,
+    _target_rule_candidate_frames,
     _target_rule_score,
     analyze_taegeuk1_sequence,
     load_taegeuk1_resources,
@@ -234,3 +236,32 @@ def test_target_rule_score_uses_best_late_camera_frame() -> None:
 
     assert score is not None
     assert score >= 80.0
+
+
+def test_camera_sequence_normalization_handles_all_nan_input() -> None:
+    sequence = np.full(TARGET_SEQUENCE_SHAPE, np.nan, dtype=np.float32)
+
+    normalized = _normalize_camera_sequence(sequence)
+
+    assert normalized.shape == TARGET_SEQUENCE_SHAPE
+    assert np.isfinite(normalized).all()
+    assert np.count_nonzero(normalized[2]) == 0
+
+
+def test_target_rule_candidates_skip_empty_tracking_frames() -> None:
+    resources = load_taegeuk1_resources()
+    sequence = np.full(TARGET_SEQUENCE_SHAPE, np.nan, dtype=np.float32)
+
+    candidates = _target_rule_candidate_frames(sequence, resources.keypoint_names)
+
+    assert candidates == []
+
+
+def test_target_rule_candidates_sample_late_frames() -> None:
+    resources = load_taegeuk1_resources()
+    sequence = np.zeros(TARGET_SEQUENCE_SHAPE, dtype=np.float32)
+    sequence[2, :, :] = 1.0
+
+    candidates = _target_rule_candidate_frames(sequence, resources.keypoint_names)
+
+    assert 1 < len(candidates) <= stgcn_taegeuk1.RULE_SCORE_CANDIDATE_FRAME_COUNT + 1
