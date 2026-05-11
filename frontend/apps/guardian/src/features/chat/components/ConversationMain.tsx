@@ -114,6 +114,9 @@ type Props = {
   topicsSample?: boolean
   recommendedActivitySample?: boolean
   emptyState?: boolean
+  onOpenPast?: () => void
+  isViewingPast?: boolean
+  onReturnToLatest?: () => void
 }
 
 /** 한글 받침 유무로 와/과 등 조사 결정. 비한글이면 vowel형 반환. */
@@ -141,6 +144,9 @@ export function ConversationMain({
   topicsSample = false,
   recommendedActivitySample = false,
   emptyState = false,
+  onOpenPast,
+  isViewingPast = false,
+  onReturnToLatest,
 }: Props) {
   return (
     <div className={styles.card}>
@@ -158,13 +164,25 @@ export function ConversationMain({
                     ✓ {durationLabel}
                   </span>
                 )}
+                {isViewingPast && (
+                  <span className={`${styles.metaChip} ${styles.metaChipPast}`}>
+                    지난 대화 보는 중
+                  </span>
+                )}
               </>
             )}
           </div>
         </div>
-        <button type="button" className={styles.pastBtn}>
-          📅 지난 대화 보기
-        </button>
+        <div className={styles.topActions}>
+          {isViewingPast && onReturnToLatest && (
+            <button type="button" className={styles.pastBtn} onClick={onReturnToLatest}>
+              ↩ 최신 대화로
+            </button>
+          )}
+          <button type="button" className={styles.pastBtn} onClick={onOpenPast}>
+            📅 지난 대화 보기
+          </button>
+        </div>
       </div>
 
       <div className={styles.stage}>

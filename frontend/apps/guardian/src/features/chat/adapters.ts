@@ -168,7 +168,15 @@ export function formatDurationLabel(meta: GuardianDialogueSessionMeta): string {
         )
       : null)
   const status =
-    meta.status === 'COMPLETED' ? '대화 완료' : meta.status === 'IN_PROGRESS' ? '진행 중' : '중단됨'
+    meta.status === 'FINISHED'
+      ? meta.finishReason === 'COMPLETED'
+        ? '대화 완료'
+        : meta.finishReason === 'REST_TODAY'
+          ? '오늘은 쉼'
+          : '종료'
+      : meta.status === 'IN_PROGRESS'
+        ? '진행 중'
+        : '중단됨'
   if (seconds == null) return status
   const mins = Math.max(1, Math.round(seconds / 60))
   return `${status} (${mins}분)`

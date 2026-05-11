@@ -3,6 +3,7 @@ import {
   getGuardianDialogueSession,
   listGuardianDialogueSessions,
   type GuardianDialogueNpc,
+  type GuardianDialogueSessionMeta,
 } from '@wish/api-client'
 import { deriveDominantTone, type EmotionTone } from './adapters'
 
@@ -66,21 +67,41 @@ export function useGuardianDialogueSession(
   })
 }
 
+/** 백엔드에 status 필터가 없어 클라이언트에서 FINISHED (정상 종료된) 세션만 남긴다.
+ *  IN_PROGRESS / ABANDONED 는 사용자에게 노출하지 않는다. */
+export function pickFirstFinished(
+  metas: GuardianDialogueSessionMeta[] | undefined,
+): GuardianDialogueSessionMeta | null {
+  if (!metas) return null
+  for (const m of metas) {
+    if (m.status === 'FINISHED') return m
+  }
+  return null
+}
+
 export function useGuardianDialogueNpcTones(
   patientProfileId: number | null | undefined,
   npcs: GuardianDialogueNpc[],
 ): Record<GuardianDialogueNpc, EmotionTone | null> {
   const enabled = typeof patientProfileId === 'number' && patientProfileId > 0
+  const sessionsSize = 10
 
   const sessionQueries = useQueries({
     queries: npcs.map(npc => ({
-      queryKey: [GUARDIAN_DIALOGUE_SESSIONS_QUERY_KEY, patientProfileId, npc, null, null, 1],
+      queryKey: [
+        GUARDIAN_DIALOGUE_SESSIONS_QUERY_KEY,
+        patientProfileId,
+        npc,
+        null,
+        null,
+        sessionsSize,
+      ],
       queryFn: async () => {
         const res = await listGuardianDialogueSessions({
           patientProfileId: patientProfileId!,
           npc,
           page: 0,
-          size: 1,
+          size: sessionsSize,
         })
         return res.data
       },
@@ -90,7 +111,8 @@ export function useGuardianDialogueNpcTones(
 
   const detailQueries = useQueries({
     queries: npcs.map((_, i) => {
-      const sessionId = sessionQueries[i]?.data?.content?.[0]?.sessionId ?? null
+      const latestFinished = pickFirstFinished(sessionQueries[i]?.data?.content)
+      const sessionId = latestFinished?.sessionId ?? null
       return {
         queryKey: [GUARDIAN_DIALOGUE_SESSION_QUERY_KEY, patientProfileId, sessionId],
         queryFn: async () => {

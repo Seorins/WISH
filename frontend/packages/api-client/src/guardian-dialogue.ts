@@ -10,9 +10,9 @@ export type GuardianDialogueNpc =
   | 'JEONGHO'
   | 'SEHYEON'
 
-export type GuardianDialogueSessionStatus = 'IN_PROGRESS' | 'COMPLETED' | 'ABANDONED' | 'EXPIRED'
+export type GuardianDialogueSessionStatus = 'IN_PROGRESS' | 'FINISHED' | 'ABANDONED'
 
-export type GuardianDialogueFinishReason = 'COMPLETED' | 'ABANDONED' | 'EXPIRED' | null
+export type GuardianDialogueFinishReason = 'COMPLETED' | 'REST_TODAY' | 'TIMEOUT' | null
 
 export type GuardianDialogueGeneratedBy = 'CLAUDE' | 'TEMPLATE' | 'FALLBACK'
 
