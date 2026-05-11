@@ -4,8 +4,10 @@ import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.comong.backend.domain.notification.entity.GuardianDeviceToken;
 
@@ -56,4 +58,20 @@ public interface GuardianDeviceTokenRepository extends JpaRepository<GuardianDev
     Optional<GuardianDeviceToken> findByUserIdAndDeviceToken(Long userId, String deviceToken);
 
     List<GuardianDeviceToken> findAllByUserIdAndActiveTrue(Long userId);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Transactional
+    @Query(
+            value =
+                    """
+                    UPDATE guardian_device_token
+                    SET
+                        active = FALSE,
+                        updated_at = CURRENT_TIMESTAMP,
+                        deactivated_at = COALESCE(deactivated_at, CURRENT_TIMESTAMP)
+                    WHERE id = :id
+                      AND active = TRUE
+                    """,
+            nativeQuery = true)
+    int deactivateActiveById(@Param("id") Long id);
 }
