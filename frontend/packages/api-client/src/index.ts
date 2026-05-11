@@ -32,6 +32,7 @@ export {
   saveMusicResult,
 } from './music-results'
 export { consumeFuel, getFuelInbox, getFuelStatus, sendFuel } from './fuel'
+export { getGuardianDialogueSession, listGuardianDialogueSessions } from './guardian-dialogue'
 export { requestPresignedUploadUrls, uploadToPresignedUrl } from './uploads'
 export { createPatientProfile, listPatientProfiles } from './patient-profiles'
 export { endLoginSession, heartbeatLoginSession, startLoginSession } from './login-sessions'
@@ -141,6 +142,16 @@ export type {
   FuelSendRequest,
   FuelStatus,
 } from './fuel'
+export type {
+  GuardianDialogueFinishReason,
+  GuardianDialogueGeneratedBy,
+  GuardianDialogueNpc,
+  GuardianDialogueSessionDetail,
+  GuardianDialogueSessionMeta,
+  GuardianDialogueSessionStatus,
+  GuardianDialogueTurn,
+  ListGuardianDialogueSessionsParams,
+} from './guardian-dialogue'
 export type {
   PresignedUploadItem,
   PresignedUploadRequest,

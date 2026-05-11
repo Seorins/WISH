@@ -6,6 +6,7 @@ type Props = {
   characters: ChatCharacter[]
   selectedId: string
   onSelect: (id: string) => void
+  tones?: Record<string, EmotionTone | null>
 }
 
 const TONE_LABEL: Record<EmotionTone, string> = {
@@ -20,13 +21,14 @@ const TONE_CLASS: Record<EmotionTone, string> = {
   worried: styles.toneWorried,
 }
 
-export function CharacterSidebar({ characters, selectedId, onSelect }: Props) {
+export function CharacterSidebar({ characters, selectedId, onSelect, tones }: Props) {
   return (
     <div className={styles.card}>
       <h3 className={styles.title}>대화 캐릭터</h3>
       <div className={styles.list}>
         {characters.map(c => {
           const isActive = c.id === selectedId
+          const resolvedTone = tones?.[c.id] ?? null
           return (
             <button
               key={c.id}
@@ -51,9 +53,13 @@ export function CharacterSidebar({ characters, selectedId, onSelect }: Props) {
               </span>
               <span className={styles.meta}>
                 <span className={styles.name}>{c.name}</span>
-                <span className={`${styles.tone} ${TONE_CLASS[c.emotion]}`}>
-                  {TONE_LABEL[c.emotion]}
-                </span>
+                {resolvedTone ? (
+                  <span className={`${styles.tone} ${TONE_CLASS[resolvedTone]}`}>
+                    {TONE_LABEL[resolvedTone]}
+                  </span>
+                ) : (
+                  <span className={`${styles.tone} ${styles.toneNone}`}>대화 없음</span>
+                )}
               </span>
               {isActive && <span className={styles.check}>✓</span>}
             </button>

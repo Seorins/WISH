@@ -204,6 +204,7 @@ function App() {
       <AuthOverlay open={showAuth} onAuthSuccess={handleAuthSuccess} onCancel={handleAuthCancel} />
       <VillagerDialogueController
         npcId={villagerNpcId}
+        patientProfileId={patientProfileId}
         isOpen={villagerNpcId !== null}
         onClose={handleVillagerDialogueClose}
         onTextChange={handleVillagerDialogueTextChange}
