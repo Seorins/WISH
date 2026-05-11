@@ -1,4 +1,4 @@
-import Phaser from 'phaser'
+﻿import Phaser from 'phaser'
 import {
   calculateAverageCompletionRate,
   createExerciseSession,
@@ -1605,10 +1605,10 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     const motion = this.motions[this.motionIndex]
     const overlay = this.add.container(0, 0).setDepth(30)
     const dim = this.add.rectangle(vw / 2, vh / 2, vw, vh, 0x24170f, 0.9)
-    const panelWidthRatio = vw < 1400 ? 0.86 : vw >= 2200 ? 0.72 : 0.8
-    const panelMaxW = vw >= 2200 ? 1500 : 1400
+    const panelWidthRatio = vw < 1400 ? 0.94 : vw >= 2200 ? 0.82 : 0.9
+    const panelMaxW = vw >= 2200 ? 1780 : 1620
     const panelW = Math.min(vw * panelWidthRatio, panelMaxW)
-    const panelH = Math.min(vh * 0.96, 1320)
+    const panelH = Math.min(vh * 0.96, 1120)
     const panelX = (vw - panelW) / 2
     const panelY = (vh - panelH) / 2
     const panel = this.add.graphics()
@@ -1619,65 +1619,25 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     panel.lineStyle(2, 0xfff2c5, 0.86)
     panel.strokeRoundedRect(panelX + 7, panelY + 7, panelW - 14, panelH - 14, 16)
 
-    const contentPadX = Math.round(Phaser.Math.Clamp(panelW * 0.014, 20, 28))
-    const topPad = Math.round(Phaser.Math.Clamp(panelH * 0.024, 18, 28))
-    const bottomPad = Math.round(Phaser.Math.Clamp(panelH * 0.024, 18, 28))
-    const rowGap = Math.round(Phaser.Math.Clamp(panelH * 0.028, 20, 34))
-    const headerH = Math.round(Phaser.Math.Clamp(panelH * 0.145, 124, 158))
-    const footerH = Math.round(Phaser.Math.Clamp(panelH * 0.095, 82, 100))
+    const contentPadX = Math.round(Phaser.Math.Clamp(panelW * 0.026, 26, 42))
+    const topPad = Math.round(Phaser.Math.Clamp(panelH * 0.018, 14, 22))
+    const bottomPad = Math.round(Phaser.Math.Clamp(panelH * 0.02, 16, 24))
+    const columnGap = Math.round(Phaser.Math.Clamp(panelW * 0.014, 16, 26))
     const headerTop = panelY + topPad
-    const headerCenterX = panelX + panelW / 2
-    const stepPillH = Math.round(Phaser.Math.Clamp(panelH * 0.04, 36, 42))
-    const progress = this.add
-      .text(
-        headerCenterX,
-        headerTop + stepPillH / 2,
-        `${this.motionIndex + 1} / ${this.motions.length}`,
-        {
-          fontFamily: 'sans-serif',
-          fontSize: `${Math.round(Phaser.Math.Clamp(panelH * 0.029, 22, 30))}px`,
-          color: '#4a3324',
-          fontStyle: 'bold',
-        },
-      )
-      .setOrigin(0.5)
-    const stepPillW = Math.max(100, progress.width + 36)
-    const stepPill = this.add.graphics()
-    stepPill.fillStyle(0xfff5d7, 0.94)
-    stepPill.fillRoundedRect(
-      headerCenterX - stepPillW / 2,
-      progress.y - stepPillH / 2,
-      stepPillW,
-      stepPillH,
-      stepPillH / 2,
-    )
-    stepPill.lineStyle(2, 0x744e2a, 0.35)
-    stepPill.strokeRoundedRect(
-      headerCenterX - stepPillW / 2,
-      progress.y - stepPillH / 2,
-      stepPillW,
-      stepPillH,
-      stepPillH / 2,
-    )
-    const motionTitle = this.add
-      .text(headerCenterX, headerTop + stepPillH + 54, motion.title, {
-        fontFamily: 'sans-serif',
-        fontSize: `${Math.round(Phaser.Math.Clamp(panelH * 0.061, 46, 66))}px`,
-        color: '#2f1a0c',
-        fontStyle: 'bold',
-      })
-      .setOrigin(0.5)
-      .setMaxLines(1)
-    this.fitTextToWidth(motionTitle, panelW - contentPadX * 2, 66, 34)
+    const stepPillH = Math.round(Phaser.Math.Clamp(panelH * 0.046, 36, 44))
+    const mainTop = headerTop
+    const mainBottom = panelY + panelH - bottomPad
+    const mainH = Math.max(1, mainBottom - mainTop)
+    const availableW = panelW - contentPadX * 2 - columnGap
+    const videoColumnW = Math.round(availableW * 0.58)
+    const infoColumnW = availableW - videoColumnW
+    const videoColumnX = panelX + contentPadX
+    const infoX = videoColumnX + videoColumnW + columnGap
 
-    const footerTop = panelY + panelH - bottomPad - footerH
-    const videoAreaY = headerTop + headerH + rowGap
-    const videoAreaH = Math.max(1, footerTop - rowGap - videoAreaY)
-    const maxGuideW = panelW - contentPadX * 2
-    const guideW = Math.min(maxGuideW, videoAreaH * (16 / 9))
-    const guideH = guideW * (9 / 16)
-    const guideX = panelX + panelW / 2 - guideW / 2
-    const guideY = videoAreaY + (videoAreaH - guideH) / 2
+    const guideH = mainH
+    const guideW = videoColumnW
+    const guideX = videoColumnX + (videoColumnW - guideW) / 2
+    const guideY = mainTop
     const guideFrame = this.add.graphics()
     guideFrame.fillStyle(0xfff8df, 1)
     guideFrame.fillRoundedRect(guideX, guideY, guideW, guideH, 24)
@@ -1695,36 +1655,125 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     const guideText = this.add
       .text(guideX + guideW / 2, guideY + guideH / 2, guideStatusText, {
         fontFamily: 'sans-serif',
-        fontSize: `${Math.round(Phaser.Math.Clamp(guideH * 0.05, 24, 34))}px`,
+        fontSize: `${Math.round(Phaser.Math.Clamp(guideH * 0.042, 24, 34))}px`,
         color: '#7a4d24',
         fontStyle: 'bold',
       })
       .setOrigin(0.5)
       .setMaxLines(1)
-    this.fitTextToWidth(guideText, guideW - 80, 34, 20)
+    this.fitTextToWidth(guideText, guideW - 64, 34, 20)
 
-    const buttonW = Math.min(panelW * 0.24, 320)
-    const buttonH = Math.round(Phaser.Math.Clamp(footerH * 0.68, 64, 76))
-    const buttonY = footerTop + footerH / 2
+    const infoCard = this.add.graphics()
+    infoCard.fillStyle(0xfff8df, 0.96)
+    infoCard.fillRoundedRect(infoX, mainTop, infoColumnW, mainH, 24)
+    infoCard.lineStyle(3, 0xb0753a, 0.72)
+    infoCard.strokeRoundedRect(infoX, mainTop, infoColumnW, mainH, 24)
+    infoCard.lineStyle(2, 0xffffff, 0.58)
+    infoCard.strokeRoundedRect(infoX + 8, mainTop + 8, infoColumnW - 16, mainH - 16, 18)
+
+    const infoPad = Math.round(Phaser.Math.Clamp(infoColumnW * 0.075, 28, 42))
+    const infoTextX = infoX + infoPad
+    const infoTextW = infoColumnW - infoPad * 2
+    const progress = this.add
+      .text(
+        infoTextX + infoTextW / 2,
+        mainTop + infoPad + stepPillH / 2,
+        `${this.motionIndex + 1} / ${this.motions.length}`,
+        {
+          fontFamily: 'sans-serif',
+          fontSize: `${Math.round(Phaser.Math.Clamp(panelH * 0.032, 22, 30))}px`,
+          color: '#fff8df',
+          fontStyle: 'bold',
+        },
+      )
+      .setOrigin(0.5)
+    const stepPillW = Math.max(108, progress.width + 38)
+    const stepPill = this.add.graphics()
+    stepPill.fillStyle(0x7a4d24, 0.96)
+    stepPill.fillRoundedRect(
+      progress.x - stepPillW / 2,
+      progress.y - stepPillH / 2,
+      stepPillW,
+      stepPillH,
+      stepPillH / 2,
+    )
+    stepPill.lineStyle(3, 0xfff2c5, 0.9)
+    stepPill.strokeRoundedRect(
+      progress.x - stepPillW / 2,
+      progress.y - stepPillH / 2,
+      stepPillW,
+      stepPillH,
+      stepPillH / 2,
+    )
+    const titleMaxSize = Math.round(Phaser.Math.Clamp(panelH * 0.056, 42, 60))
+    const motionTitle = this.add
+      .text(infoTextX + infoTextW / 2, progress.y + stepPillH / 2 + 28, motion.title, {
+        fontFamily: 'sans-serif',
+        fontSize: `${titleMaxSize}px`,
+        color: '#2f1a0c',
+        fontStyle: 'bold',
+        align: 'center',
+        wordWrap: { width: infoTextW, useAdvancedWrap: true },
+      })
+      .setOrigin(0.5, 0)
+      .setMaxLines(2)
+    this.fitTextToWidth(motionTitle, infoTextW, titleMaxSize, 34)
+
+    const goalLabelY = motionTitle.y + motionTitle.height + 32
+    const goalLabel = this.add
+      .text(infoTextX, goalLabelY, '목표', {
+        fontFamily: 'sans-serif',
+        fontSize: `${Math.round(Phaser.Math.Clamp(panelH * 0.028, 22, 30))}px`,
+        color: '#7a4d24',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0, 0)
+    const goalText = this.add
+      .text(infoTextX, goalLabelY + goalLabel.height + 12, motion.goal, {
+        fontFamily: 'sans-serif',
+        fontSize: `${Math.round(Phaser.Math.Clamp(panelH * 0.032, 24, 34))}px`,
+        color: '#3f2a18',
+        fontStyle: 'bold',
+        wordWrap: { width: infoTextW, useAdvancedWrap: true },
+        lineSpacing: 8,
+      })
+      .setOrigin(0, 0)
+
+    const tipsY = goalText.y + goalText.height + 36
+    const tipsLabel = this.add
+      .text(infoTextX, tipsY, '동작 포인트', {
+        fontFamily: 'sans-serif',
+        fontSize: `${Math.round(Phaser.Math.Clamp(panelH * 0.028, 22, 30))}px`,
+        color: '#7a4d24',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0, 0)
+    const tipsText = this.add
+      .text(
+        infoTextX,
+        tipsY + tipsLabel.height + 14,
+        motion.tips.map(tip => `• ${tip}`).join('\n'),
+        {
+          fontFamily: 'sans-serif',
+          fontSize: `${Math.round(Phaser.Math.Clamp(panelH * 0.026, 20, 28))}px`,
+          color: '#4a3324',
+          wordWrap: { width: infoTextW, useAdvancedWrap: true },
+          lineSpacing: 10,
+        },
+      )
+      .setOrigin(0, 0)
+
+    const buttonW = Math.min(infoTextW, 360)
+    const buttonH = Math.round(Phaser.Math.Clamp(panelH * 0.078, 64, 78))
+    const buttonX = infoX + infoColumnW / 2
+    const buttonY = mainTop + mainH - infoPad - buttonH / 2
     const buttonBg = this.add.graphics()
     buttonBg.fillStyle(0x2f9e58, 1)
-    buttonBg.fillRoundedRect(
-      panelX + panelW / 2 - buttonW / 2,
-      buttonY - buttonH / 2,
-      buttonW,
-      buttonH,
-      20,
-    )
+    buttonBg.fillRoundedRect(buttonX - buttonW / 2, buttonY - buttonH / 2, buttonW, buttonH, 20)
     buttonBg.lineStyle(2, 0xffffff, 0.38)
-    buttonBg.strokeRoundedRect(
-      panelX + panelW / 2 - buttonW / 2,
-      buttonY - buttonH / 2,
-      buttonW,
-      buttonH,
-      20,
-    )
+    buttonBg.strokeRoundedRect(buttonX - buttonW / 2, buttonY - buttonH / 2, buttonW, buttonH, 20)
     const buttonText = this.add
-      .text(panelX + panelW / 2, buttonY, '시작하기', {
+      .text(buttonX, buttonY, '시작하기', {
         fontFamily: 'sans-serif',
         fontSize: `${Math.round(Phaser.Math.Clamp(buttonH * 0.42, 26, 34))}px`,
         color: '#ffffff',
@@ -1732,18 +1781,23 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
       })
       .setOrigin(0.5)
     const hitArea = this.add
-      .rectangle(panelX + panelW / 2, buttonY, buttonW, buttonH, 0xffffff, 0)
+      .rectangle(buttonX, buttonY, buttonW, buttonH, 0xffffff, 0)
       .setInteractive({ useHandCursor: true })
     hitArea.on('pointerup', () => this.handleGuideStart())
 
     overlay.add([
       dim,
       panel,
+      guideFrame,
+      guideText,
+      infoCard,
       stepPill,
       progress,
       motionTitle,
-      guideFrame,
-      guideText,
+      goalLabel,
+      goalText,
+      tipsLabel,
+      tipsText,
       buttonBg,
       buttonText,
       hitArea,
@@ -1753,17 +1807,16 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     if (guideVideoUrl) {
       this.createGuideVideoElement(
         {
-          x: guideX + 12,
-          y: guideY + 12,
-          width: guideW - 24,
-          height: guideH - 24,
+          x: guideX + 14,
+          y: guideY + 14,
+          width: guideW - 28,
+          height: guideH - 28,
         },
         guideVideoUrl,
         guideText,
       )
     }
   }
-
   private handleGuideStart() {
     if (!this.canReadCameraFrame()) {
       return
@@ -1819,7 +1872,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
       .text(
         vw / 2,
         vh / 2 - Math.round(Phaser.Math.Clamp(vh * 0.18, 136, 190)),
-        '천천히 준비해요',
+        '차렷 자세 해주세요',
         {
           fontFamily: 'sans-serif',
           fontSize: `${countdownLabelFontSize}px`,
