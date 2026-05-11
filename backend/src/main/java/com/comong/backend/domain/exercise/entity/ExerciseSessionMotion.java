@@ -14,6 +14,8 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 
+import com.comong.backend.domain.performance.entity.PerformanceVideo;
+
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -49,6 +51,10 @@ public class ExerciseSessionMotion {
     @Column(nullable = false, length = 255)
     private String feedback;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "performance_video_id")
+    private PerformanceVideo performanceVideo;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -59,7 +65,8 @@ public class ExerciseSessionMotion {
             int durationSec,
             double accuracy,
             int completedReps,
-            String feedback) {
+            String feedback,
+            PerformanceVideo performanceVideo) {
         this.session = Objects.requireNonNull(session, "session must not be null");
         this.exerciseMotion =
                 Objects.requireNonNull(exerciseMotion, "exerciseMotion must not be null");
@@ -71,6 +78,7 @@ public class ExerciseSessionMotion {
         this.accuracy = accuracy;
         this.completedReps = completedReps;
         this.feedback = Objects.requireNonNull(feedback, "feedback must not be null");
+        this.performanceVideo = performanceVideo;
     }
 
     @PrePersist

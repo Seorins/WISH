@@ -20,5 +20,7 @@ public record ExerciseSessionMotionSaveRequest(
                 Double accuracy,
         @Schema(description = "수행 반복 수", example = "8") @NotNull @PositiveOrZero
                 Integer completedReps,
-        @Schema(description = "대표 피드백", example = "무릎을 조금 더 올려요") @NotBlank @Size(max = 255)
-                String feedback) {}
+        @Schema(description = "저장 피드백", example = "무릎을 조금 더 올려요") @NotBlank @Size(max = 255)
+                String feedback,
+        @Schema(description = "수행 영상 S3 object key") @Size(max = 1024) String videoKey,
+        @Schema(description = "수행 영상 썸네일 S3 object key") @Size(max = 1024) String thumbKey) {}

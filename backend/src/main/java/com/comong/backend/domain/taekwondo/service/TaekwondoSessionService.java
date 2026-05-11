@@ -10,6 +10,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.comong.backend.domain.patient.entity.PatientProfile;
 import com.comong.backend.domain.patient.service.PatientProfileService;
+import com.comong.backend.domain.performance.entity.PerformanceVideo;
+import com.comong.backend.domain.performance.service.PerformanceVideoService;
 import com.comong.backend.domain.taekwondo.dto.BeltPromotionResponse;
 import com.comong.backend.domain.taekwondo.dto.TaekwondoSessionMotionResponse;
 import com.comong.backend.domain.taekwondo.dto.TaekwondoSessionMotionSaveRequest;
@@ -28,6 +30,7 @@ import com.comong.backend.domain.taekwondo.repository.TaekwondoMotionRepository;
 import com.comong.backend.domain.taekwondo.repository.TaekwondoProgressRepository;
 import com.comong.backend.domain.taekwondo.repository.TaekwondoSessionMotionRepository;
 import com.comong.backend.domain.taekwondo.repository.TaekwondoSessionRepository;
+import com.comong.backend.domain.upload.dto.UploadPurpose;
 import com.comong.backend.global.exception.BusinessException;
 
 import lombok.RequiredArgsConstructor;
@@ -43,6 +46,7 @@ public class TaekwondoSessionService {
     private final TaekwondoProgressRepository taekwondoProgressRepository;
     private final TaekwondoBeltHistoryRepository taekwondoBeltHistoryRepository;
     private final PatientProfileService patientProfileService;
+    private final PerformanceVideoService performanceVideoService;
 
     @Transactional
     public TaekwondoSessionResponse create(Long userId, TaekwondoSessionSaveRequest request) {
@@ -72,7 +76,12 @@ public class TaekwondoSessionService {
 
         return TaekwondoSessionResponse.of(
                 session,
-                savedSessionMotions.stream().map(TaekwondoSessionMotionResponse::from).toList(),
+                savedSessionMotions.stream()
+                        .map(
+                                motion ->
+                                        TaekwondoSessionMotionResponse.from(
+                                                motion, performanceVideoService))
+                        .toList(),
                 beltPromotion);
     }
 
@@ -92,7 +101,10 @@ public class TaekwondoSessionService {
                 taekwondoSessionMotionRepository
                         .findAllBySessionIdWithMotionOrderByRoutineOrderAsc(sessionId)
                         .stream()
-                        .map(TaekwondoSessionMotionResponse::from)
+                        .map(
+                                motion ->
+                                        TaekwondoSessionMotionResponse.from(
+                                                motion, performanceVideoService))
                         .toList();
 
         return TaekwondoSessionResponse.of(session, motions);
@@ -134,6 +146,12 @@ public class TaekwondoSessionService {
             throw new BusinessException(
                     TaekwondoErrorCode.TAEKWONDO_SESSION_MOTION_POOMSAE_MISMATCH);
         }
+        PerformanceVideo performanceVideo =
+                performanceVideoService.createIfPresent(
+                        session.getPatientProfile(),
+                        request.videoKey(),
+                        request.thumbKey(),
+                        UploadPurpose.TAEKWONDO_PERFORMANCE);
 
         return TaekwondoSessionMotion.builder()
                 .session(session)
@@ -142,6 +160,7 @@ public class TaekwondoSessionService {
                 .accuracy(request.accuracy())
                 .completedReps(request.completedReps())
                 .feedback(request.feedback())
+                .performanceVideo(performanceVideo)
                 .build();
     }
 

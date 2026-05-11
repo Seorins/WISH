@@ -44,7 +44,7 @@ function useTaekwondoMotions(poomsae: Poomsae) {
  * 우측: 품새별 동작 리스트(클릭 시 좌측 영상 교체) + 다른 사용자들과 비교.
  *
  * 좌측 영상은 me-sessions 의 가장 최근 수행본(`latestVideoUrl`) 우선,
- * 없으면 motion 의 시범영상(`demoVideoUrl`)으로 폴백. me-sessions 엔드포인트
+ * 수행 영상이 없으면 시범영상으로 대체하지 않고 빈 상태를 보여준다. me-sessions 엔드포인트
  * 미구현 상태에서는 stats 가 undefined 로 떨어지고 통계 칸은 '—' 표시.
  */
 export function TaekwondoMain() {
@@ -169,8 +169,8 @@ function PoomsaeTabBar({ value, onChange }: { value: Poomsae; onChange: (v: Poom
 }
 
 function VideoCard({ motion, stats }: { motion: TaekwondoMotion; stats: MotionStats | undefined }) {
-  // 아이가 수행한 가장 최근 영상 → 시범영상 순 폴백.
-  const videoUrl = stats?.latestVideoUrl ?? motion.demoVideoUrl ?? null
+  // 아이가 수행한 가장 최근 영상만 표시한다.
+  const videoUrl = stats?.latestVideoUrl ?? null
   const hasVideo = Boolean(videoUrl)
   return (
     <section className={styles.videoCard}>
@@ -180,7 +180,7 @@ function VideoCard({ motion, stats }: { motion: TaekwondoMotion; stats: MotionSt
             key={`${motion.id}-${videoUrl}`}
             className={styles.video}
             src={videoUrl ?? undefined}
-            poster={motion.thumbnailUrl ?? undefined}
+            poster={stats?.latestThumbUrl ?? undefined}
             controls
             playsInline
             preload="metadata"

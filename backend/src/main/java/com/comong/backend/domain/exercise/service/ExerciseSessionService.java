@@ -22,6 +22,9 @@ import com.comong.backend.domain.exercise.repository.ExerciseSessionMotionReposi
 import com.comong.backend.domain.exercise.repository.ExerciseSessionRepository;
 import com.comong.backend.domain.patient.entity.PatientProfile;
 import com.comong.backend.domain.patient.service.PatientProfileService;
+import com.comong.backend.domain.performance.entity.PerformanceVideo;
+import com.comong.backend.domain.performance.service.PerformanceVideoService;
+import com.comong.backend.domain.upload.dto.UploadPurpose;
 import com.comong.backend.global.exception.BusinessException;
 
 import lombok.RequiredArgsConstructor;
@@ -35,6 +38,7 @@ public class ExerciseSessionService {
     private final ExerciseSessionMotionRepository exerciseSessionMotionRepository;
     private final ExerciseMotionRepository exerciseMotionRepository;
     private final PatientProfileService patientProfileService;
+    private final PerformanceVideoService performanceVideoService;
 
     @Transactional
     public ExerciseSessionResponse create(Long userId, ExerciseSessionSaveRequest request) {
@@ -61,7 +65,12 @@ public class ExerciseSessionService {
 
         return ExerciseSessionResponse.of(
                 session,
-                savedSessionMotions.stream().map(ExerciseSessionMotionResponse::from).toList());
+                savedSessionMotions.stream()
+                        .map(
+                                motion ->
+                                        ExerciseSessionMotionResponse.from(
+                                                motion, performanceVideoService))
+                        .toList());
     }
 
     public List<ExerciseSessionSummaryResponse> findAll(Long userId, Long patientProfileId) {
@@ -80,7 +89,10 @@ public class ExerciseSessionService {
                 exerciseSessionMotionRepository
                         .findAllBySessionIdWithExerciseMotionOrderByRoutineOrderAsc(sessionId)
                         .stream()
-                        .map(ExerciseSessionMotionResponse::from)
+                        .map(
+                                motion ->
+                                        ExerciseSessionMotionResponse.from(
+                                                motion, performanceVideoService))
                         .toList();
 
         return ExerciseSessionResponse.of(session, motions);
@@ -119,6 +131,12 @@ public class ExerciseSessionService {
         if (session.getExerciseType() != exerciseMotion.getExerciseType()) {
             throw new BusinessException(ExerciseErrorCode.EXERCISE_SESSION_MOTION_TYPE_MISMATCH);
         }
+        PerformanceVideo performanceVideo =
+                performanceVideoService.createIfPresent(
+                        session.getPatientProfile(),
+                        request.videoKey(),
+                        request.thumbKey(),
+                        UploadPurpose.GYMNASTICS_PERFORMANCE);
 
         return ExerciseSessionMotion.builder()
                 .session(session)
@@ -127,6 +145,7 @@ public class ExerciseSessionService {
                 .accuracy(request.accuracy())
                 .completedReps(request.completedReps())
                 .feedback(request.feedback())
+                .performanceVideo(performanceVideo)
                 .build();
     }
 }
