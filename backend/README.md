@@ -53,6 +53,17 @@
 > 랜덤값 생성 예: `openssl rand -base64 48`
 > Firebase service account JSON 원문과 `FIREBASE_CREDENTIALS_BASE64` 값은 절대 커밋하지 마세요. 예시 파일에는 placeholder만 두고, EC2 `.env.dev` 에만 실제 값을 주입합니다.
 
+
+Firebase service account JSON 을 base64 로 변환하는 예시는 다음과 같습니다.
+
+```bash
+base64 -w 0 firebase-service-account.json
+```
+
+```powershell
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("C:\path\to\firebase-service-account.json"))
+```
+
 IntelliJ `Run Configuration > Environment variables` 또는 쉘 `export` 로 주입.
 
 ### 3. 빌드 & 실행
