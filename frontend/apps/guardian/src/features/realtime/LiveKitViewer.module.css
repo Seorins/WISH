@@ -90,6 +90,34 @@
   padding: 12px 0 4px;
 }
 
+.statusActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.audioToggle {
+  appearance: none;
+  border: 1px solid var(--dash-color-border-strong);
+  background: var(--dash-color-surface);
+  color: var(--dash-color-text-strong);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.audioToggle:hover {
+  background: var(--dash-color-surface-muted);
+}
+
+.audioToggleOn {
+  background: var(--dash-color-primary-50);
+  border-color: var(--dash-color-primary-soft);
+  color: var(--dash-color-primary);
+}
+
 @keyframes pulse {
   0% {
     box-shadow: 0 0 0 0 rgba(255, 71, 87, 0.6);

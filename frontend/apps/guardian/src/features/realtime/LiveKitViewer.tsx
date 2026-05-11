@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { type ActiveLiveSession, useRealtimeStore } from '@/stores/realtimeStore'
 import { PttButton } from './PttButton'
 import { useLiveKitViewer, type LiveKitViewerStatus } from './useLiveKitViewer'
@@ -22,6 +22,35 @@ export function LiveKitViewer({ activeSession }: Props) {
   const contentActive = useRealtimeStore(state => state.contentActive)
   const pttEnabled = status === 'connected' && contentActive
 
+  // 첫 진입 시엔 brower autoplay 정책상 muted=true 로 두고, 사용자가 '소리 켜기' 를
+  // 누르면 그때 unmute + play 명시 호출. 재연결로 srcObject 가 교체되면 element 의
+  // muted 상태가 풀려도 audioUnmuted 가 false 면 다시 mute 시킨다.
+  const [audioUnmuted, setAudioUnmuted] = useState(false)
+
+  useEffect(() => {
+    const video = videoRef.current
+    const audio = audioRef.current
+    if (!video || !audio) return
+    video.muted = !audioUnmuted
+    audio.muted = !audioUnmuted
+    if (audioUnmuted) {
+      void video.play().catch(() => {})
+      void audio.play().catch(() => {})
+    }
+  }, [audioUnmuted, hasRemoteVideo])
+
+  // 연결이 끊기거나 viewer 가 리셋되면 unmute 의도를 보존하지 않는다.
+  // 다음 연결에서 사용자가 다시 명시적으로 켜야 안전.
+  useEffect(() => {
+    if (status === 'disconnected' || status === 'error') {
+      setAudioUnmuted(false)
+    }
+  }, [status])
+
+  const toggleAudio = useCallback(() => {
+    setAudioUnmuted(prev => !prev)
+  }, [])
+
   return (
     <div className={styles.viewer}>
       <div className={styles.stage}>
@@ -34,7 +63,8 @@ export function LiveKitViewer({ activeSession }: Props) {
           // 안드로이드 Chrome 에서 일부 비디오 코덱이 autoplay 정책 검사를 못 통과하는 경우 대비.
           controls={false}
         />
-        <audio ref={audioRef} autoPlay />
+        {/* muted 기본값으로 autoplay 차단 우회 — 소리 켜기 버튼이 unmute 한다. */}
+        <audio ref={audioRef} autoPlay muted />
         {hasRemoteVideo ? null : (
           <div className={styles.overlay}>{overlayMessage(status, activeSession.patientName)}</div>
         )}
@@ -43,11 +73,23 @@ export function LiveKitViewer({ activeSession }: Props) {
         <span className={styles.statusText}>
           {activeSession.patientName} 님이 게임에 접속해 있어요
         </span>
-        <span
-          className={`${styles.statusBadge} ${status === 'connected' ? styles.statusBadgeLive : ''}`}
-        >
-          {statusLabel(status)}
-        </span>
+        <div className={styles.statusActions}>
+          {status === 'connected' ? (
+            <button
+              type="button"
+              className={`${styles.audioToggle} ${audioUnmuted ? styles.audioToggleOn : ''}`}
+              onClick={toggleAudio}
+              aria-pressed={audioUnmuted}
+            >
+              {audioUnmuted ? '음소거' : '소리 켜기'}
+            </button>
+          ) : null}
+          <span
+            className={`${styles.statusBadge} ${status === 'connected' ? styles.statusBadgeLive : ''}`}
+          >
+            {statusLabel(status)}
+          </span>
+        </div>
       </div>
       <div className={styles.pttSlot}>
         <PttButton enabled={pttEnabled} setMicrophoneEnabled={setMicrophoneEnabled} />
