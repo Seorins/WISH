@@ -2,9 +2,12 @@ import axios from 'axios'
 import { apiClient } from './client'
 import type { ApiResponse } from './artworks'
 
+export type UploadPurpose = 'MUSIC_RESULT' | 'GYMNASTICS_PERFORMANCE' | 'TAEKWONDO_PERFORMANCE'
+
 export type PresignedUploadRequest = {
   videoContentType: string
   thumbContentType: string
+  purpose?: UploadPurpose
 }
 
 export type PresignedUploadItem = {
