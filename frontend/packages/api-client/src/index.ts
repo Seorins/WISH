@@ -160,8 +160,7 @@ export type {
 export type { Gender, PatientProfile, PatientProfileCreateRequest } from './patient-profiles'
 export type { LoginSession, LoginSessionStartRequest } from './login-sessions'
 export type {
-  GameLivekitTokenResponse,
-  GuardianLivekitTokenResponse,
+  LiveKitTokenResponse,
   RealtimeContentType,
   RealtimeEvent,
   StartContentRequest,
