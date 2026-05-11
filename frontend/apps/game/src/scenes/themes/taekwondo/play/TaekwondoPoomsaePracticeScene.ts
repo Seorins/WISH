@@ -38,6 +38,14 @@ type TaekwondoPoomsaePracticeData = {
   beltColor?: TaekwondoBeltColor
 }
 
+type GuideVideoBounds = {
+  x: number
+  y: number
+  width: number
+  height: number
+  radius?: number
+}
+
 const ASSET_KEYS = {
   background: 'taekwondo-practice-background',
   deleteButton: 'taekwondo-practice-delete-button',
@@ -62,7 +70,6 @@ const MOTION_LOAD_ERROR_MESSAGE = '품새 동작 정보를 불러오지 못했�
 const CAMERA_DENIED_MESSAGE = '카메라를 사용할 수 없어요.'
 const GUIDE_VIDEO_PENDING_MESSAGE = '영상을 준비 중입니다.'
 const MOTION_INTRO_START_LABEL = '시작하기'
-const GUIDE_VIDEO_TITLE = '가이드 영상'
 const IMAGE_ASPECT = {
   deleteButton: 344 / 336,
   feedback: 852 / 330,
@@ -74,6 +81,12 @@ const IMAGE_ASPECT = {
 export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
   private mediaStream: MediaStream | null = null
   private videoElement: HTMLVideoElement | null = null
+  private guideVideoElement?: HTMLVideoElement
+  private guideVideoResizeHandler?: () => void
+  private sideGuideVideoBounds?: GuideVideoBounds
+  private sideGuideStatusText?: Phaser.GameObjects.Text
+  private sideGuideMagnifierElement?: HTMLButtonElement
+  private sideGuideMagnifierResizeHandler?: () => void
   private cameraCanvas: HTMLCanvasElement | null = null
   private cameraContext: CanvasRenderingContext2D | null = null
   private cameraTexture: Phaser.Textures.CanvasTexture | null = null
@@ -302,6 +315,7 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
       this.currentMotionIndex = 0
       this.setCurrentMotionName(this.getCurrentMotionName())
       this.updatePoomsaeProgress()
+      this.showSideGuideVideo()
       this.showMotionIntroOverlay()
     } catch (error) {
       console.warn('[TaekwondoPoomsaePracticeScene] Failed to load taekwondo motions.', error)
@@ -319,6 +333,14 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     return this.motions[this.currentMotionIndex]?.name ?? DEFAULT_CURRENT_MOTION_NAME
   }
 
+  private getCurrentGuideVideoUrl() {
+    return this.motions[this.currentMotionIndex]?.demoVideoUrl?.trim() || null
+  }
+
+  private getCurrentMotionDescription() {
+    return this.motions[this.currentMotionIndex]?.description?.trim() || ''
+  }
+
   private setCurrentMotionName(name: string) {
     this.currentMotionText?.setText(name)
   }
@@ -329,6 +351,8 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     }
 
     this.motionIntroOverlay?.destroy(true)
+    this.destroyGuideVideoElement()
+    this.setSideGuideMagnifierVisible(false)
 
     const { width: vw, height: vh } = this.scale
     const overlay = this.add.container(vw / 2, vh / 2).setDepth(20)
@@ -339,37 +363,27 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
       depth: 0,
       radius: Math.round(Math.min(panelWidth, panelHeight) * 0.08),
     })
-    const motionName = this.add
-      .text(0, -panelHeight * 0.36, this.getCurrentMotionName(), {
-        fontFamily: 'sans-serif',
-        fontSize: `${Math.round(Phaser.Math.Clamp(panelHeight * 0.1, 44, 74))}px`,
-        color: TEXT_COLOR,
-        fontStyle: '700',
-        align: 'center',
-        wordWrap: { width: panelWidth * 0.76, useAdvancedWrap: true },
-      })
-      .setOrigin(0.5)
-    const videoBoxWidth = panelWidth * 0.72
-    const videoBoxHeight = panelHeight * 0.56
-    const videoBoxY = panelHeight * 0.05
-    const videoBox = createTaekwondoRoundedPanel(
-      this,
-      0,
-      videoBoxY,
-      videoBoxWidth,
-      videoBoxHeight,
-      {
-        depth: 0,
-        fillColor: 0xfffbf1,
-        fillAlpha: 0.96,
-        strokeColor: 0xe6c47f,
-        strokeAlpha: 0.85,
-        strokeWidth: 3,
-        radius: Math.round(videoBoxHeight * 0.14),
-      },
-    )
+
+    const outerPad = panelWidth * 0.025
+    const gap = panelWidth * 0.025
+    const boxWidth = (panelWidth - outerPad * 2 - gap) / 2
+    const boxHeight = panelHeight - outerPad * 2
+    const videoBoxX = -(gap / 2 + boxWidth / 2)
+    const descBoxX = gap / 2 + boxWidth / 2
+    const contentY = 0
+    const boxRadius = Math.round(boxHeight * 0.05)
+
+    const videoBox = createTaekwondoRoundedPanel(this, videoBoxX, contentY, boxWidth, boxHeight, {
+      depth: 0,
+      fillColor: 0xfffbf1,
+      fillAlpha: 0.96,
+      strokeColor: 0xe6c47f,
+      strokeAlpha: 0.85,
+      strokeWidth: 3,
+      radius: boxRadius,
+    })
     const pendingText = this.add
-      .text(0, videoBoxY, GUIDE_VIDEO_PENDING_MESSAGE, {
+      .text(videoBoxX, contentY, GUIDE_VIDEO_PENDING_MESSAGE, {
         fontFamily: 'sans-serif',
         fontSize: `${Math.round(Phaser.Math.Clamp(panelHeight * 0.055, 28, 40))}px`,
         color: TEXT_COLOR,
@@ -377,31 +391,80 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
         align: 'center',
       })
       .setOrigin(0.5)
-    const buttonWidth = panelWidth * 0.24
-    const buttonHeight = panelHeight * 0.09
-    const buttonY = panelHeight * 0.425
-    const startButtonGroup = this.add.container(0, buttonY)
+    const guideVideoUrl = this.getCurrentGuideVideoUrl()
+    const guideStatusText = guideVideoUrl
+      ? GUIDE_VIDEO_PENDING_MESSAGE
+      : '등록된 가이드 영상이 없어요.'
+    pendingText.setText(guideStatusText)
+
+    const descBox = createTaekwondoRoundedPanel(this, descBoxX, contentY, boxWidth, boxHeight, {
+      depth: 0,
+      fillColor: 0xfffbf1,
+      fillAlpha: 0.96,
+      strokeColor: 0xe6c47f,
+      strokeAlpha: 0.85,
+      strokeWidth: 3,
+      radius: boxRadius,
+    })
+    const innerPadX = boxWidth * 0.08
+    const innerPadY = boxHeight * 0.07
+    const titleText = this.add
+      .text(descBoxX, contentY - boxHeight * 0.28, this.getCurrentMotionName(), {
+        fontFamily: 'sans-serif',
+        fontSize: `${Math.round(Phaser.Math.Clamp(boxHeight * 0.085, 32, 56))}px`,
+        color: TEXT_COLOR,
+        fontStyle: '700',
+        align: 'center',
+        wordWrap: { width: boxWidth - innerPadX * 2, useAdvancedWrap: true },
+      })
+      .setOrigin(0.5)
+    const goalLabelX = descBoxX - boxWidth / 2 + innerPadX
+    const goalLabel = this.add
+      .text(goalLabelX, contentY - boxHeight * 0.1, '목표', {
+        fontFamily: 'sans-serif',
+        fontSize: `${Math.round(Phaser.Math.Clamp(boxHeight * 0.034, 16, 22))}px`,
+        color: '#7a4d24',
+        fontStyle: '700',
+      })
+      .setOrigin(0, 0)
+    const goalDescription = this.getCurrentMotionDescription() || '설명이 등록되어 있지 않아요.'
+    const goalText = this.add
+      .text(goalLabelX, goalLabel.y + goalLabel.displayHeight + boxHeight * 0.02, goalDescription, {
+        fontFamily: 'sans-serif',
+        fontSize: `${Math.round(Phaser.Math.Clamp(boxHeight * 0.04, 20, 26))}px`,
+        color: TEXT_COLOR,
+        fontStyle: '700',
+        align: 'left',
+        wordWrap: { width: boxWidth - innerPadX * 2, useAdvancedWrap: true },
+      })
+      .setOrigin(0, 0)
+      .setLineSpacing(8)
+
+    const buttonWidth = boxWidth - innerPadX * 2
+    const buttonHeight = boxHeight * 0.1
+    const buttonY = contentY + boxHeight / 2 - innerPadY - buttonHeight / 2
+    const startButtonGroup = this.add.container(descBoxX, buttonY)
     const startButton = createTaekwondoRoundedPanel(this, 0, 0, buttonWidth, buttonHeight, {
       depth: 0,
-      fillColor: 0xd7a64a,
+      fillColor: 0x5fa15a,
       fillAlpha: 1,
-      strokeColor: 0xa87528,
+      strokeColor: 0x3f7a3f,
       strokeAlpha: 0.95,
-      strokeWidth: 4,
-      radius: Math.round(buttonHeight * 0.48),
+      strokeWidth: 3,
+      radius: Math.round(buttonHeight * 0.4),
     })
     const startLabel = this.add
       .text(0, -buttonHeight * 0.04, MOTION_INTRO_START_LABEL, {
         fontFamily: 'sans-serif',
-        fontSize: `${Math.round(Phaser.Math.Clamp(buttonHeight * 0.46, 26, 38))}px`,
+        fontSize: `${Math.round(Phaser.Math.Clamp(buttonHeight * 0.42, 22, 32))}px`,
         color: '#ffffff',
         fontStyle: '700',
       })
       .setOrigin(0.5)
-      .setShadow(0, 2, '#8a5b1d', 3, false, true)
+      .setShadow(0, 2, '#2e5a2e', 3, false, true)
     startButtonGroup.add([startButton, startLabel])
     const hitArea = this.add
-      .rectangle(0, buttonY, buttonWidth, buttonHeight, 0xffffff, 0)
+      .rectangle(descBoxX, buttonY, buttonWidth, buttonHeight, 0xffffff, 0)
       .setInteractive({ useHandCursor: true })
 
     hitArea.on('pointerdown', () => this.startCurrentMotion())
@@ -412,7 +475,18 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
       startButtonGroup.setScale(1)
     })
 
-    overlay.add([dim, panel, motionName, videoBox, pendingText, startButtonGroup, hitArea])
+    overlay.add([
+      dim,
+      panel,
+      videoBox,
+      pendingText,
+      descBox,
+      titleText,
+      goalLabel,
+      goalText,
+      startButtonGroup,
+      hitArea,
+    ])
     overlay.setAlpha(0)
     this.tweens.add({
       targets: overlay,
@@ -423,6 +497,21 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
 
     this.isWaitingMotionStart = true
     this.motionIntroOverlay = overlay
+
+    if (guideVideoUrl) {
+      this.createGuideVideoElement(
+        {
+          x: vw / 2 + videoBoxX - boxWidth / 2,
+          y: vh / 2 + contentY - boxHeight / 2,
+          width: boxWidth,
+          height: boxHeight,
+          radius: boxRadius,
+        },
+        guideVideoUrl,
+        pendingText,
+        25,
+      )
+    }
   }
 
   private startCurrentMotion() {
@@ -434,6 +523,8 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     this.motionStartedAtMs = Date.now()
     const overlay = this.motionIntroOverlay
     this.motionIntroOverlay = undefined
+    this.destroyGuideVideoElement()
+    this.setSideGuideMagnifierVisible(true)
 
     if (!overlay) {
       return
@@ -444,7 +535,10 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
       alpha: 0,
       duration: 120,
       ease: 'Sine.easeIn',
-      onComplete: () => overlay.destroy(true),
+      onComplete: () => {
+        overlay.destroy(true)
+        this.showSideGuideVideo()
+      },
     })
   }
 
@@ -468,6 +562,7 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
 
     this.currentMotionIndex = nextMotionIndex
     this.setCurrentMotionName(this.getCurrentMotionName())
+    this.showSideGuideVideo()
     this.showMotionIntroOverlay()
   }
 
@@ -767,18 +862,8 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     const radius = Math.round(Math.min(width, height) * 0.08)
     createTaekwondoRoundedPanel(this, x, y, width, height, { radius })
 
-    this.add
-      .text(x, y - height * 0.36, GUIDE_VIDEO_TITLE, {
-        fontFamily: 'sans-serif',
-        fontSize: `${Math.round(Phaser.Math.Clamp(height * 0.085, 24, 38))}px`,
-        color: TEXT_COLOR,
-        fontStyle: '700',
-      })
-      .setOrigin(0.5)
-      .setDepth(5)
-
-    this.add
-      .text(x, y + height * 0.08, GUIDE_VIDEO_PENDING_MESSAGE, {
+    this.sideGuideStatusText = this.add
+      .text(x, y, GUIDE_VIDEO_PENDING_MESSAGE, {
         fontFamily: 'sans-serif',
         fontSize: `${Math.round(Phaser.Math.Clamp(height * 0.055, 18, 26))}px`,
         color: TEXT_COLOR,
@@ -789,25 +874,90 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(5)
 
-    const buttonSize = Math.round(Phaser.Math.Clamp(width * 0.11, 34, 48))
-    const buttonX = x + width / 2 - buttonSize * 0.72
-    const buttonY = y - height / 2 + buttonSize * 0.72
-    const expandIcon = this.add
-      .image(buttonX, buttonY, ASSET_KEYS.guideMagnifier)
-      .setDisplaySize(buttonSize, buttonSize)
-      .setDepth(6)
-    const hitArea = this.add
-      .rectangle(buttonX, buttonY, buttonSize, buttonSize, 0xffffff, 0)
-      .setDepth(7)
-      .setInteractive({ useHandCursor: true })
+    const videoInset = 4
+    this.sideGuideVideoBounds = {
+      x: x - width / 2 + videoInset,
+      y: y - height / 2 + videoInset,
+      width: width - videoInset * 2,
+      height: height - videoInset * 2,
+      radius,
+    }
 
-    hitArea.on('pointerdown', () => this.showGuideVideoExpandOverlay())
-    hitArea.on('pointerover', () => {
-      expandIcon.setDisplaySize(buttonSize * 1.08, buttonSize * 1.08)
+    const buttonSize = Math.round(Phaser.Math.Clamp(width * 0.11, 34, 48))
+    this.createGuideMagnifierElement(
+      {
+        x: x + width / 2 - buttonSize * 0.72,
+        y: y - height / 2 + buttonSize * 0.72,
+        size: buttonSize,
+      },
+      () => this.showGuideVideoExpandOverlay(),
+    )
+  }
+
+  private setSideGuideMagnifierVisible(visible: boolean) {
+    if (this.sideGuideMagnifierElement) {
+      this.sideGuideMagnifierElement.style.visibility = visible ? 'visible' : 'hidden'
+    }
+  }
+
+  private createGuideMagnifierElement(
+    bounds: { x: number; y: number; size: number },
+    onClick: () => void,
+  ) {
+    this.destroyGuideMagnifierElement()
+
+    const button = document.createElement('button')
+    button.type = 'button'
+    button.style.position = 'fixed'
+    button.style.padding = '0'
+    button.style.border = 'none'
+    button.style.background = 'transparent'
+    button.style.cursor = 'pointer'
+    button.style.zIndex = '16'
+    button.style.transition = 'transform 120ms ease'
+
+    const img = document.createElement('img')
+    img.src = assetPath('images/themes/taekwondo/ui/magnifier.png')
+    img.style.width = '100%'
+    img.style.height = '100%'
+    img.style.display = 'block'
+    img.style.pointerEvents = 'none'
+    img.draggable = false
+    button.appendChild(img)
+
+    const positionButton = () => {
+      const canvasRect = this.game.canvas.getBoundingClientRect()
+      const scaleX = canvasRect.width / this.scale.width
+      const scaleY = canvasRect.height / this.scale.height
+      const renderedSize = bounds.size * Math.min(scaleX, scaleY)
+      button.style.left = `${canvasRect.left + bounds.x * scaleX - renderedSize / 2}px`
+      button.style.top = `${canvasRect.top + bounds.y * scaleY - renderedSize / 2}px`
+      button.style.width = `${renderedSize}px`
+      button.style.height = `${renderedSize}px`
+    }
+
+    button.addEventListener('click', onClick)
+    button.addEventListener('mouseenter', () => {
+      button.style.transform = 'scale(1.08)'
     })
-    hitArea.on('pointerout', () => {
-      expandIcon.setDisplaySize(buttonSize, buttonSize)
+    button.addEventListener('mouseleave', () => {
+      button.style.transform = 'scale(1)'
     })
+
+    positionButton()
+    document.body.appendChild(button)
+    this.sideGuideMagnifierElement = button
+    this.sideGuideMagnifierResizeHandler = positionButton
+    window.addEventListener('resize', positionButton)
+  }
+
+  private destroyGuideMagnifierElement() {
+    if (this.sideGuideMagnifierResizeHandler) {
+      window.removeEventListener('resize', this.sideGuideMagnifierResizeHandler)
+      this.sideGuideMagnifierResizeHandler = undefined
+    }
+    this.sideGuideMagnifierElement?.remove()
+    this.sideGuideMagnifierElement = undefined
   }
 
   private showGuideVideoExpandOverlay() {
@@ -816,6 +966,8 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     }
 
     this.pauseAiJudgement()
+    this.destroyGuideVideoElement()
+    this.setSideGuideMagnifierVisible(false)
 
     const { width: vw, height: vh } = this.scale
     const overlay = this.add.container(vw / 2, vh / 2).setDepth(30)
@@ -826,37 +978,27 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
       depth: 0,
       radius: Math.round(Math.min(panelWidth, panelHeight) * 0.08),
     })
-    const motionName = this.add
-      .text(0, -panelHeight * 0.36, this.getCurrentMotionName(), {
-        fontFamily: 'sans-serif',
-        fontSize: `${Math.round(Phaser.Math.Clamp(panelHeight * 0.1, 44, 74))}px`,
-        color: TEXT_COLOR,
-        fontStyle: '700',
-        align: 'center',
-        wordWrap: { width: panelWidth * 0.76, useAdvancedWrap: true },
-      })
-      .setOrigin(0.5)
-    const videoBoxWidth = panelWidth * 0.72
-    const videoBoxHeight = panelHeight * 0.56
-    const videoBoxY = panelHeight * 0.05
-    const videoBox = createTaekwondoRoundedPanel(
-      this,
-      0,
-      videoBoxY,
-      videoBoxWidth,
-      videoBoxHeight,
-      {
-        depth: 0,
-        fillColor: 0xfffbf1,
-        fillAlpha: 0.96,
-        strokeColor: 0xe6c47f,
-        strokeAlpha: 0.85,
-        strokeWidth: 3,
-        radius: Math.round(videoBoxHeight * 0.14),
-      },
-    )
+
+    const outerPad = panelWidth * 0.025
+    const gap = panelWidth * 0.025
+    const boxWidth = (panelWidth - outerPad * 2 - gap) / 2
+    const boxHeight = panelHeight - outerPad * 2
+    const videoBoxX = -(gap / 2 + boxWidth / 2)
+    const descBoxX = gap / 2 + boxWidth / 2
+    const contentY = 0
+    const boxRadius = Math.round(boxHeight * 0.05)
+
+    const videoBox = createTaekwondoRoundedPanel(this, videoBoxX, contentY, boxWidth, boxHeight, {
+      depth: 0,
+      fillColor: 0xfffbf1,
+      fillAlpha: 0.96,
+      strokeColor: 0xe6c47f,
+      strokeAlpha: 0.85,
+      strokeWidth: 3,
+      radius: boxRadius,
+    })
     const pendingText = this.add
-      .text(0, videoBoxY, GUIDE_VIDEO_PENDING_MESSAGE, {
+      .text(videoBoxX, contentY, GUIDE_VIDEO_PENDING_MESSAGE, {
         fontFamily: 'sans-serif',
         fontSize: `${Math.round(Phaser.Math.Clamp(panelHeight * 0.055, 28, 40))}px`,
         color: TEXT_COLOR,
@@ -864,6 +1006,54 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
         align: 'center',
       })
       .setOrigin(0.5)
+    const guideVideoUrl = this.getCurrentGuideVideoUrl()
+    const guideStatusText = guideVideoUrl
+      ? GUIDE_VIDEO_PENDING_MESSAGE
+      : '등록된 가이드 영상이 없어요.'
+    pendingText.setText(guideStatusText)
+
+    const descBox = createTaekwondoRoundedPanel(this, descBoxX, contentY, boxWidth, boxHeight, {
+      depth: 0,
+      fillColor: 0xfffbf1,
+      fillAlpha: 0.96,
+      strokeColor: 0xe6c47f,
+      strokeAlpha: 0.85,
+      strokeWidth: 3,
+      radius: boxRadius,
+    })
+    const innerPadX = boxWidth * 0.08
+    const titleText = this.add
+      .text(descBoxX, contentY - boxHeight * 0.28, this.getCurrentMotionName(), {
+        fontFamily: 'sans-serif',
+        fontSize: `${Math.round(Phaser.Math.Clamp(boxHeight * 0.085, 32, 56))}px`,
+        color: TEXT_COLOR,
+        fontStyle: '700',
+        align: 'center',
+        wordWrap: { width: boxWidth - innerPadX * 2, useAdvancedWrap: true },
+      })
+      .setOrigin(0.5)
+    const goalLabelX = descBoxX - boxWidth / 2 + innerPadX
+    const goalLabel = this.add
+      .text(goalLabelX, contentY - boxHeight * 0.1, '목표', {
+        fontFamily: 'sans-serif',
+        fontSize: `${Math.round(Phaser.Math.Clamp(boxHeight * 0.034, 16, 22))}px`,
+        color: '#7a4d24',
+        fontStyle: '700',
+      })
+      .setOrigin(0, 0)
+    const goalDescription = this.getCurrentMotionDescription() || '설명이 등록되어 있지 않아요.'
+    const goalText = this.add
+      .text(goalLabelX, goalLabel.y + goalLabel.displayHeight + boxHeight * 0.02, goalDescription, {
+        fontFamily: 'sans-serif',
+        fontSize: `${Math.round(Phaser.Math.Clamp(boxHeight * 0.04, 20, 26))}px`,
+        color: TEXT_COLOR,
+        fontStyle: '700',
+        align: 'left',
+        wordWrap: { width: boxWidth - innerPadX * 2, useAdvancedWrap: true },
+      })
+      .setOrigin(0, 0)
+      .setLineSpacing(8)
+
     const closeSize = Math.round(Phaser.Math.Clamp(vh * 0.075, 54, 72))
     const closeX = panelWidth / 2 - closeSize * 0.95
     const closeY = -panelHeight / 2 + closeSize * 0.95
@@ -877,7 +1067,18 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     closeHitArea.on('pointerover', () => closeButton.setTint(0xffefc4))
     closeHitArea.on('pointerout', () => closeButton.clearTint())
 
-    overlay.add([dim, panel, motionName, videoBox, pendingText, closeButton, closeHitArea])
+    overlay.add([
+      dim,
+      panel,
+      videoBox,
+      pendingText,
+      descBox,
+      titleText,
+      goalLabel,
+      goalText,
+      closeButton,
+      closeHitArea,
+    ])
     overlay.setAlpha(0)
     this.tweens.add({
       targets: overlay,
@@ -887,23 +1088,43 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     })
 
     this.guideVideoExpandOverlay = overlay
+
+    if (guideVideoUrl) {
+      this.createGuideVideoElement(
+        {
+          x: vw / 2 + videoBoxX - boxWidth / 2,
+          y: vh / 2 + contentY - boxHeight / 2,
+          width: boxWidth,
+          height: boxHeight,
+          radius: boxRadius,
+        },
+        guideVideoUrl,
+        pendingText,
+        35,
+      )
+    }
   }
 
   private hideGuideVideoExpandOverlay() {
     const overlay = this.guideVideoExpandOverlay
     this.guideVideoExpandOverlay = undefined
     this.resumeAiJudgement()
+    this.setSideGuideMagnifierVisible(true)
 
     if (!overlay) {
       return
     }
 
+    this.destroyGuideVideoElement()
     this.tweens.add({
       targets: overlay,
       alpha: 0,
       duration: 120,
       ease: 'Sine.easeIn',
-      onComplete: () => overlay.destroy(true),
+      onComplete: () => {
+        overlay.destroy(true)
+        this.showSideGuideVideo()
+      },
     })
   }
 
@@ -930,6 +1151,103 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
       .setDepth(5)
+  }
+
+  private showSideGuideVideo() {
+    if (!this.sideGuideVideoBounds || this.isSceneShuttingDown) {
+      return
+    }
+
+    const guideVideoUrl = this.getCurrentGuideVideoUrl()
+    if (!guideVideoUrl) {
+      this.destroyGuideVideoElement()
+      this.sideGuideStatusText?.setText('등록된 가이드 영상이 없어요.').setVisible(true)
+      return
+    }
+
+    this.sideGuideStatusText?.setText(GUIDE_VIDEO_PENDING_MESSAGE).setVisible(true)
+    this.createGuideVideoElement(
+      this.sideGuideVideoBounds,
+      guideVideoUrl,
+      this.sideGuideStatusText,
+      15,
+    )
+  }
+
+  private createGuideVideoElement(
+    bounds: GuideVideoBounds,
+    videoUrl: string,
+    loadingText?: Phaser.GameObjects.Text,
+    zIndex = 15,
+  ) {
+    this.destroyGuideVideoElement()
+
+    const video = document.createElement('video')
+    video.src = videoUrl
+    video.muted = true
+    video.loop = true
+    video.autoplay = true
+    video.playsInline = true
+    video.preload = 'auto'
+    video.style.position = 'fixed'
+    video.style.objectFit = 'cover'
+    video.style.pointerEvents = 'none'
+    video.style.borderRadius = `${bounds.radius ?? 18}px`
+    video.style.backgroundColor = '#fffbf1'
+    video.style.zIndex = String(zIndex)
+
+    const positionVideo = () => {
+      const canvasRect = this.game.canvas.getBoundingClientRect()
+      const scaleX = canvasRect.width / this.scale.width
+      const scaleY = canvasRect.height / this.scale.height
+
+      video.style.left = `${canvasRect.left + bounds.x * scaleX}px`
+      video.style.top = `${canvasRect.top + bounds.y * scaleY}px`
+      video.style.width = `${bounds.width * scaleX}px`
+      video.style.height = `${bounds.height * scaleY}px`
+    }
+
+    video.addEventListener(
+      'loadeddata',
+      () => {
+        loadingText?.setVisible(false)
+      },
+      { once: true },
+    )
+    video.addEventListener(
+      'error',
+      () => {
+        loadingText?.setText('가이드 영상을 재생할 수 없어요.').setVisible(true)
+      },
+      { once: true },
+    )
+
+    positionVideo()
+    document.body.appendChild(video)
+    this.guideVideoElement = video
+    this.guideVideoResizeHandler = positionVideo
+    window.addEventListener('resize', positionVideo)
+
+    void video.play().catch(() => {
+      loadingText?.setText('가이드 영상을 재생하려면 화면을 눌러주세요.').setVisible(true)
+    })
+  }
+
+  private destroyGuideVideoElement() {
+    if (this.guideVideoResizeHandler) {
+      window.removeEventListener('resize', this.guideVideoResizeHandler)
+      this.guideVideoResizeHandler = undefined
+    }
+
+    if (!this.guideVideoElement) {
+      return
+    }
+
+    this.guideVideoElement.pause()
+    this.guideVideoElement.removeAttribute('src')
+    this.guideVideoElement.load()
+    this.guideVideoElement.remove()
+    this.guideVideoElement = undefined
   }
 
   private resizeCameraTexture(displayWidth: number, displayHeight: number) {
@@ -1141,6 +1459,8 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     this.motionIntroOverlay = undefined
     this.guideVideoExpandOverlay?.destroy(true)
     this.guideVideoExpandOverlay = undefined
+    this.destroyGuideVideoElement()
+    this.destroyGuideMagnifierElement()
     this.beltPromotionOverlay?.destroy(true)
     this.beltPromotionOverlay = undefined
     this.isWaitingMotionStart = false

@@ -46,29 +46,31 @@ describe('saveVillagerChoiceEvent', () => {
 
     await saveVillagerChoiceEvent(baseEvent)
 
-    expect(fetchMock).toHaveBeenCalledWith('/api/v1/dialogue/sessions/42/turns', {
+    expect(fetchMock).toHaveBeenCalledOnce()
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(String(url)).toContain('/api/v1/dialogue/sessions/42/turns')
+    expect(init).toMatchObject({
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Accept: 'application/json',
       },
-      body: JSON.stringify({
-        clientEventId: 'event-1',
-        npcId: 'monkey_friend',
-        npcName: 'SEORIN',
-        questionText: '지금 움직이고 싶어?',
-        sceneId: 'monkey_friend_01_move',
-        nodeId: 'monkey_friend_01_move',
-        topicId: undefined,
-        selectedChoice: {
-          choiceIntentId: 'monkey_move_little',
-          text: '조금 움직일래요',
-        },
-        intensity: 0,
-        concernFlags: [],
-        protectiveFactors: ['playful_coping', 'agency_coping'],
-        generatedBy: 'STATIC',
-      }),
+    })
+    expect(JSON.parse(init.body as string)).toMatchObject({
+      clientEventId: 'event-1',
+      npcId: 'monkey_friend',
+      npcName: 'SEORIN',
+      sceneId: 'monkey_friend_01_move',
+      nodeId: 'monkey_friend_01_move',
+      questionText: '지금 움직이고 싶어?',
+      selectedChoice: {
+        choiceIntentId: 'monkey_move_little',
+        text: '조금 움직일래요',
+      },
+      intensity: 0,
+      concernFlags: [],
+      protectiveFactors: ['playful_coping', 'agency_coping'],
+      generatedBy: 'STATIC',
     })
   })
 

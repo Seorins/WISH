@@ -32,6 +32,7 @@ export {
   saveMusicResult,
 } from './music-results'
 export { consumeFuel, getFuelInbox, getFuelStatus, sendFuel } from './fuel'
+export { getGuardianDialogueSession, listGuardianDialogueSessions } from './guardian-dialogue'
 export { requestPresignedUploadUrls, uploadToPresignedUrl } from './uploads'
 export { createPatientProfile, listPatientProfiles } from './patient-profiles'
 export { endLoginSession, heartbeatLoginSession, startLoginSession } from './login-sessions'
@@ -142,6 +143,16 @@ export type {
   FuelStatus,
 } from './fuel'
 export type {
+  GuardianDialogueFinishReason,
+  GuardianDialogueGeneratedBy,
+  GuardianDialogueNpc,
+  GuardianDialogueSessionDetail,
+  GuardianDialogueSessionMeta,
+  GuardianDialogueSessionStatus,
+  GuardianDialogueTurn,
+  ListGuardianDialogueSessionsParams,
+} from './guardian-dialogue'
+export type {
   PresignedUploadItem,
   PresignedUploadRequest,
   PresignedUploadResponse,
@@ -149,8 +160,7 @@ export type {
 export type { Gender, PatientProfile, PatientProfileCreateRequest } from './patient-profiles'
 export type { LoginSession, LoginSessionStartRequest } from './login-sessions'
 export type {
-  GameLivekitTokenResponse,
-  GuardianLivekitTokenResponse,
+  LiveKitTokenResponse,
   RealtimeContentType,
   RealtimeEvent,
   StartContentRequest,

@@ -5,6 +5,7 @@ import type { VillagerChoice, VillagerNpcId } from '../types'
 
 interface VillagerDialogueControllerProps {
   npcId: VillagerNpcId | null
+  patientProfileId: number | undefined
   isOpen: boolean
   onClose: () => void
   onTextChange?: (text: string) => void
@@ -12,6 +13,7 @@ interface VillagerDialogueControllerProps {
 
 export function VillagerDialogueController({
   npcId,
+  patientProfileId,
   isOpen,
   onClose,
   onTextChange,
@@ -27,11 +29,11 @@ export function VillagerDialogueController({
     selectChoice,
     advanceDialogue,
     cancelDialogue,
-  } = useVillageDialogueSession(onClose)
+  } = useVillageDialogueSession(patientProfileId, onClose)
 
   useEffect(() => {
     if (!isOpen || !npcId) return
-    startVillagerDialogue(npcId)
+    void startVillagerDialogue(npcId)
   }, [isOpen, npcId, startVillagerDialogue])
 
   useEffect(() => {

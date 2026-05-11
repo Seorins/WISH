@@ -15,6 +15,7 @@ export class NpcInteractionHintUi {
   private readonly labelText: Phaser.GameObjects.Text
   private readonly helpBar: Phaser.GameObjects.Container
   private readonly helpBg: Phaser.GameObjects.Graphics
+  private readonly helpKeyText: Phaser.GameObjects.Text
   private readonly helpText: Phaser.GameObjects.Text
   private readonly toast: Phaser.GameObjects.Container
   private readonly toastBg: Phaser.GameObjects.Graphics
@@ -60,6 +61,15 @@ export class NpcInteractionHintUi {
       .setScrollFactor(0)
       .setVisible(false)
     this.helpBg = scene.add.graphics().setScrollFactor(0)
+    this.helpKeyText = scene.add
+      .text(0, 0, 'E', {
+        fontFamily: 'Pretendard, "Noto Sans KR", sans-serif',
+        fontSize: '20px',
+        fontStyle: '900',
+        color: '#ffffff',
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0)
     this.helpText = scene.add
       .text(0, 0, '', {
         fontFamily: 'Pretendard, "Noto Sans KR", sans-serif',
@@ -69,7 +79,7 @@ export class NpcInteractionHintUi {
       })
       .setOrigin(0.5)
       .setScrollFactor(0)
-    this.helpBar.add([this.helpBg, this.helpText])
+    this.helpBar.add([this.helpBg, this.helpKeyText, this.helpText])
 
     this.toast = scene.add
       .container(0, 88)
@@ -144,29 +154,16 @@ export class NpcInteractionHintUi {
   }
 
   private drawHelpBar() {
-    const width = Math.max(280, this.helpText.width + 66)
+    const width = Math.max(320, this.helpText.width + 78)
     const height = 46
     this.helpBg.clear()
     this.helpBg.fillStyle(0x231c18, 0.78)
     this.helpBg.fillRoundedRect(-width / 2, -height / 2, width, height, 23)
     this.helpBg.fillStyle(0x7b61ff, 1)
     this.helpBg.fillRoundedRect(-width / 2 + 12, -16, 32, 32, 8)
+    this.helpKeyText.setPosition(-width / 2 + 28, 0)
+    this.helpText.setPosition(24, 0)
     this.helpBar.setPosition(this.scene.scale.width / 2, this.scene.scale.height - 40)
-
-    const key = this.scene.add
-      .text(-width / 2 + 28, 0, 'E', {
-        fontFamily: 'Pretendard, "Noto Sans KR", sans-serif',
-        fontSize: '20px',
-        fontStyle: '900',
-        color: '#ffffff',
-      })
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-    const oldKey = this.helpBar.getByName('interaction-help-key')
-    oldKey?.destroy()
-    key.setName('interaction-help-key')
-    this.helpBar.add(key)
-    this.helpText.setX(18)
   }
 
   private drawToast() {

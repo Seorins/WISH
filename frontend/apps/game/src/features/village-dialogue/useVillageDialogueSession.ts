@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { cancelVillagerDialogueSession, saveVillagerChoiceEvent } from './villageDialogueClient'
+import {
+  cancelVillagerDialogueSession,
+  finishVillageDialogueSession,
+  saveVillagerChoiceEvent,
+  startVillageDialogueSession,
+  type VillageDialogueFinishReason,
+} from './villageDialogueClient'
+import { VILLAGE_NPC_TO_API_ENUM } from './npcMapping'
 import { pickRandomCounselingScript, SHARED_COUNSELING_SCRIPTS } from './sharedCounselingScripts'
 import { VILLAGER_FIRST_GREETING, villageDialogues } from './villageDialogues'
 import type {
@@ -36,9 +43,12 @@ function getStartNode(script: CounselingScript) {
   return node
 }
 
-export function useVillageDialogueSession(onFinished?: () => void) {
+export function useVillageDialogueSession(
+  patientProfileId: number | undefined,
+  onFinished?: () => void,
+) {
   const [status, setStatus] = useState<VillagerDialogueStatus>('idle')
-  const [sessionId, setSessionId] = useState<string | null>(null)
+  const [sessionId, setSessionId] = useState<string | number | null>(null)
   const [currentNpcId, setCurrentNpcId] = useState<VillagerNpcId | null>(null)
   const [currentScript, setCurrentScript] = useState<CounselingScript | null>(null)
   const [currentNode, setCurrentNode] = useState<VillagerDialogueNode | null>(null)
@@ -46,6 +56,8 @@ export function useVillageDialogueSession(onFinished?: () => void) {
   const [selectedChoiceIntentId, setSelectedChoiceIntentId] = useState<string | null>(null)
   const [selectedEvents, setSelectedEvents] = useState<VillagerChoiceEvent[]>([])
   const timeoutIds = useRef<number[]>([])
+  const sessionIdRef = useRef<string | number | null>(null)
+  const startInFlightRef = useRef(false)
 
   const script = useMemo(
     () => (currentNpcId ? villageDialogues[currentNpcId] : null),
@@ -87,6 +99,7 @@ export function useVillageDialogueSession(onFinished?: () => void) {
 
   const resetSession = useCallback(() => {
     clearTimers()
+    sessionIdRef.current = null
     setStatus('idle')
     setSessionId(null)
     setCurrentNpcId(null)
@@ -97,25 +110,47 @@ export function useVillageDialogueSession(onFinished?: () => void) {
     setSelectedEvents([])
   }, [clearTimers])
 
-  const closeDialogue = useCallback(() => {
-    resetSession()
-    onFinished?.()
-  }, [onFinished, resetSession])
+  const finishSession = useCallback(async (reason: VillageDialogueFinishReason) => {
+    const target = sessionIdRef.current
+    if (typeof target !== 'number') return
+    try {
+      await finishVillageDialogueSession(target, reason)
+    } catch {
+      // Finish failures should not trap the child in the dialogue UI.
+    }
+  }, [])
+
+  const closeDialogue = useCallback(
+    (reason: VillageDialogueFinishReason = 'COMPLETED') => {
+      void finishSession(reason)
+      resetSession()
+      onFinished?.()
+    },
+    [finishSession, onFinished, resetSession],
+  )
 
   const cancelDialogue = useCallback(() => {
-    if (sessionId) {
-      void cancelVillagerDialogueSession(sessionId).catch(() => undefined)
+    const target = sessionIdRef.current
+    if (target) {
+      void cancelVillagerDialogueSession(target).catch(() => undefined)
     }
-    closeDialogue()
-  }, [closeDialogue, sessionId])
+    closeDialogue('CANCELLED')
+  }, [closeDialogue])
 
   const startVillagerDialogue = useCallback(
-    (npcId: VillagerNpcId) => {
+    async (npcId: VillagerNpcId) => {
+      if (startInFlightRef.current || sessionIdRef.current) return
+
       const sharedScript = pickRandomCounselingScript(SHARED_COUNSELING_SCRIPTS)
       const startNode = getStartNode(sharedScript)
+      const nextSessionId =
+        Number.isInteger(patientProfileId) && (patientProfileId ?? 0) > 0
+          ? null
+          : createLocalSessionId(npcId)
 
       clearTimers()
-      setSessionId(createLocalSessionId(npcId))
+      setSessionId(nextSessionId)
+      sessionIdRef.current = nextSessionId
       setCurrentNpcId(npcId)
       setCurrentScript(sharedScript)
       setCurrentNode(startNode)
@@ -123,9 +158,27 @@ export function useVillageDialogueSession(onFinished?: () => void) {
       setSelectedEvents([])
       setStatus('opening_greeting')
       setVisibleLines([VILLAGER_FIRST_GREETING[npcId]])
-      scheduleOpening(sharedScript, startNode)
+
+      try {
+        startInFlightRef.current = true
+        if (Number.isInteger(patientProfileId) && (patientProfileId ?? 0) > 0) {
+          const result = await startVillageDialogueSession(
+            patientProfileId as number,
+            VILLAGE_NPC_TO_API_ENUM[npcId],
+          )
+          sessionIdRef.current = result.sessionId
+          setSessionId(result.sessionId)
+        }
+
+        scheduleOpening(sharedScript, startNode)
+      } catch {
+        setStatus('error')
+        setVisibleLines([SAVE_ERROR_LINE])
+      } finally {
+        startInFlightRef.current = false
+      }
     },
-    [clearTimers, scheduleOpening],
+    [clearTimers, patientProfileId, scheduleOpening],
   )
 
   const advanceDialogue = useCallback(() => {
@@ -149,13 +202,20 @@ export function useVillageDialogueSession(onFinished?: () => void) {
     }
 
     if (status === 'ending_wait') {
-      closeDialogue()
+      closeDialogue('COMPLETED')
     }
   }, [clearTimers, closeDialogue, currentNode, currentScript, queueTimer, showQuestion, status])
 
   const selectChoice = useCallback(
     async (choice: VillagerChoice) => {
-      if (status !== 'waiting_choice' || !sessionId || !script || !currentScript || !currentNode) {
+      const targetSessionId = sessionIdRef.current
+      if (
+        status !== 'waiting_choice' ||
+        !targetSessionId ||
+        !script ||
+        !currentScript ||
+        !currentNode
+      ) {
         return
       }
 
@@ -164,7 +224,7 @@ export function useVillageDialogueSession(onFinished?: () => void) {
       setSelectedChoiceIntentId(choice.choiceIntentId)
 
       const event: VillagerChoiceEvent = {
-        sessionId,
+        sessionId: targetSessionId,
         clientEventId: createClientEventId(),
         npcId: script.npcId,
         displayName: script.displayName,
@@ -219,7 +279,7 @@ export function useVillageDialogueSession(onFinished?: () => void) {
 
           const nextNode = currentScript.nodes[choice.nextNodeId]
           if (!nextNode) {
-            closeDialogue()
+            closeDialogue('ERROR')
             return
           }
 
@@ -237,7 +297,6 @@ export function useVillageDialogueSession(onFinished?: () => void) {
       currentScript,
       queueTimer,
       script,
-      sessionId,
       showQuestion,
       status,
     ],

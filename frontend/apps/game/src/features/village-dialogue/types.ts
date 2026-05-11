@@ -62,7 +62,7 @@ export interface VillagerDialogueScript extends VillagerIdentity {
 }
 
 export interface VillagerChoiceEvent {
-  sessionId: string
+  sessionId: string | number
   clientEventId?: string
   npcId: FrontNpcId
   displayName: string

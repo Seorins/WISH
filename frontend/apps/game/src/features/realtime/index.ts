@@ -3,3 +3,5 @@ export {
   getContentTypeForSceneKey,
   isContentScene,
 } from './contentSceneRegistry'
+export { useContentLifecycleSync } from './useContentLifecycleSync'
+export { useRealtimePublisher } from './useRealtimePublisher'

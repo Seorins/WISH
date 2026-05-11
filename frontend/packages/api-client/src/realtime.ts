@@ -2,27 +2,22 @@ import { apiClient } from './client'
 import type { ApiResponse } from './artworks'
 
 // 실시간 모니터링 콘텐츠 타입.
-// BE 의 ContentType enum 과 정확히 일치해야 함 — 스키마 변경 시 양쪽 동기화 필요.
+// BE 의 ContentType enum 값(LOGIN 제외) 과 정확히 일치 — enum.name() 으로 직렬화되어 대문자.
 export type RealtimeContentType = 'MUSIC' | 'GYMNASTICS' | 'TAEKWONDO' | 'ART'
 
-// 게임앱이 LiveKit room 에 접속할 때 받는 응답.
-// livekitUrl 은 BE 가 응답에 포함시켜 FE env 에 secret 을 두지 않도록 한다.
-export type GameLivekitTokenResponse = {
+// LiveKit 토큰 응답 — 게임앱/보호자앱 모두 동일 스키마.
+// game-token 호출이든 guardian-token 호출이든 BE 는 같은 record 를 돌려준다.
+// contentActive/contentType 는 발급 시점의 콘텐츠 상태 스냅샷으로, 보호자앱이
+// 마이크 권한 초기 상태를 결정하는 데 사용된다 (게임앱은 무시해도 됨).
+export type LiveKitTokenResponse = {
   loginSessionId: number
   patientProfileId: number
   roomName: string
   livekitUrl: string
+  participantIdentity: string
+  participantName: string
   token: string
-}
-
-// 보호자앱이 LiveKit room 에 접속할 때 받는 응답.
-// 보호자는 콘텐츠 진행 상태를 알아야 PTT 마이크 버튼 활성/비활성을 결정할 수 있어
-// contentActive / contentType 가 같이 내려온다.
-export type GuardianLivekitTokenResponse = {
-  loginSessionId: number
-  roomName: string
-  livekitUrl: string
-  token: string
+  expiresInSeconds: number
   contentActive: boolean
   contentType: RealtimeContentType | null
 }
@@ -32,40 +27,59 @@ export type StartContentRequest = {
 }
 
 // /realtime/events SSE 채널 이벤트.
-// type 으로 분기하는 discriminated union — 새 이벤트 추가 시 여기와 BE 양쪽 추가.
+// BE 의 RealtimeEventType enum 과 매핑.
+// CONNECTED 는 subscribe 직후 BE 가 즉시 emit 하는 first-event — 연결 확인용으로만 사용.
+// 모든 이벤트에 occurredAt(LocalDateTime ISO 문자열) 이 포함된다.
 export type RealtimeEvent =
+  | {
+      type: 'CONNECTED'
+      occurredAt: string
+    }
   | {
       type: 'GAME_STARTED'
       loginSessionId: number
       patientProfileId: number
       patientName: string
+      occurredAt: string
     }
   | {
       type: 'GAME_ENDED'
       loginSessionId: number
       patientProfileId: number
+      occurredAt: string
     }
   | {
       type: 'CONTENT_STARTED'
       loginSessionId: number
+      patientProfileId: number
       contentType: RealtimeContentType
-      message?: string
+      occurredAt: string
     }
   | {
       type: 'CONTENT_ENDED'
       loginSessionId: number
+      patientProfileId: number
       contentType: RealtimeContentType
+      occurredAt: string
     }
 
+const KNOWN_EVENT_TYPES: ReadonlySet<RealtimeEvent['type']> = new Set([
+  'CONNECTED',
+  'GAME_STARTED',
+  'GAME_ENDED',
+  'CONTENT_STARTED',
+  'CONTENT_ENDED',
+])
+
 export async function requestGameLivekitToken(loginSessionId: number) {
-  const response = await apiClient.post<ApiResponse<GameLivekitTokenResponse>>(
+  const response = await apiClient.post<ApiResponse<LiveKitTokenResponse>>(
     `/realtime/login-sessions/${loginSessionId}/game-token`,
   )
   return response.data
 }
 
 export async function requestGuardianLivekitToken(loginSessionId: number) {
-  const response = await apiClient.post<ApiResponse<GuardianLivekitTokenResponse>>(
+  const response = await apiClient.post<ApiResponse<LiveKitTokenResponse>>(
     `/realtime/login-sessions/${loginSessionId}/guardian-token`,
   )
   return response.data
@@ -93,8 +107,9 @@ type RealtimeSubscriptionOptions = {
 }
 
 // EventSource 가 Authorization 헤더를 못 붙이는 한계를 우회하려고 fetch + ReadableStream 으로
-// 직접 SSE 를 구독한다. text/event-stream 의 최소 스펙(`data:` 라인 + 빈 줄로 메시지 구분) 만 처리.
-// 재연결/백오프는 호출자 (useRealtimeEvents) 에서 처리.
+// 직접 SSE 를 구독한다. BE 는 `event:realtime\ndata:{...}\n\n` 형태로 보내며 본 파서는
+// data: 라인만 추출하므로 event: 라인은 자연스럽게 무시된다. 재연결/백오프는 호출자
+// (useRealtimeEvents) 에서 처리.
 export async function subscribeRealtimeEvents({
   onEvent,
   onError,
@@ -133,7 +148,14 @@ export async function subscribeRealtimeEvents({
           const payload = dataLine.slice('data:'.length).trim()
           if (payload) {
             try {
-              onEvent(JSON.parse(payload) as RealtimeEvent)
+              const parsed = JSON.parse(payload) as { type?: unknown }
+              // 알 수 없는 type 은 무시 — BE 가 새 이벤트 추가했을 때 forward-compat.
+              if (
+                typeof parsed.type === 'string' &&
+                KNOWN_EVENT_TYPES.has(parsed.type as RealtimeEvent['type'])
+              ) {
+                onEvent(parsed as RealtimeEvent)
+              }
             } catch (parseError) {
               onError?.(parseError)
             }

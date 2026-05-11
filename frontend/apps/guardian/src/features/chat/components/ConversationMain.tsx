@@ -103,14 +103,17 @@ const StreamingBubbles = memo(function StreamingBubbles({ messages }: { messages
 
 type Props = {
   characterName: string
-  whenLabel: string
-  durationLabel: string
+  whenLabel?: string
+  durationLabel?: string
   messages: ChatMessage[]
   summary: ConversationSummary
   partnerImageUrl?: string
   partnerImageScale?: string
   partnerImageOffsetX?: string
   partnerImageOffsetY?: string
+  topicsSample?: boolean
+  recommendedActivitySample?: boolean
+  emptyState?: boolean
 }
 
 /** 한글 받침 유무로 와/과 등 조사 결정. 비한글이면 vowel형 반환. */
@@ -119,6 +122,10 @@ function withParticle(name: string, vowel: string, consonant: string): string {
   if (last < 0xac00 || last > 0xd7a3) return name + vowel
   const hasFinal = (last - 0xac00) % 28 !== 0
   return name + (hasFinal ? consonant : vowel)
+}
+
+function SampleBadge() {
+  return <span className={styles.sampleBadge}>샘플</span>
 }
 
 export function ConversationMain({
@@ -131,6 +138,9 @@ export function ConversationMain({
   partnerImageScale,
   partnerImageOffsetX,
   partnerImageOffsetY,
+  topicsSample = false,
+  recommendedActivitySample = false,
+  emptyState = false,
 }: Props) {
   return (
     <div className={styles.card}>
@@ -138,8 +148,18 @@ export function ConversationMain({
         <div className={styles.titleBlock}>
           <h2 className={styles.title}>{withParticle(characterName, '와', '과')}의 대화</h2>
           <div className={styles.metaRow}>
-            <span className={styles.metaChip}>{whenLabel}</span>
-            <span className={`${styles.metaChip} ${styles.metaChipDone}`}>✓ {durationLabel}</span>
+            {emptyState ? (
+              <span className={styles.metaChip}>아직 대화 기록 없음</span>
+            ) : (
+              <>
+                {whenLabel && <span className={styles.metaChip}>{whenLabel}</span>}
+                {durationLabel && (
+                  <span className={`${styles.metaChip} ${styles.metaChipDone}`}>
+                    ✓ {durationLabel}
+                  </span>
+                )}
+              </>
+            )}
           </div>
         </div>
         <button type="button" className={styles.pastBtn}>
@@ -149,7 +169,16 @@ export function ConversationMain({
 
       <div className={styles.stage}>
         <StableLeftStage />
-        <StreamingBubbles messages={messages} />
+        {emptyState ? (
+          <div className={styles.bubbles}>
+            <div className={styles.bubble}>
+              {withParticle(characterName, '와', '과')} 아직 나눈 대화가 없어요.
+            </div>
+            <div className={styles.bubble}>게임에서 대화를 진행하면 여기에 기록돼요.</div>
+          </div>
+        ) : (
+          <StreamingBubbles messages={messages} />
+        )}
         <StableRightStage
           partnerImageUrl={partnerImageUrl}
           partnerImageScale={partnerImageScale}
@@ -165,24 +194,24 @@ export function ConversationMain({
         </div>
         <div className={styles.summaryRow}>
           <div className={styles.summaryCard}>
-            <div className={styles.summaryTitle}>관계 신뢰 상승</div>
-            <div>{withParticle(characterName, '와', '과')}의 신뢰가 더 깊어졌어요.</div>
-            <div className={styles.summaryDelta}>↑ {summary.trustDelta}%</div>
-          </div>
-          <div className={styles.summaryCard}>
-            <div className={styles.summaryTitle}>대화 주제</div>
-            <div>주요 주제예요.</div>
-            <div className={styles.tagRow}>
-              {summary.topics.map(t => (
-                <span key={t} className={styles.tag}>
-                  {t}
-                </span>
-              ))}
+            <div className={styles.summaryTitle}>대화 주제 {topicsSample && <SampleBadge />}</div>
+            <div className={styles.summaryBody}>
+              <div className={styles.tagRow}>
+                {summary.topics.map(t => (
+                  <span key={t} className={styles.tag}>
+                    {t}
+                  </span>
+                ))}
+              </div>
             </div>
           </div>
           <div className={styles.summaryCard}>
-            <div className={styles.summaryTitle}>추천 후속 활동</div>
-            <div>{summary.recommendedActivity}</div>
+            <div className={styles.summaryTitle}>
+              추천 후속 활동 {recommendedActivitySample && <SampleBadge />}
+            </div>
+            <div className={styles.summaryBody}>
+              <div>{summary.recommendedActivity}</div>
+            </div>
           </div>
         </div>
       </div>

@@ -61,6 +61,13 @@ livekit:
   api-key: ${LIVEKIT_API_KEY:}
   api-secret: ${LIVEKIT_API_SECRET:}
 
+firebase:
+  push:
+    enabled: ${FIREBASE_PUSH_ENABLED:false}
+  admin:
+    project-id: ${FIREBASE_PROJECT_ID:}
+    credentials-base64: ${FIREBASE_CREDENTIALS_BASE64:}
+
 springdoc:
   api-docs:
     path: /v3/api-docs

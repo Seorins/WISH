@@ -1,4 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { RealtimeNotificationBridge } from './features/notifications'
+import { RealtimeBridge } from './features/realtime'
 import { ActivityPage } from './pages/ActivityPage'
 import { ChatPage } from './pages/ChatPage'
 import { DashboardPage } from './pages/DashboardPage'
@@ -13,6 +15,8 @@ function App() {
   const basename = import.meta.env.VITE_APP_BASE_PATH ?? '/'
   return (
     <BrowserRouter basename={basename}>
+      <RealtimeBridge />
+      <RealtimeNotificationBridge />
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />

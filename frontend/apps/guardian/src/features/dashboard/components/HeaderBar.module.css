@@ -178,6 +178,40 @@
   border: 2px solid var(--dash-color-surface);
 }
 
+.bellCount {
+  box-sizing: border-box;
+  position: absolute;
+  /* 종 원 우상단 모서리 바깥에 살짝 걸치게 — 가시성 ↑. */
+  top: -4px;
+  right: -4px;
+  /* 단자릿수일 땐 width/height 동일하게 잡아 정원. 두자릿수+ 는 bellCountWide 가 늘려준다. */
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: var(--dash-color-primary);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* 종(흰색 surface) 과 분리되도록 ring 색을 페이지 bg 로 (--dash-color-surface 는 흰색이라
+     ring 이 안 보였음). */
+  border: 2px solid var(--dash-color-bg);
+  box-shadow: 0 2px 6px rgba(124, 92, 255, 0.32);
+}
+
+.bellCountWide {
+  width: auto;
+  min-width: 20px;
+  padding: 0 6px;
+}
+
+.notificationWrap {
+  position: relative;
+}
+
 .profileWrap {
   position: relative;
 }

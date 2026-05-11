@@ -1,7 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import logoUrl from '@/assets/logo.png'
+import { NotificationPanel, NotificationPreview } from '@/features/notifications'
 import { useAuthStore } from '@/shared/auth/store'
+import { useNotificationStore } from '@/stores/notificationStore'
 import { calcKoreanAge, useMyPatient } from '@/features/auth/hooks/useMyPatient'
 import { PATIENT } from '../data/mock'
 import {
@@ -42,10 +44,13 @@ export function HeaderBar() {
   const location = useLocation()
   const active = activeTabFromPath(location.pathname)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [notificationsOpen, setNotificationsOpen] = useState(false)
   const profileRef = useRef<HTMLDivElement>(null)
+  const notificationRef = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
   const clearAuth = useAuthStore(s => s.clear)
   const { data: patient } = useMyPatient()
+  const itemCount = useNotificationStore(s => s.items.length)
 
   const displayName = patient?.name ?? ''
   const ageValue = patient?.birthDate ? calcKoreanAge(patient.birthDate) : null
@@ -69,11 +74,33 @@ export function HeaderBar() {
     }
   }, [menuOpen])
 
+  useEffect(() => {
+    if (!notificationsOpen) return
+    const handleClick = (event: MouseEvent) => {
+      if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) {
+        setNotificationsOpen(false)
+      }
+    }
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setNotificationsOpen(false)
+    }
+    document.addEventListener('click', handleClick)
+    document.addEventListener('keydown', handleKey)
+    return () => {
+      document.removeEventListener('click', handleClick)
+      document.removeEventListener('keydown', handleKey)
+    }
+  }, [notificationsOpen])
+
   const handleLogout = () => {
     setMenuOpen(false)
     clearAuth()
     navigate('/login', { replace: true })
   }
+
+  const handleBellClick = useCallback(() => {
+    setNotificationsOpen(prev => !prev)
+  }, [])
 
   return (
     <header className={styles.header}>
@@ -101,10 +128,31 @@ export function HeaderBar() {
       </nav>
 
       <div className={styles.right}>
-        <button type="button" className={styles.iconBtn} aria-label="알림">
-          <BellIcon width={20} height={20} />
-          <span className={styles.bellDot} />
-        </button>
+        <div className={styles.notificationWrap} ref={notificationRef}>
+          <button
+            type="button"
+            className={styles.iconBtn}
+            aria-label={itemCount > 0 ? `알림 ${itemCount}개` : '알림'}
+            aria-haspopup="dialog"
+            aria-expanded={notificationsOpen}
+            onClick={handleBellClick}
+          >
+            <BellIcon width={20} height={20} />
+            {itemCount > 0 && !notificationsOpen ? (
+              <span
+                className={`${styles.bellCount} ${itemCount > 9 ? styles.bellCountWide : ''}`}
+                aria-hidden
+              >
+                {itemCount > 9 ? '9+' : itemCount}
+              </span>
+            ) : null}
+          </button>
+          {notificationsOpen ? (
+            <NotificationPanel onClose={() => setNotificationsOpen(false)} />
+          ) : (
+            <NotificationPreview />
+          )}
+        </div>
         <div className={styles.profileWrap} ref={profileRef}>
           <button
             type="button"
