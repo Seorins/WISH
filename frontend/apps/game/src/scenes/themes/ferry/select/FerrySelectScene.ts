@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { consumeFuel, getFuelInbox, getFuelStatus, type FuelInboxEvent } from '@wish/api-client'
 import { assetPath } from '@/game/assets/assetPath'
 import {
   createClickTargetMarker,
@@ -23,25 +24,44 @@ const FERRY_EXIT_PORTAL = { xRatio: 0.43, yRatio: 0.86, widthRatio: 0.14, height
 const FERRY_RETURN_SPAWN = { xRatio: 0.475, yRatio: 0.755 }
 const FUEL_GOAL_PERCENT = 100
 const FUEL_PANEL_DEPTH = 20
-const INITIAL_FUEL_PERCENT = 72
-const SEND_FUEL_AMOUNT = 15
+const INITIAL_FUEL_PERCENT = 0
 const STAR_FLY_DURATION_MS = 750
-const STAR_FLY_ARC_HEIGHT = 80
+const STAR_FLY_ARC_HEIGHT = 90
 const SHIP_TARGET = { xRatio: 0.54, yRatio: 0.56 }
+const DEFAULT_GUARDIAN_MESSAGE = '오늘도 정말 잘했어, 천천히 같이 가보자.'
 const COMPACT_PANEL = {
-  width: 850,
-  height: 240,
-  top: 80,
+  designWidth: 320,
+  designHeight: 188,
+  maxWidth: 320,
+  minWidth: 300,
+  marginX: 28,
+  marginY: 104,
+  iconSize: 64,
+  iconMarginX: 28,
+  iconMarginY: 24,
 } as const
 
+type FuelPopupState = 'emptyIcon' | 'emptyOpen' | 'arrived' | 'received' | 'complete'
+
 type FuelPanelUi = {
+  container: Phaser.GameObjects.Container
   bounds: Phaser.Geom.Rectangle
+  uiScale: number
+  shadow: Phaser.GameObjects.Rectangle
+  card: Phaser.GameObjects.Rectangle
   button: Phaser.GameObjects.Zone
+  buttonBg: Phaser.GameObjects.Rectangle
   buttonText: Phaser.GameObjects.Text
-  percentText: Phaser.GameObjects.Text
-  remainText: Phaser.GameObjects.Text
+  starIcon: Phaser.GameObjects.Image
+  mailIconText: Phaser.GameObjects.Text
+  messageBox: Phaser.GameObjects.Rectangle
+  progressTrack: Phaser.GameObjects.Rectangle
+  progressFill: Phaser.GameObjects.Rectangle
+  titleText: Phaser.GameObjects.Text
+  subText: Phaser.GameObjects.Text
   messageTitleText: Phaser.GameObjects.Text
   messageBodyText: Phaser.GameObjects.Text
+  rewardText: Phaser.GameObjects.Text
   starStart: Phaser.Math.Vector2
   shipTarget: Phaser.Math.Vector2
 }
@@ -61,6 +81,11 @@ export class FerrySelectScene extends Phaser.Scene {
   private currentFuelPercent = INITIAL_FUEL_PERCENT
   private fuelPanel?: FuelPanelUi
   private isStarFlying = false
+  private isFuelRequestPending = false
+  private pendingFuelEvents: FuelInboxEvent[] = []
+  private lastReceivedAmount = 0
+  private lastReceivedMessage = ''
+  private fuelPopupState: FuelPopupState = 'emptyIcon'
 
   constructor() {
     super({ key: 'FerrySelectScene' })
@@ -80,6 +105,11 @@ export class FerrySelectScene extends Phaser.Scene {
     this.playerWasInExitPortal = true
     this.fuelPanel = undefined
     this.isStarFlying = false
+    this.isFuelRequestPending = false
+    this.pendingFuelEvents = []
+    this.lastReceivedAmount = 0
+    this.lastReceivedMessage = ''
+    this.fuelPopupState = 'emptyIcon'
 
     addCoverBackground(this, FERRY_BACKGROUND_KEY)
     this.physics.world.setBounds(0, 0, vw, vh)
@@ -97,6 +127,7 @@ export class FerrySelectScene extends Phaser.Scene {
     })
 
     this.createFuelPanel(vw, vh)
+    void this.loadFuelState()
 
     this.cameras.main.fadeIn(250, 0, 0, 0)
   }
@@ -127,7 +158,9 @@ export class FerrySelectScene extends Phaser.Scene {
 
   private readonly handlePointerDown = (pointer: Phaser.Input.Pointer) => {
     if (this.isTransitioning) return
-    if (this.fuelPanel?.bounds.contains(pointer.x, pointer.y)) return
+    if (this.fuelPanel?.container.visible && this.fuelPanel.bounds.contains(pointer.x, pointer.y)) {
+      return
+    }
 
     this.target = new Phaser.Math.Vector2(pointer.x, pointer.y)
     createClickTargetMarker(this, pointer.x, pointer.y)
@@ -150,126 +183,471 @@ export class FerrySelectScene extends Phaser.Scene {
   }
 
   private createFuelPanel(vw: number, vh: number) {
-    const maxPanelWidth = Math.min(COMPACT_PANEL.width, vw - 48)
-    const panelWidth = Phaser.Math.Clamp(maxPanelWidth, 520, COMPACT_PANEL.width)
-    const panelHeight = panelWidth * (COMPACT_PANEL.height / COMPACT_PANEL.width)
-    const panelX = (vw - panelWidth) / 2
-    const panelY = COMPACT_PANEL.top
-    const scaleY = panelWidth / COMPACT_PANEL.width
+    const maxPanelWidth = Math.min(COMPACT_PANEL.maxWidth, vw - 48)
+    const panelWidth = Phaser.Math.Clamp(
+      maxPanelWidth,
+      COMPACT_PANEL.minWidth,
+      COMPACT_PANEL.maxWidth,
+    )
+    const panelHeight = panelWidth * (COMPACT_PANEL.designHeight / COMPACT_PANEL.designWidth)
+    const panelX = COMPACT_PANEL.marginX
+    const panelY = vh - panelHeight - COMPACT_PANEL.marginY
+    const scaleY = panelWidth / COMPACT_PANEL.designWidth
 
     const panel = this.add.container(panelX, panelY).setDepth(FUEL_PANEL_DEPTH)
-    const frame = this.add.image(0, 0, FERRY_FRAME_KEY).setOrigin(0, 0)
-    frame.setScale(panelWidth / 2000, panelHeight / 688)
-
-    const title = this.add.text(170 * scaleY, 42 * scaleY, '연료 모으기', {
-      fontFamily: 'sans-serif',
-      fontSize: `${Math.round(28 * scaleY)}px`,
-      fontStyle: '700',
-      color: '#4c351d',
-    })
-    const subtitle = this.add.text(170 * scaleY, 76 * scaleY, '보호자가 보내준 별빛 연료', {
-      fontFamily: 'sans-serif',
-      fontSize: `${Math.round(14 * scaleY)}px`,
-      color: '#725b3b',
-    })
-    const percentText = this.add.text(170 * scaleY, 112 * scaleY, '', {
-      fontFamily: 'sans-serif',
-      fontSize: `${Math.round(36 * scaleY)}px`,
-      fontStyle: '700',
-      color: '#4a321b',
-    })
-    const remainText = this.add.text(292 * scaleY, 127 * scaleY, '', {
-      fontFamily: 'sans-serif',
-      fontSize: `${Math.round(14 * scaleY)}px`,
-      color: '#6c5639',
-      wordWrap: { width: 250 * scaleY },
-    })
-    const messageTitleText = this.add.text(494 * scaleY, 56 * scaleY, '', {
-      fontFamily: 'sans-serif',
-      fontSize: `${Math.round(17 * scaleY)}px`,
-      fontStyle: '700',
-      color: '#4c351d',
-      wordWrap: { width: 320 * scaleY },
-    })
-    const messageBodyText = this.add.text(494 * scaleY, 93 * scaleY, '', {
-      fontFamily: 'sans-serif',
-      fontSize: `${Math.round(14 * scaleY)}px`,
-      color: '#4c351d',
-      wordWrap: { width: 330 * scaleY },
-      lineSpacing: 3,
-    })
-    const button = this.add
-      .zone(panelWidth / 2, 189 * scaleY, panelWidth - 64 * scaleY, 58 * scaleY)
-      .setInteractive({ useHandCursor: true })
-    const buttonText = this.add
-      .text(panelWidth / 2, 189 * scaleY, '', {
+    const shadow = this.add
+      .rectangle(5 * scaleY, 8 * scaleY, panelWidth, panelHeight, 0x000000, 0.12)
+      .setOrigin(0, 0)
+    const card = this.add
+      .rectangle(0, 0, panelWidth, panelHeight, 0xffffff, 0.96)
+      .setOrigin(0, 0)
+      .setStrokeStyle(2 * scaleY, 0xe6dcff, 1)
+    const titleText = this.add
+      .text(115 * scaleY, 28 * scaleY, '', {
         fontFamily: 'sans-serif',
-        fontSize: `${Math.round(21 * scaleY)}px`,
+        fontSize: `${Math.round(20 * scaleY)}px`,
+        fontStyle: '700',
+        color: '#372d28',
+      })
+      .setOrigin(0, 0)
+    const subText = this.add
+      .text(115 * scaleY, 56 * scaleY, '', {
+        fontFamily: 'sans-serif',
+        fontSize: `${Math.round(12.5 * scaleY)}px`,
+        color: '#766960',
+      })
+      .setOrigin(0, 0)
+
+    const starIcon = this.add
+      .image(62 * scaleY, 72 * scaleY, STAR_FRAME_KEY)
+      .setOrigin(0.5)
+      .setDisplaySize(58 * scaleY, 58 * scaleY)
+    const mailIconText = this.add
+      .text(32 * scaleY, 32 * scaleY, '✉', {
+        fontFamily: 'sans-serif',
+        fontSize: `${Math.round(30 * scaleY)}px`,
+        fontStyle: '700',
+        color: '#7657dd',
+      })
+      .setOrigin(0.5)
+
+    const messageBox = this.add
+      .rectangle(34 * scaleY, 92 * scaleY, 392 * scaleY, 50 * scaleY, 0xffffff, 0.7)
+      .setOrigin(0, 0)
+      .setStrokeStyle(2 * scaleY, 0xe8d2b2, 0.7)
+    const messageTitleText = this.add
+      .text(230 * scaleY, 100 * scaleY, '', {
+        fontFamily: 'sans-serif',
+        fontSize: `${Math.round(12 * scaleY)}px`,
+        fontStyle: '700',
+        color: '#372d28',
+        align: 'center',
+        wordWrap: { width: 350 * scaleY },
+      })
+      .setOrigin(0.5, 0)
+    const messageBodyText = this.add
+      .text(230 * scaleY, 105 * scaleY, '', {
+        fontFamily: 'sans-serif',
+        fontSize: `${Math.round(13.5 * scaleY)}px`,
+        color: '#4b413a',
+        align: 'center',
+        wordWrap: { width: 350 * scaleY },
+        lineSpacing: 3,
+      })
+      .setOrigin(0.5, 0)
+
+    const progressTrack = this.add
+      .rectangle(145 * scaleY, 113 * scaleY, 240 * scaleY, 12 * scaleY, 0xe7e2f6, 1)
+      .setOrigin(0, 0.5)
+    const progressFill = this.add
+      .rectangle(145 * scaleY, 113 * scaleY, 240 * scaleY, 12 * scaleY, 0x7650df, 1)
+      .setOrigin(0, 0.5)
+    const rewardText = this.add
+      .text(230 * scaleY, 151 * scaleY, '', {
+        fontFamily: 'sans-serif',
+        fontSize: `${Math.round(15.5 * scaleY)}px`,
+        fontStyle: '700',
+        color: '#7152de',
+        align: 'center',
+        wordWrap: { width: 390 * scaleY },
+      })
+      .setOrigin(0.5, 0)
+    const button = this.add
+      .zone(230 * scaleY, 192 * scaleY, 392 * scaleY, 40 * scaleY)
+      .setInteractive({ useHandCursor: true })
+    const buttonBg = this.add
+      .rectangle(230 * scaleY, 192 * scaleY, 392 * scaleY, 40 * scaleY, 0x7657dd, 1)
+      .setOrigin(0.5)
+    const buttonText = this.add
+      .text(230 * scaleY, 192 * scaleY, '', {
+        fontFamily: 'sans-serif',
+        fontSize: `${Math.round(16.5 * scaleY)}px`,
         fontStyle: '700',
         color: '#ffffff',
       })
       .setOrigin(0.5, 0.5)
 
-    button.on('pointerdown', () => this.sendFuel())
+    button.on(
+      'pointerdown',
+      (
+        _pointer: Phaser.Input.Pointer,
+        _localX: number,
+        _localY: number,
+        event: Phaser.Types.Input.EventData,
+      ) => {
+        event.stopPropagation()
+        void this.handleFuelButton()
+      },
+    )
 
     panel.add([
-      frame,
-      title,
-      subtitle,
-      percentText,
-      remainText,
+      shadow,
+      card,
+      titleText,
+      subText,
+      messageBox,
+      starIcon,
+      mailIconText,
       messageTitleText,
       messageBodyText,
+      progressTrack,
+      progressFill,
+      rewardText,
+      buttonBg,
       button,
       buttonText,
     ])
 
     this.fuelPanel = {
+      container: panel,
       bounds: new Phaser.Geom.Rectangle(panelX, panelY, panelWidth, panelHeight),
+      uiScale: scaleY,
+      shadow,
+      card,
       button,
+      buttonBg,
       buttonText,
-      percentText,
-      remainText,
+      starIcon,
+      mailIconText,
+      messageBox,
+      progressTrack,
+      progressFill,
+      titleText,
+      subText,
       messageTitleText,
       messageBodyText,
-      starStart: new Phaser.Math.Vector2(panelX + 101 * scaleY, panelY + 101 * scaleY),
+      rewardText,
+      starStart: new Phaser.Math.Vector2(panelX + 62 * scaleY, panelY + 72 * scaleY),
       shipTarget: new Phaser.Math.Vector2(vw * SHIP_TARGET.xRatio, vh * SHIP_TARGET.yRatio),
     }
     this.refreshFuelUi()
   }
 
-  private sendFuel() {
-    if (this.isStarFlying || this.currentFuelPercent >= FUEL_GOAL_PERCENT) {
+  private async loadFuelState() {
+    if (this.isFuelRequestPending) return
+
+    this.isFuelRequestPending = true
+    this.refreshFuelUi()
+
+    try {
+      const [statusResponse, inboxResponse] = await Promise.all([getFuelStatus(), getFuelInbox()])
+      this.currentFuelPercent = Phaser.Math.Clamp(
+        statusResponse.data?.percentage ?? 0,
+        0,
+        FUEL_GOAL_PERCENT,
+      )
+      this.pendingFuelEvents = inboxResponse.data ?? []
+      const latestEvent = this.pendingFuelEvents.at(-1)
+      this.lastReceivedAmount = this.pendingFuelEvents.reduce((sum, event) => sum + event.amount, 0)
+      this.lastReceivedMessage = latestEvent?.message ?? DEFAULT_GUARDIAN_MESSAGE
+      this.fuelPopupState = this.pendingFuelEvents.length > 0 ? 'arrived' : 'emptyIcon'
+    } catch (error) {
+      console.warn('Failed to load ferry fuel state.', error)
+      this.pendingFuelEvents = []
+      this.lastReceivedAmount = 0
+      this.lastReceivedMessage = ''
+    } finally {
+      this.isFuelRequestPending = false
+      this.refreshFuelUi()
+    }
+  }
+
+  private async receiveFuel() {
+    if (this.isStarFlying || this.isFuelRequestPending) return
+
+    if (this.pendingFuelEvents.length === 0) {
+      void this.loadFuelState()
       return
     }
 
-    this.currentFuelPercent = Phaser.Math.Clamp(
-      this.currentFuelPercent + SEND_FUEL_AMOUNT,
-      0,
-      FUEL_GOAL_PERCENT,
-    )
+    this.fuelPopupState = 'received'
+    const eventIds = this.pendingFuelEvents.map(event => event.id)
+    this.isFuelRequestPending = true
     this.refreshFuelUi()
-    this.playStarFlyAnimation()
 
-    if (this.currentFuelPercent >= FUEL_GOAL_PERCENT) {
-      this.onFuelCompleted()
+    try {
+      await consumeFuel({ ids: eventIds })
+      const [statusResponse, inboxResponse] = await Promise.all([getFuelStatus(), getFuelInbox()])
+      this.currentFuelPercent = Phaser.Math.Clamp(
+        statusResponse.data?.percentage ?? this.currentFuelPercent,
+        0,
+        FUEL_GOAL_PERCENT,
+      )
+      this.pendingFuelEvents = inboxResponse.data ?? []
+      const latestEvent = this.pendingFuelEvents.at(-1)
+      this.lastReceivedAmount = this.pendingFuelEvents.reduce((sum, event) => sum + event.amount, 0)
+      this.lastReceivedMessage = latestEvent?.message ?? DEFAULT_GUARDIAN_MESSAGE
+      this.fuelPopupState = this.currentFuelPercent >= FUEL_GOAL_PERCENT ? 'complete' : 'received'
+      this.refreshFuelUi()
+      this.playStarFlyAnimation()
+    } catch (error) {
+      console.warn('Failed to receive ferry fuel.', error)
+    } finally {
+      this.isFuelRequestPending = false
+      this.refreshFuelUi()
     }
+  }
+
+  private async handleFuelButton() {
+    if (this.fuelPopupState === 'received') {
+      this.fuelPopupState = 'emptyIcon'
+      this.refreshFuelUi()
+      return
+    }
+
+    if (this.fuelPopupState === 'emptyIcon') {
+      await this.loadFuelState()
+      if (this.pendingFuelEvents.length === 0) {
+        this.fuelPopupState = 'emptyOpen'
+        this.refreshFuelUi()
+      }
+      return
+    }
+
+    if (this.fuelPopupState === 'emptyOpen') {
+      this.fuelPopupState = 'emptyIcon'
+      this.refreshFuelUi()
+      return
+    }
+
+    if (this.fuelPopupState === 'complete') {
+      this.onFuelCompleted()
+      return
+    }
+
+    await this.receiveFuel()
   }
 
   private refreshFuelUi() {
     if (!this.fuelPanel) return
 
+    const panel = this.fuelPanel
+    const ui = panel.uiScale
+    const popupWidth = COMPACT_PANEL.designWidth * ui
+    const popupHeight = COMPACT_PANEL.designHeight * ui
+    const iconSize = COMPACT_PANEL.iconSize * ui
+    const iconX = this.scale.width - iconSize - COMPACT_PANEL.iconMarginX
+    const iconY = COMPACT_PANEL.iconMarginY
+    const popupX = Math.max(16, this.scale.width - popupWidth - COMPACT_PANEL.iconMarginX)
+    const popupY = Math.min(iconY + iconSize + 10, this.scale.height - popupHeight - 16)
+    const buttonY = 162 * ui
+
+    const setPanelSize = (width: number, height: number) => {
+      const scaledWidth = width * ui
+      const scaledHeight = height * ui
+      panel.shadow.setSize(scaledWidth, scaledHeight)
+      panel.card.setSize(scaledWidth, scaledHeight)
+      panel.bounds.setTo(panel.container.x, panel.container.y, scaledWidth, scaledHeight)
+    }
+
+    const showPopupFrame = () => {
+      panel.container.setPosition(popupX, popupY)
+      setPanelSize(COMPACT_PANEL.designWidth, COMPACT_PANEL.designHeight)
+      panel.shadow
+        .setVisible(true)
+        .setPosition(5 * ui, 7 * ui)
+        .setFillStyle(0x1d1308, 0.14)
+      panel.card
+        .setVisible(true)
+        .setFillStyle(0xfffbf4, 0.98)
+        .setStrokeStyle(2 * ui, 0xe6cfaa, 1)
+      panel.mailIconText.setVisible(false)
+      panel.starIcon
+        .setVisible(true)
+        .setPosition(42 * ui, 46 * ui)
+        .setDisplaySize(38 * ui, 38 * ui)
+      panel.titleText
+        .setVisible(true)
+        .setOrigin(0, 0)
+        .setPosition(76 * ui, 20 * ui)
+      panel.subText
+        .setVisible(true)
+        .setOrigin(0, 0)
+        .setPosition(76 * ui, 47 * ui)
+      panel.messageBox
+        .setVisible(false)
+        .setPosition(24 * ui, 80 * ui)
+        .setSize(272 * ui, 48 * ui)
+        .setFillStyle(0xffffff, 0.68)
+        .setStrokeStyle(1 * ui, 0xe7d3b4, 0.9)
+      panel.messageTitleText.setVisible(false).setText('')
+      panel.messageBodyText
+        .setVisible(true)
+        .setOrigin(0, 0)
+        .setPosition(26 * ui, 84 * ui)
+        .setAlign('left')
+      panel.rewardText
+        .setVisible(true)
+        .setOrigin(0, 0)
+        .setPosition(26 * ui, 129 * ui)
+        .setAlign('left')
+      panel.progressTrack
+        .setVisible(false)
+        .setPosition(92 * ui, 109 * ui)
+        .setSize(198 * ui, 10 * ui)
+      panel.progressFill
+        .setVisible(false)
+        .setPosition(92 * ui, 109 * ui)
+        .setSize(198 * ui, 10 * ui)
+      panel.buttonBg
+        .setVisible(true)
+        .setPosition(160 * ui, buttonY)
+        .setSize(272 * ui, 34 * ui)
+        .setFillStyle(0x7657dd, 1)
+      panel.button
+        .setVisible(true)
+        .setPosition(160 * ui, buttonY)
+        .setSize(272 * ui, 34 * ui)
+      panel.buttonText.setVisible(true).setPosition(160 * ui, buttonY)
+      panel.button.setInteractive({ useHandCursor: true })
+    }
+
+    const showMailIcon = () => {
+      panel.container.setPosition(iconX, iconY)
+      setPanelSize(COMPACT_PANEL.iconSize, COMPACT_PANEL.iconSize)
+      panel.shadow
+        .setVisible(true)
+        .setPosition(4 * ui, 5 * ui)
+        .setFillStyle(0x1d1308, 0.14)
+      panel.card
+        .setVisible(true)
+        .setFillStyle(0xfffbf4, 0.98)
+        .setStrokeStyle(2 * ui, 0xe6cfaa, 1)
+      panel.starIcon.setVisible(false)
+      panel.mailIconText.setVisible(true).setPosition(32 * ui, 32 * ui)
+      panel.titleText.setVisible(false).setText('')
+      panel.subText.setVisible(false).setText('')
+      panel.messageBox.setVisible(false)
+      panel.messageTitleText.setVisible(false)
+      panel.messageBodyText.setVisible(false)
+      panel.rewardText.setVisible(false)
+      panel.progressTrack.setVisible(false)
+      panel.progressFill.setVisible(false)
+      panel.buttonBg.setVisible(false)
+      panel.buttonText.setVisible(false)
+      panel.button
+        .setVisible(true)
+        .setPosition(32 * ui, 32 * ui)
+        .setSize(COMPACT_PANEL.iconSize * ui, COMPACT_PANEL.iconSize * ui)
+      panel.button.setInteractive({ useHandCursor: true })
+    }
+
     this.currentFuelPercent = Phaser.Math.Clamp(this.currentFuelPercent, 0, FUEL_GOAL_PERCENT)
     const remainPercent = FUEL_GOAL_PERCENT - this.currentFuelPercent
-    this.fuelPanel.percentText.setText(`${this.currentFuelPercent}%`)
-    this.fuelPanel.remainText.setText(`출발까지 ${remainPercent}% 남았어요`)
-    this.fuelPanel.messageTitleText.setText('아이의 응원이 도착했어요!')
-    this.fuelPanel.messageBodyText.setText('오늘도 정말 잘했어, 천천히 같이 가보자.')
-    this.fuelPanel.buttonText.setText('별빛 연료 보내기')
-    this.fuelPanel.button.setInteractive({ useHandCursor: true })
-    this.fuelPanel.buttonText.setAlpha(1)
-  }
+    const hasPendingFuel = this.pendingFuelEvents.length > 0
+    const progressRatio = Phaser.Math.Clamp(this.currentFuelPercent / FUEL_GOAL_PERCENT, 0, 1)
+    panel.progressFill.setScale(progressRatio, 1)
 
+    if (this.isFuelRequestPending) {
+      panel.container.setVisible(false)
+      panel.button.disableInteractive()
+      return
+    }
+
+    panel.container.setVisible(true)
+
+    if (this.fuelPopupState === 'emptyIcon') {
+      showMailIcon()
+      return
+    }
+
+    if (this.fuelPopupState === 'emptyOpen') {
+      showPopupFrame()
+      panel.starIcon.setVisible(false)
+      panel.mailIconText.setVisible(true).setPosition(42 * ui, 46 * ui)
+      panel.titleText.setText('별빛 우편함')
+      panel.subText.setText('아직 도착한 별빛이 없어요')
+      panel.messageBodyText.setText('보호자의 응원이 도착하면\n이곳에서 확인할 수 있어요')
+      panel.rewardText.setVisible(false).setText('')
+      panel.buttonText.setText('확인')
+      return
+    }
+
+    if (this.fuelPopupState === 'arrived' && hasPendingFuel) {
+      showPopupFrame()
+      panel.titleText.setText('별빛 연료 도착')
+      panel.subText.setText('보호자가 응원을 보냈어요')
+      panel.messageBox.setVisible(true)
+      panel.messageBodyText
+        .setOrigin(0.5, 0)
+        .setPosition(160 * ui, 91 * ui)
+        .setAlign('center')
+      panel.messageBodyText.setText(
+        this.lastReceivedMessage || '오늘도 정말 잘했어,\n천천히 같이 가보자.',
+      )
+      panel.rewardText
+        .setOrigin(0.5, 0)
+        .setPosition(160 * ui, 131 * ui)
+        .setAlign('center')
+      panel.rewardText.setText(`+${this.lastReceivedAmount}% 별빛 연료`)
+      panel.buttonText.setText('별빛 받기')
+      return
+    }
+
+    if (this.fuelPopupState === 'received') {
+      showPopupFrame()
+      panel.titleText.setText('별빛을 받았어요')
+      panel.subText.setText('배에 별빛 연료가 채워졌어요')
+      panel.messageBox.setVisible(false)
+      panel.messageBodyText
+        .setOrigin(0, 0)
+        .setPosition(92 * ui, 83 * ui)
+        .setAlign('left')
+      panel.messageBodyText.setText(`현재 별빛 연료 ${this.currentFuelPercent}%`)
+      panel.progressTrack.setVisible(true)
+      panel.progressFill.setVisible(true)
+      panel.rewardText
+        .setOrigin(0, 0)
+        .setPosition(92 * ui, 123 * ui)
+        .setAlign('left')
+      panel.rewardText.setText(`출발까지 ${remainPercent}% 남았어요`)
+      panel.buttonText.setText('확인')
+      return
+    }
+
+    if (this.fuelPopupState === 'complete') {
+      showPopupFrame()
+      panel.titleText.setText('연료가 가득 찼어요')
+      panel.subText.setText('배가 출발할 준비를 마쳤어요')
+      panel.messageBox.setVisible(false)
+      panel.starIcon.setPosition(54 * ui, 96 * ui).setDisplaySize(46 * ui, 46 * ui)
+      panel.messageBodyText
+        .setOrigin(0, 0)
+        .setPosition(92 * ui, 82 * ui)
+        .setAlign('left')
+      panel.messageBodyText.setText('100% 달성!')
+      panel.rewardText
+        .setOrigin(0, 0)
+        .setPosition(92 * ui, 122 * ui)
+        .setAlign('left')
+      panel.rewardText.setText('출발 준비 완료')
+      panel.buttonText.setText('배 출발하기')
+      return
+    }
+
+    this.fuelPopupState = 'emptyIcon'
+    this.refreshFuelUi()
+  }
   private playStarFlyAnimation() {
     if (!this.fuelPanel) return
 
@@ -307,12 +685,6 @@ export class FerrySelectScene extends Phaser.Scene {
   }
 
   private onFuelCompleted() {
-    if (!this.fuelPanel) return
-
-    this.fuelPanel.remainText.setText('출발 준비 완료!')
-    this.fuelPanel.buttonText.setText('배 출발하기')
-    this.fuelPanel.button.disableInteractive()
-    this.fuelPanel.buttonText.setAlpha(0.86)
     console.info('별빛 연료 100% 완료. 배 출발 연출 실행 가능.')
   }
 }
