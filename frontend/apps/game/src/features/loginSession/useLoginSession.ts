@@ -38,6 +38,15 @@ export function useLoginSession(patientProfileId: number | undefined) {
     const sendHeartbeat = () => {
       const sessionId = sessionIdRef.current
       if (sessionId === null) return
+      const currentToken = localStorage.getItem(ACCESS_TOKEN_STORAGE_KEY)
+      if (tokenRef.current !== currentToken) {
+        stopHeartbeat()
+        fireEnd(sessionId, tokenRef.current)
+        sessionIdRef.current = null
+        tokenRef.current = null
+        useLoginSessionStore.getState().clearSession()
+        return
+      }
       heartbeatLoginSession(sessionId).catch(() => {
         // 한 번 실패해도 다음 주기에 자동 재시도
       })
