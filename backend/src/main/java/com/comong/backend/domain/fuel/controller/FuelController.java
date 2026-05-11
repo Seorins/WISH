@@ -28,7 +28,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 
-@Tag(name = "연료", description = "보호자 별빛 연료 전송 및 게임 수신함 API")
+@Tag(name = "Fuel", description = "보호자 별빛 연료 전송 및 게임 수신함 API")
 @RestController
 @RequestMapping("/fuel")
 @RequiredArgsConstructor
