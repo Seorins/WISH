@@ -40,6 +40,9 @@
 | `LIVEKIT_URL` | LiveKit Cloud 서버 URL | (빈 값) | ✅ 실시간 모니터링 토큰 발급 전 주입 |
 | `LIVEKIT_API_KEY` | LiveKit API key | (빈 값) | ✅ 서버 환경변수로만 주입 |
 | `LIVEKIT_API_SECRET` | LiveKit API secret | (빈 값) | ✅ 서버 환경변수로만 주입, git/Jira/Slack 평문 공유 금지 |
+| `FIREBASE_PUSH_ENABLED` | FCM push 발송 활성화 여부 | `false` | Firebase 인증 정보가 설정된 dev/prod 에서만 `true` |
+| `FIREBASE_PROJECT_ID` | Firebase project ID | (빈 값) | Firebase Console 의 project ID |
+| `FIREBASE_CREDENTIALS_BASE64` | Firebase service account JSON 을 base64 로 인코딩한 값 | (빈 값) | EC2 `.env.dev` 등 서버 환경변수로만 주입, git/Jira/Slack 평문 공유 금지 |
 | `GMS_KEY` | GMS Anthropic Claude API 키 (등대지기 LLM) | (빈 값) | ✅ dev/prod 에서 주입. 미설정 시 Claude 비활성, 항상 fallback scene |
 | `GMS_ANTHROPIC_BASE_URL` | GMS 엔드포인트 | `https://gms.ssafy.io/gmsapi/api.anthropic.com/v1` | 운영 도메인 변경 시만 |
 | `GMS_ANTHROPIC_MODEL` | Claude 모델 ID | `claude-sonnet-4-5-20250929` | 모델 업그레이드 시 |
@@ -48,6 +51,7 @@
 
 > ⚠️ `JWT_SECRET` 의 기본값은 로컬 개발 편의용 플레이스홀더입니다. `dev`/`prod` 환경에서는 외부에서 반드시 주입하세요. 유출되면 토큰 위조 가능.
 > 랜덤값 생성 예: `openssl rand -base64 48`
+> Firebase service account JSON 원문과 `FIREBASE_CREDENTIALS_BASE64` 값은 절대 커밋하지 마세요. 예시 파일에는 placeholder만 두고, EC2 `.env.dev` 에만 실제 값을 주입합니다.
 
 IntelliJ `Run Configuration > Environment variables` 또는 쉘 `export` 로 주입.
 
