@@ -56,6 +56,18 @@
   color: #1f9a55;
 }
 
+.metaChipPast {
+  background: #fff4e0;
+  color: #a16400;
+}
+
+.topActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
 .pastBtn {
   appearance: none;
   border: 1px solid var(--dash-color-border, #e5e1f0);
