@@ -10,6 +10,7 @@ import {
 import { useMyPatientId } from '@/features/auth/hooks/useMyPatientId'
 import { useDailyUsageStats, useMyTaekwondoSessions, useUsageAverages } from '../hooks'
 import { aggregateTaekwondoMotionStats, type MotionStats } from '../utils/aggregateMotionStats'
+import { ActivityEmptyState } from './ActivityEmptyState'
 import styles from './MotionActivity.module.css'
 
 const DEFAULT_POOMSAE: Poomsae = 'TAEGEUK_1'
@@ -86,17 +87,39 @@ export function TaekwondoMain() {
   const selectedMotion = sortedMotions.find(m => m.id === selectedMotionId) ?? null
   const selectedStats = selectedMotion ? motionStatsMap[selectedMotion.id] : undefined
 
+  const dailyLoaded = daily !== undefined
+  const noActivityToday = dailyLoaded && todayTaekwondoSeconds === 0
+
+  if (noActivityToday) {
+    return (
+      <ActivityEmptyState
+        icon="🥋"
+        title="오늘 태권도 활동 기록이 없어요"
+        description="아이가 태권도장에서 품새를 수행하면 여기에 결과가 표시돼요"
+      />
+    )
+  }
+
   return (
     <div className={styles.layout}>
       <div className={styles.mainColumn}>
         <PoomsaeTabBar value={poomsae} onChange={setPoomsae} />
 
         {isLoading ? (
-          <div className={styles.fullStatus}>동작을 불러오는 중...</div>
+          <ActivityEmptyState variant="loading" icon="🥋" title="동작을 불러오는 중..." />
         ) : error ? (
-          <div className={`${styles.fullStatus} ${styles.error}`}>동작을 불러오지 못했어요</div>
+          <ActivityEmptyState
+            variant="error"
+            icon="⚠️"
+            title="동작을 불러오지 못했어요"
+            description="잠시 후 다시 시도해주세요"
+          />
         ) : !selectedMotion ? (
-          <div className={styles.fullStatus}>등록된 동작이 없어요</div>
+          <ActivityEmptyState
+            icon="🥋"
+            title="아직 등록된 동작이 없어요"
+            description="이 품새에 새로운 동작이 추가되면 여기에 표시돼요"
+          />
         ) : (
           <>
             <VideoCard motion={selectedMotion} stats={selectedStats} />

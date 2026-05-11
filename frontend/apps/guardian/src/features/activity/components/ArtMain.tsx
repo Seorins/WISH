@@ -4,6 +4,7 @@ import artIconImg from '@/assets/art_icon.png'
 import { useMyPatientId } from '@/features/auth/hooks/useMyPatientId'
 import { PaletteColorIcon, StarFilledIcon } from '@/features/dashboard/components/icons'
 import { useDailyUsageStats, useMyArtworks, useUsageAverages } from '../hooks'
+import { ActivityEmptyState } from './ActivityEmptyState'
 import styles from './ArtMain.module.css'
 
 function todayKst(): string {
@@ -70,19 +71,27 @@ export function ArtMain() {
   }, [data])
 
   if (isLoading) {
-    return <div className={styles.fullStatus}>그림을 불러오는 중...</div>
+    return <ActivityEmptyState variant="loading" icon="🎨" title="그림을 불러오는 중..." />
   }
 
   if (error) {
-    return <div className={`${styles.fullStatus} ${styles.error}`}>그림을 불러오지 못했어요</div>
+    return (
+      <ActivityEmptyState
+        variant="error"
+        icon="⚠️"
+        title="그림을 불러오지 못했어요"
+        description="잠시 후 다시 시도해주세요"
+      />
+    )
   }
 
   if (todayArtworks.length === 0) {
     return (
-      <section className={styles.heroCard}>
-        <h2 className={styles.title}>미술 결과</h2>
-        <div className={styles.emptyArt}>오늘 그린 그림이 아직 없어요</div>
-      </section>
+      <ActivityEmptyState
+        icon="🎨"
+        title="오늘 그린 그림이 아직 없어요"
+        description="아이와 함께 그림을 그려보세요"
+      />
     )
   }
 
