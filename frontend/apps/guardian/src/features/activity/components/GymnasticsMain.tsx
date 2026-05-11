@@ -45,7 +45,7 @@ function useExerciseMotions(exerciseType: ExerciseType) {
  * 우측: 운동 종류별 동작 리스트(클릭 시 좌측 영상 교체) + 다른 사용자들과 비교.
  *
  * 좌측 영상은 me-sessions 의 가장 최근 수행본(`latestVideoUrl`) 우선,
- * 수행 영상이 없으면 시범영상으로 대체하지 않고 빈 상태를 보여준다. me-sessions 엔드포인트
+ * 없으면 motion 의 시범영상(`demoVideoUrl`)으로 폴백. me-sessions 엔드포인트
  * 미구현 상태에서는 stats 가 undefined 로 떨어지고 통계 칸은 '—' 표시.
  */
 export function GymnasticsMain() {
@@ -175,8 +175,8 @@ function ExerciseTypeTabBar({
 }
 
 function VideoCard({ motion, stats }: { motion: ExerciseMotion; stats: MotionStats | undefined }) {
-  // 아이가 수행한 가장 최근 영상만 표시한다.
-  const videoUrl = stats?.latestVideoUrl ?? null
+  // 아이가 수행한 가장 최근 영상 → 시범영상 순 폴백.
+  const videoUrl = stats?.latestVideoUrl ?? motion.demoVideoUrl ?? null
   const hasVideo = Boolean(videoUrl)
   return (
     <section className={styles.videoCard}>
@@ -186,7 +186,7 @@ function VideoCard({ motion, stats }: { motion: ExerciseMotion; stats: MotionSta
             key={`${motion.id}-${videoUrl}`}
             className={styles.video}
             src={videoUrl ?? undefined}
-            poster={stats?.latestThumbUrl ?? undefined}
+            poster={motion.thumbnailUrl ?? undefined}
             controls
             playsInline
             preload="metadata"

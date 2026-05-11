@@ -1,10 +1,5 @@
 ﻿import Phaser from 'phaser'
 import { assetPath } from '@/game/assets/assetPath'
-import {
-  startPerformanceRecording,
-  type PerformanceRecorderHandle,
-} from '@/game/motion/performanceRecorder'
-import { uploadPerformanceRecording } from '@/game/motion/performanceVideoUpload'
 import { fadeToScene } from '@/game/systems/sceneTransition'
 import { addCoverBackground } from '@/game/world/background'
 import {
@@ -91,8 +86,6 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
   private beltPromotionOverlay?: Phaser.GameObjects.Container
   private motions: TaekwondoMotion[] = []
   private motionResults: CreateTaekwondoSessionMotionRequest[] = []
-  private performanceRecorder: PerformanceRecorderHandle | null = null
-  private performanceUploadPromises: Promise<void>[] = []
   private recordedMotionIndexes = new Set<number>()
   private currentMotionIndex = 0
   private practiceStartedAtMs = 0
@@ -149,8 +142,6 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     this.beltColor = data.beltColor ?? DEFAULT_TAEKWONDO_BELT_COLOR
     this.motions = []
     this.motionResults = []
-    this.performanceRecorder = null
-    this.performanceUploadPromises = []
     this.recordedMotionIndexes.clear()
     this.currentMotionIndex = 0
     this.practiceStartedAtMs = 0
@@ -441,7 +432,6 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
 
     this.isWaitingMotionStart = false
     this.motionStartedAtMs = Date.now()
-    this.startCurrentPerformanceRecording()
     const overlay = this.motionIntroOverlay
     this.motionIntroOverlay = undefined
 
@@ -490,15 +480,13 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     const now = Date.now()
     const durationSec = Math.max(1, Math.round((now - this.motionStartedAtMs) / 1000))
     this.recordedMotionIndexes.add(this.currentMotionIndex)
-    const result: CreateTaekwondoSessionMotionRequest = {
+    this.motionResults.push({
       taekwondoMotionId: motion.id,
       durationSec,
       accuracy: 1,
       completedReps: motion.targetReps,
       feedback: DEFAULT_MOTION_COMPLETE_FEEDBACK,
-    }
-    this.motionResults.push(result)
-    this.queuePerformanceVideoUpload(result)
+    })
     this.updatePoomsaeProgress()
   }
 
@@ -526,8 +514,6 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
       )
       return null
     }
-
-    await this.awaitPerformanceVideoUploads()
 
     const durationSec = Math.max(
       1,
@@ -1121,43 +1107,7 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     })
   }
 
-  private startCurrentPerformanceRecording() {
-    this.cancelCurrentPerformanceRecording()
-    this.performanceRecorder = startPerformanceRecording(this.videoElement)
-  }
-
-  private queuePerformanceVideoUpload(result: CreateTaekwondoSessionMotionRequest) {
-    const recorder = this.performanceRecorder
-    this.performanceRecorder = null
-    if (!recorder) return
-
-    const uploadPromise = recorder
-      .stop()
-      .then(recording => uploadPerformanceRecording(recording, 'TAEKWONDO_PERFORMANCE'))
-      .then(keys => {
-        result.videoKey = keys.videoKey
-        result.thumbKey = keys.thumbKey
-      })
-      .catch(error => {
-        console.warn('[TaekwondoPoomsaePracticeScene] Failed to upload performance video.', error)
-      })
-    this.performanceUploadPromises.push(uploadPromise)
-  }
-
-  private cancelCurrentPerformanceRecording() {
-    this.performanceRecorder?.cancel()
-    this.performanceRecorder = null
-  }
-
-  private async awaitPerformanceVideoUploads() {
-    if (this.performanceUploadPromises.length === 0) return
-    const pendingUploads = this.performanceUploadPromises
-    this.performanceUploadPromises = []
-    await Promise.allSettled(pendingUploads)
-  }
-
   private stopPractice() {
-    this.cancelCurrentPerformanceRecording()
     this.stopCamera()
     this.returnToPoomsaeSelect()
   }
@@ -1199,9 +1149,7 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     this.progressView = undefined
     this.motions = []
     this.motionResults = []
-    this.performanceUploadPromises = []
     this.recordedMotionIndexes.clear()
-    this.cancelCurrentPerformanceRecording()
     this.stopCamera()
     this.cleanupCameraEffects()
 

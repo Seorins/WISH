@@ -9,8 +9,6 @@ export type CreateTaekwondoSessionMotionRequest = {
   accuracy: number
   completedReps: number
   feedback: string
-  videoKey?: string | null
-  thumbKey?: string | null
 }
 
 export type CreateTaekwondoSessionRequest = {
@@ -31,8 +29,6 @@ export type TaekwondoSessionMotionResult = {
   accuracy: number
   completedReps: number
   feedback: string
-  videoUrl?: string | null
-  thumbUrl?: string | null
   createdAt: string
 }
 

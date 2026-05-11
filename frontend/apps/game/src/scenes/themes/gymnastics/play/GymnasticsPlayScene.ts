@@ -6,11 +6,6 @@ import {
   type CreateExerciseSessionRecord,
 } from '@wish/api-client'
 import { assetPath } from '@/game/assets/assetPath'
-import {
-  startPerformanceRecording,
-  type PerformanceRecorderHandle,
-} from '@/game/motion/performanceRecorder'
-import { uploadPerformanceRecording } from '@/game/motion/performanceVideoUpload'
 import { POSE_LANDMARK_NAMES, PoseTracker } from '@/game/motion/poseTracker'
 import { fadeToScene } from '@/game/systems/sceneTransition'
 import { addCoverBackground } from '@/game/world/background'
@@ -78,8 +73,6 @@ type LocalExerciseMotionRecord = {
   completionRate: number
   completedCount: number
   feedback: string
-  videoKey?: string | null
-  thumbKey?: string | null
 }
 
 type LandmarkPayload = {
@@ -465,8 +458,6 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
   private motionStartedAtMs = 0
   private motionAccumulatedDurationMs = 0
   private motionRecords: LocalExerciseMotionRecord[] = []
-  private performanceRecorder: PerformanceRecorderHandle | null = null
-  private performanceUploadPromises: Promise<void>[] = []
   private hasSubmittedSession = false
   private saveState: 'idle' | 'saving' | 'success' | 'error' = 'idle'
   private saveRetryButton?: Phaser.GameObjects.Text
@@ -536,8 +527,6 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     this.motionStartedAtMs = 0
     this.motionAccumulatedDurationMs = 0
     this.motionRecords = []
-    this.performanceRecorder = null
-    this.performanceUploadPromises = []
     this.hasSubmittedSession = false
     this.saveState = 'idle'
     this.lastTtsKey = null
@@ -1816,7 +1805,6 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     if (this.sessionStartedAtMs <= 0) {
       this.sessionStartedAtMs = this.motionStartedAtMs
     }
-    this.startCurrentPerformanceRecording()
     this.renderMotion()
   }
 
@@ -2842,15 +2830,13 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
         this.aiState.feedback,
     )
 
-    const record: LocalExerciseMotionRecord = {
+    this.motionRecords.push({
       exerciseMotionId: motionSpec.exerciseMotionId,
       durationSec,
       completionRate,
       completedCount,
       feedback,
-    }
-    this.motionRecords.push(record)
-    this.queuePerformanceVideoUpload(record)
+    })
   }
 
   private normalizeSessionFeedback(feedback: string | null | undefined) {
@@ -2888,7 +2874,6 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     this.renderSaveState()
 
     try {
-      await this.awaitPerformanceVideoUploads()
       const payload = toCreateExerciseSessionRequest(this.buildExerciseSessionRecord())
       const savedSession = await createExerciseSession(payload)
       this.saveState = 'success'
@@ -2978,7 +2963,6 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     if (this.isMotionAdvancing || this.motionIndex <= 0) return
 
     this.resetFeedbackTts()
-    this.cancelCurrentPerformanceRecording()
     this.motionIndex -= 1
     this.aiState = createInitialAiState()
     this.aiError = null
@@ -3122,47 +3106,11 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
   }
 
-  private startCurrentPerformanceRecording() {
-    this.cancelCurrentPerformanceRecording()
-    this.performanceRecorder = startPerformanceRecording(this.poseTracker?.video ?? null)
-  }
-
-  private queuePerformanceVideoUpload(record: LocalExerciseMotionRecord) {
-    const recorder = this.performanceRecorder
-    this.performanceRecorder = null
-    if (!recorder) return
-
-    const uploadPromise = recorder
-      .stop()
-      .then(recording => uploadPerformanceRecording(recording, 'GYMNASTICS_PERFORMANCE'))
-      .then(keys => {
-        record.videoKey = keys.videoKey
-        record.thumbKey = keys.thumbKey
-      })
-      .catch(error => {
-        console.warn('[GymnasticsPlayScene] Failed to upload performance video.', error)
-      })
-    this.performanceUploadPromises.push(uploadPromise)
-  }
-
-  private cancelCurrentPerformanceRecording() {
-    this.performanceRecorder?.cancel()
-    this.performanceRecorder = null
-  }
-
-  private async awaitPerformanceVideoUploads() {
-    if (this.performanceUploadPromises.length === 0) return
-    const pendingUploads = this.performanceUploadPromises
-    this.performanceUploadPromises = []
-    await Promise.allSettled(pendingUploads)
-  }
-
   private cleanup() {
     this.timerEvent?.remove(false)
     this.timerEvent = undefined
     this.poseTracker?.stop()
     this.poseTracker = null
-    this.cancelCurrentPerformanceRecording()
     this.requestInFlight = false
     this.resetFeedbackTts()
     this.clearGuideOverlay()

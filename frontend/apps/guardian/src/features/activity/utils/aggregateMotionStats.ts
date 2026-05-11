@@ -14,7 +14,6 @@ export type MotionStats = {
   totalReps: number
   avgAccuracy: number
   latestVideoUrl: string | null
-  latestThumbUrl: string | null
   latestPlayedAt: string
   sessionCount: number
 }
@@ -26,7 +25,6 @@ type AggregatableMotion = {
   completedReps: number
   createdAt: string
   videoUrl: string | null
-  thumbUrl: string | null
 }
 
 function aggregate(motions: AggregatableMotion[]): Record<number, MotionStats> {
@@ -51,7 +49,6 @@ function aggregate(motions: AggregatableMotion[]): Record<number, MotionStats> {
       totalReps,
       avgAccuracy,
       latestVideoUrl: latest.videoUrl,
-      latestThumbUrl: latest.thumbUrl,
       latestPlayedAt: latest.createdAt,
       sessionCount: items.length,
     }
@@ -61,7 +58,7 @@ function aggregate(motions: AggregatableMotion[]): Record<number, MotionStats> {
 
 // videoUrl 필드는 BE 가 `MotionResult` 스키마에 추가한 뒤부터 채워짐 — 그 전엔 undefined.
 // 타입 단언으로 안전하게 옵셔널 read.
-type WithOptionalVideoUrl = { videoUrl?: string | null; thumbUrl?: string | null }
+type WithOptionalVideoUrl = { videoUrl?: string | null }
 
 export function aggregateTaekwondoMotionStats(
   sessions: TaekwondoSessionDetail[],
@@ -74,7 +71,6 @@ export function aggregateTaekwondoMotionStats(
       completedReps: m.completedReps,
       createdAt: m.createdAt,
       videoUrl: (m as WithOptionalVideoUrl).videoUrl ?? null,
-      thumbUrl: (m as WithOptionalVideoUrl).thumbUrl ?? null,
     })),
   )
   return aggregate(motions)
@@ -91,7 +87,6 @@ export function aggregateExerciseMotionStats(
       completedReps: m.completedReps,
       createdAt: m.createdAt,
       videoUrl: (m as WithOptionalVideoUrl).videoUrl ?? null,
-      thumbUrl: (m as WithOptionalVideoUrl).thumbUrl ?? null,
     })),
   )
   return aggregate(motions)

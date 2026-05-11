@@ -5,10 +5,7 @@ import type { ApiResponse } from './artworks'
 export type PresignedUploadRequest = {
   videoContentType: string
   thumbContentType: string
-  purpose?: UploadPurpose
 }
-
-export type UploadPurpose = 'MUSIC_RESULT' | 'GYMNASTICS_PERFORMANCE' | 'TAEKWONDO_PERFORMANCE'
 
 export type PresignedUploadItem = {
   key: string

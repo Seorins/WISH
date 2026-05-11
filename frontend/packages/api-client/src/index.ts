@@ -138,7 +138,6 @@ export type {
   PresignedUploadItem,
   PresignedUploadRequest,
   PresignedUploadResponse,
-  UploadPurpose,
 } from './uploads'
 export type { Gender, PatientProfile, PatientProfileCreateRequest } from './patient-profiles'
 export type { LoginSession, LoginSessionStartRequest } from './login-sessions'
