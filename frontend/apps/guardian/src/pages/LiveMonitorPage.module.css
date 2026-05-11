@@ -19,7 +19,9 @@
   flex: 1 1 auto;
   min-height: 0;
   display: flex;
-  align-items: center;
+  /* safe center: 콘텐츠가 body 보다 크면 위쪽 overflow 를 막고 start 로 폴백.
+     이게 없으면 video 가 header 뒤로 밀려 올라간다. */
+  align-items: safe center;
   justify-content: center;
   padding: 16px 32px 20px;
   overflow-y: auto;

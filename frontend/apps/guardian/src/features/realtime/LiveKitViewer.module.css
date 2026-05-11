@@ -1,6 +1,10 @@
 .viewer {
   width: 100%;
-  max-width: 960px;
+  /* 비디오를 viewport 세로 공간에 맞춰 줄어들게 하려고 max-width 를 두 가지 중 작은 값으로:
+     1) 960px (기존 디자인 cap)
+     2) calc((100vh - 360px) * 16/9) — 상태바/PTT/헤더/패딩 예약 후 남는 세로를 16:9 로 환산.
+     aspect-ratio 가 width 로부터 height 를 도출하므로 max-width 를 줄이면 height 도 따라 줄어든다. */
+  max-width: min(960px, calc((100vh - 360px) * 16 / 9));
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -87,7 +91,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 12px 0 4px;
+  padding: 4px 0 0;
 }
 
 .statusActions {
