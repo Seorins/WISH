@@ -43,10 +43,11 @@ import tools.jackson.databind.ObjectMapper;
 public class ExerciseSessionService {
 
     private static final int REPLAY_FPS = 30;
-    private static final int MAX_REPLAY_DURATION_MS = 180_000;
-    private static final int MAX_REPLAY_FRAMES = REPLAY_FPS * 180;
+    private static final int REPLAY_MAX_CAPTURE_SECONDS = 180;
+    private static final int REPLAY_MAX_DURATION_MS = REPLAY_MAX_CAPTURE_SECONDS * 1000;
+    private static final int REPLAY_MAX_FRAMES = REPLAY_FPS * REPLAY_MAX_CAPTURE_SECONDS;
     private static final int REPLAY_TUPLE_SIZE = 4;
-    private static final double REPLAY_COORDINATE_ABS_LIMIT = 10.0;
+    private static final double REPLAY_NORMALIZED_COORDINATE_ABS_LIMIT = 10.0;
     private static final List<String> REPLAY_LANDMARK_NAMES =
             List.of(
                     "LEFT_SHOULDER",
@@ -247,9 +248,9 @@ public class ExerciseSessionService {
                 || replay.fps() != REPLAY_FPS) {
             throw new BusinessException(GlobalErrorCode.INVALID_INPUT);
         }
-        if (replay.durationMs() > MAX_REPLAY_DURATION_MS
+        if (replay.durationMs() > REPLAY_MAX_DURATION_MS
                 || replay.frames().isEmpty()
-                || replay.frames().size() > MAX_REPLAY_FRAMES) {
+                || replay.frames().size() > REPLAY_MAX_FRAMES) {
             throw new BusinessException(GlobalErrorCode.INVALID_INPUT);
         }
         if (!REPLAY_LANDMARK_NAMES.equals(replay.landmarks())) {
@@ -294,7 +295,7 @@ public class ExerciseSessionService {
         if (value == null) {
             return;
         }
-        if (!Double.isFinite(value) || Math.abs(value) > REPLAY_COORDINATE_ABS_LIMIT) {
+        if (!Double.isFinite(value) || Math.abs(value) > REPLAY_NORMALIZED_COORDINATE_ABS_LIMIT) {
             throw new BusinessException(GlobalErrorCode.INVALID_INPUT);
         }
     }

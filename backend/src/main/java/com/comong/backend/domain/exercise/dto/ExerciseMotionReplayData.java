@@ -36,7 +36,10 @@ public record ExerciseMotionReplayData(
                 Segment representativeSegment) {
 
     public record Frame(
-            @Schema(description = "Frame timestamp from clip start in milliseconds", example = "33")
+            @Schema(
+                            description =
+                                    "Frame timestamp from clip start in milliseconds. Timestamps must be strictly increasing; duplicate timestamps are rejected.",
+                            example = "33")
                     @NotNull
                     @PositiveOrZero
                     Integer t,

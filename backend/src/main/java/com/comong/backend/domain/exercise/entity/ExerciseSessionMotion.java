@@ -83,7 +83,7 @@ public class ExerciseSessionMotion {
         this.completedReps = completedReps;
         this.feedback = Objects.requireNonNull(feedback, "feedback must not be null");
         this.performanceVideo = performanceVideo;
-        this.poseReplay = poseReplay;
+        this.poseReplay = normalizeNullableText(poseReplay);
     }
 
     public boolean hasPoseReplay() {
@@ -112,5 +112,12 @@ public class ExerciseSessionMotion {
         if (value < 0.0 || value > 1.0) {
             throw new IllegalArgumentException("accuracy must be between 0.0 and 1.0");
         }
+    }
+
+    private String normalizeNullableText(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value;
     }
 }
