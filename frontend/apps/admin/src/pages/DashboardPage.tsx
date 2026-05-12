@@ -250,7 +250,7 @@ export function DashboardPage() {
                 <ResponsiveContainer width="100%" height="100%">
                   <ComposedChart
                     data={usageChartData}
-                    margin={{ top: 8, right: 10, left: 0, bottom: 0 }}
+                    margin={{ top: 8, right: 4, left: 0, bottom: 0 }}
                   >
                     <CartesianGrid stroke="#edf2f7" vertical={false} />
                     <XAxis
@@ -260,9 +260,20 @@ export function DashboardPage() {
                       tick={{ fontSize: 12 }}
                     />
                     <YAxis
+                      yAxisId="content"
                       tickLine={false}
                       axisLine={false}
-                      tick={{ fontSize: 12 }}
+                      width={42}
+                      tick={{ fontSize: 12, fill: '#486581' }}
+                      tickFormatter={value => formatCompactDuration(Number(value))}
+                    />
+                    <YAxis
+                      yAxisId="app"
+                      orientation="right"
+                      tickLine={false}
+                      axisLine={false}
+                      width={42}
+                      tick={{ fontSize: 12, fill: CONTENT_COLORS.login }}
                       tickFormatter={value => formatCompactDuration(Number(value))}
                     />
                     <Tooltip
@@ -272,11 +283,32 @@ export function DashboardPage() {
                       ]}
                     />
                     <Legend formatter={value => usageMetricLabel(String(value))} />
-                    <Bar dataKey="art" stackId="content" fill={CONTENT_COLORS.art} />
-                    <Bar dataKey="music" stackId="content" fill={CONTENT_COLORS.music} />
-                    <Bar dataKey="taekwondo" stackId="content" fill={CONTENT_COLORS.taekwondo} />
-                    <Bar dataKey="gymnastics" stackId="content" fill={CONTENT_COLORS.gymnastics} />
+                    <Bar
+                      yAxisId="content"
+                      dataKey="art"
+                      stackId="content"
+                      fill={CONTENT_COLORS.art}
+                    />
+                    <Bar
+                      yAxisId="content"
+                      dataKey="music"
+                      stackId="content"
+                      fill={CONTENT_COLORS.music}
+                    />
+                    <Bar
+                      yAxisId="content"
+                      dataKey="taekwondo"
+                      stackId="content"
+                      fill={CONTENT_COLORS.taekwondo}
+                    />
+                    <Bar
+                      yAxisId="content"
+                      dataKey="gymnastics"
+                      stackId="content"
+                      fill={CONTENT_COLORS.gymnastics}
+                    />
                     <Line
+                      yAxisId="app"
                       type="monotone"
                       dataKey="login"
                       stroke={CONTENT_COLORS.login}
