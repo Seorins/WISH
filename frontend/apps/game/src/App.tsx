@@ -99,8 +99,17 @@ function App() {
     game.events.on('villager-dialogue:force-close', () => {
       setVillagerNpcId(null)
     })
-    game.events.on('lighthouse-emotion:open', () => {
+    game.events.on('lighthouse-emotion:open', async () => {
       setIsLighthouseEmotionOpen(true)
+      const id = await resolvePatientProfileIdOrFetch()
+      if (isCancelled) return
+      if (id) {
+        setPatientProfileId(id)
+        return
+      }
+      setIsLighthouseEmotionOpen(false)
+      game.events.emit('lighthouse-emotion:closed')
+      setShowAuth(true)
     })
     game.events.on('lighthouse-emotion:force-close', () => {
       setIsLighthouseEmotionOpen(false)

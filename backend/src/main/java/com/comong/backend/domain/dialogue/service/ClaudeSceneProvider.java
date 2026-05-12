@@ -17,168 +17,157 @@ import com.comong.backend.domain.dialogue.entity.DialogueTurnGeneratedBy;
 
 import lombok.RequiredArgsConstructor;
 
-/**
- * Claude 가 생성한 다음 장면을 검증해 {@link SceneResponse} 로 변환. 호출자({@link DialogueService})는 본 provider 가 빈
- * 결과를 돌려주면 {@link FallbackSceneProvider} 로 위임한다.
- *
- * <p>책임 경계: HTTP 호출과 tool_use 파싱은 {@link ClaudeClient}, 비즈니스 검증(금지어 / 길이 / choice 수 / 화이트리스트 / 전이규칙
- * / npcResponse)과 도메인 매핑은 본 클래스.
- *
- * <p>안전 4중 방어 (S14P31E103-632):
- *
- * <ol>
- *   <li>system prompt 로 LLM 역할 / 금지 주제 명시
- *   <li>tool_use schema 로 출력 구조 강제
- *   <li>본 클래스의 validate() — 길이 / 금지어 / <b>choiceIntentId 화이트리스트 16종</b> / <b>전이규칙(prevChoice 별
- *       allowedNext)</b>
- *   <li>실패 시 {@link FallbackSceneProvider} 로 안전한 정적 시나리오 위임
- * </ol>
- */
 @Component
 @RequiredArgsConstructor
 public class ClaudeSceneProvider {
 
     private static final Logger log = LoggerFactory.getLogger(ClaudeSceneProvider.class);
 
-    /**
-     * 아이 화면에 절대 등장하면 안 되는 진단·평가·압박 어휘 목록.
-     *
-     * <p>"등대지기대화" 4단계 제약 문서의 금지 표현 16종을 모두 커버한다:
-     *
-     * <ul>
-     *   <li>진단·평가: 우울증/우울/불안장애/위험/경고/진단/치료/죽음/죽을/예후/실패/심각/문제 있음/정상/비정상
-     *   <li>압박·강요·책임 전가: 참아야 / 긍정적으로 생각 / 이겨내야 / 빨리 말 (어미 변형 커버용 부분 매칭)
-     * </ul>
-     */
     private static final Set<String> FORBIDDEN_TERMS =
             Set.of(
-                    "우울증",
-                    "우울",
-                    "불안장애",
-                    "위험",
-                    "경고",
                     "진단",
-                    "치료",
-                    "죽음",
-                    "죽을",
-                    "예후",
-                    "실패",
+                    "위험",
                     "심각",
-                    "문제 있음",
-                    "정상",
-                    "비정상",
-                    "참아야",
-                    "긍정적으로 생각",
-                    "이겨내야",
-                    "빨리 말");
+                    "우울증",
+                    "불안장애",
+                    "치료 필요",
+                    "참아야 해",
+                    "이겨내야 해",
+                    "괜찮아질 거야",
+                    "아프지 않을 거야",
+                    "치료가 잘될 거야",
+                    "죽음",
+                    "예후",
+                    "생존",
+                    "병이 낫는다",
+                    "약 복용");
 
-    /** 등대지기 대화에서 허용되는 choiceIntentId 16종. 이 외 ID 가 응답에 등장하면 fallback. */
+    private static final Set<String> MEDICAL_TERMS = Set.of("주사", "검사", "아픔", "아픈", "병원");
+    private static final Set<String> FAMILY_WORRY_TERMS = Set.of("가족 걱정", "가족이 걱정");
+
     private static final Set<String> ALLOWED_INTENTS =
             Set.of(
-                    "mood_okay",
-                    "mood_worried",
-                    "mood_hard",
-                    "rest_today",
-                    "worry_pain",
-                    "worry_unknown",
+                    "rest_quiet",
+                    "rest_close_eyes",
+                    "rest_near_family",
+                    "activity_music",
+                    "activity_art",
+                    "activity_move",
+                    "talk_body",
+                    "talk_peer",
+                    "talk_worry",
+                    "body_okay",
+                    "body_tired",
+                    "body_pain_worry",
+                    "body_tell_adult",
+                    "body_point_place",
+                    "body_hold_hand",
+                    "peer_miss",
+                    "peer_school",
+                    "peer_okay",
+                    "worry_hospital",
                     "worry_family",
-                    "hard_body",
-                    "hard_lonely",
-                    "hard_angry",
+                    "worry_upset",
+                    "hospital_injection",
+                    "hospital_unknown",
+                    "hospital_okay",
                     "support_family",
-                    "support_medical",
-                    "support_draw",
-                    "action_breathe",
-                    "action_draw",
-                    "action_tell");
+                    "support_teacher",
+                    "support_hold_hand",
+                    "express_words",
+                    "express_drawing",
+                    "express_private",
+                    "anger_pause",
+                    "anger_say_upset",
+                    "anger_call_help");
 
-    /**
-     * 직전 선택 → 허용되는 다음 choiceIntentId 집합. 화이트리스트 안에 있어도 이 그래프 밖 흐름이면 fallback. 빈 set 은 종료여야 함을 의미.
-     */
     private static final Map<String, Set<String>> TRANSITION_RULES =
             Map.ofEntries(
-                    Map.entry("mood_okay", Set.of("action_breathe", "action_draw", "action_tell")),
-                    Map.entry(
-                            "mood_worried", Set.of("worry_pain", "worry_unknown", "worry_family")),
-                    Map.entry("mood_hard", Set.of("hard_body", "hard_lonely", "hard_angry")),
-                    Map.entry(
-                            "worry_pain",
-                            Set.of("support_family", "support_medical", "support_draw")),
-                    Map.entry(
-                            "worry_unknown",
-                            Set.of("support_family", "support_medical", "support_draw")),
-                    Map.entry(
-                            "worry_family",
-                            Set.of("support_family", "support_medical", "support_draw")),
-                    Map.entry(
-                            "hard_body",
-                            Set.of("support_family", "support_medical", "support_draw")),
-                    Map.entry(
-                            "hard_lonely",
-                            Set.of("support_family", "support_medical", "support_draw")),
-                    Map.entry(
-                            "hard_angry",
-                            Set.of("support_family", "support_medical", "support_draw")),
-                    Map.entry(
-                            "action_tell",
-                            Set.of("support_family", "support_medical", "support_draw")),
-                    // 종료 직전 선택들 — Claude 가 다음 scene 만들면 안 됨 (BE 가 종료 처리)
-                    Map.entry("action_breathe", Set.of()),
-                    Map.entry("action_draw", Set.of()),
+                    Map.entry("entry_rest", Set.of("rest_quiet", "rest_close_eyes", "rest_near_family")),
+                    Map.entry("entry_activity", Set.of("activity_music", "activity_art", "activity_move")),
+                    Map.entry("entry_talk", Set.of("talk_body", "talk_peer", "talk_worry")),
+                    Map.entry("talk_body", Set.of("body_okay", "body_tired", "body_pain_worry")),
+                    Map.entry("body_tired", Set.of("body_tell_adult", "body_point_place", "body_hold_hand")),
+                    Map.entry("body_pain_worry", Set.of("body_tell_adult", "body_point_place", "body_hold_hand")),
+                    Map.entry("talk_peer", Set.of("peer_miss", "peer_school", "peer_okay")),
+                    Map.entry("talk_worry", Set.of("worry_hospital", "worry_family", "worry_upset")),
+                    Map.entry("worry_hospital", Set.of("hospital_injection", "hospital_unknown", "hospital_okay")),
+                    Map.entry("hospital_injection", Set.of("support_family", "support_teacher", "support_hold_hand")),
+                    Map.entry("hospital_unknown", Set.of("support_family", "support_teacher", "support_hold_hand")),
+                    Map.entry("worry_family", Set.of("express_words", "express_drawing", "express_private")),
+                    Map.entry("worry_upset", Set.of("anger_pause", "anger_say_upset", "anger_call_help")),
+                    Map.entry("rest_quiet", Set.of()),
+                    Map.entry("rest_close_eyes", Set.of()),
+                    Map.entry("rest_near_family", Set.of()),
+                    Map.entry("activity_music", Set.of()),
+                    Map.entry("activity_art", Set.of()),
+                    Map.entry("activity_move", Set.of()),
+                    Map.entry("body_okay", Set.of()),
+                    Map.entry("body_tell_adult", Set.of()),
+                    Map.entry("body_point_place", Set.of()),
+                    Map.entry("body_hold_hand", Set.of()),
+                    Map.entry("peer_miss", Set.of()),
+                    Map.entry("peer_school", Set.of()),
+                    Map.entry("peer_okay", Set.of()),
+                    Map.entry("hospital_okay", Set.of()),
                     Map.entry("support_family", Set.of()),
-                    Map.entry("support_medical", Set.of()),
-                    Map.entry("support_draw", Set.of()));
+                    Map.entry("support_teacher", Set.of()),
+                    Map.entry("support_hold_hand", Set.of()),
+                    Map.entry("express_words", Set.of()),
+                    Map.entry("express_drawing", Set.of()),
+                    Map.entry("express_private", Set.of()),
+                    Map.entry("anger_pause", Set.of()),
+                    Map.entry("anger_say_upset", Set.of()),
+                    Map.entry("anger_call_help", Set.of()));
 
-    private static final int MAX_QUESTION_LENGTH = 30;
+    private static final int MAX_QUESTION_LENGTH = 34;
     private static final int MAX_CHOICE_TEXT_LENGTH = 18;
     private static final int MAX_NPC_RESPONSE_LINE_LENGTH = 40;
     private static final int MAX_NPC_RESPONSE_LINES = 2;
-    private static final int MIN_CHOICES = 1;
+    private static final int MIN_CHOICES = 2;
     private static final int MAX_CHOICES = 3;
 
     private static final String SYSTEM_PROMPT =
             """
-            너는 소아암 아동을 위한 게임 속 등대지기 영철의 정서 체크인 보조다.
-            이 기능은 심리·의학적 진단 도구가 아니다.
-            너는 심리 진단을 하지 않는다. 우울증·불안장애·위험도·치료 판단·예후를 절대 말하지 않는다.
-            너는 의료 조언을 하지 않는다. 아이에게 병의 예후, 죽음, 치료 성공 여부를 묻지 않는다.
-            아이는 직접 텍스트를 입력하지 않고 버튼만 누른다. 너는 짧은 질문 1개와 짧은 선택지 1~3개만 만든다.
+            너는 WISH 마을의 등대지기 영철이다.
+            너는 소아암 환아가 게임 안에서 몸과 마음을 편하게 표현하도록 돕는 캐릭터다.
 
-            톤 원칙:
-            - 검사나 평가처럼 보이면 안 된다.
-            - 아이를 판단하거나 압박하지 마라.
-            - 아이의 책임이나 잘못을 묻는 질문을 만들지 마라.
-            - "참아야 해", "긍정적으로 생각해", "네가 이겨내야 해", "빨리 말해" 같은 강요/책임 전가 표현 금지.
+            너는 심리상담사, 의사, 진단 도구가 아니다.
+            아이를 평가하거나 진단하지 않는다.
+            아이가 고른 선택을 부드럽게 받아주고, 다음에 고를 수 있는 짧은 선택지를 제안한다.
 
-            길이/식별자 제약:
-            - questionText 는 30자 이내.
-            - 각 choice text 는 18자 이내.
-            - choiceIntentId 는 snake_case 짧은 식별자.
-            - "오늘은 쉬고 싶어요"(rest_today)는 첫 화면에서만 제공된다 — 후속 질문(현재 호출)에는 절대 포함하지 마라.
-            - choiceIntentId 는 반드시 다음 16종 중에서만 골라라:
-                mood_okay, mood_worried, mood_hard, rest_today,
-                worry_pain, worry_unknown, worry_family,
-                hard_body, hard_lonely, hard_angry,
-                support_family, support_medical, support_draw,
-                action_breathe, action_draw, action_tell
-            - 새 ID 를 만들거나 변형하지 마라.
+            말투:
+            - 차분하고 따뜻한 등대지기 말투를 사용한다.
+            - 아이에게 말하듯 쉬운 한국어를 쓴다.
+            - 한 문장은 짧게 쓴다.
+            - npcResponse는 1~2문장만 사용한다.
+            - questionText도 한 문장만 사용한다.
+            - 바다, 등대, 불빛 표현은 가끔만 사용한다.
+            - 너무 시적이거나 추상적인 표현은 피한다.
 
-            npcResponse 는 직전 선택을 인정하는 짧은 1~2 줄 ack 멘트 (각 줄 40자 이내).
+            대화 원칙:
+            1. 아이가 선택한 내용을 먼저 받아준다.
+            2. 아이가 선택하지 않은 민감한 주제를 꺼내지 않는다.
+            3. 주사, 검사, 아픔, 가족 걱정은 아이가 관련 흐름을 선택한 뒤에만 다룬다.
+            4. 대화는 선택지 기반으로만 진행한다.
+            5. 자유 입력을 요구하지 않는다.
+            6. 의학 조언, 진단, 위험도, 치료 판단을 하지 않는다.
+            7. 참으라고 하거나 긍정적으로 생각하라고 강요하지 않는다.
+            8. 활동은 강요하지 않는다.
+            9. 피곤함, 아픔, 걱정이 표현되면 먼저 쉬기나 도움 요청을 안내한다.
 
-            금지 표현 (어떤 필드에도 등장 불가):
-            우울증, 불안장애, 위험, 경고, 진단, 치료, 치료 필요, 죽음, 죽을, 예후, 실패, 문제 있음, 심각,
-            정상/비정상, 참아야 해, 긍정적으로 생각해, 네가 이겨내야 해, 빨리 말해.
+            금지 표현:
+            진단, 위험, 심각, 우울증, 불안장애, 치료 필요, 참아야 해, 이겨내야 해,
+            괜찮아질 거야, 아프지 않을 거야, 치료가 잘될 거야, 죽음, 예후, 생존,
+            병이 낫는다, 의학적 판단, 약 복용 지시.
 
-            출력은 반드시 tool_use 형식만 사용하라. 마크다운/설명문/주석을 출력하지 마라.
-            아이가 직전에 고른 선택을 인정하고 자연스럽게 다음 짧은 질문으로 이어간다.
+            반드시 tool_use input으로만 응답한다.
+            choiceIntentId는 user message에 있는 허용 목록에서만 고른다.
+            shouldEndSession=true이면 questionText는 빈 문자열, choices는 빈 배열로 둔다.
             """;
 
     private final ClaudeClient claudeClient;
 
-    /**
-     * 직전 turn 들을 맥락으로 주고 Claude 가 다음 장면을 만들도록 요청. 검증 통과 시 generatedBy=CLAUDE 의 {@link
-     * SceneResponse} 반환, 그 외(키 미설정 / Claude 실패 / 검증 실패)는 empty.
-     */
     public Optional<SceneResponse> nextScene(
             DialogueSession session, List<DialogueTurn> turnsAscByStepIndex) {
         String userMessage = buildUserMessage(turnsAscByStepIndex);
@@ -194,10 +183,10 @@ public class ClaudeSceneProvider {
                                 .get(turnsAscByStepIndex.size() - 1)
                                 .getChoiceIntentId();
         Optional<ClaudeClient.ClaudeSceneResult> validated =
-                validate(result.get(), prevChoiceIntentId);
+                validate(result.get(), prevChoiceIntentId, turnsAscByStepIndex);
         if (validated.isEmpty()) {
             log.warn(
-                    "Claude response failed validation for session {} — falling back",
+                    "Claude response failed validation for session {} - falling back",
                     session.getId());
             return Optional.empty();
         }
@@ -205,55 +194,56 @@ public class ClaudeSceneProvider {
     }
 
     private String buildUserMessage(List<DialogueTurn> turns) {
-        StringBuilder sb = new StringBuilder("지금까지의 대화 흐름:\n");
-        if (turns.isEmpty()) {
-            sb.append("(아직 없음 — 첫 후속 질문)\n");
-        } else {
-            int order = 1;
-            for (DialogueTurn t : turns) {
-                sb.append(order++)
-                        .append(". Q: ")
-                        .append(t.getQuestionText())
-                        .append(" / A: ")
-                        .append(t.getChoiceText())
-                        .append(" (intent: ")
-                        .append(t.getChoiceIntentId())
-                        .append(")\n");
-            }
+        StringBuilder sb = new StringBuilder("대화 기록:\n");
+        int order = 1;
+        for (DialogueTurn t : turns) {
+            sb.append(order++)
+                    .append(". Q: ")
+                    .append(t.getQuestionText())
+                    .append(" / A: ")
+                    .append(t.getChoiceText())
+                    .append(" (intent: ")
+                    .append(t.getChoiceIntentId())
+                    .append(")\n");
         }
         DialogueTurn last = turns.isEmpty() ? null : turns.get(turns.size() - 1);
         if (last != null) {
             String prev = last.getChoiceIntentId();
             Set<String> allowedNext = TRANSITION_RULES.getOrDefault(prev, Set.of());
-            sb.append("\n방금 아이가 \"").append(last.getChoiceText()).append("\" 를 골랐어. ");
+            sb.append("\n아이가 방금 고른 선택: ").append(last.getChoiceText()).append("\n");
             if (allowedNext.isEmpty()) {
-                sb.append("이제 종료할 시점이야 — choices 를 비우고 shouldEndSession=true 로 응답해.");
+                sb.append("이 선택은 마무리 선택이다. shouldEndSession=true로 짧게 마무리한다.\n");
             } else {
-                sb.append("이 흐름에 자연스러운 짧은 다음 질문 + 선택지를 만들어줘. ")
-                        .append("choiceIntentId 는 반드시 다음 set 안에서만 골라: ")
-                        .append(String.join(", ", allowedNext));
+                sb.append("다음 선택지 choiceIntentId는 이 목록에서만 고른다: ")
+                        .append(String.join(", ", allowedNext))
+                        .append("\n");
             }
-        } else {
-            sb.append("\n첫 후속 질문을 짧게 하나 만들어줘.");
         }
         return sb.toString();
     }
 
-    /** 검증 통과한 ClaudeSceneResult 만 통과시킨다. 실패 시 empty. */
     private Optional<ClaudeClient.ClaudeSceneResult> validate(
-            ClaudeClient.ClaudeSceneResult result, String prevChoiceIntentId) {
+            ClaudeClient.ClaudeSceneResult result,
+            String prevChoiceIntentId,
+            List<DialogueTurn> turnsAscByStepIndex) {
         String q = result.questionText();
-        // 종료 신호일 땐 questionText 가 비어도 OK. 그 외엔 비어있으면 안 됨.
         if (!result.shouldEndSession()) {
-            if (q == null
-                    || q.isBlank()
-                    || q.length() > MAX_QUESTION_LENGTH
-                    || containsForbidden(q)) {
+            if (q == null || q.isBlank() || q.length() > MAX_QUESTION_LENGTH || containsForbidden(q)) {
+                return Optional.empty();
+            }
+            if (isBeforeHospitalRoute(prevChoiceIntentId) && containsAny(q, MEDICAL_TERMS)) {
+                return Optional.empty();
+            }
+            if (isBeforeFamilyRoute(prevChoiceIntentId) && containsAny(q, FAMILY_WORRY_TERMS)) {
+                return Optional.empty();
+            }
+            if (isRepeatedQuestion(q, turnsAscByStepIndex)) {
                 return Optional.empty();
             }
         } else if (q != null && containsForbidden(q)) {
             return Optional.empty();
         }
+
         List<ClaudeClient.ClaudeChoice> choices = result.choices();
         if (choices == null) {
             return Optional.empty();
@@ -264,18 +254,15 @@ public class ClaudeSceneProvider {
                         : TRANSITION_RULES.getOrDefault(prevChoiceIntentId, Set.of());
         if (result.shouldEndSession()) {
             if (!choices.isEmpty()) {
-                return Optional.empty(); // 종료 신호인데 선택지가 있으면 모순
-            }
-        } else {
-            if (choices.size() < MIN_CHOICES || choices.size() > MAX_CHOICES) {
                 return Optional.empty();
             }
+        } else if (choices.size() < MIN_CHOICES || choices.size() > MAX_CHOICES) {
+            return Optional.empty();
         }
         for (ClaudeClient.ClaudeChoice c : choices) {
             if (c.choiceIntentId() == null
                     || c.choiceIntentId().isBlank()
                     || !ALLOWED_INTENTS.contains(c.choiceIntentId())
-                    || "rest_today".equals(c.choiceIntentId())
                     || !allowedNext.contains(c.choiceIntentId())) {
                 return Optional.empty();
             }
@@ -286,7 +273,7 @@ public class ClaudeSceneProvider {
                 return Optional.empty();
             }
         }
-        // npcResponse 검증
+
         List<String> npcResponse = result.npcResponse();
         if (npcResponse == null
                 || npcResponse.isEmpty()
@@ -305,12 +292,43 @@ public class ClaudeSceneProvider {
     }
 
     private static boolean containsForbidden(String text) {
-        for (String term : FORBIDDEN_TERMS) {
+        return containsAny(text, FORBIDDEN_TERMS);
+    }
+
+    private static boolean containsAny(String text, Set<String> terms) {
+        for (String term : terms) {
             if (text.contains(term)) {
                 return true;
             }
         }
         return false;
+    }
+
+    private static boolean isBeforeHospitalRoute(String prevChoiceIntentId) {
+        return prevChoiceIntentId == null
+                || !Set.of(
+                                "worry_hospital",
+                                "hospital_injection",
+                                "hospital_unknown",
+                                "support_family",
+                                "support_teacher",
+                                "support_hold_hand")
+                        .contains(prevChoiceIntentId);
+    }
+
+    private static boolean isBeforeFamilyRoute(String prevChoiceIntentId) {
+        return prevChoiceIntentId == null
+                || !Set.of("worry_family", "express_words", "express_drawing", "express_private")
+                        .contains(prevChoiceIntentId);
+    }
+
+    private static boolean isRepeatedQuestion(String question, List<DialogueTurn> turnsAscByStepIndex) {
+        String normalized = question.replaceAll("\\s+", "");
+        return turnsAscByStepIndex.stream()
+                .map(DialogueTurn::getQuestionText)
+                .filter(text -> text != null)
+                .map(text -> text.replaceAll("\\s+", ""))
+                .anyMatch(normalized::equals);
     }
 
     private static SceneResponse toSceneResponse(ClaudeClient.ClaudeSceneResult result) {
@@ -321,7 +339,7 @@ public class ClaudeSceneProvider {
         return new SceneResponse(
                 result.questionText(),
                 choices,
-                /* secondaryAction= */ null,
+                null,
                 result.shouldEndSession(),
                 DialogueTurnGeneratedBy.CLAUDE,
                 result.npcResponse());

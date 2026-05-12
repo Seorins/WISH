@@ -2,19 +2,22 @@ import type { BackendNpcName, FrontNpcId } from '../npcIdentity'
 
 export type LighthouseDialogueStatus =
   | 'idle'
-  | 'starting'
+  | 'opening_welcome'
+  | 'opening_safe_line'
+  | 'entry_question'
   | 'waiting_choice'
-  | 'submitting_choice'
-  | 'loading_next'
+  | 'showing_local_bridge'
+  | 'loading_llm'
   | 'showing_response'
-  | 'finishing'
-  | 'showing_closing'
+  | 'waiting_final_close'
   | 'finished'
-  | 'error'
 
 export interface EmotionChoiceViewModel {
   choiceIntentId: string
   text: string
+  nextNodeId?: string | null
+  endAfterSelect?: boolean
+  responseLines?: string[]
   intensity?: number
   concernFlags?: string[]
   protectiveFactors?: string[]
@@ -52,9 +55,19 @@ export interface StartLighthouseEmotionApiResponse {
   errors?: Record<string, string>
 }
 
+export interface DailyActivityState {
+  hasDoneAnyActivityToday: boolean
+  completedActivityCount: number
+  recommendedActivityLabel?: string
+}
+
 export interface SubmitLighthouseTurnRequest {
   questionText: string
   selectedChoice: EmotionChoiceViewModel
+  route?: string
+  historyIntentIds?: string[]
+  previousQuestionTexts?: string[]
+  dailyActivityState?: DailyActivityState
 }
 
 export interface SubmitLighthouseTurnResponse {
@@ -70,12 +83,14 @@ export interface SubmitLighthouseTurnApiResponse {
     sessionId: number
     status: 'IN_PROGRESS' | 'FINISHED' | 'CANCELLED'
     nextScene: EmotionSceneViewModel
+    npcResponse?: string[]
+    closingLines?: string[]
   } | null
   errors?: Record<string, string>
 }
 
 export interface FinishLighthouseEmotionRequest {
-  finishReason: 'COMPLETED' | 'REST' | 'MAX_STEPS' | 'CANCELLED' | 'ERROR'
+  finishReason: 'COMPLETED' | 'REST_TODAY' | 'TIMEOUT'
 }
 
 export interface FinishLighthouseEmotionResponse {
@@ -134,6 +149,7 @@ export interface LighthouseEmotionState {
   sessionId: string | null
   status: LighthouseDialogueStatus
   currentScene: EmotionSceneViewModel | null
+  currentNodeId: string | null
   npcResponseLines: string[]
   closingLines: string[]
   selectedChoiceIntentId: string | null

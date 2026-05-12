@@ -99,7 +99,7 @@
 .dialogue-choice-overlay {
   position: absolute;
   left: 50%;
-  bottom: calc(var(--dialogue-frame-height) + 48px);
+  bottom: calc(var(--dialogue-frame-height) + 200px);
   transform: translateX(-50%);
   width: min(620px, 56vw);
   z-index: 40;
@@ -281,6 +281,7 @@
   }
 
   .dialogue-choice-overlay {
+    bottom: calc(var(--dialogue-frame-height) + 130px);
     width: min(480px, 78vw);
   }
 

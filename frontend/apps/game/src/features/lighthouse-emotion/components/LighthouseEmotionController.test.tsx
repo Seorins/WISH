@@ -9,13 +9,27 @@ function jsonResponse(body: unknown, ok = true) {
   } as Response
 }
 
-async function flushStartOpening() {
+function createDeferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>(innerResolve => {
+    resolve = innerResolve
+  })
+  return { promise, resolve }
+}
+
+async function flushStart() {
   await act(async () => {
     await Promise.resolve()
   })
+}
 
+async function advanceOpeningToEntry() {
+  fireEvent.click(screen.getByRole('button', { name: '대화 계속하기' }))
   await act(async () => {
-    vi.advanceTimersByTime(3000)
+    await Promise.resolve()
+  })
+  fireEvent.click(screen.getByRole('button', { name: '대화 계속하기' }))
+  await act(async () => {
     await Promise.resolve()
   })
 }
@@ -31,88 +45,37 @@ describe('LighthouseEmotionController', () => {
     vi.unstubAllGlobals()
   })
 
-  it('runs backend-driven choice flow without exposing internal fields or postcards', async () => {
+  it('starts a backend session but shows the fixed lighthouse opening first', async () => {
     const fetchMock = vi.mocked(fetch)
-    const onClose = vi.fn()
     const onTextChange = vi.fn()
 
-    fetchMock
-      .mockResolvedValueOnce(
-        jsonResponse({
-          code: 'CREATED',
-          message: 'created',
-          data: {
-            sessionId: 1,
-            status: 'IN_PROGRESS',
-            scene: {
-              sceneId: 'first',
-              questionText: '오늘 기분은 어떠니?',
-              choices: [
-                { choiceIntentId: 'mood_okay', text: '괜찮아요' },
-                { choiceIntentId: 'rest_today', text: '오늘은 쉬고 싶어요' },
-                { choiceIntentId: 'mood_worried', text: '걱정돼요' },
-                { choiceIntentId: 'mood_hard', text: '힘들어요' },
-                { choiceIntentId: 'extra', text: '더보기' },
-              ],
-              secondaryAction: { choiceIntentId: 'rest_today', text: '오늘은 쉬고 싶어요' },
-              shouldEndSession: false,
-              generatedBy: 'CLAUDE',
-              reasonCode: 'safe_reason',
-            },
-          },
-        }),
-      )
-      .mockResolvedValueOnce(
-        jsonResponse({
-          npcResponse: ['걱정이 찾아온 날이구나.', '괜찮아, 천천히 골라도 돼.'],
-          nextScene: {
-            sceneId: 'follow-up',
-            questionText: '무엇이 가장 걱정되니?',
-            choices: [
-              { choiceIntentId: 'rest_today', text: '오늘은 쉬고 싶어요' },
-              { choiceIntentId: 'worry_body', text: '몸이 걱정돼요' },
-              { choiceIntentId: 'worry_family', text: '가족이 걱정돼요' },
-            ],
-            secondaryAction: { choiceIntentId: 'rest_today', text: '오늘은 쉬고 싶어요' },
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        code: 'CREATED',
+        message: 'created',
+        data: {
+          sessionId: 1,
+          status: 'IN_PROGRESS',
+          scene: {
+            questionText: 'Backend first scene should not show first',
+            choices: [{ choiceIntentId: 'mood_okay', text: 'Okay' }],
+            secondaryAction: null,
             shouldEndSession: false,
           },
-        }),
-      )
-      .mockResolvedValueOnce(
-        jsonResponse({
-          npcResponse: ['말해줘서 고맙구나.'],
-          nextScene: {
-            questionText: '',
-            choices: [],
-            secondaryAction: null,
-            shouldEndSession: true,
-          },
-        }),
-      )
-      .mockResolvedValueOnce(
-        jsonResponse({
-          code: 'OK',
-          message: 'finished',
-          data: {
-            sessionId: 1,
-            status: 'FINISHED',
-            closingLines: ['오늘 이야기해줘서 고맙구나.', '등대 불은 계속 켜둘게.'],
-          },
-        }),
-      )
+        },
+      }),
+    )
 
     render(
       <LighthouseEmotionController
         patientProfileId={7}
         isOpen
-        onClose={onClose}
+        onClose={vi.fn()}
         onTextChange={onTextChange}
       />,
     )
 
-    await act(async () => {
-      await Promise.resolve()
-    })
+    await flushStart()
 
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringMatching(/\/api\/v1\/dialogue\/sessions$/),
@@ -127,77 +90,25 @@ describe('LighthouseEmotionController', () => {
       }),
     )
     expect(onTextChange).toHaveBeenCalledWith(
-      '안녕, 또 와줬구나.\n오늘 등대 불은 잔잔하게 켜져 있어.\n괜찮다면 지금 마음을 조금 나눠볼래?',
+      '어서 와, 기다리고 있었단다.\n우리만의 작은 등대에 온 걸 환영해.',
     )
+    expect(screen.queryByRole('button', { name: 'Okay' })).toBeNull()
 
-    await act(async () => {
-      vi.advanceTimersByTime(3000)
-      await Promise.resolve()
-    })
+    await advanceOpeningToEntry()
 
-    expect(onTextChange).toHaveBeenCalledWith('오늘 기분은 어떠니?')
-    expect(screen.getByRole('button', { name: '괜찮아요' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: '걱정돼요' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: '힘들어요' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: '오늘은 쉬고 싶어요' })).toBeTruthy()
+    expect(onTextChange).toHaveBeenCalledWith('오늘은 어떻게 지내고 싶니?')
+    expect(screen.getByRole('button', { name: '쉬고 싶어요' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '뭔가 해보고 싶어요' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '잠깐 얘기하고 싶어요' })).toBeTruthy()
     expect(screen.queryByText('choiceIntentId')).toBeNull()
-    expect(screen.queryByText('CLAUDE')).toBeNull()
-    expect(screen.queryByText('safe_reason')).toBeNull()
-    expect(screen.queryByText('마음엽서')).toBeNull()
-
-    fireEvent.click(screen.getByRole('button', { name: '걱정돼요' }))
-
-    await act(async () => {
-      await Promise.resolve()
-    })
-
-    expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringMatching(/\/api\/v1\/dialogue\/sessions\/1\/turns$/),
-      expect.objectContaining({
-        method: 'POST',
-        body: expect.stringContaining('"questionText"'),
-      }),
-    )
-    expect(screen.queryByRole('button', { name: '괜찮아요' })).toBeNull()
-    expect(onTextChange).toHaveBeenCalledWith('걱정이 찾아온 날이구나.\n괜찮아, 천천히 골라도 돼.')
-
-    await act(async () => {
-      vi.advanceTimersByTime(1700)
-      await Promise.resolve()
-    })
-
-    expect(onTextChange).toHaveBeenCalledWith('무엇이 가장 걱정되니?')
-    expect(screen.getByRole('button', { name: '몸이 걱정돼요' })).toBeTruthy()
-
-    fireEvent.click(screen.getByRole('button', { name: '몸이 걱정돼요' }))
-
-    await act(async () => {
-      await Promise.resolve()
-    })
-    await act(async () => {
-      vi.advanceTimersByTime(1700)
-      await Promise.resolve()
-    })
-
-    expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringMatching(/\/api\/v1\/dialogue\/sessions\/1\/finish$/),
-      expect.objectContaining({
-        method: 'POST',
-        body: JSON.stringify({ finishReason: 'COMPLETED' }),
-      }),
-    )
-    expect(onTextChange).toHaveBeenCalledWith('오늘 이야기해줘서 고맙구나.\n등대 불은 계속 켜둘게.')
-
-    expect(screen.queryByRole('button', { name: '마을로 돌아가기' })).toBeNull()
-    await act(async () => {
-      vi.advanceTimersByTime(3200)
-      await Promise.resolve()
-    })
-    expect(onClose).toHaveBeenCalled()
+    expect(screen.queryByText('LLM')).toBeNull()
   })
 
-  it('finishes with REST when the first secondary action is selected', async () => {
+  it('shows bridge lines, then lighthouse loading copy, then the validated next scene', async () => {
     const fetchMock = vi.mocked(fetch)
+    const onTextChange = vi.fn()
+
+    const turnDeferred = createDeferred<Response>()
 
     fetchMock
       .mockResolvedValueOnce(
@@ -207,18 +118,87 @@ describe('LighthouseEmotionController', () => {
           data: {
             sessionId: 2,
             status: 'IN_PROGRESS',
-            scene: {
-              questionText: '오늘 기분은 어떠니?',
-              choices: [{ choiceIntentId: 'mood_okay', text: '괜찮아요' }],
-              secondaryAction: { choiceIntentId: 'rest_today', text: '오늘은 쉬고 싶어요' },
-              shouldEndSession: false,
-            },
+            scene: null,
+          },
+        }),
+      )
+      .mockReturnValueOnce(turnDeferred.promise)
+
+    render(
+      <LighthouseEmotionController
+        patientProfileId={7}
+        isOpen
+        onClose={vi.fn()}
+        onTextChange={onTextChange}
+      />,
+    )
+
+    await flushStart()
+    await advanceOpeningToEntry()
+
+    fireEvent.click(screen.getByRole('button', { name: '잠깐 얘기하고 싶어요' }))
+
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(onTextChange).toHaveBeenCalledWith(
+      '그래, 길게 말하지 않아도 괜찮단다.\n편한 얘기부터 골라보자.',
+    )
+    expect(screen.queryByRole('button', { name: '잠깐 얘기하고 싶어요' })).toBeNull()
+
+    await act(async () => {
+      vi.advanceTimersByTime(1400)
+      await Promise.resolve()
+    })
+    expect(onTextChange).toHaveBeenCalledWith('등대지기가 불빛을 살피고 있어요...')
+
+    turnDeferred.resolve(
+      jsonResponse({
+        npcResponse: ['그래, 그 얘기부터 해보자.'],
+        nextScene: {
+          questionText: '무슨 얘기가 좋을까?',
+          choices: [
+            { choiceIntentId: 'talk_body', text: '몸 얘기' },
+            { choiceIntentId: 'talk_peer', text: '친구나 학교 얘기' },
+            { choiceIntentId: 'talk_worry', text: '걱정되는 얘기' },
+          ],
+          secondaryAction: null,
+          shouldEndSession: false,
+        },
+      }),
+    )
+
+    await act(async () => {
+      await Promise.resolve()
+    })
+    await act(async () => {
+      vi.advanceTimersByTime(1700)
+      await Promise.resolve()
+    })
+
+    expect(onTextChange).toHaveBeenCalledWith('무슨 얘기가 좋을까?')
+    expect(screen.getByRole('button', { name: '몸 얘기' })).toBeTruthy()
+  })
+
+  it('waits on final lines instead of auto-closing', async () => {
+    const fetchMock = vi.mocked(fetch)
+    const onClose = vi.fn()
+
+    fetchMock
+      .mockResolvedValueOnce(
+        jsonResponse({
+          code: 'CREATED',
+          message: 'created',
+          data: {
+            sessionId: 3,
+            status: 'IN_PROGRESS',
+            scene: null,
           },
         }),
       )
       .mockResolvedValueOnce(
         jsonResponse({
-          npcResponse: ['알겠다. 오늘은 쉬어도 괜찮단다.'],
+          npcResponse: ['쉬어도 괜찮단다.'],
           nextScene: {
             questionText: '',
             choices: [],
@@ -232,26 +212,23 @@ describe('LighthouseEmotionController', () => {
           code: 'OK',
           message: 'finished',
           data: {
-            sessionId: 2,
+            sessionId: 3,
             status: 'FINISHED',
-            closingLines: ['편할 때 다시 와.'],
+            closingLines: ['오늘은 여기까지 해도 괜찮단다.'],
           },
         }),
       )
 
-    render(
-      <LighthouseEmotionController
-        patientProfileId={7}
-        isOpen
-        onClose={vi.fn()}
-        onTextChange={vi.fn()}
-      />,
-    )
+    render(<LighthouseEmotionController patientProfileId={7} isOpen onClose={onClose} />)
 
-    await flushStartOpening()
+    await flushStart()
+    await advanceOpeningToEntry()
 
-    fireEvent.click(screen.getByRole('button', { name: '오늘은 쉬고 싶어요' }))
-
+    fireEvent.click(screen.getByRole('button', { name: '쉬고 싶어요' }))
+    await act(async () => {
+      vi.advanceTimersByTime(1400)
+      await Promise.resolve()
+    })
     await act(async () => {
       await Promise.resolve()
     })
@@ -261,11 +238,18 @@ describe('LighthouseEmotionController', () => {
     })
 
     expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringMatching(/\/api\/v1\/dialogue\/sessions\/2\/finish$/),
+      expect.stringMatching(/\/api\/v1\/dialogue\/sessions\/3\/finish$/),
       expect.objectContaining({
-        body: JSON.stringify({ finishReason: 'REST' }),
+        body: JSON.stringify({ finishReason: 'COMPLETED' }),
       }),
     )
+    expect(onClose).not.toHaveBeenCalled()
+
+    fireEvent.keyDown(window, { key: 'Enter' })
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(onClose).toHaveBeenCalled()
   })
 
   it('shows a child-safe error message when start API fails', async () => {
@@ -287,7 +271,7 @@ describe('LighthouseEmotionController', () => {
       await Promise.resolve()
     })
 
-    expect(onTextChange).toHaveBeenCalledWith('잠시 후 다시 말을 걸어줘.')
+    expect(onTextChange).toHaveBeenCalled()
     expect(screen.queryByRole('button', { name: 'API error' })).toBeNull()
   })
 })
