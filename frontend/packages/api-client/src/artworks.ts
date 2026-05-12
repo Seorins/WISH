@@ -90,6 +90,31 @@ export async function createArtwork({ image, filename, ...request }: CreateArtwo
   return response.data
 }
 
+export type DrawingGuessRequest = {
+  prompt: string
+  image: Blob
+  filename: string
+}
+
+export type DrawingGuessResult = {
+  isMatch: boolean
+  guess: string
+  confidence: number
+  source: 'CLAUDE' | 'FALLBACK'
+}
+
+export async function submitDrawingGuess({ prompt, image, filename }: DrawingGuessRequest) {
+  const formData = new FormData()
+  formData.append('request', new Blob([JSON.stringify({ prompt })], { type: 'application/json' }))
+  formData.append('image', image, filename)
+
+  const response = await apiClient.post<ApiResponse<DrawingGuessResult>>(
+    '/artworks/guess',
+    formData,
+  )
+  return response.data
+}
+
 export async function getMyArtworks({
   page = 0,
   size = 4,

@@ -24,7 +24,7 @@ export interface ArtChoiceOption {
 }
 
 export const artChoiceOptions: ArtChoiceOption[] = [
-  { mode: 'free-drawing', label: '자유 그림', description: '하얀 캔버스에 마음껏 그려봐!' },
+  { mode: 'free-drawing', label: '그림 퀴즈', description: '제시어를 그리면 AI가 맞춰줘!' },
   { mode: 'coloring', label: '색칠하기', description: '준비된 그림에 예쁜 색을 입혀봐!' },
 ]
 
@@ -36,11 +36,11 @@ export const rumiSelectDialogs: Record<RumiSelectDialogStage, RumiDialogLine[]> 
   'choice-prompt': [
     {
       id: 'rumi-choice-001',
-      text: '오늘은 마음껏 그리고 싶어, 아니면 준비된 그림에 예쁜 색을 입혀보고 싶어?',
+      text: '오늘은 제시어를 보고 그림 퀴즈를 풀어볼까, 아니면 준비된 그림에 예쁜 색을 입혀보고 싶어?',
     },
     {
       id: 'rumi-choice-002',
-      text: '자유롭게 그리고 싶으면 자유 그림, 그림에 색을 채우고 싶으면 색칠하기를 골라보자.',
+      text: '제시어 보고 그려보고 싶으면 그림 퀴즈, 그림에 색을 채우고 싶으면 색칠하기를 골라보자.',
     },
   ],
 }
@@ -51,12 +51,15 @@ export const rumiContentDialogs: Record<
 > = {
   'free-drawing': {
     confirm: [
-      { id: 'rumi-free-confirm-001', text: '좋아, 오늘은 네 마음이 가는 대로 자유롭게 그려보자.' },
-      { id: 'rumi-free-confirm-002', text: '좋아, 그리고 싶은 걸 무엇이든 그려봐도 괜찮아.' },
+      { id: 'rumi-free-confirm-001', text: '좋아, 오늘은 제시어를 보고 그림 퀴즈를 풀어보자.' },
+      { id: 'rumi-free-confirm-002', text: '좋아, 내가 보여주는 단어를 그려봐. AI가 맞춰볼게.' },
     ],
     intro: [
-      { id: 'rumi-free-intro-001', text: '하얀 캔버스가 준비됐어. 선 하나부터 천천히 시작해보자.' },
-      { id: 'rumi-free-intro-002', text: '먼저 떠오르는 색이나 모양이 있으면 편하게 그려봐.' },
+      { id: 'rumi-free-intro-001', text: '위쪽에 제시어가 보이지? 천천히 그려보자.' },
+      {
+        id: 'rumi-free-intro-002',
+        text: '제시어처럼 보이게 그리면 돼. 다 그렸으면 "그렸어요!"를 눌러.',
+      },
     ],
     'first-action': [
       { id: 'rumi-free-first-001', text: '우와, 시작됐구나. 네 그림이 조금씩 나타나고 있어.' },

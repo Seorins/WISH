@@ -2,7 +2,14 @@ export { apiClient } from './client'
 export { getAdminDashboard, getAdminPatientDashboard, notifyGuardian } from './admin-dashboard'
 export { authInterceptor } from './interceptors/auth'
 export { login, signup } from './auth'
-export { createArtwork, deleteArtwork, getArtwork, getMyArtworks, updateArtwork } from './artworks'
+export {
+  createArtwork,
+  deleteArtwork,
+  getArtwork,
+  getMyArtworks,
+  submitDrawingGuess,
+  updateArtwork,
+} from './artworks'
 export {
   createExerciseMotion,
   deleteExerciseMotion,
@@ -97,6 +104,8 @@ export type {
   ArtworkPage,
   CreateArtworkParams,
   CreateArtworkRequest,
+  DrawingGuessRequest,
+  DrawingGuessResult,
   GetMyArtworksParams,
   Pageable,
   PageResponse,
