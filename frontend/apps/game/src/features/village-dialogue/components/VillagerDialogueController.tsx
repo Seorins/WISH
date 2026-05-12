@@ -43,20 +43,6 @@ export function VillagerDialogueController({
     onTextChange?.(visibleText)
   }, [isOpen, onTextChange, visibleText])
 
-  useEffect(() => {
-    if (!isOpen || status !== 'opening_greeting') return
-
-    const handleGreetingAdvanceKey = (event: KeyboardEvent) => {
-      if (event.key !== 'e' && event.key !== 'E') return
-      event.preventDefault()
-      event.stopPropagation()
-      advanceDialogue()
-    }
-
-    window.addEventListener('keydown', handleGreetingAdvanceKey, { capture: true })
-    return () => window.removeEventListener('keydown', handleGreetingAdvanceKey, { capture: true })
-  }, [advanceDialogue, isOpen, status])
-
   if (!isOpen || !script) return null
 
   const isWaitingChoice = status === 'waiting_choice'
@@ -69,7 +55,9 @@ export function VillagerDialogueController({
     <DialogueLayer
       isOpen={isOpen}
       displayName={script.displayName}
-      visibleLines={status === 'error' ? ['잠시 후 다시 말을 걸어줘.'] : visibleLines}
+      visibleLines={
+        status === 'error' ? ['대화를 저장하지 못했어. 잠시 후 다시 해보자.'] : visibleLines
+      }
       choices={currentNode?.choices ?? []}
       showChoices={isWaitingChoice}
       selectedChoiceId={selectedChoiceIntentId}

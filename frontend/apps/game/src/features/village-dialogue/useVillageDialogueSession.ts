@@ -14,6 +14,7 @@ import {
 import { VILLAGE_NPC_TO_API_ENUM } from './npcMapping'
 import { pickRandomCounselingScript, SHARED_COUNSELING_SCRIPTS } from './sharedCounselingScripts'
 import { VILLAGER_FIRST_GREETING, villageDialogues } from './villageDialogues'
+import { getVillagerLines } from './villagerLinePack'
 import type {
   CounselingScript,
   DailyActivityState,
@@ -26,7 +27,8 @@ import type {
 
 const RESPONSE_LINE_DELAY_MS = 850
 const MIN_RESPONSE_DELAY_MS = 900
-const SAVE_ERROR_LINE = '잠시 후 다시 말을 걸어줘.'
+const QUESTION_CHOICE_DELAY_MS = 700
+const SAVE_ERROR_LINE = '대화를 저장하지 못했어. 잠시 후 다시 해보자.'
 
 function logVillageDialogueDebug(message: string, payload?: unknown) {
   if (!import.meta.env.DEV) return
@@ -89,12 +91,18 @@ export function useVillageDialogueSession(
     timeoutIds.current.push(timeoutId)
   }, [])
 
-  const showQuestion = useCallback((node: VillagerDialogueNode) => {
-    setCurrentNode(node)
-    setVisibleLines([node.questionText])
-    setSelectedChoiceIntentId(null)
-    setStatus('waiting_choice')
-  }, [])
+  const showQuestion = useCallback(
+    (node: VillagerDialogueNode) => {
+      setCurrentNode(node)
+      setVisibleLines([node.questionText])
+      setSelectedChoiceIntentId(null)
+      setStatus('showing_question')
+      queueTimer(() => {
+        setStatus(prev => (prev === 'showing_question' ? 'waiting_choice' : prev))
+      }, QUESTION_CHOICE_DELAY_MS)
+    },
+    [queueTimer],
+  )
 
   const resetSession = useCallback(() => {
     clearTimers()
@@ -200,6 +208,11 @@ export function useVillageDialogueSession(
 
     if (status === 'waiting_final_close') {
       closeDialogue('COMPLETED')
+      return
+    }
+
+    if (status === 'error') {
+      closeDialogue('ERROR')
     }
   }, [clearTimers, closeDialogue, currentNode, currentScript, showQuestion, status])
 
@@ -260,8 +273,14 @@ export function useVillageDialogueSession(
         })
         setSelectedEvents(prev => [...prev, event])
 
-        const responseLines =
-          choice.responseLines.length > 0 ? choice.responseLines : ['말해줘서 고마워.']
+        const responseLines = getVillagerLines({
+          npcId: script.npcId,
+          key: choice.responseKey,
+          fallback:
+            choice.fallbackResponseLines.length > 0
+              ? choice.fallbackResponseLines
+              : (choice.responseLines ?? ['말해줘서 고마워.']),
+        })
         setVisibleLines([responseLines[0]])
         setStatus('showing_response')
 
@@ -289,6 +308,7 @@ export function useVillageDialogueSession(
                 ? choice.endingLines
                 : buildActivityAwareEndingLines({
                     endingType: getChoiceEndingType(choice),
+                    npcId: script.npcId,
                     dailyActivityState: resolvedDailyActivityState,
                   })
 

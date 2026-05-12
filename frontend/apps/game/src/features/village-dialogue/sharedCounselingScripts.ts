@@ -1,19 +1,20 @@
-import type { CounselingNode, CounselingScript } from './types'
 import { applyActivityAwareEndingTypes } from './activityAwareEnding'
+import type { CounselingNode, CounselingScript } from './types'
 
-const ENTRY_COUNSELING_NODES: Record<string, CounselingNode> = {
+const nodes: Record<string, CounselingNode> = {
   entry_01: {
     nodeId: 'entry_01',
-    questionText: '오늘은 뭐가 좋을까?',
+    questionText: '오늘은 어떻게 지내고 싶어?',
     choices: [
       {
         choiceIntentId: 'entry_rest',
-        text: '쉬고 싶어요',
+        text: '쉬면서 있고 싶어요',
         nextNodeId: 'rest_01',
         intensity: 1,
         concernFlags: ['needs_rest'],
         protectiveFactors: ['sets_boundary', 'rest_need_named'],
-        responseLines: ['좋아. 쉬고 싶은 날도 있지.', '그럼 어떻게 쉬고 싶은지 골라보자.'],
+        responseKey: 'entry_rest',
+        fallbackResponseLines: ['좋아. 쉬고 싶은 날도 있지.', '그럼 어떻게 쉬고 싶은지 골라보자.'],
       },
       {
         choiceIntentId: 'entry_activity',
@@ -22,19 +23,22 @@ const ENTRY_COUNSELING_NODES: Record<string, CounselingNode> = {
         intensity: 0,
         concernFlags: [],
         protectiveFactors: ['agency_coping', 'positive_activity_interest'],
-        responseLines: ['좋아. 가볍게 시작해도 괜찮아.', '오늘은 어떤 게 끌려?'],
+        responseKey: 'entry_activity',
+        fallbackResponseLines: ['좋아. 가볍게 시작해도 괜찮아.', '오늘은 어떤 게 끌려?'],
       },
       {
         choiceIntentId: 'entry_talk',
-        text: '얘기하고 싶어요',
+        text: '잠깐 얘기하고 싶어요',
         nextNodeId: 'talk_topic_01',
         intensity: 0,
         concernFlags: [],
         protectiveFactors: ['support_seeking', 'verbal_expression'],
-        responseLines: ['좋아. 길게 말하지 않아도 돼.', '편한 얘기부터 골라보자.'],
+        responseKey: 'entry_talk',
+        fallbackResponseLines: ['좋아. 길게 말하지 않아도 돼.', '편한 얘기부터 골라보자.'],
       },
     ],
   },
+
   rest_01: {
     nodeId: 'rest_01',
     questionText: '어떻게 쉬고 싶어?',
@@ -47,11 +51,9 @@ const ENTRY_COUNSELING_NODES: Record<string, CounselingNode> = {
         intensity: 1,
         concernFlags: ['needs_rest'],
         protectiveFactors: ['sets_boundary'],
-        responseLines: ['조용히 있어도 괜찮아.', '말하지 않고 쉬어도 돼.'],
-        activityEndingLines: {
-          pending: ['먼저 조금 쉬어가자.', '괜찮아지면 가벼운 활동 하나만 해보자.'],
-          completed: ['오늘은 이 정도면 충분해.', '천천히 쉬어가자.'],
-        },
+        responseKey: 'rest_quiet',
+        fallbackResponseLines: ['조용히 있어도 괜찮아.', '말하지 않고 쉬어도 돼.'],
+        endingType: 'REST_THEN_ACTIVITY',
       },
       {
         choiceIntentId: 'rest_close_eyes',
@@ -61,8 +63,9 @@ const ENTRY_COUNSELING_NODES: Record<string, CounselingNode> = {
         intensity: 1,
         concernFlags: ['fatigue_present'],
         protectiveFactors: ['self_care_action', 'rest_need_named'],
-        responseLines: ['눈을 잠깐 감는 것도 쉬는 방법이야.', '몸이 조금 편해질 수 있어.'],
-        endingLines: ['지금은 잠깐 쉬어도 괜찮아.', '활동은 천천히 해도 돼.'],
+        responseKey: 'rest_eyes',
+        fallbackResponseLines: ['눈을 잠깐 감는 것도 쉬는 방법이야.', '몸이 조금 편해질 수 있어.'],
+        endingType: 'REST_ONLY',
       },
       {
         choiceIntentId: 'rest_near_family',
@@ -72,11 +75,13 @@ const ENTRY_COUNSELING_NODES: Record<string, CounselingNode> = {
         intensity: 0,
         concernFlags: [],
         protectiveFactors: ['family_support_preference', 'support_need_named'],
-        responseLines: ['편한 사람 옆에 있으면 마음도 쉬기 쉬워.', '그렇게 쉬어도 괜찮아.'],
-        endingLines: ['편한 곳에서 쉬어가자.', '오늘은 네 속도대로 가도 괜찮아.'],
+        responseKey: 'rest_family',
+        fallbackResponseLines: ['편한 사람 옆에 있으면 마음도 쉬기 쉬워.', '그렇게 쉬어도 괜찮아.'],
+        endingType: 'REST_ONLY',
       },
     ],
   },
+
   activity_01: {
     nodeId: 'activity_01',
     questionText: '가볍게 뭘 해볼까?',
@@ -88,20 +93,22 @@ const ENTRY_COUNSELING_NODES: Record<string, CounselingNode> = {
         endAfterSelect: true,
         intensity: 0,
         concernFlags: [],
-        protectiveFactors: ['positive_activity_interest', 'music_coping'],
-        responseLines: ['좋아. 듣는 것부터 시작해도 돼.', '짧게 들어도 충분해.'],
-        endingLines: ['그럼 음악 활동부터 가볍게 해보자.'],
+        protectiveFactors: ['positive_activity_interest', 'music_interest'],
+        responseKey: 'activity_music',
+        fallbackResponseLines: ['좋아. 듣는 것부터 시작해도 돼.', '짧게 들어도 충분해.'],
+        endingType: 'GO_LIGHT_ACTIVITY',
       },
       {
-        choiceIntentId: 'activity_drawing',
+        choiceIntentId: 'activity_art',
         text: '그림을 그려볼래요',
         nextNodeId: null,
         endAfterSelect: true,
         intensity: 0,
         concernFlags: [],
         protectiveFactors: ['creative_expression', 'positive_activity_interest'],
-        responseLines: ['좋아. 그림은 말보다 편할 때가 있어.', '생각나는 것만 그려도 돼.'],
-        endingLines: ['그럼 미술 활동으로 남겨봐도 좋아.'],
+        responseKey: 'activity_art',
+        fallbackResponseLines: ['좋아. 그림은 말보다 편할 때가 있어.', '생각나는 것만 그려도 돼.'],
+        endingType: 'EXPRESS_WITH_DRAWING',
       },
       {
         choiceIntentId: 'activity_move',
@@ -110,12 +117,14 @@ const ENTRY_COUNSELING_NODES: Record<string, CounselingNode> = {
         endAfterSelect: true,
         intensity: 0,
         concernFlags: [],
-        protectiveFactors: ['movement_coping', 'positive_activity_interest'],
-        responseLines: ['좋아. 아주 조금만 움직여도 괜찮아.', '힘들면 멈춰도 돼.'],
-        endingLines: ['그럼 가벼운 활동부터 해보자.', '천천히 따라가도 괜찮아.'],
+        protectiveFactors: ['movement_interest', 'agency_coping'],
+        responseKey: 'activity_move',
+        fallbackResponseLines: ['좋아. 아주 조금만 움직여도 괜찮아.', '힘들면 멈춰도 돼.'],
+        endingType: 'GO_LIGHT_ACTIVITY',
       },
     ],
   },
+
   talk_topic_01: {
     nodeId: 'talk_topic_01',
     questionText: '무슨 얘기가 좋을까?',
@@ -126,8 +135,9 @@ const ENTRY_COUNSELING_NODES: Record<string, CounselingNode> = {
         nextNodeId: 'body_01',
         intensity: 0,
         concernFlags: [],
-        protectiveFactors: ['body_state_named'],
-        responseLines: ['좋아. 몸 얘기부터 해보자.', '편한 만큼만 말해도 돼.'],
+        protectiveFactors: ['body_checkin_interest'],
+        responseKey: 'talk_body',
+        fallbackResponseLines: ['좋아. 몸이 어떤지 잠깐만 살펴보자.'],
       },
       {
         choiceIntentId: 'talk_peer',
@@ -135,8 +145,9 @@ const ENTRY_COUNSELING_NODES: Record<string, CounselingNode> = {
         nextNodeId: 'peer_01',
         intensity: 0,
         concernFlags: [],
-        protectiveFactors: ['social_connection'],
-        responseLines: ['좋아. 친구나 학교 얘기도 괜찮아.', '생각나는 것부터 골라보자.'],
+        protectiveFactors: ['social_connection_interest'],
+        responseKey: 'talk_peer',
+        fallbackResponseLines: ['좋아. 친구나 학교 생각이 나는 날도 있지.'],
       },
       {
         choiceIntentId: 'talk_worry',
@@ -144,11 +155,16 @@ const ENTRY_COUNSELING_NODES: Record<string, CounselingNode> = {
         nextNodeId: 'worry_01',
         intensity: 1,
         concernFlags: ['worry_present'],
-        protectiveFactors: ['support_seeking', 'verbal_expression'],
-        responseLines: ['좋아. 걱정되는 얘기도 해도 돼.', '말하기 싫은 건 안 골라도 괜찮아.'],
+        protectiveFactors: ['emotion_named', 'support_seeking'],
+        responseKey: 'talk_worry',
+        fallbackResponseLines: [
+          '좋아. 걱정되는 게 있으면 조금만 말해도 돼.',
+          '말하기 싫은 건 괜찮다고 해도 돼.',
+        ],
       },
     ],
   },
+
   body_01: {
     nodeId: 'body_01',
     questionText: '지금 몸은 어때?',
@@ -161,11 +177,9 @@ const ENTRY_COUNSELING_NODES: Record<string, CounselingNode> = {
         intensity: 0,
         concernFlags: [],
         protectiveFactors: ['positive_body_state'],
-        responseLines: ['좋아. 지금은 괜찮구나.', '그래도 불편해지면 바로 말해도 돼.'],
-        activityEndingLines: {
-          pending: ['괜찮으면 가벼운 활동 하나 해볼까?'],
-          completed: ['오늘은 해본 게 있으니까, 잠깐 쉬어도 괜찮아.'],
-        },
+        responseKey: 'body_okay',
+        fallbackResponseLines: ['좋아. 지금은 괜찮구나.', '그래도 불편해지면 바로 말해도 돼.'],
+        endingType: 'GO_LIGHT_ACTIVITY',
       },
       {
         choiceIntentId: 'body_tired_easy',
@@ -174,19 +188,25 @@ const ENTRY_COUNSELING_NODES: Record<string, CounselingNode> = {
         intensity: 2,
         concernFlags: ['fatigue_present', 'body_discomfort'],
         protectiveFactors: ['body_state_named'],
-        responseLines: ['그럴 때 있지.', '힘이 빠지면 잠깐 쉬어도 돼.'],
+        responseKey: 'body_tired',
+        fallbackResponseLines: ['그럴 때 있지.', '힘이 빠지면 잠깐 쉬어도 돼.'],
       },
       {
         choiceIntentId: 'body_pain_worry',
         text: '아픈 게 걱정돼요',
         nextNodeId: 'body_pain_02',
         intensity: 3,
-        concernFlags: ['pain_concern'],
+        concernFlags: ['pain_concern', 'procedure_fear'],
         protectiveFactors: ['can_name_fear'],
-        responseLines: ['아픈 게 걱정되면 혼자 참지 않아도 돼.', '어떻게 알려줄지 같이 골라보자.'],
+        responseKey: 'body_pain_worry',
+        fallbackResponseLines: [
+          '아픈 게 걱정되면 혼자 참지 않아도 돼.',
+          '어떻게 알려줄지 같이 골라보자.',
+        ],
       },
     ],
   },
+
   body_rest_02: {
     nodeId: 'body_rest_02',
     questionText: '그럴 땐 어떻게 쉬고 싶어?',
@@ -198,9 +218,10 @@ const ENTRY_COUNSELING_NODES: Record<string, CounselingNode> = {
         endAfterSelect: true,
         intensity: 1,
         concernFlags: ['needs_rest'],
-        protectiveFactors: ['sets_boundary', 'rest_need_named'],
-        responseLines: ['조용히 있어도 괜찮아.', '말하지 않고 쉬어도 돼.'],
-        endingLines: ['먼저 조금 쉬어가자.', '괜찮아지면 가벼운 활동 하나만 해보자.'],
+        protectiveFactors: ['sets_boundary'],
+        responseKey: 'body_rest_quiet',
+        fallbackResponseLines: ['조용히 있어도 괜찮아.', '말하지 않고 쉬어도 돼.'],
+        endingType: 'REST_THEN_ACTIVITY',
       },
       {
         choiceIntentId: 'body_family_near',
@@ -210,25 +231,31 @@ const ENTRY_COUNSELING_NODES: Record<string, CounselingNode> = {
         intensity: 0,
         concernFlags: [],
         protectiveFactors: ['family_support_preference', 'support_need_named'],
-        responseLines: ['편한 사람 옆에 있으면 조금 나아질 수 있어.', '그렇게 쉬어도 괜찮아.'],
-        endingLines: ['지금은 편한 곳에서 쉬어도 괜찮아.', '활동은 천천히 해도 돼.'],
+        responseKey: 'body_family_near',
+        fallbackResponseLines: [
+          '편한 사람 옆에 있으면 조금 나아질 수 있어.',
+          '그렇게 쉬어도 괜찮아.',
+        ],
+        endingType: 'REST_ONLY',
       },
       {
-        choiceIntentId: 'body_tell_close_person',
+        choiceIntentId: 'body_tell_adult',
         text: '가까운 사람에게 말할래요',
         nextNodeId: null,
         endAfterSelect: true,
         intensity: 0,
         concernFlags: [],
-        protectiveFactors: ['support_seeking'],
-        responseLines: [
+        protectiveFactors: ['support_seeking', 'adult_support_preference'],
+        responseKey: 'body_tell_adult',
+        fallbackResponseLines: [
           '좋아. 가까운 사람에게 말하면 같이 도와줄 수 있어.',
           '혼자 참고 있지 않아도 돼.',
         ],
-        endingLines: ['먼저 가까운 사람에게 알려보자.', '그다음에 천천히 해도 괜찮아.'],
+        endingType: 'ASK_ADULT_FIRST',
       },
     ],
   },
+
   body_pain_02: {
     nodeId: 'body_pain_02',
     questionText: '아플 때는 어떻게 알려줄까?',
@@ -241,8 +268,9 @@ const ENTRY_COUNSELING_NODES: Record<string, CounselingNode> = {
         intensity: 0,
         concernFlags: [],
         protectiveFactors: ['medical_support_preference', 'support_seeking'],
-        responseLines: ['좋아. 선생님께 말하면 도와줄 수 있어.', '작은 아픔도 말해도 돼.'],
-        endingLines: ['먼저 선생님께 알려보자.', '활동은 천천히 해도 괜찮아.'],
+        responseKey: 'pain_tell_teacher',
+        fallbackResponseLines: ['좋아. 선생님께 말하면 도와줄 수 있어.', '작은 아픔도 말해도 돼.'],
+        endingType: 'ASK_MEDICAL_FIRST',
       },
       {
         choiceIntentId: 'pain_point_place',
@@ -252,8 +280,9 @@ const ENTRY_COUNSELING_NODES: Record<string, CounselingNode> = {
         intensity: 1,
         concernFlags: ['prefers_nonverbal_expression'],
         protectiveFactors: ['alternative_expression', 'body_state_named'],
-        responseLines: ['손으로 알려줘도 괜찮아.', '말이 안 나올 때는 그 방법도 좋아.'],
-        endingLines: ['네 방식대로 알려줘도 괜찮아.', '혼자 참지 않아도 돼.'],
+        responseKey: 'pain_point_place',
+        fallbackResponseLines: ['손으로 알려줘도 괜찮아.', '말이 안 나올 때는 그 방법도 좋아.'],
+        endingType: 'ASK_HELP_FIRST',
       },
       {
         choiceIntentId: 'pain_hold_hand',
@@ -263,11 +292,13 @@ const ENTRY_COUNSELING_NODES: Record<string, CounselingNode> = {
         intensity: 1,
         concernFlags: ['needs_comfort'],
         protectiveFactors: ['comfort_preference_named', 'support_need_named'],
-        responseLines: ['손을 잡아달라고 해도 괜찮아.', '그게 조금 든든할 때도 있어.'],
-        endingLines: ['도움을 받아도 괜찮아.', '지금은 천천히 가자.'],
+        responseKey: 'pain_hold_hand',
+        fallbackResponseLines: ['손을 잡아달라고 해도 괜찮아.', '그게 조금 든든할 때도 있어.'],
+        endingType: 'REST_ONLY',
       },
     ],
   },
+
   peer_01: {
     nodeId: 'peer_01',
     questionText: '친구나 학교 생각이 나?',
@@ -279,7 +310,8 @@ const ENTRY_COUNSELING_NODES: Record<string, CounselingNode> = {
         intensity: 2,
         concernFlags: ['peer_separation', 'loneliness'],
         protectiveFactors: ['relationship_named'],
-        responseLines: ['친구가 보고 싶은 마음이 들 수 있어.', '길게 말하지 않아도 돼.'],
+        responseKey: 'peer_miss',
+        fallbackResponseLines: ['친구가 보고 싶은 마음이 들 수 있어.', '길게 말하지 않아도 돼.'],
       },
       {
         choiceIntentId: 'peer_curious_school',
@@ -288,7 +320,8 @@ const ENTRY_COUNSELING_NODES: Record<string, CounselingNode> = {
         intensity: 1,
         concernFlags: ['school_connection'],
         protectiveFactors: ['social_connection', 'information_seeking'],
-        responseLines: ['학교에서 뭐 하는지 궁금할 수 있어.', '천천히 들어도 괜찮아.'],
+        responseKey: 'school_curious',
+        fallbackResponseLines: ['학교에서 뭐 하는지 궁금할 수 있어.', '천천히 들어도 괜찮아.'],
       },
       {
         choiceIntentId: 'peer_okay_now',
@@ -298,14 +331,12 @@ const ENTRY_COUNSELING_NODES: Record<string, CounselingNode> = {
         intensity: 0,
         concernFlags: [],
         protectiveFactors: ['positive_social_state'],
-        responseLines: ['좋아. 지금은 괜찮구나.', '필요하면 나중에 다시 이야기해도 돼.'],
-        activityEndingLines: {
-          pending: ['그럼 가벼운 활동 하나 해볼까?'],
-          completed: ['오늘은 이미 해본 게 있으니까, 천천히 쉬어가도 괜찮아.'],
-        },
+        fallbackResponseLines: ['좋아. 지금은 괜찮구나.', '필요하면 나중에 다시 이야기해도 돼.'],
+        endingType: 'GO_LIGHT_ACTIVITY',
       },
     ],
   },
+
   peer_friend_02: {
     nodeId: 'peer_friend_02',
     questionText: '친구 생각이 날 땐 뭐가 좋을까?',
@@ -318,19 +349,21 @@ const ENTRY_COUNSELING_NODES: Record<string, CounselingNode> = {
         intensity: 0,
         concernFlags: [],
         protectiveFactors: ['verbal_expression', 'social_connection'],
-        responseLines: ['짧게 인사해도 마음이 전해질 수 있어.'],
-        endingLines: ['짧게 전해도 괜찮아.', '오늘은 천천히 쉬어가자.'],
+        responseKey: 'peer_miss',
+        fallbackResponseLines: ['짧게 인사해도 마음이 전해질 수 있어.'],
+        endingType: 'SOCIAL_CONNECT',
       },
       {
-        choiceIntentId: 'peer_send_drawing',
+        choiceIntentId: 'peer_draw',
         text: '그림을 그리고 싶어요',
         nextNodeId: null,
         endAfterSelect: true,
         intensity: 0,
         concernFlags: ['prefers_nonverbal_expression'],
         protectiveFactors: ['creative_expression', 'alternative_expression'],
-        responseLines: ['그림으로 표현해도 좋아.', '말보다 쉬울 때가 있지.'],
-        endingLines: ['오늘은 그림으로 남겨봐도 좋아.', '네 방식대로 전해도 괜찮아.'],
+        responseKey: 'peer_draw',
+        fallbackResponseLines: ['그림으로 표현해도 좋아.', '말보다 쉬울 때가 있지.'],
+        endingType: 'EXPRESS_WITH_DRAWING',
       },
       {
         choiceIntentId: 'peer_talk_later',
@@ -340,11 +373,13 @@ const ENTRY_COUNSELING_NODES: Record<string, CounselingNode> = {
         intensity: 1,
         concernFlags: ['hesitation_to_share'],
         protectiveFactors: ['sets_boundary'],
-        responseLines: ['지금 바로 말하지 않아도 괜찮아.', '나중에 해도 돼.'],
-        endingLines: ['천천히 해도 괜찮아.', '생각나면 그때 이야기해도 돼.'],
+        responseKey: 'peer_later',
+        fallbackResponseLines: ['지금 바로 말하지 않아도 괜찮아.', '나중에 해도 돼.'],
+        endingType: 'PRIVATE_OKAY',
       },
     ],
   },
+
   peer_school_02: {
     nodeId: 'peer_school_02',
     questionText: '학교 이야기는 어떻게 듣고 싶어?',
@@ -357,8 +392,9 @@ const ENTRY_COUNSELING_NODES: Record<string, CounselingNode> = {
         intensity: 0,
         concernFlags: [],
         protectiveFactors: ['family_support_preference', 'information_seeking'],
-        responseLines: ['가족에게 물어보면 편하게 들을 수 있어.'],
-        endingLines: ['궁금한 건 천천히 물어봐도 돼.', '오늘은 네 속도대로 가자.'],
+        responseKey: 'school_ask_family',
+        fallbackResponseLines: ['가족에게 물어보면 편하게 들을 수 있어.'],
+        endingType: 'ASK_HELP_FIRST',
       },
       {
         choiceIntentId: 'school_ask_friend',
@@ -368,8 +404,9 @@ const ENTRY_COUNSELING_NODES: Record<string, CounselingNode> = {
         intensity: 0,
         concernFlags: [],
         protectiveFactors: ['social_connection', 'information_seeking'],
-        responseLines: ['친구에게 짧게 물어봐도 괜찮아.'],
-        endingLines: ['짧게 물어봐도 괜찮아.', '부담 없을 때 해도 돼.'],
+        responseKey: 'school_ask_friend',
+        fallbackResponseLines: ['친구에게 짧게 물어봐도 괜찮아.'],
+        endingType: 'SOCIAL_CONNECT',
       },
       {
         choiceIntentId: 'school_later',
@@ -379,11 +416,13 @@ const ENTRY_COUNSELING_NODES: Record<string, CounselingNode> = {
         intensity: 1,
         concernFlags: ['hesitation_to_share'],
         protectiveFactors: ['sets_boundary'],
-        responseLines: ['지금 바로 듣지 않아도 괜찮아.'],
-        endingLines: ['나중에 들어도 괜찮아.', '오늘은 다른 걸 해봐도 좋아.'],
+        responseKey: 'school_later',
+        fallbackResponseLines: ['지금 바로 듣지 않아도 괜찮아.'],
+        endingType: 'PRIVATE_OKAY',
       },
     ],
   },
+
   worry_01: {
     nodeId: 'worry_01',
     questionText: '어떤 게 제일 신경 쓰여?',
@@ -393,143 +432,159 @@ const ENTRY_COUNSELING_NODES: Record<string, CounselingNode> = {
         text: '병원 일이 걱정돼요',
         nextNodeId: 'hospital_02',
         intensity: 2,
-        concernFlags: ['hospital_worry'],
-        protectiveFactors: ['worry_named'],
-        responseLines: ['병원 일이 신경 쓰일 수 있어.', '말하기 싫으면 괜찮다고 해도 돼.'],
+        concernFlags: ['hospital_worry', 'worry_present'],
+        protectiveFactors: ['emotion_named'],
+        responseKey: 'worry_hospital',
+        fallbackResponseLines: ['병원 일이 신경 쓰일 수 있어.', '말하기 싫으면 괜찮다고 해도 돼.'],
       },
       {
         choiceIntentId: 'worry_family',
         text: '가족이 걱정돼요',
         nextNodeId: 'family_worry_02',
         intensity: 3,
-        concernFlags: ['family_worry'],
-        protectiveFactors: ['relationship_named'],
-        responseLines: ['가족이 걱정될 때도 있지.', '혼자만 걱정하지 않아도 돼.'],
+        concernFlags: ['family_worry', 'parent_concern'],
+        protectiveFactors: ['relationship_named', 'empathy'],
+        responseKey: 'worry_family',
+        fallbackResponseLines: ['가족이 걱정될 때도 있지.', '혼자만 걱정하지 않아도 돼.'],
       },
       {
         choiceIntentId: 'worry_upset',
         text: '속상한 일이 있어요',
         nextNodeId: 'anger_02',
         intensity: 2,
-        concernFlags: ['anger_or_frustration'],
+        concernFlags: ['anger_or_frustration', 'distress_present'],
         protectiveFactors: ['emotion_named'],
-        responseLines: ['속상한 일이 있었구나.', '지금 바로 다 말하지 않아도 돼.'],
+        responseKey: 'worry_upset',
+        fallbackResponseLines: ['속상한 일이 있었구나.', '지금 바로 다 말하지 않아도 돼.'],
       },
     ],
   },
+
   hospital_02: {
     nodeId: 'hospital_02',
     questionText: '어떤 게 조금 걸려?',
     choices: [
       {
-        choiceIntentId: 'hospital_shot_worry',
+        choiceIntentId: 'hospital_injection',
         text: '주사가 걱정돼요',
         nextNodeId: 'hospital_support_03',
         intensity: 3,
         concernFlags: ['procedure_fear', 'pain_concern'],
         protectiveFactors: ['can_name_fear'],
-        responseLines: ['그럴 수 있어.', '주사 생각만 해도 걱정될 때가 있지.'],
+        responseKey: 'hospital_injection',
+        fallbackResponseLines: ['그럴 수 있어.', '주사 생각만 해도 걱정될 때가 있지.'],
       },
       {
-        choiceIntentId: 'hospital_unknown_worry',
+        choiceIntentId: 'hospital_unknown',
         text: '어떻게 하는지 모르겠어요',
         nextNodeId: 'hospital_question_03',
         intensity: 2,
         concernFlags: ['uncertainty', 'information_need'],
         protectiveFactors: ['uncertainty_named'],
-        responseLines: ['모르면 더 걱정될 수 있어.', '물어보는 건 괜찮은 일이야.'],
+        responseKey: 'hospital_unknown',
+        fallbackResponseLines: ['모르면 더 걱정될 수 있어.', '물어보는 건 괜찮은 일이야.'],
       },
       {
-        choiceIntentId: 'hospital_now_okay',
+        choiceIntentId: 'hospital_okay',
         text: '지금은 괜찮아요',
         nextNodeId: null,
         endAfterSelect: true,
         intensity: 0,
         concernFlags: [],
         protectiveFactors: ['positive_mood'],
-        responseLines: ['좋아. 지금은 괜찮구나.', '말하고 싶지 않으면 넘어가도 괜찮아.'],
-        endingLines: ['오늘은 네 속도대로 가도 괜찮아.'],
+        responseKey: 'hospital_okay',
+        fallbackResponseLines: ['좋아. 지금은 괜찮구나.', '필요하면 나중에 다시 말해도 돼.'],
+        endingType: 'GO_LIGHT_ACTIVITY',
       },
     ],
   },
+
   hospital_support_03: {
     nodeId: 'hospital_support_03',
     questionText: '그럴 땐 뭐가 조금 나을까?',
     choices: [
       {
-        choiceIntentId: 'procedure_family_near',
+        choiceIntentId: 'hospital_family_near',
         text: '가족이 옆에 있으면 좋아요',
         nextNodeId: null,
         endAfterSelect: true,
         intensity: 0,
         concernFlags: [],
         protectiveFactors: ['family_support_preference', 'support_need_named'],
-        responseLines: ['가족이 옆에 있으면 조금 든든할 수 있어.', '그렇게 부탁해도 괜찮아.'],
-        endingLines: ['걱정될 땐 곁에 있어달라고 해도 돼.', '오늘은 천천히 가자.'],
+        responseKey: 'hospital_family_near',
+        fallbackResponseLines: ['가족이 옆에 있으면 조금 든든할 수 있어.', '그렇게 말해도 괜찮아.'],
+        endingType: 'REST_ONLY',
       },
       {
-        choiceIntentId: 'procedure_teacher_near',
+        choiceIntentId: 'hospital_teacher_explain',
         text: '선생님이 설명해주면 좋아요',
         nextNodeId: null,
         endAfterSelect: true,
         intensity: 0,
         concernFlags: [],
-        protectiveFactors: ['medical_support_preference', 'information_seeking'],
-        responseLines: ['설명을 들으면 덜 낯설 수 있어.', '모르는 건 물어봐도 돼.'],
-        endingLines: ['궁금한 건 물어봐도 괜찮아.', '활동은 천천히 해도 돼.'],
+        protectiveFactors: ['information_seeking', 'medical_support_preference'],
+        responseKey: 'hospital_teacher_explain',
+        fallbackResponseLines: ['설명을 들으면 덜 낯설 수 있어.', '모르는 건 물어봐도 돼.'],
+        endingType: 'ASK_MEDICAL_FIRST',
       },
       {
-        choiceIntentId: 'procedure_hold_hand',
+        choiceIntentId: 'hospital_hold_hand',
         text: '손을 잡아줬으면 해요',
         nextNodeId: null,
         endAfterSelect: true,
         intensity: 1,
         concernFlags: ['needs_comfort'],
-        protectiveFactors: ['comfort_preference_named'],
-        responseLines: ['손을 잡아달라고 말해도 괜찮아.', '혼자 견디지 않아도 돼.'],
-        endingLines: ['도움을 부탁해도 괜찮아.', '지금은 천천히 쉬어가자.'],
+        protectiveFactors: ['comfort_preference_named', 'support_need_named'],
+        responseKey: 'hospital_hold_hand',
+        fallbackResponseLines: ['손을 잡아달라고 말해도 괜찮아.', '혼자 견디지 않아도 돼.'],
+        endingType: 'REST_ONLY',
       },
     ],
   },
+
   hospital_question_03: {
     nodeId: 'hospital_question_03',
     questionText: '누구에게 물어보면 좋을까?',
     choices: [
       {
-        choiceIntentId: 'procedure_ask_teacher',
+        choiceIntentId: 'hospital_ask_teacher',
         text: '선생님께 물어볼래요',
         nextNodeId: null,
         endAfterSelect: true,
         intensity: 0,
         concernFlags: [],
         protectiveFactors: ['information_seeking', 'medical_support_preference'],
-        responseLines: ['좋아. 선생님께 물어보면 차근차근 알려줄 수 있어.'],
-        endingLines: ['모르는 건 물어봐도 괜찮아.', '알고 나면 마음이 조금 편해질 수 있어.'],
+        responseKey: 'hospital_ask_teacher',
+        fallbackResponseLines: ['좋아. 선생님께 물어보면 차근차근 알려줄 수 있어.'],
+        endingType: 'ASK_MEDICAL_FIRST',
       },
       {
-        choiceIntentId: 'procedure_family_ask',
+        choiceIntentId: 'hospital_ask_family',
         text: '가족이랑 물어볼래요',
         nextNodeId: null,
         endAfterSelect: true,
         intensity: 0,
         concernFlags: [],
         protectiveFactors: ['family_support_preference', 'information_seeking'],
-        responseLines: ['가족이랑 같이 물어보면 더 든든할 수 있어.'],
-        endingLines: ['같이 물어보는 것도 좋은 방법이야.', '천천히 확인해도 돼.'],
+        responseKey: 'hospital_ask_family',
+        fallbackResponseLines: ['가족이랑 같이 물어보면 더 든든할 수 있어.'],
+        endingType: 'ASK_HELP_FIRST',
       },
       {
-        choiceIntentId: 'procedure_draw_question',
+        choiceIntentId: 'hospital_draw_question',
         text: '그림으로 물어볼래요',
         nextNodeId: null,
         endAfterSelect: true,
         intensity: 0,
         concernFlags: ['prefers_nonverbal_expression'],
         protectiveFactors: ['alternative_expression', 'creative_expression'],
-        responseLines: ['그림으로 물어봐도 괜찮아.', '말보다 쉬울 때가 있지.'],
-        endingLines: ['말이 어려우면 그림으로 해도 돼.', '오늘은 미술 활동으로 남겨봐도 좋아.'],
+        responseKey: 'hospital_draw_question',
+        fallbackResponseLines: ['그림으로 물어봐도 괜찮아.', '말보다 쉬울 때가 있지.'],
+        endingType: 'EXPRESS_WITH_DRAWING',
       },
     ],
   },
+
   family_worry_02: {
     nodeId: 'family_worry_02',
     questionText: '그럴 땐 누구에게 말하면 좋을까?',
@@ -542,8 +597,9 @@ const ENTRY_COUNSELING_NODES: Record<string, CounselingNode> = {
         intensity: 0,
         concernFlags: [],
         protectiveFactors: ['verbal_expression', 'family_support_preference'],
-        responseLines: ['좋아. 걱정된다고 말해도 괜찮아.', '말하면 조금 가벼워질 수 있어.'],
-        endingLines: ['혼자 걱정하지 않아도 돼.', '짧게 말해도 괜찮아.'],
+        responseKey: 'family_say_worry',
+        fallbackResponseLines: ['좋아. 걱정된다고 말해도 괜찮아.', '말하면 조금 가벼워질 수 있어.'],
+        endingType: 'ASK_HELP_FIRST',
       },
       {
         choiceIntentId: 'family_tell_teacher',
@@ -553,8 +609,12 @@ const ENTRY_COUNSELING_NODES: Record<string, CounselingNode> = {
         intensity: 0,
         concernFlags: [],
         protectiveFactors: ['medical_support_preference', 'support_seeking'],
-        responseLines: ['선생님께 말하면 같이 도와줄 수 있어.', '혼자만 들고 있지 않아도 돼.'],
-        endingLines: ['가까운 사람에게 말해보자.', '활동은 천천히 해도 괜찮아.'],
+        responseKey: 'family_tell_teacher',
+        fallbackResponseLines: [
+          '선생님께 말하면 같이 도와줄 수 있어.',
+          '혼자만 들고 있지 않아도 돼.',
+        ],
+        endingType: 'ASK_MEDICAL_FIRST',
       },
       {
         choiceIntentId: 'family_show_drawing',
@@ -564,11 +624,13 @@ const ENTRY_COUNSELING_NODES: Record<string, CounselingNode> = {
         intensity: 0,
         concernFlags: ['prefers_nonverbal_expression'],
         protectiveFactors: ['creative_expression', 'alternative_expression'],
-        responseLines: ['그림으로 보여줘도 괜찮아.', '네 방식대로 전해도 돼.'],
-        endingLines: ['말이 어려우면 그림으로 해도 돼.', '오늘은 미술 활동으로 남겨봐도 좋아.'],
+        responseKey: 'family_show_drawing',
+        fallbackResponseLines: ['그림으로 보여줘도 괜찮아.', '네 방식대로 전해도 돼.'],
+        endingType: 'EXPRESS_WITH_DRAWING',
       },
     ],
   },
+
   anger_02: {
     nodeId: 'anger_02',
     questionText: '그럴 땐 어떻게 하고 싶어?',
@@ -581,11 +643,9 @@ const ENTRY_COUNSELING_NODES: Record<string, CounselingNode> = {
         intensity: 1,
         concernFlags: ['anger_or_frustration'],
         protectiveFactors: ['pause_coping', 'self_regulation'],
-        responseLines: ['좋아. 잠깐 멈추는 것도 방법이야.', '천천히 다시 해도 돼.'],
-        activityEndingLines: {
-          pending: ['잠깐 쉬고 나서, 괜찮아지면 가벼운 활동 하나만 해보자.'],
-          completed: ['오늘은 천천히 쉬어가자.'],
-        },
+        responseKey: 'anger_pause',
+        fallbackResponseLines: ['좋아. 잠깐 멈추는 것도 방법이야.', '천천히 다시 해도 돼.'],
+        endingType: 'CALM_DOWN',
       },
       {
         choiceIntentId: 'anger_say_upset',
@@ -595,8 +655,9 @@ const ENTRY_COUNSELING_NODES: Record<string, CounselingNode> = {
         intensity: 1,
         concernFlags: ['anger_or_frustration'],
         protectiveFactors: ['emotion_named', 'verbal_expression'],
-        responseLines: ['속상하다고 말해도 괜찮아.', '말하면 조금 덜 답답할 수 있어.'],
-        endingLines: ['가까운 사람에게 말해도 괜찮아.', '혼자 들고 있지 않아도 돼.'],
+        responseKey: 'anger_say_upset',
+        fallbackResponseLines: ['속상하다고 말해도 괜찮아.', '말하면 조금 덜 답답할 수 있어.'],
+        endingType: 'ASK_HELP_FIRST',
       },
       {
         choiceIntentId: 'anger_call_help',
@@ -606,94 +667,32 @@ const ENTRY_COUNSELING_NODES: Record<string, CounselingNode> = {
         intensity: 1,
         concernFlags: ['anger_or_frustration'],
         protectiveFactors: ['support_seeking', 'self_regulation'],
-        responseLines: [
+        responseKey: 'anger_call_help',
+        fallbackResponseLines: [
           '혼자 하기 어려울 땐 도와달라고 말해도 괜찮아.',
           '도움을 받는 것도 좋은 방법이야.',
         ],
-        endingLines: ['먼저 도움을 받아도 괜찮아.', '그다음에 천천히 해도 돼.'],
+        endingType: 'ASK_HELP_FIRST',
       },
     ],
   },
 }
 
-const RAW_SHARED_COUNSELING_SCRIPTS: CounselingScript[] = [
-  {
-    scriptId: 'villager_entry_body',
-    title: '가벼운 입구 대화',
-    domain: 'body',
-    weight: 3,
-    startNodeId: 'entry_01',
-    nodes: ENTRY_COUNSELING_NODES,
-  },
-  {
-    scriptId: 'villager_entry_rest',
-    title: '가벼운 휴식 입구 대화',
-    domain: 'fatigue',
-    weight: 2,
-    startNodeId: 'entry_01',
-    nodes: ENTRY_COUNSELING_NODES,
-  },
-  {
-    scriptId: 'villager_entry_peer',
-    title: '가벼운 친구 입구 대화',
-    domain: 'peer',
-    weight: 2,
-    startNodeId: 'entry_01',
-    nodes: ENTRY_COUNSELING_NODES,
-  },
-  {
-    scriptId: 'villager_entry_family',
-    title: '가벼운 마음 입구 대화',
-    domain: 'family',
-    weight: 1,
-    startNodeId: 'entry_01',
-    nodes: ENTRY_COUNSELING_NODES,
-  },
-  {
-    scriptId: 'villager_entry_expression',
-    title: '가벼운 표현 입구 대화',
-    domain: 'expression',
-    weight: 1,
-    startNodeId: 'entry_01',
-    nodes: ENTRY_COUNSELING_NODES,
-  },
-  {
-    scriptId: 'villager_entry_worry',
-    title: '가벼운 걱정 입구 대화',
-    domain: 'anger',
-    weight: 1,
-    startNodeId: 'entry_01',
-    nodes: ENTRY_COUNSELING_NODES,
-  },
-]
+export const VILLAGER_COUNSELING_SCRIPT: CounselingScript = {
+  scriptId: 'villager_common_entry',
+  title: '마을 주민 공통 대화',
+  startNodeId: 'entry_01',
+  nodes,
+}
 
-export const SHARED_COUNSELING_SCRIPTS: CounselingScript[] = applyActivityAwareEndingTypes(
-  RAW_SHARED_COUNSELING_SCRIPTS,
-)
+export const SHARED_COUNSELING_SCRIPTS: CounselingScript[] = applyActivityAwareEndingTypes([
+  VILLAGER_COUNSELING_SCRIPT,
+])
 
 export function pickRandomCounselingScript(scripts: CounselingScript[]) {
   if (scripts.length === 0) {
     throw new Error('No counseling scripts available')
   }
 
-  const today = new Date().toISOString().slice(0, 10)
-  const key = `recent_shared_counseling_script_${today}`
-  const recentScriptId = localStorage.getItem(key)
-
-  const candidates =
-    scripts.length > 1 ? scripts.filter(script => script.scriptId !== recentScriptId) : scripts
-  const pool = candidates.length > 0 ? candidates : scripts
-  const totalWeight = pool.reduce((sum, script) => sum + (script.weight ?? 1), 0)
-  let random = Math.random() * totalWeight
-
-  for (const script of pool) {
-    random -= script.weight ?? 1
-    if (random <= 0) {
-      localStorage.setItem(key, script.scriptId)
-      return script
-    }
-  }
-
-  localStorage.setItem(key, pool[0].scriptId)
-  return pool[0]
+  return scripts[0]
 }

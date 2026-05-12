@@ -27,6 +27,12 @@ function finishResponseDelay() {
   })
 }
 
+function revealChoicesDelay() {
+  act(() => {
+    vi.advanceTimersByTime(700)
+  })
+}
+
 describe('VillagerDialogueController', () => {
   let originalFetch: typeof fetch
   let calls: FetchCall[]
@@ -78,8 +84,8 @@ describe('VillagerDialogueController', () => {
       />,
     )
 
-    expect(onTextChange).toHaveBeenCalledWith('안녕, 왔네.\n잠깐 쉬어가도 돼.')
-    expect(screen.queryByRole('button', { name: '쉬고 싶어요' })).toBeNull()
+    expect(onTextChange).toHaveBeenCalledWith('안녕, 오늘 하루 어땠어?\n편한 자리에 앉아봐.')
+    expect(screen.queryByRole('button', { name: '쉬면서 있고 싶어요' })).toBeNull()
 
     await flushPromises()
 
@@ -95,16 +101,21 @@ describe('VillagerDialogueController', () => {
       vi.advanceTimersByTime(3000)
     })
     expect(onTextChange).not.toHaveBeenCalledWith(
-      '안녕, 왔네.\n잠깐 쉬어가도 돼.\n오늘은 뭐가 좋을까?',
+      '안녕, 오늘 하루 어땠어?\n편한 자리에 앉아봐.\n오늘은 어떻게 지내고 싶어?',
     )
-    expect(screen.queryByRole('button', { name: '쉬고 싶어요' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '쉬면서 있고 싶어요' })).toBeNull()
 
     fireEvent.keyDown(window, { key: 'e' })
+    expect(screen.queryByRole('button', { name: '쉬면서 있고 싶어요' })).toBeNull()
 
-    expect(onTextChange).toHaveBeenCalledWith('오늘은 뭐가 좋을까?')
-    expect(screen.getByRole('button', { name: '쉬고 싶어요' })).toBeTruthy()
+    fireEvent.keyDown(window, { key: 'Enter' })
+
+    expect(onTextChange).toHaveBeenCalledWith('오늘은 어떻게 지내고 싶어?')
+    expect(screen.queryByRole('button', { name: '쉬면서 있고 싶어요' })).toBeNull()
+    revealChoicesDelay()
+    expect(screen.getByRole('button', { name: '쉬면서 있고 싶어요' })).toBeTruthy()
     expect(screen.getByRole('button', { name: '뭔가 해보고 싶어요' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: '얘기하고 싶어요' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '잠깐 얘기하고 싶어요' })).toBeTruthy()
 
     fireEvent.click(screen.getByRole('button', { name: '뭔가 해보고 싶어요' }))
 
@@ -116,10 +127,10 @@ describe('VillagerDialogueController', () => {
     expect(JSON.parse(turnCall!.init!.body as string)).toMatchObject({
       npcId: 'nurse_bunny',
       npcName: 'JOEUN',
-      topicId: 'villager_entry_body',
+      topicId: 'villager_common_entry',
       sceneId: 'entry_01',
       nodeId: 'entry_01',
-      questionText: '오늘은 뭐가 좋을까?',
+      questionText: '오늘은 어떻게 지내고 싶어?',
       selectedChoice: {
         choiceIntentId: 'entry_activity',
         text: '뭔가 해보고 싶어요',
@@ -161,8 +172,8 @@ describe('VillagerDialogueController', () => {
       />,
     )
 
-    fireEvent.keyDown(window, { key: 'e' })
-    expect(screen.queryByRole('button', { name: '쉬고 싶어요' })).toBeNull()
+    fireEvent.keyDown(window, { key: 'Enter' })
+    expect(screen.queryByRole('button', { name: '쉬면서 있고 싶어요' })).toBeNull()
 
     await act(async () => {
       resolveStart(
@@ -179,7 +190,12 @@ describe('VillagerDialogueController', () => {
     })
 
     fireEvent.keyDown(window, { key: 'e' })
-    expect(screen.getByRole('button', { name: '쉬고 싶어요' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: '쉬면서 있고 싶어요' })).toBeNull()
+
+    fireEvent.keyDown(window, { key: 'Enter' })
+    expect(screen.queryByRole('button', { name: '쉬면서 있고 싶어요' })).toBeNull()
+    revealChoicesDelay()
+    expect(screen.getByRole('button', { name: '쉬면서 있고 싶어요' })).toBeTruthy()
   })
 
   it('waits on ending lines and does not close with E', async () => {
@@ -198,17 +214,20 @@ describe('VillagerDialogueController', () => {
 
     await flushPromises()
     clickAdvanceHitarea()
+    revealChoicesDelay()
     fireEvent.click(screen.getByRole('button', { name: '뭔가 해보고 싶어요' }))
     await flushPromises()
     finishResponseDelay()
 
     expect(onTextChange).toHaveBeenCalledWith('가볍게 뭘 해볼까?')
+    expect(screen.queryByRole('button', { name: '음악을 들어볼래요' })).toBeNull()
+    revealChoicesDelay()
 
     fireEvent.click(screen.getByRole('button', { name: '음악을 들어볼래요' }))
     await flushPromises()
     finishResponseDelay()
 
-    expect(onTextChange).toHaveBeenCalledWith('그럼 음악 활동부터 가볍게 해보자.')
+    expect(onTextChange).toHaveBeenCalledWith('괜찮으면 가벼운 활동 하나 가볍게 해볼까?')
     expect(screen.queryByRole('button', { name: '마을로 돌아가기' })).toBeNull()
 
     act(() => {
@@ -244,18 +263,72 @@ describe('VillagerDialogueController', () => {
 
     await flushPromises()
     clickAdvanceHitarea()
-    fireEvent.click(screen.getByRole('button', { name: '얘기하고 싶어요' }))
+    revealChoicesDelay()
+    fireEvent.click(screen.getByRole('button', { name: '잠깐 얘기하고 싶어요' }))
     await flushPromises()
     finishResponseDelay()
+    revealChoicesDelay()
 
     fireEvent.click(screen.getByRole('button', { name: '몸 얘기' }))
     await flushPromises()
     finishResponseDelay()
+    revealChoicesDelay()
 
     fireEvent.click(screen.getByRole('button', { name: '괜찮아요' }))
     await flushPromises()
     finishResponseDelay()
 
-    expect(onTextChange).toHaveBeenCalledWith('오늘은 해본 게 있으니까, 잠깐 쉬어도 괜찮아.')
+    expect(onTextChange).toHaveBeenCalledWith('오늘은 이미 해본 게 있으니까, 잠깐 쉬어도 괜찮아.')
+  })
+
+  it('closes from the save error state so the input layer is not trapped', async () => {
+    const onClose = vi.fn()
+    const onTextChange = vi.fn()
+
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input.toString()
+      calls.push({ url, init })
+      if (url.endsWith('/dialogue/sessions')) {
+        return new Response(
+          JSON.stringify({
+            code: 'SUCCESS',
+            message: 'OK',
+            data: { sessionId: SESSION_ID, status: 'IN_PROGRESS' },
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        )
+      }
+      if (url.endsWith(`/dialogue/sessions/${SESSION_ID}/turns`)) {
+        return new Response(JSON.stringify({ code: 'ERROR', message: 'failed' }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      }
+      return new Response(JSON.stringify({ code: 'SUCCESS', message: 'OK', data: null }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }) as typeof fetch
+
+    render(
+      <VillagerDialogueController
+        npcId="sleepy_sheep"
+        patientProfileId={PATIENT_PROFILE_ID}
+        isOpen
+        onClose={onClose}
+        onTextChange={onTextChange}
+      />,
+    )
+
+    await flushPromises()
+    clickAdvanceHitarea()
+    revealChoicesDelay()
+    fireEvent.click(screen.getByRole('button', { name: '쉬면서 있고 싶어요' }))
+    await flushPromises()
+
+    expect(onTextChange).toHaveBeenCalledWith('대화를 저장하지 못했어. 잠시 후 다시 해보자.')
+
+    fireEvent.keyDown(window, { key: 'Enter' })
+    expect(onClose).toHaveBeenCalled()
   })
 })

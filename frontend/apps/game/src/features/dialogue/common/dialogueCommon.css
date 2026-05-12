@@ -101,7 +101,7 @@
   left: 50%;
   bottom: calc(var(--dialogue-frame-height) + 48px);
   transform: translateX(-50%);
-  width: min(900px, 68vw);
+  width: min(620px, 56vw);
   z-index: 40;
   pointer-events: none;
 }
@@ -136,17 +136,18 @@
 .dialogue-choice-button {
   width: 100%;
   min-height: 58px;
-  display: grid;
-  grid-template-columns: 46px minmax(0, 1fr);
+  position: relative;
+  display: flex;
   align-items: center;
-  gap: 12px;
+  justify-content: center;
   border: 4px solid #7a5630;
   border-radius: 8px;
+  padding: 0 58px;
   background: rgba(255, 243, 212, 0.96);
   color: #4b341f;
   font-size: 26px;
   font-weight: 900;
-  text-align: left;
+  text-align: center;
   cursor: pointer;
   box-shadow:
     0 5px 0 rgba(43, 27, 16, 0.26),
@@ -170,9 +171,10 @@
 }
 
 .dialogue-choice-marker {
+  position: absolute;
+  left: 16px;
   width: 30px;
   height: 30px;
-  margin-left: 10px;
   display: grid;
   place-items: center;
   border-radius: 50%;
@@ -184,6 +186,7 @@
 
 .dialogue-choice-label {
   min-width: 0;
+  width: 100%;
   overflow-wrap: anywhere;
   word-break: keep-all;
 }
@@ -278,10 +281,16 @@
   }
 
   .dialogue-choice-overlay {
-    width: min(560px, 88vw);
+    width: min(480px, 78vw);
   }
 
   .dialogue-choice-button {
+    min-height: 52px;
+    padding: 0 48px;
     font-size: 21px;
+  }
+
+  .dialogue-choice-marker {
+    left: 12px;
   }
 }
