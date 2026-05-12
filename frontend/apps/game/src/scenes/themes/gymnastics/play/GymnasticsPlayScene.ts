@@ -2254,7 +2254,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     if (motionSpec.type === 'daniel') return
 
     const previousStepCount = this.aiState.stepCount
-    const nextState = { ...this.aiState, tracking: 'tracked', feedback: '동작을 따라 해볼까요?' }
+    const nextState: GymnasticsAiState = { ...this.aiState, tracking: 'tracked', feedback: null }
 
     if (!this.hasCoreBodyLandmarks(landmarks)) {
       nextState.feedback = '뒤로 가볼까요'
@@ -2723,18 +2723,23 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
 
     const motionSpec = this.getCurrentAiMotionSpec()
     const shouldForceSuccessTitle = this.didTopCountIncrease || this.didDanielComplete
-    const title =
-      this.getFriendlyFeedbackText(
-        this.aiState.feedback ||
-          this.aiState.displayedFeedbackText ||
-          this.aiState.representativeFeedbackText,
-      ) ?? this.getDefaultFeedbackText()
+    const successTitle = shouldForceSuccessTitle ? '좋아요!' : null
+    const aiTitle = this.getFriendlyFeedbackText(
+      this.aiState.feedback ||
+        this.aiState.displayedFeedbackText ||
+        this.aiState.representativeFeedbackText,
+    )
+    const title = successTitle ?? aiTitle
     const detail =
       motionSpec.type === 'daniel'
         ? this.getDanielHoldDetail(motionSpec)
         : this.getProgressDetailText(motionSpec)
 
-    this.setFeedbackTitle(title, { force: shouldForceSuccessTitle })
+    if (title) {
+      this.setFeedbackTitle(title, { force: Boolean(successTitle) })
+    } else {
+      this.clearFeedbackTitle()
+    }
     this.setFeedbackDetail(detail, { isProgressDetail: motionSpec.type === 'daniel' })
     this.didTopCountIncrease = false
     this.didDanielComplete = false
@@ -2780,15 +2785,30 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     this.lastTtsPlayedAtMs = 0
   }
 
-  private getFriendlyFeedbackText(feedback: string | null | undefined) {
-    if (!feedback?.trim()) return null
+  private getAiFeedbackTitle(feedback: string | null | undefined) {
+    if (!feedback?.trim()) return this.getDefaultFeedbackText()
 
-    const normalized = feedback.toLowerCase()
-    if (/[ÃÂ�ëìïÑãŒ]/.test(feedback) || feedback.includes('?')) {
-      return this.getDefaultFeedbackText()
+    const normalized = feedback!.toLowerCase()
+    if (/[ÃƒÃ‚ï¿½Ã«Ã¬Ã¯Ã‘Ã£Å’]/.test(feedback!) || feedback!.includes('?')) {
+      return null
     }
+    if (
+      normalized.includes('good') ||
+      normalized.includes('complete') ||
+      normalized.includes('progress') ||
+      normalized.includes('hold')
+    ) {
+      return null
+    }
+    if (normalized.includes('camera') || normalized.includes('pose')) return '전신이 보이게 서요'
+
+    return feedback
+  }
+
+  private getFriendlyFeedbackText(feedback: string | null | undefined) {
+    return this.getAiFeedbackTitle(feedback)
+    const normalized = ''
     if (normalized.includes('good') || normalized.includes('complete')) return '좋아요!'
-    if (normalized.includes('progress')) return null
     if (normalized.includes('hold')) return '자세를 유지해볼까요?'
     if (normalized.includes('camera') || normalized.includes('pose')) return '전신이 보이게 서요'
 
@@ -2796,6 +2816,8 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
   }
 
   private getDefaultFeedbackText() {
+    if (this.isCameraRecognized) return null
+
     if (!this.isCameraRecognized) return '전신이 보이게 서요'
 
     const motionSpec = this.getCurrentAiMotionSpec()
@@ -2811,12 +2833,13 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     return this.aiState.stepCount > 0 ? '계속 이어가볼까요?' : '동작을 따라 해볼까요?'
   }
 
-  private setFeedbackTitle(title: string, options: { force?: boolean } = {}) {
+  private setFeedbackTitle(title: string | null | undefined, options: { force?: boolean } = {}) {
     if (this.saveState === 'idle') {
       this.showRealtimeFeedbackCard()
     }
 
-    const nextTitle = title.trim() || this.getDefaultFeedbackText()
+    const nextTitle = title?.trim()
+    if (!nextTitle) return
     const now = this.time.now
     const elapsedMs = now - this.feedbackTitleChangedAtMs
     const canChange =
@@ -2831,6 +2854,12 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     this.feedbackTitleChangedAtMs = now
     this.feedbackTitleText?.setText(this.getCompactFeedbackTitle(nextTitle))
     this.fitFeedbackTitleToOneLine()
+  }
+
+  private clearFeedbackTitle() {
+    this.displayedFeedbackTitle = ''
+    this.feedbackTitleChangedAtMs = this.time.now
+    this.feedbackTitleText?.setText('')
   }
 
   private getCompactFeedbackTitle(title: string) {
@@ -3276,9 +3305,12 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     this.isCameraRecognized = isRecognized
     this.statusDot.setFillStyle(isRecognized ? 0x1fbf5b : 0xd13b2f)
     this.statusText.setText(isRecognized ? '인식 중' : '인식 불가')
-    this.feedbackTitleText?.setText(isRecognized ? '좋아요!' : '기다릴게요')
     this.statusText.setText(isRecognized ? '인식 중' : '인식 대기')
-    this.setFeedbackTitle(isRecognized ? '좋아요!' : '전신이 보이게 서요', { force: true })
+    if (isRecognized) {
+      this.clearFeedbackTitle()
+    } else {
+      this.setFeedbackTitle('전신이 보이게 서요', { force: true })
+    }
     if (this.feedbackTitleText) {
       this.layoutStatusBadge()
       this.fitFeedbackTitleToOneLine()
@@ -3291,13 +3323,14 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     this.motionCounterText?.setText(`${this.motionIndex + 1}/${this.motions.length} ${motionTitle}`)
     this.motionTitleText?.setText(motionTitle)
     this.timerText?.setText(this.formatTime(this.remainingSeconds))
-    this.feedbackTitleText?.setText(this.isCameraRecognized ? '좋아요!' : '기다릴게요')
     this.fitTextToWidth(this.motionCounterText, this.motionCounterMaxWidth, this.headerFontSize, 14)
     this.fitTextToWidth(this.motionTitleText, this.motionTitleMaxWidth, 44, 28)
     this.centerMotionTitleText()
-    this.setFeedbackTitle(this.isCameraRecognized ? '좋아요!' : '전신이 보이게 서요', {
-      force: true,
-    })
+    if (this.isCameraRecognized) {
+      this.clearFeedbackTitle()
+    } else {
+      this.setFeedbackTitle('전신이 보이게 서요', { force: true })
+    }
     this.updateHoldProgressUi(this.getCurrentAiMotionSpec())
     this.fitTextToWidth(this.timerText, this.timerMaxWidth, this.headerFontSize, 14)
     this.fitFeedbackTitleToOneLine()
