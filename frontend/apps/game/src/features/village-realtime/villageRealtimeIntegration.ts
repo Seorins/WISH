@@ -1,0 +1,94 @@
+import Phaser from 'phaser'
+
+import { useAuthStore } from '@/features/auth/store'
+import type { PlayerDirection, PlayerSprite } from '@/game/entities/player'
+
+import { extractUserIdFromToken } from './jwtUserId'
+import { RemotePlayersGroup } from './RemotePlayersGroup'
+import { VillageRealtimeClient } from './villageRealtimeClient'
+
+/** publishPosition 최대 빈도. 200ms = 5Hz (계획서 4.3). */
+const PUBLISH_INTERVAL_MS = 200
+/** ratio 좌표 변화 임계값. 이 이하의 변화는 publish 스킵 (유휴 트래픽 절감). */
+const POSITION_CHANGE_THRESHOLD = 0.001
+
+export interface VillageRealtimeIntegration {
+  /** local player 의 현재 상태를 5Hz 로 throttling 해 BE 에 보낸다. update() 매 tick 에 안전하게 호출 가능. */
+  publishLocal(player: PlayerSprite, dir: PlayerDirection, moving: boolean): void
+  /** Phaser 씬 SHUTDOWN 시 호출. WS deactivate + 원격 sprite 정리. 멱등. */
+  destroy(): void
+}
+
+interface AttachOptions {
+  scene: Phaser.Scene
+  worldWidth: number
+  worldHeight: number
+  /** WS broker URL — 미지정 시 same-origin {@code /api/v1/ws/village}. */
+  brokerUrl?: string
+}
+
+/**
+ * VillageScene 에서 호출하는 통합 진입점. 토큰/userId 가 없으면 null 을 돌려준다 (멀티플레이 비활성). 반환된 통합은
+ * 시작 시점에 이미 WS connect 가 호출된 상태.
+ */
+export function attachVillageRealtime(opts: AttachOptions): VillageRealtimeIntegration | null {
+  const token = useAuthStore.getState().token
+  if (!token) return null
+  const localUserId = extractUserIdFromToken(token)
+  if (localUserId === null) return null
+
+  const remotePlayers = new RemotePlayersGroup({
+    scene: opts.scene,
+    localUserId,
+    worldWidth: opts.worldWidth,
+    worldHeight: opts.worldHeight,
+  })
+
+  const client = new VillageRealtimeClient({
+    url: opts.brokerUrl,
+    token,
+    onEvent: event => remotePlayers.applyEvent(event),
+    onSnapshot: snapshot => remotePlayers.applySnapshot(snapshot),
+    onError: error => {
+      // WS / STOMP 에러는 콘솔에 기록만 — Phaser 씬 흐름은 막지 않는다. enabled=false 시연 폴백,
+      // 룸 정원 초과 등 사용자 가시화 가치가 낮은 케이스가 대부분.
+      console.warn('Village realtime error', error.message)
+    },
+  })
+  client.connect()
+
+  // publishLocal throttling 상태
+  let lastPublishMs = 0
+  let lastX = Number.NaN
+  let lastY = Number.NaN
+  let lastDir: PlayerDirection | null = null
+  let lastMoving = false
+
+  return {
+    publishLocal(player, dir, moving) {
+      const now = opts.scene.time.now
+      if (now - lastPublishMs < PUBLISH_INTERVAL_MS) return
+
+      const xRatio = player.x / opts.worldWidth
+      const yRatio = player.y / opts.worldHeight
+      const positionChanged =
+        Math.abs(xRatio - lastX) > POSITION_CHANGE_THRESHOLD ||
+        Math.abs(yRatio - lastY) > POSITION_CHANGE_THRESHOLD
+      const stateChanged = moving !== lastMoving || dir !== lastDir
+
+      if (!positionChanged && !stateChanged) return
+
+      client.publishPosition({ x: xRatio, y: yRatio, dir, moving })
+      lastPublishMs = now
+      lastX = xRatio
+      lastY = yRatio
+      lastDir = dir
+      lastMoving = moving
+    },
+
+    destroy() {
+      void client.disconnect()
+      remotePlayers.destroy()
+    },
+  }
+}
