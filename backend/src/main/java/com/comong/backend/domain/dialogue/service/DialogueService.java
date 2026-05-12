@@ -182,6 +182,13 @@ public class DialogueService {
         return FinishSessionResponse.of(session, closingLines);
     }
 
+    public SessionDetailResponse getSession(Long currentUserId, Long sessionId) {
+        DialogueSession session = findOwnedSessionOrThrow(currentUserId, sessionId);
+        List<DialogueTurn> turns =
+                turnRepository.findAllBySessionIdOrderByStepIndexAsc(session.getId());
+        return SessionDetailResponse.from(session, turns);
+    }
+
     /**
      * 보호자 페이지 대화 이력 목록 — 환자 owner 검증 후 NPC/기간 필터로 페이지 조회.
      *
