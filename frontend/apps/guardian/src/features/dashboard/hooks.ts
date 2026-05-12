@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import {
+  getExerciseMotionReplay,
   getExerciseSessionDetail,
   getExerciseSessions,
   type ExerciseSessionSummary,
@@ -7,6 +8,7 @@ import {
 import { buildGymnasticsRangeSummary, isGymnasticsSession } from './gymnasticsRangeSummary'
 
 export const GYMNASTICS_RANGE_SUMMARY_QUERY_KEY = 'dashboard-gymnastics-range-summary'
+export const GYMNASTICS_MOTION_REPLAY_QUERY_KEY = 'dashboard-gymnastics-motion-replay'
 
 function createdAtDesc(a: ExerciseSessionSummary, b: ExerciseSessionSummary): number {
   return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
@@ -49,5 +51,16 @@ export function useGymnasticsRangeSummary(patientId: number | undefined | null) 
       return buildGymnasticsRangeSummary(currentResult.value, previousDetail)
     },
     enabled: typeof patientId === 'number' && patientId > 0,
+  })
+}
+
+export function useGymnasticsMotionReplay(
+  motionResultId: number | undefined | null,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: [GYMNASTICS_MOTION_REPLAY_QUERY_KEY, motionResultId],
+    queryFn: () => getExerciseMotionReplay(motionResultId!),
+    enabled: enabled && typeof motionResultId === 'number' && motionResultId > 0,
   })
 }

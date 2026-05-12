@@ -126,6 +126,9 @@ const FALLBACK_JOINTS: Joint[] = [
   { id: 'ankle-r', position: [0.1, 0.05, 0.06] },
 ]
 
+const FALLBACK_JOINT_BY_ID = new Map(FALLBACK_JOINTS.map(joint => [joint.id, joint]))
+const DEFAULT_JOINT_POSITION: [number, number, number] = [0, 0, 0]
+
 function classifyBone(rawName: string): string | null {
   const n = rawName.toLowerCase()
   const isLeft = /^left|(^|[._\-:])l(?=$|[._\-:])|\.l\b|_l\b/.test(n)
@@ -150,9 +153,15 @@ function classifyBone(rawName: string): string | null {
 function frameToJoints(clip: MotionClip, frameIdx: number): Joint[] {
   const frame = clip.frames[frameIdx]
   return clip.landmarks.map((name, i) => {
+    const id = KP_TO_JOINT_ID[name]
     const lm = frame.lm[i]
+    const fallback = FALLBACK_JOINT_BY_ID.get(id)?.position ?? DEFAULT_JOINT_POSITION
+    if (!lm || lm[0] == null || lm[1] == null || lm[2] == null || lm[3] <= 0.05) {
+      return { id, position: fallback }
+    }
+
     return {
-      id: KP_TO_JOINT_ID[name],
+      id,
       position: [lm[0] * KP_SCALE, HIP_LOCAL_Y - lm[1] * KP_SCALE, -lm[2] * KP_SCALE],
     }
   })
@@ -166,6 +175,12 @@ function readLocalKp(
 ): Vector3 {
   const idx = clip.landmarks.indexOf(name)
   const lm = frame.lm[idx]
+  const fallback =
+    FALLBACK_JOINT_BY_ID.get(KP_TO_JOINT_ID[name])?.position ?? DEFAULT_JOINT_POSITION
+  if (!lm || lm[0] == null || lm[1] == null || lm[2] == null || lm[3] <= 0.05) {
+    out.set(fallback[0], fallback[1], fallback[2])
+    return out
+  }
   out.set(lm[0] * KP_SCALE, HIP_LOCAL_Y - lm[1] * KP_SCALE, -lm[2] * KP_SCALE)
   return out
 }
@@ -176,6 +191,7 @@ function CharacterModel({
   onStaticJoints,
   activeMotion,
   activeClipName,
+  playbackTimeMs,
   onMotionFrame,
 }: {
   targetScale: number
@@ -183,6 +199,7 @@ function CharacterModel({
   onStaticJoints: (joints: Joint[]) => void
   activeMotion: MotionClip | null
   activeClipName: string | null
+  playbackTimeMs?: number | null
   onMotionFrame: (joints: Joint[]) => void
 }) {
   const { scene } = useGLTF(wishGlbUrl)
@@ -302,10 +319,18 @@ function CharacterModel({
     }
 
     if (!activeMotion) return
-    if (!ENABLE_SIN_MARKER_MOTION) return
+    const shouldPlayKeypointMotion = activeMotion.source === 'recorded' || ENABLE_SIN_MARKER_MOTION
+    if (!shouldPlayKeypointMotion) return
 
-    const elapsed = (performance.now() - playStartMs.current) % activeMotion.durationMs
-    const idx = Math.floor((elapsed / 1000) * activeMotion.fps) % activeMotion.frames.length
+    const durationMs = Math.max(1, activeMotion.durationMs)
+    const elapsed =
+      playbackTimeMs == null
+        ? (performance.now() - playStartMs.current) % durationMs
+        : Math.min(durationMs, Math.max(0, playbackTimeMs))
+    const idx = Math.min(
+      activeMotion.frames.length - 1,
+      Math.floor((elapsed / 1000) * activeMotion.fps),
+    )
     if (idx === lastFrameIdx.current) return
     lastFrameIdx.current = idx
 
@@ -380,9 +405,10 @@ function CharacterModel({
 
 type Character3DProps = {
   activeMotion?: MotionClip | null
+  playbackTimeMs?: number | null
 }
 
-export function Character3D({ activeMotion = null }: Character3DProps) {
+export function Character3D({ activeMotion = null, playbackTimeMs = null }: Character3DProps) {
   const controlsRef = useRef<ComponentRef<typeof OrbitControls>>(null)
   const [zoom, setZoom] = useState(0)
   const [joints, setJoints] = useState<Joint[]>(FALLBACK_JOINTS)
@@ -434,6 +460,7 @@ export function Character3D({ activeMotion = null }: Character3DProps) {
               onStaticJoints={handleStaticJoints}
               activeMotion={activeMotion}
               activeClipName={activeClipName}
+              playbackTimeMs={playbackTimeMs}
               onMotionFrame={handleMotionFrame}
             />
           </Suspense>

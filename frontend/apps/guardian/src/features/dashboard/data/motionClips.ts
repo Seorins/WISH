@@ -27,7 +27,7 @@ export const LANDMARK_NAMES = [
 
 export type LandmarkName = (typeof LANDMARK_NAMES)[number]
 
-export type Landmark = readonly [number, number, number, number]
+export type Landmark = readonly [number | null, number | null, number | null, number]
 
 export type MotionFrame = {
   /** 프레임 시각 (ms, 시작점 0) */
@@ -43,6 +43,12 @@ export type MotionClip = {
   durationMs: number
   landmarks: readonly LandmarkName[]
   frames: readonly MotionFrame[]
+  source?: 'dummy' | 'recorded'
+  representativeSegment?: {
+    startMs: number
+    endMs: number
+    reason?: string | null
+  } | null
 }
 
 const FPS = 30
@@ -93,6 +99,7 @@ function buildClip(id: string, name: string, modify: Modifier): MotionClip {
     durationMs: Math.round((FRAME_COUNT - 1) * FRAME_DT),
     landmarks: LANDMARK_NAMES,
     frames,
+    source: 'dummy',
   }
 }
 
