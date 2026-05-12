@@ -52,6 +52,7 @@ public class DialogueService {
     private final PatientProfileService patientProfileService;
     private final FallbackSceneProvider fallbackSceneProvider;
     private final ClaudeSceneProvider claudeSceneProvider;
+    private final LighthouseIntentCatalog lighthouseIntentCatalog;
 
     @Transactional
     public StartSessionResponse createSession(Long currentUserId, StartSessionRequest request) {
@@ -83,6 +84,28 @@ public class DialogueService {
                         ? DialogueTurnGeneratedBy.FALLBACK
                         : DialogueTurnGeneratedBy.NPC_SCRIPT;
 
+        // 등대지기는 BE catalog 의 metadata 가 진실 (FE 값 override).
+        // 마을 주민은 FE 자체 스크립트의 값 그대로 적재.
+        short intensity;
+        List<String> concernFlags;
+        List<String> protectiveFactors;
+        if (session.getNpcName().isBackendDriven()) {
+            LighthouseIntentCatalog.ChoiceIntentMetadata meta =
+                    lighthouseIntentCatalog
+                            .lookup(choice.choiceIntentId())
+                            .orElseThrow(
+                                    () ->
+                                            new BusinessException(
+                                                    DialogueErrorCode.INVALID_CHOICE_FOR_STEP));
+            intensity = meta.intensity();
+            concernFlags = meta.concernFlags();
+            protectiveFactors = meta.protectiveFactors();
+        } else {
+            intensity = choice.intensity();
+            concernFlags = choice.concernFlags();
+            protectiveFactors = choice.protectiveFactors();
+        }
+
         try {
             turnRepository.saveAndFlush(
                     DialogueTurn.builder()
@@ -91,9 +114,9 @@ public class DialogueService {
                             .questionText(request.questionText())
                             .choiceIntentId(choice.choiceIntentId())
                             .choiceText(choice.text())
-                            .intensity(choice.intensity())
-                            .concernFlags(choice.concernFlags())
-                            .protectiveFactors(choice.protectiveFactors())
+                            .intensity(intensity)
+                            .concernFlags(concernFlags)
+                            .protectiveFactors(protectiveFactors)
                             .generatedBy(generatedBy)
                             .build());
         } catch (DataIntegrityViolationException e) {
