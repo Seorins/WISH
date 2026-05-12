@@ -26,28 +26,22 @@ export function ReportPage() {
       onNext={goNext}
       onCurrent={goCurrent}
       onModeChange={setMode}
-      leftColumn={
+      content={
         <>
           <ReportHero data={data} />
           {hasData ? (
             <>
               <MetricCards summary={data.summary} />
               <ParticipationCalendar days={data.participation} />
+              <RomTrend trends={data.romTrends} />
+              <UsageCompare usage={data.usage} daysElapsed={week.daysElapsed} />
+              <TimeOfDay buckets={data.timeBuckets} topBucketId={data.topBucketId} />
               <Achievements achievements={data.achievements} />
             </>
           ) : (
             <EmptyState />
           )}
         </>
-      }
-      rightColumn={
-        hasData ? (
-          <>
-            <RomTrend trends={data.romTrends} />
-            <UsageCompare usage={data.usage} daysElapsed={week.daysElapsed} />
-            <TimeOfDay buckets={data.timeBuckets} topBucketId={data.topBucketId} />
-          </>
-        ) : null
       }
     />
   )

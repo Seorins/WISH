@@ -14,8 +14,7 @@ type Props = {
   onNext: () => void
   onCurrent: () => void
   onModeChange: (mode: ReportRangeMode) => void
-  leftColumn: ReactNode
-  rightColumn: ReactNode
+  content: ReactNode
 }
 
 export function ReportLayout({
@@ -27,8 +26,7 @@ export function ReportLayout({
   onNext,
   onCurrent,
   onModeChange,
-  leftColumn,
-  rightColumn,
+  content,
 }: Props) {
   return (
     <div className={styles.shell}>
@@ -84,10 +82,7 @@ export function ReportLayout({
           </div>
         </div>
 
-        <section className={styles.grid}>
-          <div className={styles.column}>{leftColumn}</div>
-          <div className={styles.column}>{rightColumn}</div>
-        </section>
+        <section className={styles.stack}>{content}</section>
       </main>
     </div>
   )
