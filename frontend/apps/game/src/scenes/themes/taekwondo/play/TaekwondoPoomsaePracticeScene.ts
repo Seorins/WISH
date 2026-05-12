@@ -92,6 +92,8 @@ const AI_ADVANCE_THRESHOLD = 60
 const MOTION_COUNTDOWN_FROM = 3
 const MOTION_COUNTDOWN_TICK_MS = 1000
 const MOTION_COUNTDOWN_READY_FEEDBACK = '곧 시작해요!'
+const GUIDE_INTRO_PLAY_COUNT = 2
+const GUIDE_INTRO_FALLBACK_MS = 5000
 const MOTION_CAPTURING_FEEDBACK = '동작 확인 중...'
 const ENCOURAGEMENT_SUCCESS_MESSAGES = [
   '정확해요!',
@@ -610,6 +612,21 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     this.motionIntroOverlay = overlay
 
     if (guideVideoUrl) {
+      let playedCount = 0
+      const handleEnded = () => {
+        playedCount += 1
+        if (playedCount >= GUIDE_INTRO_PLAY_COUNT) {
+          this.startCurrentMotion()
+          return
+        }
+        const video = this.guideVideoElement
+        if (video) {
+          video.currentTime = 0
+          void video.play().catch(() => {
+            /* 자동재생 차단 등은 무시 */
+          })
+        }
+      }
       this.createGuideVideoElement(
         {
           x: vw / 2 + videoBoxX - boxWidth / 2,
@@ -621,7 +638,12 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
         guideVideoUrl,
         pendingText,
         25,
+        { loop: false, onEnded: handleEnded },
       )
+    } else {
+      this.time.delayedCall(GUIDE_INTRO_FALLBACK_MS, () => {
+        this.startCurrentMotion()
+      })
     }
   }
 
@@ -1509,16 +1531,20 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     videoUrl: string,
     loadingText?: Phaser.GameObjects.Text,
     zIndex = 15,
+    options?: { loop?: boolean; onEnded?: () => void },
   ) {
     this.destroyGuideVideoElement()
 
     const video = document.createElement('video')
     video.src = videoUrl
     video.muted = true
-    video.loop = true
+    video.loop = options?.loop ?? true
     video.autoplay = true
     video.playsInline = true
     video.preload = 'auto'
+    if (options?.onEnded) {
+      video.addEventListener('ended', options.onEnded)
+    }
     video.style.position = 'fixed'
     video.style.objectFit = 'cover'
     video.style.pointerEvents = 'none'
