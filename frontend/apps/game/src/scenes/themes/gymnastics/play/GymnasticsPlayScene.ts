@@ -467,6 +467,8 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
   private lastPoseDiagnosticAtMs = 0
   private isMotionAdvancing = false
   private aiState = createInitialAiState()
+  private didTopCountIncrease = false
+  private didDanielComplete = false
   private aiError: string | null = null
   private sessionStartedAtMs = 0
   private motionStartedAtMs = 0
@@ -2604,6 +2606,8 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
 
   private updateAiState(payload: GymnasticsAiResponse) {
     const motionSpec = this.getCurrentAiMotionSpec()
+    const previousStepCount = this.aiState.stepCount
+    const previousHoldCompleted = this.aiState.holdCompleted
     const nextStepCount =
       motionSpec.type === 'top'
         ? (payload.step_count ?? this.aiState.stepCount)
@@ -2622,6 +2626,9 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
       holdDurationMs: nextHoldDurationMs,
       holdCompleted: nextHoldCompleted,
     }
+    this.didTopCountIncrease = motionSpec.type === 'top' && nextStepCount > previousStepCount
+    this.didDanielComplete =
+      motionSpec.type === 'daniel' && !previousHoldCompleted && nextHoldCompleted
 
     this.aiState = {
       ...this.aiState,
@@ -2707,19 +2714,22 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     if (this.saveState !== 'idle') return
 
     const motionSpec = this.getCurrentAiMotionSpec()
+    const shouldForceSuccessTitle = this.didTopCountIncrease || this.didDanielComplete
     const title =
       this.getFriendlyFeedbackText(
         this.aiState.feedback ||
           this.aiState.displayedFeedbackText ||
           this.aiState.representativeFeedbackText,
-      ) ?? (this.isCameraRecognized ? '좋아요!' : '전신이 보이게 서요')
+      ) ?? this.getDefaultFeedbackText()
     const detail =
       motionSpec.type === 'daniel'
         ? this.getDanielHoldDetail(motionSpec)
         : this.getProgressDetailText(motionSpec)
 
-    this.setFeedbackTitle(title)
+    this.setFeedbackTitle(title, { force: shouldForceSuccessTitle })
     this.setFeedbackDetail(detail, { isProgressDetail: motionSpec.type === 'daniel' })
+    this.didTopCountIncrease = false
+    this.didDanielComplete = false
     this.updateHoldProgressUi(motionSpec)
     this.motionCounterText?.setText(
       `${this.motionIndex + 1}/${this.motions.length} ${this.motions[this.motionIndex].title}`,
@@ -2778,9 +2788,19 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
   }
 
   private getDefaultFeedbackText() {
+    if (!this.isCameraRecognized) return '전신이 보이게 서요'
+
     const motionSpec = this.getCurrentAiMotionSpec()
-    if (motionSpec.type === 'daniel') return '자세를 유지해볼까요?'
-    return this.aiState.stepCount > 0 ? '좋아요! 계속 해볼까요?' : '동작을 따라 해볼까요?'
+    if (motionSpec.type === 'daniel') {
+      if (this.aiState.holdCompleted) return '좋아요!'
+      if (this.aiState.previousState === 'holding' || this.aiState.holdDurationMs > 0) {
+        return '자세 유지 중이에요'
+      }
+      return '자세를 따라 해볼까요?'
+    }
+
+    if (this.didTopCountIncrease) return '좋아요!'
+    return this.aiState.stepCount > 0 ? '계속 이어가볼까요?' : '동작을 따라 해볼까요?'
   }
 
   private setFeedbackTitle(title: string, options: { force?: boolean } = {}) {
