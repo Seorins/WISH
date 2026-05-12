@@ -8,7 +8,11 @@ import {
   uploadToPresignedUrl,
   type CreateExerciseSessionRecord,
   type ExerciseMotion,
+  type ExerciseMotionReplayClip,
   type ExerciseType,
+  type MotionReplayFrame,
+  type MotionReplayLandmarkTuple,
+  type MotionReplaySegment,
 } from '@wish/api-client'
 import { assetPath } from '@/game/assets/assetPath'
 import { POSE_LANDMARK_NAMES, PoseTracker } from '@/game/motion/poseTracker'
@@ -87,6 +91,35 @@ type LocalExerciseMotionRecord = {
   feedback: string
   videoKey?: string
   thumbKey?: string
+  poseReplay?: ExerciseMotionReplayClip
+}
+
+type ReplayLandmarkName =
+  | 'LEFT_SHOULDER'
+  | 'RIGHT_SHOULDER'
+  | 'LEFT_ELBOW'
+  | 'RIGHT_ELBOW'
+  | 'LEFT_WRIST'
+  | 'RIGHT_WRIST'
+  | 'LEFT_HIP'
+  | 'RIGHT_HIP'
+  | 'LEFT_KNEE'
+  | 'RIGHT_KNEE'
+  | 'LEFT_ANKLE'
+  | 'RIGHT_ANKLE'
+
+type LocalMotionReplaySample = {
+  frame: MotionReplayFrame
+  meanConfidence: number
+  trackingOk: boolean
+  progress: number
+}
+
+type RawReplayLandmark = {
+  x: number
+  y: number
+  z: number | null
+  confidence: number
 }
 
 type LandmarkPayload = {
@@ -361,6 +394,34 @@ const FEEDBACK_MAIN_MIN_FONT_SIZE = 32
 const FEEDBACK_TIMER_MAX_FONT_SIZE = 44
 const FEEDBACK_TIMER_MIN_FONT_SIZE = 26
 const AI_EVALUATION_INTERVAL_MS = 550
+const REPLAY_FPS = 30
+const REPLAY_SAMPLE_INTERVAL_MS = 1000 / REPLAY_FPS
+const REPLAY_MAX_FRAMES = REPLAY_FPS * 180
+const REPLAY_MIN_CONFIDENCE = 0.5
+const REPLAY_LANDMARK_NAMES: readonly ReplayLandmarkName[] = [
+  'LEFT_SHOULDER',
+  'RIGHT_SHOULDER',
+  'LEFT_ELBOW',
+  'RIGHT_ELBOW',
+  'LEFT_WRIST',
+  'RIGHT_WRIST',
+  'LEFT_HIP',
+  'RIGHT_HIP',
+  'LEFT_KNEE',
+  'RIGHT_KNEE',
+  'LEFT_ANKLE',
+  'RIGHT_ANKLE',
+]
+const REPLAY_REQUIRED_TRACKING_NAMES: readonly ReplayLandmarkName[] = [
+  'LEFT_SHOULDER',
+  'RIGHT_SHOULDER',
+  'LEFT_HIP',
+  'RIGHT_HIP',
+  'LEFT_KNEE',
+  'RIGHT_KNEE',
+  'LEFT_ANKLE',
+  'RIGHT_ANKLE',
+]
 const AI_REQUEST_RETRY_DELAY_MS = 2000
 const GYMNASTICS_COUNTDOWN_SECONDS = 3
 const FRAME_TEXT_COLOR = '#5a2f12'
@@ -473,6 +534,8 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
   private sessionStartedAtMs = 0
   private motionStartedAtMs = 0
   private motionAccumulatedDurationMs = 0
+  private motionReplaySamples: LocalMotionReplaySample[] = []
+  private lastReplaySampleAtMs = Number.NEGATIVE_INFINITY
   private motionRecords: LocalExerciseMotionRecord[] = []
   private motionRecorderHandle: ScreenRecorderHandle | null = null
   private pendingMotionUploads: Promise<void>[] = []
@@ -548,6 +611,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     this.sessionStartedAtMs = 0
     this.motionStartedAtMs = 0
     this.motionAccumulatedDurationMs = 0
+    this.resetCurrentMotionReplay()
     this.motionRecords = []
     this.motionRecorderHandle = null
     this.pendingMotionUploads = []
@@ -1872,6 +1936,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     this.isMotionAdvancing = false
     this.motionStartedAtMs = 0
     this.motionAccumulatedDurationMs = 0
+    this.resetCurrentMotionReplay()
     this.cancelCurrentMotionRecording()
     this.aiState = createInitialAiState()
     this.aiError = null
@@ -2130,6 +2195,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     this.poseMissCount = 0
     this.updateRecognitionStatus(true)
     this.drawPoseLandmarks(pose.landmarks)
+    this.sampleCurrentMotionReplay(pose.landmarks)
 
     const motionSpec = this.getCurrentAiMotionSpec()
     if (this.aiConnectionIssue && this.time.now < this.aiRetryAvailableAtMs) {
@@ -3106,6 +3172,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
         this.aiState.displayedFeedbackText ??
         this.aiState.feedback,
     )
+    const poseReplay = this.buildCurrentMotionReplayClip(durationSec * 1000)
 
     const motionRecord: LocalExerciseMotionRecord = {
       exerciseMotionId: motionSpec.exerciseMotionId,
@@ -3113,6 +3180,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
       completionRate,
       completedCount,
       feedback,
+      ...(poseReplay ? { poseReplay } : {}),
     }
     this.motionRecords.push(motionRecord)
 
@@ -3258,6 +3326,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
       this.feedbackDetailChangedAtMs = 0
       this.motionStartedAtMs = 0
       this.motionAccumulatedDurationMs = 0
+      this.resetCurrentMotionReplay()
       this.cancelCurrentMotionRecording()
       this.renderMotion()
       this.showGuidePreview()
@@ -3280,6 +3349,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     this.feedbackDetailChangedAtMs = 0
     this.motionStartedAtMs = 0
     this.motionAccumulatedDurationMs = 0
+    this.resetCurrentMotionReplay()
     this.cancelCurrentMotionRecording()
     this.renderMotion()
   }
@@ -3298,6 +3368,175 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
       z: landmark.z,
       visibility: landmark.visibility,
     }))
+  }
+
+  private resetCurrentMotionReplay() {
+    this.motionReplaySamples = []
+    this.lastReplaySampleAtMs = Number.NEGATIVE_INFINITY
+  }
+
+  private sampleCurrentMotionReplay(
+    landmarks: readonly { x: number; y: number; z?: number; visibility?: number }[],
+  ) {
+    if (this.motionReplaySamples.length >= REPLAY_MAX_FRAMES) return
+
+    const elapsedMs = this.getCurrentMotionElapsedMs()
+    if (elapsedMs - this.lastReplaySampleAtMs < REPLAY_SAMPLE_INTERVAL_MS) return
+
+    const normalized = this.toReplayLandmarkTuples(landmarks)
+    if (!normalized) return
+
+    const frame: MotionReplayFrame = {
+      t: Math.max(0, Math.round(elapsedMs)),
+      lm: normalized.tuples,
+    }
+
+    this.motionReplaySamples.push({
+      frame,
+      meanConfidence: normalized.meanConfidence,
+      trackingOk: normalized.trackingOk,
+      progress: this.getMotionProgressRatio(this.getCurrentAiMotionSpec()),
+    })
+    this.lastReplaySampleAtMs = elapsedMs
+  }
+
+  private getCurrentMotionElapsedMs() {
+    const activeDurationMs =
+      this.motionStartedAtMs > 0 ? Math.max(0, Date.now() - this.motionStartedAtMs) : 0
+    return this.motionAccumulatedDurationMs + activeDurationMs
+  }
+
+  private toReplayLandmarkTuples(
+    landmarks: readonly { x: number; y: number; z?: number; visibility?: number }[],
+  ): {
+    tuples: readonly MotionReplayLandmarkTuple[]
+    meanConfidence: number
+    trackingOk: boolean
+  } | null {
+    const raw = new Map<ReplayLandmarkName, RawReplayLandmark>()
+
+    for (const name of REPLAY_LANDMARK_NAMES) {
+      const landmark = this.getLandmark(landmarks, name)
+      if (!landmark) continue
+
+      const confidence = landmark.visibility ?? 1
+      if (confidence < REPLAY_MIN_CONFIDENCE) continue
+
+      const mirroredName = this.mirrorReplayLandmarkName(name)
+      raw.set(mirroredName, {
+        x: 1 - landmark.x,
+        y: landmark.y,
+        z: Number.isFinite(landmark.z) ? landmark.z! : null,
+        confidence,
+      })
+    }
+
+    const leftHip = raw.get('LEFT_HIP')
+    const rightHip = raw.get('RIGHT_HIP')
+    const hipCenter = {
+      x: leftHip && rightHip ? (leftHip.x + rightHip.x) / 2 : 0.5,
+      y: leftHip && rightHip ? (leftHip.y + rightHip.y) / 2 : 0.5,
+    }
+    const leftShoulder = raw.get('LEFT_SHOULDER')
+    const rightShoulder = raw.get('RIGHT_SHOULDER')
+    const shoulderWidth =
+      leftShoulder && rightShoulder
+        ? Math.hypot(rightShoulder.x - leftShoulder.x, rightShoulder.y - leftShoulder.y)
+        : 1
+    const scale = Math.max(shoulderWidth, 0.000001)
+
+    const tuples = REPLAY_LANDMARK_NAMES.map<MotionReplayLandmarkTuple>(name => {
+      const landmark = raw.get(name)
+      if (!landmark) return [null, null, null, 0]
+
+      return [
+        this.roundReplayValue((landmark.x - hipCenter.x) / scale),
+        this.roundReplayValue((landmark.y - hipCenter.y) / scale),
+        landmark.z == null ? null : this.roundReplayValue(landmark.z / scale),
+        this.roundReplayValue(landmark.confidence),
+      ]
+    })
+    const confidenceValues = tuples.map(tuple => tuple[3])
+    const meanConfidence =
+      confidenceValues.reduce((total, confidence) => total + confidence, 0) /
+      confidenceValues.length
+    const trackingOk = REPLAY_REQUIRED_TRACKING_NAMES.every(name => raw.has(name))
+
+    return { tuples, meanConfidence, trackingOk }
+  }
+
+  private mirrorReplayLandmarkName(name: ReplayLandmarkName): ReplayLandmarkName {
+    if (name.startsWith('LEFT_')) return name.replace('LEFT_', 'RIGHT_') as ReplayLandmarkName
+    if (name.startsWith('RIGHT_')) return name.replace('RIGHT_', 'LEFT_') as ReplayLandmarkName
+    return name
+  }
+
+  private roundReplayValue(value: number) {
+    return Math.round(value * 10_000) / 10_000
+  }
+
+  private buildCurrentMotionReplayClip(durationMs: number): ExerciseMotionReplayClip | null {
+    if (this.motionReplaySamples.length === 0) return null
+
+    const frames = this.motionReplaySamples.map(sample => sample.frame)
+    const lastFrameMs = frames[frames.length - 1]?.t ?? 0
+    const replayDurationMs = Math.max(0, Math.round(Math.max(durationMs, lastFrameMs)))
+
+    return {
+      version: 1,
+      fps: REPLAY_FPS,
+      durationMs: replayDurationMs,
+      landmarks: REPLAY_LANDMARK_NAMES,
+      frames,
+      representativeSegment: this.pickRepresentativeReplaySegment(replayDurationMs),
+    }
+  }
+
+  private pickRepresentativeReplaySegment(durationMs: number): MotionReplaySegment | null {
+    const samples = this.motionReplaySamples
+    if (samples.length === 0) return null
+
+    const windowMs = Math.min(5000, Math.max(3000, durationMs))
+    if (durationMs <= windowMs) {
+      return {
+        startMs: 0,
+        endMs: durationMs,
+        reason: 'full motion window',
+      }
+    }
+
+    const windowSize = Math.max(1, Math.round(windowMs / REPLAY_SAMPLE_INTERVAL_MS))
+    const prefixScores = [0]
+    samples.forEach(sample => {
+      prefixScores.push(
+        prefixScores[prefixScores.length - 1] +
+          sample.meanConfidence +
+          sample.progress +
+          (sample.trackingOk ? 0.25 : 0),
+      )
+    })
+
+    let bestScore = Number.NEGATIVE_INFINITY
+    let bestStartMs = 0
+    for (let startIndex = 0; startIndex < samples.length; startIndex += 1) {
+      const endIndex = Math.min(samples.length - 1, startIndex + windowSize - 1)
+      const startMs = samples[startIndex].frame.t
+      const endMs = samples[endIndex].frame.t
+      if (endMs > durationMs) break
+
+      const sampleCount = endIndex - startIndex + 1
+      const qualityScore = (prefixScores[endIndex + 1] - prefixScores[startIndex]) / sampleCount
+      if (qualityScore > bestScore) {
+        bestScore = qualityScore
+        bestStartMs = startMs
+      }
+    }
+
+    return {
+      startMs: Math.round(bestStartMs),
+      endMs: Math.round(Math.min(durationMs, bestStartMs + windowMs)),
+      reason: 'highest tracking/progress score',
+    }
   }
 
   private updateRecognitionStatus(isRecognized: boolean) {
