@@ -218,6 +218,27 @@ class ExerciseMotionControllerIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
+    void updateExerciseMotion_acceptsDescriptionWithTrailingNewline() throws Exception {
+        ExerciseMotion saved =
+                exerciseMotionRepository.save(exerciseMotion(ExerciseType.TOP, "March", 1));
+        String expectedDescription = "Updated description.\n";
+
+        mockMvc.perform(
+                        applyAdmin(
+                                updateMultipart(
+                                        saved.getId(),
+                                        "{\"description\":\"Updated description.\\n\"}",
+                                        null,
+                                        null)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.description").value(expectedDescription));
+
+        ExerciseMotion updated = exerciseMotionRepository.findById(saved.getId()).orElseThrow();
+        assertThat(updated.getDescription()).isEqualTo(expectedDescription);
+    }
+
+    @Test
     void updateExerciseMotion_byAdminUpdatesRoutineOrder() throws Exception {
         ExerciseMotion march =
                 exerciseMotionRepository.save(exerciseMotion(ExerciseType.TOP, "March", 1));
@@ -411,6 +432,23 @@ class ExerciseMotionControllerIntegrationTest extends IntegrationTestSupport {
         ExerciseMotion unchanged = exerciseMotionRepository.findById(saved.getId()).orElseThrow();
         assertThat(unchanged.getName()).isEqualTo("March");
         assertThat(unchanged.getTargetReps()).isEqualTo(8);
+    }
+
+    @Test
+    void updateExerciseMotion_rejectsBlankLineOnlyDescription() throws Exception {
+        ExerciseMotion saved =
+                exerciseMotionRepository.save(exerciseMotion(ExerciseType.TOP, "March", 1));
+        String originalDescription = saved.getDescription();
+
+        mockMvc.perform(
+                        applyAdmin(
+                                updateMultipart(
+                                        saved.getId(), "{\"description\":\"\\n\\n\"}", null, null)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("G-001"));
+
+        ExerciseMotion unchanged = exerciseMotionRepository.findById(saved.getId()).orElseThrow();
+        assertThat(unchanged.getDescription()).isEqualTo(originalDescription);
     }
 
     @Test

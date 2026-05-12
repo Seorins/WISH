@@ -18,7 +18,7 @@ public record TaekwondoMotionUpdateRequest(
         @Schema(description = "루틴 내 동작 순서", example = "1") @Positive Integer routineOrder,
         @Schema(description = "목표 반복 수", example = "1") @Positive Integer targetReps,
         @Schema(description = "동작 설명", example = "기본 준비 자세를 잡는다.")
-                @Pattern(regexp = ".*\\S.*", message = "공백만 입력할 수 없습니다.")
+                @Pattern(regexp = "(?s).*\\S.*", message = "공백만 입력할 수 없습니다.")
                 String description,
         @Schema(description = "true 이면 기존 썸네일 제거 (thumbnail part 가 없을 때만 효과)")
                 Boolean clearThumbnail,
