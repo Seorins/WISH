@@ -72,6 +72,8 @@ export function startMusicRecording(opts: StartMusicRecordingOptions): MusicReco
     return null
   }
 
+  // Capture the Phaser game canvas, not an internal camera/source canvas.
+  // Scenes that draw camera feeds, HUD, feedback, and overlays into Phaser will be recorded as one full game view.
   const canvas = opts.scene.game.canvas
   if (!canvas || typeof canvas.captureStream !== 'function') {
     console.warn('[musicRecorder] canvas.captureStream not available')

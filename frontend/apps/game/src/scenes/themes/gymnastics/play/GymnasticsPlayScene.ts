@@ -13,7 +13,7 @@ import {
 import { assetPath } from '@/game/assets/assetPath'
 import { POSE_LANDMARK_NAMES, PoseTracker } from '@/game/motion/poseTracker'
 import {
-  startMusicRecording as startScreenRecording,
+  startMusicRecording as startFullGameCanvasRecording,
   type MusicRecorderHandle as ScreenRecorderHandle,
 } from '@/game/systems/musicRecorder'
 import { fadeToScene } from '@/game/systems/sceneTransition'
@@ -1936,7 +1936,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     this.isMotionAdvancing = false
     this.motionStartedAtMs = Date.now()
     this.cancelCurrentMotionRecording()
-    this.motionRecorderHandle = startScreenRecording({ scene: this })
+    this.motionRecorderHandle = startFullGameCanvasRecording({ scene: this })
     if (this.sessionStartedAtMs <= 0) {
       this.sessionStartedAtMs = this.motionStartedAtMs
     }
