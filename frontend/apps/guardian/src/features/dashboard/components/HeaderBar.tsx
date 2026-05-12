@@ -26,7 +26,7 @@ const TABS: ReadonlyArray<{ id: TabId; label: string; Icon: typeof HomeIcon; to?
   { id: 'exercise', label: '신체', Icon: ExerciseIcon, to: '/' },
   { id: 'chat', label: '감정', Icon: ChatIcon, to: '/chat' },
   { id: 'activity', label: '활동', Icon: ActivityIcon, to: '/activity' },
-  { id: 'reports', label: '리포트', Icon: ClipboardIcon },
+  { id: 'reports', label: '리포트', Icon: ClipboardIcon, to: '/reports' },
   { id: 'live', label: '실시간', Icon: LiveIcon, to: '/live' },
   { id: 'fuel', label: '연료', Icon: FuelIcon, to: '/fuel' },
 ]
