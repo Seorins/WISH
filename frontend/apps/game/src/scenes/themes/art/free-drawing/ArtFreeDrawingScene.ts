@@ -2,12 +2,13 @@ import Phaser from 'phaser'
 import { createArtwork, updateArtwork } from '@wish/api-client'
 import { assetPath } from '@/game/assets/assetPath'
 import { createSceneWeatherLayer } from '@/features/weather/phaserWeatherLayer'
+import type { NormalizedLandmark } from '@mediapipe/tasks-vision'
 import { HandTracker, type TrackedHand } from '@/game/motion/handTracker'
-import { detectIndexFingerGesture } from '@/game/motion/indexFingerGesture'
+import { detectPinchGesture } from '@/game/motion/pinchGesture'
 import { toPointerCanvasCoordinates } from '@/game/motion/pointerCanvasCoordinates'
 import { toPointerConfidence } from '@/game/motion/pointerConfidence'
 import { toPointerCoordinates } from '@/game/motion/pointerCoordinates'
-import { getPointerReference } from '@/game/motion/pointerReference'
+import { HAND_LANDMARK_INDEX, type PointerReference } from '@/game/motion/pointerReference'
 import { PointerSmoother } from '@/game/motion/pointerSmoother'
 import { PointerTrackingGuard } from '@/game/motion/pointerTrackingGuard'
 import { createArtCameraPreview, type ArtCameraPreview } from '../ui/artCameraPreview'
@@ -29,6 +30,20 @@ const HAND_DIALOG_SELECT_HOLD_MS = 450
 const HAND_DRAW_MIN_DISTANCE_RATIO = 0.004
 const POINTER_DRAW_MIN_DISTANCE_RATIO = 0.003
 const HAND_POINTER_REJECT_MARGIN = 0.08
+// Pinch 진입 < 0.15(사실상 닿아야 함), 해제 > 0.20 — 손가락이 거의 닿은 상태에서만 펜다운.
+const PINCH_ENTER_RATIO = 0.15
+const PINCH_EXIT_RATIO = 0.2
+// 한 프레임에 ratio가 이만큼 이상 변하면 "손 모으는/펴는 중" → 그리기 비활성화
+const PINCH_TRANSITION_RATIO_DELTA = 0.025
+// 핀치 들어간 직후 이 시간 동안은 그리기 차단 — 접근 모션 끝자락의 짧은 선 방지
+const PINCH_SETTLING_MS = 80
+// 손이 한 프레임에 캔버스 폭의 9% 이상 튀면 연결선 끊고 새 스트로크 시작
+const HAND_DRAW_JUMP_DISTANCE_RATIO = 0.09
+// 핀치 직전 호버 위치를 펜다운 위치로 스냅하는 최대 거리(캔버스 폭 비율) — 7% 안이면 같은 자리로 간주
+const HOVER_AIM_REJOIN_RATIO = 0.07
+// 호버 위치가 너무 오래되면 무시(500ms)
+const HOVER_AIM_FRESHNESS_MS = 500
+const MAX_STROKE_HISTORY = 80
 const HAND_POINTER_CAMERA_BOUNDS = { left: 0.06, right: 0.94, top: 0.06, bottom: 0.78 } as const
 type DrawingTool = 'brush' | 'eraser'
 const DRAWING_TOOLS: DrawingTool[] = ['brush', 'eraser']
@@ -58,6 +73,13 @@ type HandPointerState = {
   point: Phaser.Math.Vector2
   isDrawingGesture: boolean
 }
+type StrokePoint = { x: number; y: number }
+type StrokeRecord = {
+  tool: DrawingTool
+  color: number
+  size: number
+  points: StrokePoint[]
+}
 type ArtFreeDrawingSceneData = {
   suppressIntroDialog?: boolean
   editArtwork?: EditableArtworkSceneData
@@ -67,7 +89,7 @@ type EditableArtworkSceneData = {
   imageTextureKey: string
   isPublic: boolean
 }
-type HandActionKind = 'save' | 'reset' | 'exit'
+type HandActionKind = 'save' | 'reset' | 'exit' | 'undo'
 type ExportedDrawingPng = {
   blob: Blob
   dataUrl: string
@@ -96,6 +118,10 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
   private saveButton: Phaser.GameObjects.Image | null = null
   private resetButton: Phaser.GameObjects.Image | null = null
   private exitButton: Phaser.GameObjects.Image | null = null
+  private undoButton: Phaser.GameObjects.Container | null = null
+  private undoButtonBounds = new Phaser.Geom.Rectangle()
+  private strokeHistory: StrokeRecord[] = []
+  private currentStrokeRecord: StrokeRecord | null = null
   private palettePoints: PalettePoint[] = []
   private handTracker: HandTracker | null = null
   private readonly handPointerSmoother = new PointerSmoother({ alpha: 0.24 })
@@ -106,6 +132,9 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
 
   private isDrawing = false
   private isHandDrawing = false
+  private isPinchActive = false
+  private lastPinchRatio: number | null = null
+  private pinchActiveSince = 0
   private isStartingHandTracker = false
   private handTrackingDisposed = false
   private isTransitioning = false
@@ -114,6 +143,9 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
   private activeDrawingPointerId: number | null = null
   private lastDrawPoint: Phaser.Math.Vector2 | null = null
   private lastHandDrawPoint: Phaser.Math.Vector2 | null = null
+  private lastHandRawPoint: Phaser.Math.Vector2 | null = null
+  // 핀치 직전 손이 호버하던 캔버스 좌표 — 핀치 시작할 때 펜다운 위치로 스냅하는 데 씀
+  private lastHoverPoint: { x: number; y: number; capturedAt: number } | null = null
   private currentTool: DrawingTool = 'brush'
   private currentColor: number = PALETTE_SWATCHES[0].color
   // 실제로 brush 로 그려본 팔레트 색 추적 (지우개 제외).
@@ -143,6 +175,7 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
   private saveButtonBaseScale = { x: 1, y: 1 }
   private resetButtonBaseScale = { x: 1, y: 1 }
   private exitButtonBaseScale = { x: 1, y: 1 }
+  private undoButtonBaseScale = { x: 1, y: 1 }
 
   private readonly handlePointerDown = (pointer: Phaser.Input.Pointer) => {
     if (
@@ -168,6 +201,7 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
     const point = this.clampToDrawBounds(pointer.x, pointer.y)
     this.lastDrawPoint = point
     this.drawDot(point.x, point.y)
+    this.beginStrokeRecord(point.x, point.y)
 
     if (!this.hasStartedDrawing) {
       this.hasStartedDrawing = true
@@ -202,6 +236,7 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
     if (!this.lastDrawPoint) {
       this.lastDrawPoint = currentPoint
       this.drawDot(currentPoint.x, currentPoint.y)
+      this.beginStrokeRecord(currentPoint.x, currentPoint.y)
       return
     }
 
@@ -211,6 +246,7 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
     }
 
     this.drawStroke(this.lastDrawPoint, currentPoint)
+    this.extendStrokeRecord(currentPoint.x, currentPoint.y)
     this.lastDrawPoint = currentPoint
   }
 
@@ -275,6 +311,14 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
     this.pendingHandTool = null
     this.pendingHandToolStartedAt = 0
     this.lastHandToolSelectedAt = 0
+    this.strokeHistory = []
+    this.currentStrokeRecord = null
+    this.undoButton = null
+    this.isPinchActive = false
+    this.lastPinchRatio = null
+    this.pinchActiveSince = 0
+    this.lastHandRawPoint = null
+    this.lastHoverPoint = null
     this.clearPendingHandDialogButton()
 
     const background = this.add.image(vw / 2, vh / 2, 'art-room-background')
@@ -350,7 +394,7 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
       .setOrigin(0, 0)
 
     this.add
-      .text(headerX, subtitleY, '검지를 펴고 손을 움직여 마음껏 그려봐.', {
+      .text(headerX, subtitleY, '엄지와 검지를 모으면 그려지고, 살짝 떼면 멈춰져.', {
         fontFamily: 'sans-serif',
         fontSize: `${Math.max(16, Math.round(vw * 0.01))}px`,
         color: '#fff6ea',
@@ -589,6 +633,94 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
         this.resetDrawing()
       },
     )
+
+    this.createUndoButton(saveButtonX - saveButtonWidth / 2 - buttonGap, buttonY, saveButtonHeight)
+  }
+
+  private createUndoButton(rightX: number, buttonY: number, buttonHeight: number) {
+    // 텍스트 라벨 기반의 가벼운 알약형 버튼 — 저장/리셋 PNG와 비슷한 톤
+    const padX = 18
+    const labelText = '↶ 되돌리기'
+    const fontSize = Math.max(15, Math.round(buttonHeight * 0.42))
+
+    const label = this.add
+      .text(0, 0, labelText, {
+        fontFamily: 'sans-serif',
+        fontSize: `${fontSize}px`,
+        color: '#5f3b22',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5, 0.5)
+
+    const buttonWidth = Math.max(buttonHeight * 2.2, label.width + padX * 2)
+    const buttonX = rightX - buttonWidth / 2
+
+    const background = this.add.graphics()
+    const drawBackground = (fill: number, alpha = 1) => {
+      background.clear()
+      background.fillStyle(fill, alpha)
+      background.fillRoundedRect(
+        -buttonWidth / 2,
+        -buttonHeight / 2,
+        buttonWidth,
+        buttonHeight,
+        buttonHeight / 2,
+      )
+      background.lineStyle(2, 0xaa875b, 1)
+      background.strokeRoundedRect(
+        -buttonWidth / 2,
+        -buttonHeight / 2,
+        buttonWidth,
+        buttonHeight,
+        buttonHeight / 2,
+      )
+    }
+    drawBackground(0xfffbf1)
+
+    const container = this.add.container(buttonX, buttonY, [background, label]).setDepth(15)
+    container.setSize(buttonWidth, buttonHeight)
+    container.setInteractive({
+      hitArea: new Phaser.Geom.Rectangle(
+        -buttonWidth / 2,
+        -buttonHeight / 2,
+        buttonWidth,
+        buttonHeight,
+      ),
+      hitAreaCallback: Phaser.Geom.Rectangle.Contains,
+      useHandCursor: true,
+    })
+
+    container.on('pointerover', () => drawBackground(0xfff2d6))
+    container.on('pointerout', () => drawBackground(0xfffbf1))
+    container.on(
+      'pointerdown',
+      (
+        _pointer: Phaser.Input.Pointer,
+        _localX: number,
+        _localY: number,
+        event: Phaser.Types.Input.EventData,
+      ) => {
+        event.stopPropagation()
+        this.undoLastStroke()
+      },
+    )
+
+    this.undoButton = container
+    this.undoButtonBaseScale = { x: container.scaleX, y: container.scaleY }
+    this.undoButtonBounds.setTo(
+      buttonX - buttonWidth / 2,
+      buttonY - buttonHeight / 2,
+      buttonWidth,
+      buttonHeight,
+    )
+    this.refreshUndoButton()
+  }
+
+  private refreshUndoButton() {
+    const container = this.undoButton
+    if (!container) return
+    const hasUndoable = this.strokeHistory.length > 0 || this.currentStrokeRecord !== null
+    container.setAlpha(hasUndoable ? 1 : 0.5)
   }
 
   private createToolSelector() {
@@ -873,6 +1005,17 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
     }
 
     if (!handState?.isDrawingGesture) {
+      // 핀치하지 않은 상태에서 캔버스 위를 호버하면 그 위치를 기억 — 다음 펜다운 위치로 스냅.
+      if (
+        handState &&
+        Phaser.Geom.Rectangle.Contains(this.drawBounds, handState.point.x, handState.point.y)
+      ) {
+        this.lastHoverPoint = {
+          x: handState.point.x,
+          y: handState.point.y,
+          capturedAt: result.timestampMs,
+        }
+      }
       this.stopHandDrawing()
       this.clearPendingHandAction()
       this.clearPendingHandTool()
@@ -920,9 +1063,20 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
       return null
     }
 
-    const pointerReference = getPointerReference(hand)
-    if (!pointerReference) {
+    // 커서 위치를 결정하기 전에 핀치 여부부터 평가 — 핀치 중엔 엄지·검지 중점을 쓴다.
+    // 단, 커서 위치는 "논리적 핀치 상태(isPinchActive)" 기준이고, 그리기 여부는
+    // "안정된 핀치(전이 중 아님)" 기준이라 살짝 다름.
+    const isDrawingGesture = this.evaluatePinchGesture(hand)
+    const cursorLandmark = this.getHandCursorLandmark(hand, this.isPinchActive)
+    if (!cursorLandmark) {
       return null
+    }
+
+    const pointerReference: PointerReference = {
+      landmark: cursorLandmark,
+      landmarkIndex: HAND_LANDMARK_INDEX.INDEX_FINGER_TIP,
+      handedness: hand.handedness,
+      score: hand.score,
     }
 
     const rawPointerCoordinates = toPointerCoordinates(
@@ -952,8 +1106,67 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
         this.drawBounds.left + canvasCoordinates.canvasX,
         this.drawBounds.top + canvasCoordinates.canvasY,
       ),
-      isDrawingGesture: detectIndexFingerGesture(hand).isIndexOnlyGesture,
+      isDrawingGesture,
     }
+  }
+
+  // 핀치 중엔 엄지·검지 끝 중점을 커서로 사용 — 핀치 동작 자체가 검지 끝을
+  // 엄지 쪽으로 끌어당기는 걸 상쇄해 의도한 위치에 더 정확히 찍힘.
+  private getHandCursorLandmark(hand: TrackedHand, isPinching: boolean): NormalizedLandmark | null {
+    const index = hand.landmarks[HAND_LANDMARK_INDEX.INDEX_FINGER_TIP] ?? null
+
+    if (!isPinching) {
+      return index
+    }
+
+    const thumb = hand.landmarks[HAND_LANDMARK_INDEX.THUMB_TIP]
+    if (!index || !thumb) {
+      return index
+    }
+
+    return {
+      x: (index.x + thumb.x) / 2,
+      y: (index.y + thumb.y) / 2,
+      z: (index.z + thumb.z) / 2,
+      visibility: Math.min(index.visibility ?? 1, thumb.visibility ?? 1),
+    }
+  }
+
+  // 핀치 진입(<0.15) / 해제(>0.20) — 손가락이 거의 닿은 상태에서만 펜다운.
+  // ① 핀치 들어간 직후 PINCH_SETTLING_MS 동안은 그리기 차단 (접근 모션 끝자락 차단)
+  // ② ratio가 한 프레임에 빠르게 변할 때(=모으는/펴는 중)는 그리기 차단 (모션 도중 차단)
+  // 커서 위치(isPinchActive) 자체는 정상 갱신해서 호버 추적과 시각적 흔들림엔 영향 없음.
+  private evaluatePinchGesture(hand: TrackedHand): boolean {
+    const result = detectPinchGesture(hand)
+    const ratio = result.pinchRatio
+    if (ratio === null) {
+      this.isPinchActive = false
+      this.lastPinchRatio = null
+      this.pinchActiveSince = 0
+      return false
+    }
+
+    const previousRatio = this.lastPinchRatio
+    const dRatio = previousRatio === null ? 0 : Math.abs(ratio - previousRatio)
+    this.lastPinchRatio = ratio
+
+    const wasActive = this.isPinchActive
+    if (this.isPinchActive) {
+      this.isPinchActive = ratio < PINCH_EXIT_RATIO
+    } else {
+      this.isPinchActive = ratio < PINCH_ENTER_RATIO
+    }
+
+    if (!wasActive && this.isPinchActive) {
+      this.pinchActiveSince = this.time.now
+    } else if (!this.isPinchActive) {
+      this.pinchActiveSince = 0
+    }
+
+    const isStable = dRatio <= PINCH_TRANSITION_RATIO_DELTA
+    const isSettled =
+      this.pinchActiveSince > 0 && this.time.now - this.pinchActiveSince >= PINCH_SETTLING_MS
+    return this.isPinchActive && isStable && isSettled
   }
 
   private isHandPointerInsideViewport(point: { normalizedX: number; normalizedY: number }) {
@@ -990,16 +1203,60 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
     }
   }
 
+  // 핀치 직전 호버 위치가 가까운 곳에 남아 있으면 그 위치를 펜다운 위치로 사용 — 손이
+  // 핀치 모션 중에 살짝 어긋나는 걸 보정.
+  private resolveStrokeStartPoint(currentPoint: Phaser.Math.Vector2): Phaser.Math.Vector2 {
+    const hover = this.lastHoverPoint
+    if (!hover) {
+      return currentPoint
+    }
+
+    if (this.time.now - hover.capturedAt > HOVER_AIM_FRESHNESS_MS) {
+      return currentPoint
+    }
+
+    const snapDistance = Math.max(28, this.drawBounds.width * HOVER_AIM_REJOIN_RATIO)
+    const aimDistance = Phaser.Math.Distance.Between(
+      hover.x,
+      hover.y,
+      currentPoint.x,
+      currentPoint.y,
+    )
+    if (aimDistance > snapDistance) {
+      return currentPoint
+    }
+
+    return this.clampToDrawBounds(hover.x, hover.y)
+  }
+
   private drawHandPoint(point: Phaser.Math.Vector2) {
     const rawPoint = this.clampToDrawBounds(point.x, point.y)
+
+    // raw 좌표 기준 점프 감지: 손이 한 프레임에 너무 멀리 튀면 연결선 끊기
+    const jumpThreshold = this.getHandDrawJumpDistance()
+    const hasJumped =
+      this.isHandDrawing &&
+      this.lastHandRawPoint !== null &&
+      Phaser.Math.Distance.BetweenPoints(this.lastHandRawPoint, rawPoint) > jumpThreshold
+
+    if (hasJumped) {
+      this.commitStrokeRecord()
+      this.handDrawingSmoother.reset()
+      this.lastHandDrawPoint = null
+    }
+    this.lastHandRawPoint = rawPoint
+
     const filteredPoint = this.handDrawingSmoother.smooth(rawPoint)
     const currentPoint = this.clampToDrawBounds(filteredPoint.x, filteredPoint.y)
 
     if (!this.isHandDrawing) {
+      const startPoint = this.resolveStrokeStartPoint(currentPoint)
       this.isHandDrawing = true
       this.strokeCount += 1
-      this.lastHandDrawPoint = currentPoint
-      this.drawDot(currentPoint.x, currentPoint.y)
+      this.lastHandDrawPoint = startPoint
+      this.drawDot(startPoint.x, startPoint.y)
+      this.beginStrokeRecord(startPoint.x, startPoint.y)
+      this.lastHoverPoint = null
 
       if (!this.hasStartedDrawing) {
         this.hasStartedDrawing = true
@@ -1009,8 +1266,11 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
     }
 
     if (!this.lastHandDrawPoint) {
-      this.lastHandDrawPoint = currentPoint
-      this.drawDot(currentPoint.x, currentPoint.y)
+      const startPoint = this.resolveStrokeStartPoint(currentPoint)
+      this.lastHandDrawPoint = startPoint
+      this.drawDot(startPoint.x, startPoint.y)
+      this.beginStrokeRecord(startPoint.x, startPoint.y)
+      this.lastHoverPoint = null
       return
     }
 
@@ -1022,12 +1282,17 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
     }
 
     this.drawStroke(this.lastHandDrawPoint, currentPoint)
+    this.extendStrokeRecord(currentPoint.x, currentPoint.y)
     this.lastHandDrawPoint = currentPoint
   }
 
   private stopHandDrawing() {
+    if (this.isHandDrawing) {
+      this.commitStrokeRecord()
+    }
     this.isHandDrawing = false
     this.lastHandDrawPoint = null
+    this.lastHandRawPoint = null
     this.handDrawingSmoother.reset()
   }
 
@@ -1112,6 +1377,8 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
       this.requestSaveDrawing()
     } else if (action === 'reset') {
       this.resetDrawing()
+    } else if (action === 'undo') {
+      this.undoLastStroke()
     } else {
       this.requestReturnToArtRoom()
     }
@@ -1121,6 +1388,10 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
 
   private getHandActionAt(point: Phaser.Math.Vector2): HandActionKind | null {
     const padding = this.getHandActionHitPadding()
+
+    if (this.undoButton && this.containsExpandedBounds(this.undoButtonBounds, point, padding)) {
+      return 'undo'
+    }
 
     if (
       this.saveButton &&
@@ -1150,6 +1421,16 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
     this.applyActionButtonEffect(this.saveButton, this.saveButtonBaseScale, action === 'save')
     this.applyActionButtonEffect(this.resetButton, this.resetButtonBaseScale, action === 'reset')
     this.applyActionButtonEffect(this.exitButton, this.exitButtonBaseScale, action === 'exit')
+    this.applyUndoButtonHover(action === 'undo')
+  }
+
+  private applyUndoButtonHover(isActive: boolean) {
+    const container = this.undoButton
+    if (!container) return
+    container.setScale(
+      this.undoButtonBaseScale.x * (isActive ? 1.06 : 1),
+      this.undoButtonBaseScale.y * (isActive ? 1.06 : 1),
+    )
   }
 
   private applyActionButtonEffect(
@@ -1318,6 +1599,111 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
     return nearest
   }
 
+  private beginStrokeRecord(x: number, y: number) {
+    // 진행 중 스트로크가 남아 있으면 먼저 마무리(예: jump 감지로 강제 분리될 때)
+    if (this.currentStrokeRecord) {
+      this.commitStrokeRecord()
+    }
+    this.currentStrokeRecord = {
+      tool: this.currentTool,
+      color: this.currentColor,
+      size: this.getActiveStrokeSize(),
+      points: [{ x, y }],
+    }
+  }
+
+  private extendStrokeRecord(x: number, y: number) {
+    if (!this.currentStrokeRecord) {
+      this.beginStrokeRecord(x, y)
+      return
+    }
+    this.currentStrokeRecord.points.push({ x, y })
+  }
+
+  private commitStrokeRecord() {
+    const stroke = this.currentStrokeRecord
+    this.currentStrokeRecord = null
+    if (!stroke || stroke.points.length === 0) {
+      return
+    }
+    this.strokeHistory.push(stroke)
+    if (this.strokeHistory.length > MAX_STROKE_HISTORY) {
+      this.strokeHistory.shift()
+    }
+    this.refreshUndoButton()
+  }
+
+  private undoLastStroke() {
+    // 진행 중 스트로크가 있으면 먼저 그것부터 되돌림(이미 캔버스에 일부 찍혔으니까)
+    if (this.currentStrokeRecord) {
+      this.currentStrokeRecord = null
+      this.isDrawing = false
+      this.isHandDrawing = false
+      this.activeDrawingPointerId = null
+      this.lastDrawPoint = null
+      this.lastHandDrawPoint = null
+      this.lastHandRawPoint = null
+      this.handDrawingSmoother.reset()
+      this.redrawFromHistory()
+      this.refreshUndoButton()
+      return
+    }
+
+    if (this.strokeHistory.length === 0) {
+      return
+    }
+    this.strokeHistory.pop()
+    this.redrawFromHistory()
+    if (this.strokeHistory.length === 0 && !this.editingArtwork) {
+      this.hasStartedDrawing = false
+      this.usedColors.clear()
+    }
+    this.refreshUndoButton()
+  }
+
+  private redrawFromHistory() {
+    this.drawingTexture.clear()
+    this.applyInitialArtworkImage()
+    for (const stroke of this.strokeHistory) {
+      this.replayStrokeRecord(stroke)
+    }
+  }
+
+  private replayStrokeRecord(stroke: StrokeRecord) {
+    const drawColor = stroke.tool === 'eraser' ? 0xffffff : stroke.color
+    const first = stroke.points[0]
+    if (!first) {
+      return
+    }
+
+    this.brushStroke.clear()
+    this.brushStroke.fillStyle(drawColor, 1)
+    this.brushStroke.fillCircle(
+      first.x - this.drawBounds.x,
+      first.y - this.drawBounds.y,
+      stroke.size / 2,
+    )
+    this.drawingTexture.draw(this.brushStroke)
+
+    for (let i = 1; i < stroke.points.length; i += 1) {
+      const from = stroke.points[i - 1]
+      const to = stroke.points[i]
+      this.brushStroke.clear()
+      this.brushStroke.lineStyle(stroke.size, drawColor, 1)
+      this.brushStroke.beginPath()
+      this.brushStroke.moveTo(from.x - this.drawBounds.x, from.y - this.drawBounds.y)
+      this.brushStroke.lineTo(to.x - this.drawBounds.x, to.y - this.drawBounds.y)
+      this.brushStroke.strokePath()
+      this.brushStroke.fillStyle(drawColor, 1)
+      this.brushStroke.fillCircle(
+        to.x - this.drawBounds.x,
+        to.y - this.drawBounds.y,
+        stroke.size / 2,
+      )
+      this.drawingTexture.draw(this.brushStroke)
+    }
+  }
+
   private drawDot(x: number, y: number) {
     const strokeSize = this.getActiveStrokeSize()
     this.brushStroke.clear()
@@ -1369,6 +1755,10 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
     )
   }
 
+  private getHandDrawJumpDistance() {
+    return Math.max(48, Math.round(this.drawBounds.width * HAND_DRAW_JUMP_DISTANCE_RATIO))
+  }
+
   private getPointerDrawMinDistance() {
     return Phaser.Math.Clamp(
       Math.round(this.drawBounds.width * POINTER_DRAW_MIN_DISTANCE_RATIO),
@@ -1385,6 +1775,9 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
   }
 
   private stopDrawing() {
+    if (this.isDrawing) {
+      this.commitStrokeRecord()
+    }
     this.isDrawing = false
     this.activeDrawingPointerId = null
     this.lastDrawPoint = null
@@ -1396,9 +1789,13 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
     this.handPointerSmoother.reset()
     this.handTrackingGuard.reset()
     this.drawingTexture.clear()
-    this.hasStartedDrawing = false
+    this.applyInitialArtworkImage()
+    this.strokeHistory = []
+    this.currentStrokeRecord = null
+    this.hasStartedDrawing = Boolean(this.editingArtwork)
     this.strokeCount = 0
     this.usedColors.clear()
+    this.refreshUndoButton()
   }
 
   private requestSaveDrawing() {
