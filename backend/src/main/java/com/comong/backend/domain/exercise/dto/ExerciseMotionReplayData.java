@@ -40,7 +40,9 @@ public record ExerciseMotionReplayData(
                     @NotNull
                     @PositiveOrZero
                     Integer t,
-            @Schema(description = "12 compact [x,y,z,confidence] tuples")
+            @Schema(
+                            description =
+                                    "12 compact [x,y,z,confidence] tuples. x/y/z may be null when a landmark is not tracked; confidence is required.")
                     @NotNull
                     @Size(min = 12, max = 12)
                     List<List<Double>> lm) {}

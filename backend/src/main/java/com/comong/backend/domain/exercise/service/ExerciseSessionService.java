@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -70,9 +71,15 @@ public class ExerciseSessionService {
 
     @Transactional
     public ExerciseSessionResponse create(Long userId, ExerciseSessionSaveRequest request) {
+        List<ExerciseSessionMotionSaveRequest> motionRequests = request.motions();
+        List<String> poseReplays =
+                motionRequests.stream()
+                        .map(ExerciseSessionMotionSaveRequest::poseReplay)
+                        .map(this::serializeReplay)
+                        .toList();
         PatientProfile patientProfile =
                 patientProfileService.findOwnedOrThrow(userId, request.patientProfileId());
-        Map<Long, ExerciseMotion> motionMap = loadExerciseMotionMap(request.motions());
+        Map<Long, ExerciseMotion> motionMap = loadExerciseMotionMap(motionRequests);
 
         ExerciseSession session =
                 exerciseSessionRepository.save(
@@ -81,12 +88,18 @@ public class ExerciseSessionService {
                                 .exerciseType(request.exerciseType())
                                 .durationSec(request.durationSec())
                                 .averageAccuracy(request.averageAccuracy())
-                                .completedMotionCount(request.motions().size())
+                                .completedMotionCount(motionRequests.size())
                                 .build());
 
         List<ExerciseSessionMotion> sessionMotions =
-                request.motions().stream()
-                        .map(motionRequest -> toSessionMotion(session, motionRequest, motionMap))
+                IntStream.range(0, motionRequests.size())
+                        .mapToObj(
+                                index ->
+                                        toSessionMotion(
+                                                session,
+                                                motionRequests.get(index),
+                                                motionMap,
+                                                poseReplays.get(index)))
                         .toList();
         List<ExerciseSessionMotion> savedSessionMotions =
                 exerciseSessionMotionRepository.saveAll(sessionMotions);
@@ -115,7 +128,7 @@ public class ExerciseSessionService {
         ExerciseSession session = findOwnedSessionOrThrow(userId, sessionId);
         List<ExerciseSessionMotionResponse> motions =
                 exerciseSessionMotionRepository
-                        .findAllBySessionIdWithExerciseMotionOrderByRoutineOrderAsc(sessionId)
+                        .findResponseRowsBySessionIdOrderByRoutineOrderAsc(sessionId)
                         .stream()
                         .map(
                                 motion ->
@@ -175,12 +188,12 @@ public class ExerciseSessionService {
     private ExerciseSessionMotion toSessionMotion(
             ExerciseSession session,
             ExerciseSessionMotionSaveRequest request,
-            Map<Long, ExerciseMotion> motionMap) {
+            Map<Long, ExerciseMotion> motionMap,
+            String poseReplay) {
         ExerciseMotion exerciseMotion = motionMap.get(request.exerciseMotionId());
         if (session.getExerciseType() != exerciseMotion.getExerciseType()) {
             throw new BusinessException(ExerciseErrorCode.EXERCISE_SESSION_MOTION_TYPE_MISMATCH);
         }
-        String poseReplay = serializeReplay(request.poseReplay());
         PerformanceVideo performanceVideo =
                 performanceVideoService.createIfPresent(
                         session.getPatientProfile(),
@@ -245,7 +258,9 @@ public class ExerciseSessionService {
 
         int previousTimestampMs = -1;
         for (ExerciseMotionReplayData.Frame frame : replay.frames()) {
-            if (frame.t() == null || frame.t() <= previousTimestampMs) {
+            if (frame.t() == null
+                    || frame.t() <= previousTimestampMs
+                    || frame.t() > replay.durationMs()) {
                 throw new BusinessException(GlobalErrorCode.INVALID_INPUT);
             }
             previousTimestampMs = frame.t();

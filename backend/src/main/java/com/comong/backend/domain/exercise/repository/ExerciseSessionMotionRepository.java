@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import com.comong.backend.domain.exercise.dto.ExerciseSessionMotionResponseRow;
 import com.comong.backend.domain.exercise.entity.ExerciseSessionMotion;
 
 public interface ExerciseSessionMotionRepository
@@ -15,12 +16,16 @@ public interface ExerciseSessionMotionRepository
     List<ExerciseSessionMotion> findAllBySessionId(Long sessionId);
 
     @Query(
-            "select sm from ExerciseSessionMotion sm "
-                    + "join fetch sm.exerciseMotion m "
-                    + "left join fetch sm.performanceVideo "
+            "select new com.comong.backend.domain.exercise.dto.ExerciseSessionMotionResponseRow("
+                    + "sm.id, m.id, m.name, m.routineOrder, sm.durationSec, sm.accuracy, "
+                    + "sm.completedReps, sm.feedback, pv.videoKey, pv.thumbKey, "
+                    + "case when sm.poseReplay is not null then true else false end, sm.createdAt) "
+                    + "from ExerciseSessionMotion sm "
+                    + "join sm.exerciseMotion m "
+                    + "left join sm.performanceVideo pv "
                     + "where sm.session.id = :sessionId "
                     + "order by m.routineOrder asc")
-    List<ExerciseSessionMotion> findAllBySessionIdWithExerciseMotionOrderByRoutineOrderAsc(
+    List<ExerciseSessionMotionResponseRow> findResponseRowsBySessionIdOrderByRoutineOrderAsc(
             @Param("sessionId") Long sessionId);
 
     @Query(
