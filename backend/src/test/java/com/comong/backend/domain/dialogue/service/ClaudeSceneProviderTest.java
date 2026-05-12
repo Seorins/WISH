@@ -47,19 +47,19 @@ class ClaudeSceneProviderTest {
                 new ClaudeSceneResult(
                         "무엇이 가장 걱정되니?",
                         List.of(
-                                new ClaudeChoice("worry_pain", "아픈 게 걱정돼요"),
-                                new ClaudeChoice("worry_family", "가족이 걱정돼요")),
+                                new ClaudeChoice("talk_body", "몸 얘기"),
+                                new ClaudeChoice("talk_peer", "친구 얘기")),
                         false,
                         List.of("걱정이 찾아왔구나."));
         when(claudeClient.generateNextScene(anyString(), anyString())).thenReturn(Optional.of(raw));
 
-        Optional<SceneResponse> result = provider.nextScene(session, List.of(turn("mood_worried")));
+        Optional<SceneResponse> result = provider.nextScene(session, List.of(turn("entry_talk")));
 
         assertThat(result).isPresent();
         SceneResponse scene = result.get();
         assertThat(scene.questionText()).isEqualTo("무엇이 가장 걱정되니?");
         assertThat(scene.choices()).hasSize(2);
-        assertThat(scene.choices().get(0).choiceIntentId()).isEqualTo("worry_pain");
+        assertThat(scene.choices().get(0).choiceIntentId()).isEqualTo("talk_body");
         assertThat(scene.secondaryAction()).isNull();
         assertThat(scene.shouldEndSession()).isFalse();
         assertThat(scene.generatedBy()).isEqualTo(DialogueTurnGeneratedBy.CLAUDE);
@@ -329,7 +329,9 @@ class ClaudeSceneProviderTest {
         ClaudeSceneResult raw =
                 new ClaudeSceneResult(
                         "오늘 기분은 어떠니?",
-                        List.of(new ClaudeChoice("mood_okay", "괜찮아요")),
+                        List.of(
+                                new ClaudeChoice("rest_quiet", "조용히 있을래요"),
+                                new ClaudeChoice("activity_music", "음악 들을래요")),
                         false,
                         List.of("좋구나."));
         when(claudeClient.generateNextScene(anyString(), anyString())).thenReturn(Optional.of(raw));
