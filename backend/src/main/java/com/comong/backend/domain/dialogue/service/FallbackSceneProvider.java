@@ -1,6 +1,7 @@
 package com.comong.backend.domain.dialogue.service;
 
 import java.util.List;
+import java.util.Map;
 
 import org.springframework.stereotype.Component;
 
@@ -14,7 +15,8 @@ import com.comong.backend.domain.dialogue.entity.NpcName;
 /**
  * LLM 미연동 / Claude 실패 시 사용할 정적 시나리오 트리. 등대지기 영철의 전 흐름을 결정론적으로 제공한다.
  *
- * <p>구조: (이전 선택, 누적 stepCount) → 다음 장면. 모든 라우팅은 in-memory 상수로 표현하여 외부 의존성 없이 즉시 fallback 가능.
+ * <p>구조: (이전 선택, 누적 stepCount) → (다음 장면 + ack 멘트). 모든 라우팅은 in-memory 상수로 표현하여 외부 의존성 없이 즉시 fallback
+ * 가능.
  *
  * <p>마을 주민 6인은 FE 가 정적 스크립트를 보유하므로 본 provider 는 호출되지 않는다 — 호출자({@link DialogueService})가 {@link
  * NpcName#isBackendDriven()} 으로 분기 후 BE-driven NPC 만 진입한다.
@@ -22,7 +24,7 @@ import com.comong.backend.domain.dialogue.entity.NpcName;
 @Component
 public class FallbackSceneProvider {
 
-    // ===== 첫 화면 =====
+    // ===== 첫 화면 (npcResponse 비어있음 — 직전 선택 없음) =====
 
     private static final SceneResponse YEONGCHEOL_FIRST_SCENE =
             new SceneResponse(
@@ -32,48 +34,65 @@ public class FallbackSceneProvider {
                             ChoiceResponse.of("mood_worried", "걱정돼요"),
                             ChoiceResponse.of("mood_hard", "힘들어요")),
                     ChoiceResponse.of("rest_today", "오늘은 쉬고 싶어요"),
-                    false,
-                    DialogueTurnGeneratedBy.FALLBACK);
+                    /* shouldEndSession= */ false,
+                    DialogueTurnGeneratedBy.FALLBACK,
+                    /* npcResponse= */ List.of());
 
-    // ===== 후속 장면 (secondaryAction 항상 null) =====
+    // ===== 후속 장면 템플릿 (질문 + 선택지). ack 는 prev choice 에 따라 외부에서 주입 =====
 
-    private static final SceneResponse SCENE_WORRY_SOURCE =
-            scene(
+    private record SceneTemplate(String questionText, List<ChoiceResponse> choices) {}
+
+    private static final SceneTemplate TEMPLATE_WORRY_SOURCE =
+            new SceneTemplate(
                     "무엇이 가장 걱정되니?",
-                    ChoiceResponse.of("worry_pain", "아픈 게 걱정돼요"),
-                    ChoiceResponse.of("worry_unknown", "잘 모르겠어요"),
-                    ChoiceResponse.of("worry_family", "가족이 걱정돼요"));
+                    List.of(
+                            ChoiceResponse.of("worry_pain", "아픈 게 걱정돼요"),
+                            ChoiceResponse.of("worry_unknown", "잘 모르겠어요"),
+                            ChoiceResponse.of("worry_family", "가족이 걱정돼요")));
 
-    private static final SceneResponse SCENE_HARD_PART =
-            scene(
+    private static final SceneTemplate TEMPLATE_HARD_PART =
+            new SceneTemplate(
                     "지금 가장 힘든 건 뭐니?",
-                    ChoiceResponse.of("hard_body", "몸이 힘들어요"),
-                    ChoiceResponse.of("hard_lonely", "외로워요"),
-                    ChoiceResponse.of("hard_angry", "화가 나요"));
+                    List.of(
+                            ChoiceResponse.of("hard_body", "몸이 힘들어요"),
+                            ChoiceResponse.of("hard_lonely", "외로워요"),
+                            ChoiceResponse.of("hard_angry", "화가 나요")));
 
-    private static final SceneResponse SCENE_SMALL_ACTION =
-            scene(
+    private static final SceneTemplate TEMPLATE_SMALL_ACTION =
+            new SceneTemplate(
                     "지금 해볼 수 있는 작은 일은?",
-                    ChoiceResponse.of("action_breathe", "숨을 천천히 쉬어요"),
-                    ChoiceResponse.of("action_draw", "그림을 그려요"),
-                    ChoiceResponse.of("action_tell", "한마디 해볼래요"));
+                    List.of(
+                            ChoiceResponse.of("action_breathe", "숨을 천천히 쉬어요"),
+                            ChoiceResponse.of("action_draw", "그림을 그려요"),
+                            ChoiceResponse.of("action_tell", "한마디 해볼래요")));
 
-    private static final SceneResponse SCENE_SUPPORT_CHOICE =
-            scene(
+    private static final SceneTemplate TEMPLATE_SUPPORT_CHOICE =
+            new SceneTemplate(
                     "어떻게 도움을 받아볼까?",
-                    ChoiceResponse.of("support_family", "가족에게 말할래요"),
-                    ChoiceResponse.of("support_medical", "선생님께 말할래요"),
-                    ChoiceResponse.of("support_draw", "그림으로 전할래요"));
+                    List.of(
+                            ChoiceResponse.of("support_family", "가족에게 말할래요"),
+                            ChoiceResponse.of("support_medical", "선생님께 말할래요"),
+                            ChoiceResponse.of("support_draw", "그림으로 전할래요")));
 
-    // ===== 종료 신호 =====
+    // ===== 직전 선택 → ack 멘트 =====
 
-    private static final SceneResponse SCENE_END =
-            new SceneResponse(
-                    "",
-                    List.of(),
-                    null,
-                    /* shouldEndSession= */ true,
-                    DialogueTurnGeneratedBy.FALLBACK);
+    private static final Map<String, List<String>> ACK_BY_PREV_CHOICE =
+            Map.ofEntries(
+                    Map.entry("mood_okay", List.of("좋구나. 작은 햇빛이 보이는 날이네.")),
+                    Map.entry("mood_worried", List.of("걱정이 찾아왔구나.")),
+                    Map.entry("mood_hard", List.of("말해줘서 고맙구나.")),
+                    Map.entry("worry_pain", List.of("아픈 게 걱정될 수 있지.")),
+                    Map.entry("worry_unknown", List.of("잘 모를 때 더 답답할 수 있단다.")),
+                    Map.entry("worry_family", List.of("가족을 많이 아끼는구나.")),
+                    Map.entry("hard_body", List.of("몸이 힘들면 마음도 지치기 쉽지.")),
+                    Map.entry("hard_lonely", List.of("혼자 있는 것처럼 느껴졌구나.")),
+                    Map.entry("hard_angry", List.of("화나는 마음도 말해도 괜찮아.")),
+                    Map.entry("support_family", List.of("가족에게 한마디 건네보자.")),
+                    Map.entry("support_medical", List.of("선생님께 말해도 된단다.")),
+                    Map.entry("support_draw", List.of("말이 어려우면 그림도 좋단다.")),
+                    Map.entry("action_breathe", List.of("좋구나. 숨은 작은 닻이 된단다.")),
+                    Map.entry("action_draw", List.of("그림도 마음의 말이 될 수 있지.")),
+                    Map.entry("action_tell", List.of("좋다. 한마디면 충분할 때도 있단다.")));
 
     // ===== 마무리 대사 =====
 
@@ -94,26 +113,20 @@ public class FallbackSceneProvider {
 
     /**
      * 직전 선택 + 현재 stepCount 를 보고 다음 장면을 결정. {@link DialogueSession#isAtMaxSteps()} 인 경우와 일부
-     * 선택지(action_breathe/draw)에선 즉시 종료 신호를 반환한다.
+     * 선택지(action_breathe/draw, support_*)에선 즉시 종료 신호를 반환한다. ack 멘트는 직전 선택에 따라 주입된다.
      */
     public SceneResponse nextScene(
             NpcName npcName, String prevChoiceIntentId, int newStepCount, int maxSteps) {
         requireBackendDriven(npcName);
+        List<String> ack = ackFor(prevChoiceIntentId);
         if (newStepCount >= maxSteps) {
-            return SCENE_END;
+            return endScene(ack);
         }
-        return switch (prevChoiceIntentId) {
-            case "mood_okay" -> SCENE_SMALL_ACTION;
-            case "mood_worried" -> SCENE_WORRY_SOURCE;
-            case "mood_hard" -> SCENE_HARD_PART;
-            case "worry_pain", "worry_unknown", "worry_family" -> SCENE_SUPPORT_CHOICE;
-            case "hard_body", "hard_lonely", "hard_angry" -> SCENE_SUPPORT_CHOICE;
-            case "action_tell" -> SCENE_SUPPORT_CHOICE;
-            case "action_breathe", "action_draw" -> SCENE_END;
-            case "support_family", "support_medical", "support_draw" -> SCENE_END;
-            // 미정의 / 비정상 choice — 안전하게 종료
-            default -> SCENE_END;
-        };
+        SceneTemplate template = chooseTemplate(prevChoiceIntentId);
+        if (template == null) {
+            return endScene(ack);
+        }
+        return toScene(template, ack);
     }
 
     /** 종료 시 NPC 가 남기는 짧은 마무리 대사 (1~2 줄). BE-driven NPC 에 한해 호출되어야 한다. */
@@ -126,6 +139,44 @@ public class FallbackSceneProvider {
         };
     }
 
+    /** 직전 선택지에 대응하는 ack 멘트. 매핑 외 선택은 빈 리스트. */
+    public List<String> ackFor(String prevChoiceIntentId) {
+        return ACK_BY_PREV_CHOICE.getOrDefault(prevChoiceIntentId, List.of());
+    }
+
+    private static SceneTemplate chooseTemplate(String prevChoiceIntentId) {
+        return switch (prevChoiceIntentId) {
+            case "mood_okay" -> TEMPLATE_SMALL_ACTION;
+            case "mood_worried" -> TEMPLATE_WORRY_SOURCE;
+            case "mood_hard" -> TEMPLATE_HARD_PART;
+            case "worry_pain", "worry_unknown", "worry_family" -> TEMPLATE_SUPPORT_CHOICE;
+            case "hard_body", "hard_lonely", "hard_angry" -> TEMPLATE_SUPPORT_CHOICE;
+            case "action_tell" -> TEMPLATE_SUPPORT_CHOICE;
+            // action_breathe / action_draw / support_* / 알 수 없는 choice → 종료 신호 (null)
+            default -> null;
+        };
+    }
+
+    private static SceneResponse toScene(SceneTemplate template, List<String> npcResponse) {
+        return new SceneResponse(
+                template.questionText(),
+                template.choices(),
+                /* secondaryAction= */ null,
+                /* shouldEndSession= */ false,
+                DialogueTurnGeneratedBy.FALLBACK,
+                npcResponse);
+    }
+
+    private static SceneResponse endScene(List<String> npcResponse) {
+        return new SceneResponse(
+                "",
+                List.of(),
+                /* secondaryAction= */ null,
+                /* shouldEndSession= */ true,
+                DialogueTurnGeneratedBy.FALLBACK,
+                npcResponse);
+    }
+
     private static void requireBackendDriven(NpcName npcName) {
         if (!npcName.isBackendDriven()) {
             // 호출자(DialogueService)가 NpcName.isBackendDriven() 으로 분기해야 한다.
@@ -133,15 +184,5 @@ public class FallbackSceneProvider {
             throw new IllegalStateException(
                     "FallbackSceneProvider only handles backend-driven NPC, got " + npcName);
         }
-    }
-
-    private static SceneResponse scene(
-            String questionText, ChoiceResponse a, ChoiceResponse b, ChoiceResponse c) {
-        return new SceneResponse(
-                questionText,
-                List.of(a, b, c),
-                /* secondaryAction= */ null,
-                /* shouldEndSession= */ false,
-                DialogueTurnGeneratedBy.FALLBACK);
     }
 }

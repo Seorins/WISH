@@ -6,11 +6,17 @@ import {
   startVillageDialogueSession,
   type VillageDialogueFinishReason,
 } from './villageDialogueClient'
+import {
+  buildActivityAwareEndingLines,
+  getChoiceEndingType,
+  getTodayActivityState,
+} from './activityAwareEnding'
 import { VILLAGE_NPC_TO_API_ENUM } from './npcMapping'
 import { pickRandomCounselingScript, SHARED_COUNSELING_SCRIPTS } from './sharedCounselingScripts'
 import { VILLAGER_FIRST_GREETING, villageDialogues } from './villageDialogues'
 import type {
   CounselingScript,
+  DailyActivityState,
   VillagerChoice,
   VillagerChoiceEvent,
   VillagerDialogueNode,
@@ -18,10 +24,18 @@ import type {
   VillagerNpcId,
 } from './types'
 
-const OPENING_STEP_DELAY_MS = 1500
-const RESPONSE_LINE_DELAY_MS = 1800
-const MIN_RESPONSE_DELAY_MS = 1800
+const RESPONSE_LINE_DELAY_MS = 850
+const MIN_RESPONSE_DELAY_MS = 900
 const SAVE_ERROR_LINE = '잠시 후 다시 말을 걸어줘.'
+
+function logVillageDialogueDebug(message: string, payload?: unknown) {
+  if (!import.meta.env.DEV) return
+  if (payload === undefined) {
+    console.info(`[villager-dialogue] ${message}`)
+    return
+  }
+  console.info(`[villager-dialogue] ${message}`, payload)
+}
 
 function createLocalSessionId(npcId: VillagerNpcId) {
   const randomId =
@@ -46,6 +60,7 @@ function getStartNode(script: CounselingScript) {
 export function useVillageDialogueSession(
   patientProfileId: number | undefined,
   onFinished?: () => void,
+  dailyActivityState?: DailyActivityState,
 ) {
   const [status, setStatus] = useState<VillagerDialogueStatus>('idle')
   const [sessionId, setSessionId] = useState<string | number | null>(null)
@@ -80,22 +95,6 @@ export function useVillageDialogueSession(
     setSelectedChoiceIntentId(null)
     setStatus('waiting_choice')
   }, [])
-
-  const scheduleOpening = useCallback(
-    (sharedScript: CounselingScript, startNode: VillagerDialogueNode) => {
-      queueTimer(() => {
-        if (sharedScript.contextLine) {
-          setVisibleLines([sharedScript.contextLine])
-          setStatus('opening_context')
-          queueTimer(() => showQuestion(startNode), OPENING_STEP_DELAY_MS)
-          return
-        }
-
-        showQuestion(startNode)
-      }, OPENING_STEP_DELAY_MS)
-    },
-    [queueTimer, showQuestion],
-  )
 
   const resetSession = useCallback(() => {
     clearTimers()
@@ -157,7 +156,7 @@ export function useVillageDialogueSession(
       setSelectedChoiceIntentId(null)
       setSelectedEvents([])
       setStatus('opening_greeting')
-      setVisibleLines([VILLAGER_FIRST_GREETING[npcId]])
+      setVisibleLines(VILLAGER_FIRST_GREETING[npcId].slice(0, 2))
 
       try {
         startInFlightRef.current = true
@@ -168,43 +167,41 @@ export function useVillageDialogueSession(
           )
           sessionIdRef.current = result.sessionId
           setSessionId(result.sessionId)
+          logVillageDialogueDebug('backend session ready', {
+            npcId,
+            sessionId: result.sessionId,
+            status: result.status,
+          })
         }
-
-        scheduleOpening(sharedScript, startNode)
       } catch {
+        logVillageDialogueDebug('failed to start backend session', { npcId, patientProfileId })
         setStatus('error')
         setVisibleLines([SAVE_ERROR_LINE])
       } finally {
         startInFlightRef.current = false
       }
     },
-    [clearTimers, patientProfileId, scheduleOpening],
+    [clearTimers, patientProfileId],
   )
 
   const advanceDialogue = useCallback(() => {
     if (status === 'opening_greeting' && currentScript && currentNode) {
-      clearTimers()
-      if (currentScript.contextLine) {
-        setVisibleLines([currentScript.contextLine])
-        setStatus('opening_context')
-        queueTimer(() => showQuestion(currentNode), OPENING_STEP_DELAY_MS)
+      if (startInFlightRef.current || !sessionIdRef.current) {
+        logVillageDialogueDebug('opening advance blocked until session is ready', {
+          startInFlight: startInFlightRef.current,
+          sessionId: sessionIdRef.current,
+        })
         return
       }
-
-      showQuestion(currentNode)
-      return
-    }
-
-    if (status === 'opening_context' && currentNode) {
       clearTimers()
       showQuestion(currentNode)
       return
     }
 
-    if (status === 'ending_wait') {
+    if (status === 'waiting_final_close') {
       closeDialogue('COMPLETED')
     }
-  }, [clearTimers, closeDialogue, currentNode, currentScript, queueTimer, showQuestion, status])
+  }, [clearTimers, closeDialogue, currentNode, currentScript, showQuestion, status])
 
   const selectChoice = useCallback(
     async (choice: VillagerChoice) => {
@@ -216,6 +213,14 @@ export function useVillageDialogueSession(
         !currentScript ||
         !currentNode
       ) {
+        logVillageDialogueDebug('choice ignored before save', {
+          choiceIntentId: choice.choiceIntentId,
+          status,
+          sessionId: targetSessionId,
+          hasScript: Boolean(script),
+          hasCurrentScript: Boolean(currentScript),
+          hasCurrentNode: Boolean(currentNode),
+        })
         return
       }
 
@@ -243,7 +248,16 @@ export function useVillageDialogueSession(
       }
 
       try {
+        logVillageDialogueDebug('saving choice turn', {
+          sessionId: targetSessionId,
+          nodeId: currentNode.nodeId,
+          choiceIntentId: choice.choiceIntentId,
+        })
         await saveVillagerChoiceEvent(event)
+        logVillageDialogueDebug('choice turn saved', {
+          sessionId: targetSessionId,
+          choiceIntentId: choice.choiceIntentId,
+        })
         setSelectedEvents(prev => [...prev, event])
 
         const responseLines =
@@ -266,14 +280,21 @@ export function useVillageDialogueSession(
         )
         queueTimer(() => {
           if (!choice.nextNodeId || choice.endAfterSelect) {
-            const endingLines =
-              choice.endingLines && choice.endingLines.length > 0
+            const resolvedDailyActivityState = getTodayActivityState(dailyActivityState)
+            const endingLines = choice.activityEndingLines
+              ? resolvedDailyActivityState.hasDoneAnyActivityToday
+                ? choice.activityEndingLines.completed
+                : choice.activityEndingLines.pending
+              : choice.endingLines && choice.endingLines.length > 0
                 ? choice.endingLines
-                : [currentScript.fallbackEndingLine ?? '필요하면 다시 와.']
+                : buildActivityAwareEndingLines({
+                    endingType: getChoiceEndingType(choice),
+                    dailyActivityState: resolvedDailyActivityState,
+                  })
 
-            setVisibleLines(endingLines.slice(0, 2))
+            setVisibleLines(endingLines)
             setSelectedChoiceIntentId(null)
-            setStatus('ending_wait')
+            setStatus('waiting_final_close')
             return
           }
 
@@ -286,6 +307,10 @@ export function useVillageDialogueSession(
           showQuestion(nextNode)
         }, delayMs)
       } catch {
+        logVillageDialogueDebug('failed to save choice turn', {
+          sessionId: targetSessionId,
+          choiceIntentId: choice.choiceIntentId,
+        })
         setStatus('error')
         setVisibleLines([SAVE_ERROR_LINE])
       }
@@ -295,6 +320,7 @@ export function useVillageDialogueSession(
       closeDialogue,
       currentNode,
       currentScript,
+      dailyActivityState,
       queueTimer,
       script,
       showQuestion,

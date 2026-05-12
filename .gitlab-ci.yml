@@ -658,7 +658,7 @@ frontend:image:game:
         --build-arg VITE_APP_BASE_PATH=/ \
         --build-arg VITE_API_BASE_URL=https://api-dev.wish-e103.xyz/api/v1 \
         --build-arg VITE_AI_BASE_URL=https://ai-dev.wish-e103.xyz/api/v1 \
-        --build-arg VITE_ENABLE_DEMO_AUTH=true \
+        --build-arg VITE_ENABLE_DEMO_AUTH=false \
         ${DESTINATIONS}
   rules: *frontend_game_dev_rules
 

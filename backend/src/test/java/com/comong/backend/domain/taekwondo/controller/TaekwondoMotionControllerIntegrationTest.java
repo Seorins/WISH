@@ -227,6 +227,27 @@ class TaekwondoMotionControllerIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
+    void updateTaekwondoMotion_acceptsDescriptionWithTrailingNewline() throws Exception {
+        TaekwondoMotion saved =
+                taekwondoMotionRepository.save(motion(Poomsae.TAEGEUK_1, "Ready", 1));
+        String expectedDescription = "Updated description.\n";
+
+        mockMvc.perform(
+                        applyAdmin(
+                                updateMultipart(
+                                        saved.getId(),
+                                        "{\"description\":\"Updated description.\\n\"}",
+                                        null,
+                                        null)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.description").value(expectedDescription));
+
+        TaekwondoMotion updated = taekwondoMotionRepository.findById(saved.getId()).orElseThrow();
+        assertThat(updated.getDescription()).isEqualTo(expectedDescription);
+    }
+
+    @Test
     void updateTaekwondoMotion_byAdminUpdatesRoutineOrder() throws Exception {
         TaekwondoMotion ready =
                 taekwondoMotionRepository.save(motion(Poomsae.TAEGEUK_1, "기본준비", 1));
@@ -428,6 +449,23 @@ class TaekwondoMotionControllerIntegrationTest extends IntegrationTestSupport {
         TaekwondoMotion unchanged = taekwondoMotionRepository.findById(saved.getId()).orElseThrow();
         assertThat(unchanged.getName()).isEqualTo("기본준비");
         assertThat(unchanged.getTargetReps()).isEqualTo(1);
+    }
+
+    @Test
+    void updateTaekwondoMotion_rejectsBlankLineOnlyDescription() throws Exception {
+        TaekwondoMotion saved =
+                taekwondoMotionRepository.save(motion(Poomsae.TAEGEUK_1, "Ready", 1));
+        String originalDescription = saved.getDescription();
+
+        mockMvc.perform(
+                        applyAdmin(
+                                updateMultipart(
+                                        saved.getId(), "{\"description\":\"\\n\\n\"}", null, null)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("G-001"));
+
+        TaekwondoMotion unchanged = taekwondoMotionRepository.findById(saved.getId()).orElseThrow();
+        assertThat(unchanged.getDescription()).isEqualTo(originalDescription);
     }
 
     @Test

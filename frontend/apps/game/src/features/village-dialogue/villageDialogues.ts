@@ -33,13 +33,13 @@ export const VILLAGER_IDENTITIES: Record<VillagerNpcId, VillagerIdentity> = {
   },
 }
 
-export const VILLAGER_FIRST_GREETING: Record<VillagerNpcId, string> = {
-  nurse_bunny: '안녕, 와줬구나.',
-  sleepy_sheep: '안녕, 왔구나.',
-  gardener_bear: '안녕, 들렀구나.',
-  monkey_friend: '오, 왔구나!',
-  squirrel_friend: '안녕, 와줬구나.',
-  dain: '안녕, 놀러왔구나.',
+export const VILLAGER_FIRST_GREETING: Record<VillagerNpcId, string[]> = {
+  nurse_bunny: ['안녕, 왔네.', '잠깐 쉬어가도 돼.'],
+  sleepy_sheep: ['안녕, 왔어?', '나도 잠깐 쉬고 있었어.'],
+  gardener_bear: ['안녕, 왔네.', '여기 조용해서 쉬기 좋아.'],
+  monkey_friend: ['오! 왔네.', '잠깐 같이 있어도 좋아.'],
+  squirrel_friend: ['안녕, 왔구나.', '괜찮으면 잠깐 얘기하자.'],
+  dain: ['안녕! 왔네.', '같이 잠깐 얘기할래?'],
 }
 
 export const villageDialogues: Record<VillagerNpcId, VillagerDialogueScript> = {

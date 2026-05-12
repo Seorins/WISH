@@ -124,9 +124,27 @@ public class ClaudeClient {
                                                                                 List.of(
                                                                                         "choiceIntentId",
                                                                                         "text"))),
-                                                "shouldEndSession", Map.of("type", "boolean")),
+                                                "shouldEndSession", Map.of("type", "boolean"),
+                                                "npcResponse",
+                                                        Map.of(
+                                                                "type",
+                                                                "array",
+                                                                "minItems",
+                                                                1,
+                                                                "maxItems",
+                                                                2,
+                                                                "items",
+                                                                Map.of(
+                                                                        "type",
+                                                                        "string",
+                                                                        "maxLength",
+                                                                        40))),
                                 "required",
-                                        List.of("questionText", "choices", "shouldEndSession")));
+                                        List.of(
+                                                "questionText",
+                                                "choices",
+                                                "shouldEndSession",
+                                                "npcResponse")));
     }
 
     private ClaudeSceneResult extractToolResult(JsonNode response) {
@@ -149,7 +167,8 @@ public class ClaudeClient {
         boolean shouldEnd =
                 input.has("shouldEndSession") && input.get("shouldEndSession").asBoolean();
         List<ClaudeChoice> choices = parseChoices(input.get("choices"));
-        return new ClaudeSceneResult(questionText, choices, shouldEnd);
+        List<String> npcResponse = parseNpcResponse(input.get("npcResponse"));
+        return new ClaudeSceneResult(questionText, choices, shouldEnd, npcResponse);
     }
 
     private List<ClaudeChoice> parseChoices(JsonNode choicesNode) {
@@ -166,6 +185,13 @@ public class ClaudeClient {
                 .toList();
     }
 
+    private List<String> parseNpcResponse(JsonNode npcResponseNode) {
+        if (npcResponseNode == null || !npcResponseNode.isArray()) {
+            throw new IllegalStateException("Claude tool_use missing npcResponse array");
+        }
+        return npcResponseNode.valueStream().map(line -> line.asString("")).toList();
+    }
+
     private static String textOrThrow(JsonNode node, String field) {
         JsonNode value = node.get(field);
         if (value == null || value.isNull()) {
@@ -176,7 +202,10 @@ public class ClaudeClient {
 
     /** Claude tool_use 응답의 input — 의미 검증 전 raw 데이터. */
     public record ClaudeSceneResult(
-            String questionText, List<ClaudeChoice> choices, boolean shouldEndSession) {}
+            String questionText,
+            List<ClaudeChoice> choices,
+            boolean shouldEndSession,
+            List<String> npcResponse) {}
 
     public record ClaudeChoice(String choiceIntentId, String text) {}
 }

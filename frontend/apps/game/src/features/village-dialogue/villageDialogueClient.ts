@@ -78,10 +78,10 @@ export async function saveVillagerChoiceEvent(event: VillagerChoiceEvent) {
         selectedChoice: {
           choiceIntentId: event.choiceIntentId,
           text: event.choiceText,
+          intensity: event.intensity,
+          concernFlags: event.concernFlags,
+          protectiveFactors: event.protectiveFactors,
         },
-        intensity: event.intensity,
-        concernFlags: event.concernFlags,
-        protectiveFactors: event.protectiveFactors,
         generatedBy: event.generatedBy,
       }),
     })

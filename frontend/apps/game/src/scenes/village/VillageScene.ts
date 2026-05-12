@@ -588,7 +588,7 @@ export class VillageScene extends Phaser.Scene {
     const dialog = this.dialogs.get(npcId)
     if (!dialog) return
 
-    setCenteredDialogText(dialog, VILLAGER_FIRST_GREETING[npcId] ?? '안녕, 와줬구나.')
+    setCenteredDialogText(dialog, VILLAGER_FIRST_GREETING[npcId].slice(0, 2).join('\n'))
     this.isVillagerDialogueOpen = true
     this.activeDialogNpcId = npcId
     this.target = null

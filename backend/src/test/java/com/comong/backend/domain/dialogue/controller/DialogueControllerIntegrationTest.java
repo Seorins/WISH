@@ -275,6 +275,96 @@ class DialogueControllerIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
+    @DisplayName("등대지기: FE 위조 intensity/concernFlags 무시 — BE catalog 값으로 저장 (S14P31E103-708)")
+    void submitTurn_yeongcheol_overridesMetadataFromCatalog() throws Exception {
+        TestUser user = setupUserWithProfile("override@example.com", "override-user");
+        long sessionId = startSession(user, "YEONGCHEOL");
+
+        // FE 가 위조: worry_pain (catalog intensity=3) 인데 intensity=0 으로 보냄
+        mockMvc.perform(
+                        post("/dialogue/sessions/{id}/turns", sessionId)
+                                .header("Authorization", "Bearer " + user.token())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(
+                                        """
+                                        {
+                                          "questionText": "오늘 기분은 어떠니?",
+                                          "selectedChoice": {
+                                            "choiceIntentId": "worry_pain",
+                                            "text": "아픈 게 걱정돼요",
+                                            "intensity": 0,
+                                            "concernFlags": ["FAKE_FLAG"],
+                                            "protectiveFactors": ["FAKE_FACTOR"]
+                                          }
+                                        }
+                                        """))
+                .andExpect(status().isOk());
+
+        // 세션 상세 조회 → 저장된 turn 은 catalog 값
+        mockMvc.perform(
+                        get("/dialogue/sessions/{id}", sessionId)
+                                .header("Authorization", "Bearer " + user.token()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.turns[0].intensity").value(3))
+                .andExpect(jsonPath("$.data.turns[0].concernFlags[0]").value("pain_concern"))
+                .andExpect(jsonPath("$.data.turns[0].concernFlags[1]").value("procedure_fear"))
+                .andExpect(jsonPath("$.data.turns[0].protectiveFactors[0]").value("can_name_fear"));
+    }
+
+    @Test
+    @DisplayName("등대지기: 화이트리스트 밖 choiceIntentId → 400 DL-006 (S14P31E103-708)")
+    void submitTurn_yeongcheol_unknownIntent_returnsBadRequest() throws Exception {
+        TestUser user = setupUserWithProfile("unknown@example.com", "unknown-user");
+        long sessionId = startSession(user, "YEONGCHEOL");
+
+        mockMvc.perform(
+                        post("/dialogue/sessions/{id}/turns", sessionId)
+                                .header("Authorization", "Bearer " + user.token())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(turnBody("오늘 기분은 어떠니?", "kill_myself", "...", 0)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("DL-006"));
+
+        assertThat(dialogueTurnRepository.count()).isZero();
+    }
+
+    @Test
+    @DisplayName("마을 주민: FE 값 그대로 저장 (BE catalog 미적용)")
+    void submitTurn_villager_keepsFeProvidedMetadata() throws Exception {
+        TestUser user = setupUserWithProfile("villager-meta@example.com", "villager-meta");
+        long sessionId = startSession(user, "JOEUN");
+
+        mockMvc.perform(
+                        post("/dialogue/sessions/{id}/turns", sessionId)
+                                .header("Authorization", "Bearer " + user.token())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(
+                                        """
+                                        {
+                                          "questionText": "오늘 몸은 어때?",
+                                          "selectedChoice": {
+                                            "choiceIntentId": "nurse_body_tired",
+                                            "text": "조금 피곤해요",
+                                            "intensity": 2,
+                                            "concernFlags": ["fatigue_present"],
+                                            "protectiveFactors": ["body_state_named"]
+                                          }
+                                        }
+                                        """))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(
+                        get("/dialogue/sessions/{id}", sessionId)
+                                .header("Authorization", "Bearer " + user.token()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.turns[0].choiceIntentId").value("nurse_body_tired"))
+                .andExpect(jsonPath("$.data.turns[0].intensity").value(2))
+                .andExpect(jsonPath("$.data.turns[0].concernFlags[0]").value("fatigue_present"))
+                .andExpect(
+                        jsonPath("$.data.turns[0].protectiveFactors[0]").value("body_state_named"));
+    }
+
+    @Test
     @DisplayName("다른 사람 세션에 turn 제출 — DL-001 (404, enumeration 방지)")
     void submitTurn_foreignSession_returnsNotFound() throws Exception {
         TestUser owner = setupUserWithProfile("turn-owner@example.com", "turn-owner");
