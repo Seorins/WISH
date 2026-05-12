@@ -83,19 +83,38 @@ public class ClaudeSceneProvider {
 
     private static final Map<String, Set<String>> TRANSITION_RULES =
             Map.ofEntries(
-                    Map.entry("entry_rest", Set.of("rest_quiet", "rest_close_eyes", "rest_near_family")),
-                    Map.entry("entry_activity", Set.of("activity_music", "activity_art", "activity_move")),
+                    Map.entry(
+                            "entry_rest",
+                            Set.of("rest_quiet", "rest_close_eyes", "rest_near_family")),
+                    Map.entry(
+                            "entry_activity",
+                            Set.of("activity_music", "activity_art", "activity_move")),
                     Map.entry("entry_talk", Set.of("talk_body", "talk_peer", "talk_worry")),
                     Map.entry("talk_body", Set.of("body_okay", "body_tired", "body_pain_worry")),
-                    Map.entry("body_tired", Set.of("body_tell_adult", "body_point_place", "body_hold_hand")),
-                    Map.entry("body_pain_worry", Set.of("body_tell_adult", "body_point_place", "body_hold_hand")),
+                    Map.entry(
+                            "body_tired",
+                            Set.of("body_tell_adult", "body_point_place", "body_hold_hand")),
+                    Map.entry(
+                            "body_pain_worry",
+                            Set.of("body_tell_adult", "body_point_place", "body_hold_hand")),
                     Map.entry("talk_peer", Set.of("peer_miss", "peer_school", "peer_okay")),
-                    Map.entry("talk_worry", Set.of("worry_hospital", "worry_family", "worry_upset")),
-                    Map.entry("worry_hospital", Set.of("hospital_injection", "hospital_unknown", "hospital_okay")),
-                    Map.entry("hospital_injection", Set.of("support_family", "support_teacher", "support_hold_hand")),
-                    Map.entry("hospital_unknown", Set.of("support_family", "support_teacher", "support_hold_hand")),
-                    Map.entry("worry_family", Set.of("express_words", "express_drawing", "express_private")),
-                    Map.entry("worry_upset", Set.of("anger_pause", "anger_say_upset", "anger_call_help")),
+                    Map.entry(
+                            "talk_worry", Set.of("worry_hospital", "worry_family", "worry_upset")),
+                    Map.entry(
+                            "worry_hospital",
+                            Set.of("hospital_injection", "hospital_unknown", "hospital_okay")),
+                    Map.entry(
+                            "hospital_injection",
+                            Set.of("support_family", "support_teacher", "support_hold_hand")),
+                    Map.entry(
+                            "hospital_unknown",
+                            Set.of("support_family", "support_teacher", "support_hold_hand")),
+                    Map.entry(
+                            "worry_family",
+                            Set.of("express_words", "express_drawing", "express_private")),
+                    Map.entry(
+                            "worry_upset",
+                            Set.of("anger_pause", "anger_say_upset", "anger_call_help")),
                     Map.entry("rest_quiet", Set.of()),
                     Map.entry("rest_close_eyes", Set.of()),
                     Map.entry("rest_near_family", Set.of()),
@@ -228,7 +247,10 @@ public class ClaudeSceneProvider {
             List<DialogueTurn> turnsAscByStepIndex) {
         String q = result.questionText();
         if (!result.shouldEndSession()) {
-            if (q == null || q.isBlank() || q.length() > MAX_QUESTION_LENGTH || containsForbidden(q)) {
+            if (q == null
+                    || q.isBlank()
+                    || q.length() > MAX_QUESTION_LENGTH
+                    || containsForbidden(q)) {
                 return Optional.empty();
             }
             if (isBeforeHospitalRoute(prevChoiceIntentId) && containsAny(q, MEDICAL_TERMS)) {
@@ -322,7 +344,8 @@ public class ClaudeSceneProvider {
                         .contains(prevChoiceIntentId);
     }
 
-    private static boolean isRepeatedQuestion(String question, List<DialogueTurn> turnsAscByStepIndex) {
+    private static boolean isRepeatedQuestion(
+            String question, List<DialogueTurn> turnsAscByStepIndex) {
         String normalized = question.replaceAll("\\s+", "");
         return turnsAscByStepIndex.stream()
                 .map(DialogueTurn::getQuestionText)

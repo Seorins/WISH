@@ -204,12 +204,7 @@ public class FallbackSceneProvider {
 
     private static SceneResponse endScene(List<String> npcResponse) {
         return new SceneResponse(
-                "",
-                List.of(),
-                null,
-                true,
-                DialogueTurnGeneratedBy.FALLBACK,
-                npcResponse);
+                "", List.of(), null, true, DialogueTurnGeneratedBy.FALLBACK, npcResponse);
     }
 
     private static void requireBackendDriven(NpcName npcName) {

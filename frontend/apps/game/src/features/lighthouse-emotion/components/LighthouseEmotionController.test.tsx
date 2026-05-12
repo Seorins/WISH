@@ -17,19 +17,22 @@ function createDeferred<T>() {
   return { promise, resolve }
 }
 
-async function flushStart() {
+async function flushPromises() {
   await act(async () => {
     await Promise.resolve()
   })
 }
 
 async function advanceOpeningToEntry() {
-  fireEvent.click(screen.getByRole('button', { name: '대화 계속하기' }))
+  fireEvent.keyDown(window, { key: 'Enter' })
+  await flushPromises()
+  fireEvent.keyDown(window, { key: 'Enter' })
+  await flushPromises()
+}
+
+async function advanceDialogueDelay() {
   await act(async () => {
-    await Promise.resolve()
-  })
-  fireEvent.click(screen.getByRole('button', { name: '대화 계속하기' }))
-  await act(async () => {
+    vi.advanceTimersByTime(1700)
     await Promise.resolve()
   })
 }
@@ -75,7 +78,7 @@ describe('LighthouseEmotionController', () => {
       />,
     )
 
-    await flushStart()
+    await flushPromises()
 
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringMatching(/\/api\/v1\/dialogue\/sessions$/),
@@ -94,8 +97,12 @@ describe('LighthouseEmotionController', () => {
     )
     expect(screen.queryByRole('button', { name: 'Okay' })).toBeNull()
 
-    await advanceOpeningToEntry()
+    fireEvent.keyDown(window, { key: 'Enter' })
+    await flushPromises()
+    expect(onTextChange).toHaveBeenCalledWith('여기서는 천천히 쉬어도 괜찮아.')
 
+    fireEvent.keyDown(window, { key: 'Enter' })
+    await flushPromises()
     expect(onTextChange).toHaveBeenCalledWith('오늘은 어떻게 지내고 싶니?')
     expect(screen.getByRole('button', { name: '쉬고 싶어요' })).toBeTruthy()
     expect(screen.getByRole('button', { name: '뭔가 해보고 싶어요' })).toBeTruthy()
@@ -104,10 +111,9 @@ describe('LighthouseEmotionController', () => {
     expect(screen.queryByText('LLM')).toBeNull()
   })
 
-  it('shows bridge lines, then lighthouse loading copy, then the validated next scene', async () => {
+  it('uses LLM only as a fast response rewrite and advances by static node id', async () => {
     const fetchMock = vi.mocked(fetch)
     const onTextChange = vi.fn()
-
     const turnDeferred = createDeferred<Response>()
 
     fetchMock
@@ -133,51 +139,43 @@ describe('LighthouseEmotionController', () => {
       />,
     )
 
-    await flushStart()
+    await flushPromises()
     await advanceOpeningToEntry()
 
     fireEvent.click(screen.getByRole('button', { name: '잠깐 얘기하고 싶어요' }))
+    await flushPromises()
 
-    await act(async () => {
-      await Promise.resolve()
-    })
     expect(onTextChange).toHaveBeenCalledWith(
       '그래, 길게 말하지 않아도 괜찮단다.\n편한 얘기부터 골라보자.',
     )
     expect(screen.queryByRole('button', { name: '잠깐 얘기하고 싶어요' })).toBeNull()
 
-    await act(async () => {
-      vi.advanceTimersByTime(1400)
-      await Promise.resolve()
-    })
-    expect(onTextChange).toHaveBeenCalledWith('등대지기가 불빛을 살피고 있어요...')
-
     turnDeferred.resolve(
       jsonResponse({
-        npcResponse: ['그래, 그 얘기부터 해보자.'],
-        nextScene: {
-          questionText: '무슨 얘기가 좋을까?',
-          choices: [
-            { choiceIntentId: 'talk_body', text: '몸 얘기' },
-            { choiceIntentId: 'talk_peer', text: '친구나 학교 얘기' },
-            { choiceIntentId: 'talk_worry', text: '걱정되는 얘기' },
-          ],
-          secondaryAction: null,
-          shouldEndSession: false,
+        data: {
+          sessionId: 2,
+          status: 'IN_PROGRESS',
+          npcResponse: ['좋아. 편한 얘기부터 골라보자.'],
+          nextScene: {
+            questionText: 'Backend question should be ignored',
+            choices: [{ choiceIntentId: 'ignored', text: 'Ignored' }],
+            secondaryAction: null,
+            shouldEndSession: false,
+          },
         },
       }),
     )
 
-    await act(async () => {
-      await Promise.resolve()
-    })
-    await act(async () => {
-      vi.advanceTimersByTime(1700)
-      await Promise.resolve()
-    })
+    await flushPromises()
+    expect(onTextChange).toHaveBeenCalledWith('좋아. 편한 얘기부터 골라보자.')
+
+    await advanceDialogueDelay()
 
     expect(onTextChange).toHaveBeenCalledWith('무슨 얘기가 좋을까?')
     expect(screen.getByRole('button', { name: '몸 얘기' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '친구나 학교 얘기' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '걱정되는 얘기' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Ignored' })).toBeNull()
   })
 
   it('waits on final lines instead of auto-closing', async () => {
@@ -198,12 +196,21 @@ describe('LighthouseEmotionController', () => {
       )
       .mockResolvedValueOnce(
         jsonResponse({
-          npcResponse: ['쉬어도 괜찮단다.'],
-          nextScene: {
-            questionText: '',
-            choices: [],
-            secondaryAction: null,
-            shouldEndSession: true,
+          data: {
+            sessionId: 3,
+            status: 'IN_PROGRESS',
+            npcResponse: ['그래, 쉬고 싶은 날도 있지.'],
+            nextScene: null,
+          },
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          data: {
+            sessionId: 3,
+            status: 'IN_PROGRESS',
+            npcResponse: ['그래. 조용히 있어도 괜찮아.'],
+            nextScene: null,
           },
         }),
       )
@@ -214,28 +221,25 @@ describe('LighthouseEmotionController', () => {
           data: {
             sessionId: 3,
             status: 'FINISHED',
-            closingLines: ['오늘은 여기까지 해도 괜찮단다.'],
+            closingLines: ['오늘은 여기까지 해도 괜찮아.'],
           },
         }),
       )
 
     render(<LighthouseEmotionController patientProfileId={7} isOpen onClose={onClose} />)
 
-    await flushStart()
+    await flushPromises()
     await advanceOpeningToEntry()
 
     fireEvent.click(screen.getByRole('button', { name: '쉬고 싶어요' }))
-    await act(async () => {
-      vi.advanceTimersByTime(1400)
-      await Promise.resolve()
-    })
-    await act(async () => {
-      await Promise.resolve()
-    })
-    await act(async () => {
-      vi.advanceTimersByTime(1700)
-      await Promise.resolve()
-    })
+    await flushPromises()
+    await advanceDialogueDelay()
+    expect(screen.getByRole('button', { name: '조용히 있을래요' })).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: '조용히 있을래요' }))
+    await flushPromises()
+    await advanceDialogueDelay()
+    await flushPromises()
 
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringMatching(/\/api\/v1\/dialogue\/sessions\/3\/finish$/),
@@ -246,9 +250,7 @@ describe('LighthouseEmotionController', () => {
     expect(onClose).not.toHaveBeenCalled()
 
     fireEvent.keyDown(window, { key: 'Enter' })
-    await act(async () => {
-      await Promise.resolve()
-    })
+    await flushPromises()
     expect(onClose).toHaveBeenCalled()
   })
 
@@ -267,9 +269,7 @@ describe('LighthouseEmotionController', () => {
       />,
     )
 
-    await act(async () => {
-      await Promise.resolve()
-    })
+    await flushPromises()
 
     expect(onTextChange).toHaveBeenCalled()
     expect(screen.queryByRole('button', { name: 'API error' })).toBeNull()
