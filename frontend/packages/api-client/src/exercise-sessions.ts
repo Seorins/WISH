@@ -22,6 +22,7 @@ export type CreateExerciseMotionResultRequest = {
   feedback?: string
   videoKey?: string
   thumbKey?: string
+  poseReplay?: ExerciseMotionReplayClip
 }
 
 export type CreateExerciseMotionRecord = {
@@ -32,6 +33,43 @@ export type CreateExerciseMotionRecord = {
   feedback?: string
   videoKey?: string
   thumbKey?: string
+  poseReplay?: ExerciseMotionReplayClip
+}
+
+export type MotionReplayLandmarkTuple = readonly [
+  number | null,
+  number | null,
+  number | null,
+  number,
+]
+
+export type MotionReplayFrame = {
+  t: number
+  lm: readonly MotionReplayLandmarkTuple[]
+}
+
+export type MotionReplaySegment = {
+  startMs: number
+  endMs: number
+  reason?: string | null
+}
+
+export type ExerciseMotionReplayClip = {
+  version: number
+  fps: 30
+  durationMs: number
+  landmarks: readonly string[]
+  frames: readonly MotionReplayFrame[]
+  representativeSegment?: MotionReplaySegment | null
+}
+
+export type ExerciseMotionReplayResponse = {
+  motionResultId: number
+  exerciseMotionId: number
+  motionName: string
+  routineOrder: number
+  replayAvailable: boolean
+  replay: ExerciseMotionReplayClip | null
 }
 
 export type CreateExerciseSessionRequest = {
@@ -61,6 +99,7 @@ export type ExerciseSessionMotionResult = {
   feedback: string
   videoUrl?: string | null
   thumbUrl?: string | null
+  replayAvailable?: boolean
   createdAt: string
 }
 
@@ -77,10 +116,15 @@ export const CREATE_EXERCISE_SESSION_ERROR_MESSAGE =
 export const EXERCISE_SESSION_DETAIL_ERROR_MESSAGE =
   '\uCCB4\uC870 \uC138\uC158 \uC0C1\uC138 \uAE30\uB85D\uC744 \uBD88\uB7EC\uC624\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4. \uC7A0\uC2DC \uD6C4 \uB2E4\uC2DC \uC2DC\uB3C4\uD574\uC8FC\uC138\uC694.'
 
+export const EXERCISE_MOTION_REPLAY_ERROR_MESSAGE =
+  '\uCCB4\uC870 \uB3D9\uC791 \uB9AC\uD50C\uB808\uC774\uB97C \uBD88\uB7EC\uC624\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4. \uC7A0\uC2DC \uD6C4 \uB2E4\uC2DC \uC2DC\uB3C4\uD574\uC8FC\uC138\uC694.'
+
 const INVALID_PATIENT_PROFILE_ID_MESSAGE =
   'patientProfileId\uAC00 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.'
 const INVALID_EXERCISE_SESSION_ID_MESSAGE =
   '\uCCB4\uC870 \uC138\uC158 ID\uAC00 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.'
+const INVALID_EXERCISE_MOTION_RESULT_ID_MESSAGE =
+  '\uCCB4\uC870 \uB3D9\uC791 \uACB0\uACFC ID\uAC00 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.'
 const INVALID_EXERCISE_TYPE_MESSAGE =
   '\uC6B4\uB3D9 \uC885\uB958\uAC00 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.'
 const INVALID_DURATION_MESSAGE =
@@ -93,6 +137,15 @@ const INVALID_SAVE_RESPONSE_MESSAGE =
   '\uCCB4\uC870 \uC138\uC158 \uC800\uC7A5 \uC751\uB2F5\uC774 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.'
 const INVALID_DETAIL_RESPONSE_MESSAGE =
   '\uCCB4\uC870 \uC138\uC158 \uC0C1\uC138 \uC751\uB2F5\uC774 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.'
+const INVALID_REPLAY_RESPONSE_MESSAGE =
+  '\uCCB4\uC870 \uB3D9\uC791 \uB9AC\uD50C\uB808\uC774 \uC751\uB2F5\uC774 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.'
+const INVALID_POSE_REPLAY_MESSAGE =
+  '\uC88C\uD45C \uB9AC\uD50C\uB808\uC774 \uB370\uC774\uD130\uAC00 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.'
+
+const REPLAY_FPS = 30
+const REPLAY_LANDMARK_COUNT = 12
+const REPLAY_TUPLE_SIZE = 4
+const REPLAY_MAX_FRAMES = REPLAY_FPS * 180
 
 export function createExerciseSessionError(error: unknown) {
   const message =
@@ -140,6 +193,12 @@ function assertValidExerciseSessionId(id: number) {
   }
 }
 
+function assertValidExerciseMotionResultId(id: number) {
+  if (!Number.isInteger(id) || id <= 0) {
+    throw new Error(INVALID_EXERCISE_MOTION_RESULT_ID_MESSAGE)
+  }
+}
+
 function assertFiniteNumber(value: number, message: string) {
   if (!Number.isFinite(value)) {
     throw new Error(message)
@@ -150,6 +209,64 @@ function assertCompletionRate(value: number, message: string) {
   assertFiniteNumber(value, message)
   if (value < 0 || value > 1) {
     throw new Error(message)
+  }
+}
+
+function validatePoseReplay(replay: ExerciseMotionReplayClip): void {
+  if (
+    replay.version !== 1 ||
+    replay.fps !== REPLAY_FPS ||
+    !Number.isFinite(replay.durationMs) ||
+    replay.durationMs < 0 ||
+    !Array.isArray(replay.landmarks) ||
+    replay.landmarks.length !== REPLAY_LANDMARK_COUNT ||
+    !Array.isArray(replay.frames) ||
+    replay.frames.length === 0 ||
+    replay.frames.length > REPLAY_MAX_FRAMES
+  ) {
+    throw new Error(INVALID_POSE_REPLAY_MESSAGE)
+  }
+
+  let previousTimestampMs = -1
+  replay.frames.forEach(frame => {
+    if (
+      !Number.isFinite(frame.t) ||
+      frame.t < previousTimestampMs ||
+      !Array.isArray(frame.lm) ||
+      frame.lm.length !== REPLAY_LANDMARK_COUNT
+    ) {
+      throw new Error(INVALID_POSE_REPLAY_MESSAGE)
+    }
+    previousTimestampMs = frame.t
+
+    frame.lm.forEach((tuple: MotionReplayLandmarkTuple) => {
+      if (!Array.isArray(tuple) || tuple.length !== REPLAY_TUPLE_SIZE) {
+        throw new Error(INVALID_POSE_REPLAY_MESSAGE)
+      }
+
+      const [x, y, z, confidence] = tuple
+      const coordinates = [x, y, z]
+      if (
+        coordinates.some(value => value !== null && !Number.isFinite(value)) ||
+        !Number.isFinite(confidence) ||
+        confidence < 0 ||
+        confidence > 1
+      ) {
+        throw new Error(INVALID_POSE_REPLAY_MESSAGE)
+      }
+    })
+  })
+
+  const segment = replay.representativeSegment
+  if (
+    segment &&
+    (!Number.isFinite(segment.startMs) ||
+      !Number.isFinite(segment.endMs) ||
+      segment.startMs < 0 ||
+      segment.endMs < segment.startMs ||
+      segment.endMs > replay.durationMs)
+  ) {
+    throw new Error(INVALID_POSE_REPLAY_MESSAGE)
   }
 }
 
@@ -203,6 +320,7 @@ export function toCreateExerciseSessionRequest(
       feedback: motion.feedback,
       ...(motion.videoKey ? { videoKey: motion.videoKey } : {}),
       ...(motion.thumbKey ? { thumbKey: motion.thumbKey } : {}),
+      ...(motion.poseReplay ? { poseReplay: motion.poseReplay } : {}),
     })),
   }
 }
@@ -246,6 +364,10 @@ export function validateCreateExerciseSessionRequest(payload: CreateExerciseSess
 
     if (motion.feedback !== undefined && typeof motion.feedback !== 'string') {
       throw new Error(getMotionMessage(order, 'feedback'))
+    }
+
+    if (motion.poseReplay) {
+      validatePoseReplay(motion.poseReplay)
     }
   })
 }
@@ -363,5 +485,37 @@ export async function getExerciseSessionDetail(
       throw error
     }
     throw new Error(EXERCISE_SESSION_DETAIL_ERROR_MESSAGE)
+  }
+}
+
+export async function getExerciseMotionReplay(
+  motionResultId: number,
+  client: AxiosInstance = apiClient,
+): Promise<ExerciseMotionReplayResponse> {
+  assertValidExerciseMotionResultId(motionResultId)
+
+  try {
+    const response = await client.get<ApiResponse<ExerciseMotionReplayResponse | null>>(
+      `/exercise-sessions/motions/${motionResultId}/replay`,
+      {
+        headers: { Accept: 'application/json' },
+      },
+    )
+
+    const body = response.data
+    if (body.errors && Object.keys(body.errors).length > 0) {
+      throw new Error(EXERCISE_MOTION_REPLAY_ERROR_MESSAGE)
+    }
+
+    if (!body.data) {
+      throw new Error(INVALID_REPLAY_RESPONSE_MESSAGE)
+    }
+
+    return body.data
+  } catch (error) {
+    if (error instanceof Error && error.message === INVALID_REPLAY_RESPONSE_MESSAGE) {
+      throw error
+    }
+    throw new Error(EXERCISE_MOTION_REPLAY_ERROR_MESSAGE)
   }
 }
