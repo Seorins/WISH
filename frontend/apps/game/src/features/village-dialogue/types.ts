@@ -1,4 +1,4 @@
-import type { BackendNpcName, FrontNpcId } from '../npcIdentity'
+import type { FrontNpcId } from '../npcIdentity'
 
 export type VillagerNpcId =
   | 'nurse_bunny'
@@ -8,15 +8,18 @@ export type VillagerNpcId =
   | 'squirrel_friend'
   | 'dain'
 
+export type BackendNpcName = 'JOEUN' | 'GEONBIN' | 'JEONGHO' | 'SEORIN' | 'SEHYEON' | 'DAIN'
+
 export interface VillagerIdentity {
   npcId: VillagerNpcId
   displayName: string
-  backendNpcName: Exclude<BackendNpcName, 'YEONGCHEOL'>
+  backendNpcName: BackendNpcName
 }
 
 export type VillagerDialogueStatus =
   | 'idle'
   | 'opening_greeting'
+  | 'showing_question'
   | 'waiting_choice'
   | 'submitting_choice'
   | 'showing_response'
@@ -37,6 +40,56 @@ export type CounselingEndingType =
   | 'CALM_DOWN'
   | 'NO_PRESSURE'
 
+export type VillagerLineKey =
+  | 'entry_rest'
+  | 'entry_activity'
+  | 'entry_talk'
+  | 'rest_quiet'
+  | 'rest_eyes'
+  | 'rest_family'
+  | 'activity_music'
+  | 'activity_art'
+  | 'activity_move'
+  | 'talk_body'
+  | 'talk_peer'
+  | 'talk_worry'
+  | 'body_okay'
+  | 'body_tired'
+  | 'body_pain_worry'
+  | 'body_rest_quiet'
+  | 'body_family_near'
+  | 'body_tell_adult'
+  | 'pain_tell_teacher'
+  | 'pain_point_place'
+  | 'pain_hold_hand'
+  | 'peer_miss'
+  | 'peer_draw'
+  | 'peer_later'
+  | 'school_curious'
+  | 'school_ask_family'
+  | 'school_ask_friend'
+  | 'school_later'
+  | 'worry_hospital'
+  | 'worry_family'
+  | 'worry_upset'
+  | 'hospital_injection'
+  | 'hospital_unknown'
+  | 'hospital_okay'
+  | 'hospital_family_near'
+  | 'hospital_teacher_explain'
+  | 'hospital_hold_hand'
+  | 'hospital_ask_teacher'
+  | 'hospital_ask_family'
+  | 'hospital_draw_question'
+  | 'family_say_worry'
+  | 'family_tell_teacher'
+  | 'family_show_drawing'
+  | 'anger_pause'
+  | 'anger_say_upset'
+  | 'anger_call_help'
+  | 'expression_words'
+  | 'expression_drawing'
+
 export interface DailyActivityState {
   completedActivityCount: number
   hasDoneAnyActivityToday: boolean
@@ -52,7 +105,9 @@ export interface CounselingChoice {
   intensity: 0 | 1 | 2 | 3
   concernFlags: string[]
   protectiveFactors: string[]
-  responseLines: string[]
+  responseKey?: VillagerLineKey
+  fallbackResponseLines: string[]
+  responseLines?: string[]
   endingType?: CounselingEndingType
   endingLines?: string[]
   activityEndingLines?: {
@@ -70,7 +125,7 @@ export interface CounselingNode {
 export interface CounselingScript {
   scriptId: string
   title: string
-  domain: 'body' | 'pain' | 'fatigue' | 'family' | 'peer' | 'expression' | 'anger'
+  domain?: 'body' | 'pain' | 'fatigue' | 'family' | 'peer' | 'expression' | 'anger'
   weight?: number
   fallbackEndingLine?: string
   startNodeId: string
