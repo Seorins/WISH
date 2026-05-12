@@ -95,6 +95,11 @@ const MOTION_COUNTDOWN_READY_FEEDBACK = '곧 시작해요!'
 const GUIDE_INTRO_PLAY_COUNT = 2
 const GUIDE_INTRO_FALLBACK_MS = 5000
 const MOTION_CAPTURING_FEEDBACK = '동작 확인 중...'
+const GUIDE_VIDEO_OBJECT_POSITION = '50% 90%'
+const SIDE_GUIDE_VIDEO_OBJECT_POSITION = '50% 90%'
+const SIDE_GUIDE_VIDEO_SCALE = 1.25
+const SIDE_GUIDE_VIDEO_TRANSLATE_X = '0%'
+const SIDE_GUIDE_VIDEO_TRANSLATE_Y = '-5%'
 const ENCOURAGEMENT_SUCCESS_MESSAGES = [
   '정확해요!',
   '멋져요!',
@@ -132,6 +137,7 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
   private mediaStream: MediaStream | null = null
   private videoElement: HTMLVideoElement | null = null
   private guideVideoElement?: HTMLVideoElement
+  private guideVideoWrapper?: HTMLDivElement
   private guideVideoResizeHandler?: () => void
   private sideGuideVideoBounds?: GuideVideoBounds
   private sideGuideStatusText?: Phaser.GameObjects.Text
@@ -1546,6 +1552,13 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
       guideVideoUrl,
       this.sideGuideStatusText,
       15,
+      {
+        objectFit: 'contain',
+        objectPosition: SIDE_GUIDE_VIDEO_OBJECT_POSITION,
+        scale: SIDE_GUIDE_VIDEO_SCALE,
+        translateX: SIDE_GUIDE_VIDEO_TRANSLATE_X,
+        translateY: SIDE_GUIDE_VIDEO_TRANSLATE_Y,
+      },
     )
   }
 
@@ -1554,9 +1567,25 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     videoUrl: string,
     loadingText?: Phaser.GameObjects.Text,
     zIndex = 15,
-    options?: { loop?: boolean; onEnded?: () => void },
+    options?: {
+      loop?: boolean
+      onEnded?: () => void
+      objectFit?: 'cover' | 'contain'
+      objectPosition?: string
+      scale?: number
+      translateX?: string
+      translateY?: string
+    },
   ) {
     this.destroyGuideVideoElement()
+
+    const wrapper = document.createElement('div')
+    wrapper.style.position = 'fixed'
+    wrapper.style.overflow = 'hidden'
+    wrapper.style.pointerEvents = 'none'
+    wrapper.style.borderRadius = `${bounds.radius ?? 18}px`
+    wrapper.style.backgroundColor = '#fffbf1'
+    wrapper.style.zIndex = String(zIndex)
 
     const video = document.createElement('video')
     video.src = videoUrl
@@ -1568,22 +1597,33 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     if (options?.onEnded) {
       video.addEventListener('ended', options.onEnded)
     }
-    video.style.position = 'fixed'
-    video.style.objectFit = 'cover'
+    video.style.width = '100%'
+    video.style.height = '100%'
+    video.style.objectFit = options?.objectFit ?? 'cover'
+    video.style.objectPosition = options?.objectPosition ?? GUIDE_VIDEO_OBJECT_POSITION
     video.style.pointerEvents = 'none'
-    video.style.borderRadius = `${bounds.radius ?? 18}px`
-    video.style.backgroundColor = '#fffbf1'
-    video.style.zIndex = String(zIndex)
+    const scale = options?.scale ?? 1
+    const translateX = options?.translateX ?? '0%'
+    const translateY = options?.translateY ?? '0%'
+    const hasTranslate = translateX !== '0%' || translateY !== '0%'
+    if (scale !== 1 || hasTranslate) {
+      const parts: string[] = []
+      if (scale !== 1) parts.push(`scale(${scale})`)
+      if (hasTranslate) parts.push(`translate(${translateX}, ${translateY})`)
+      video.style.transform = parts.join(' ')
+      video.style.transformOrigin = 'center'
+    }
+    wrapper.appendChild(video)
 
-    const positionVideo = () => {
+    const positionWrapper = () => {
       const canvasRect = this.game.canvas.getBoundingClientRect()
       const scaleX = canvasRect.width / this.scale.width
       const scaleY = canvasRect.height / this.scale.height
 
-      video.style.left = `${canvasRect.left + bounds.x * scaleX}px`
-      video.style.top = `${canvasRect.top + bounds.y * scaleY}px`
-      video.style.width = `${bounds.width * scaleX}px`
-      video.style.height = `${bounds.height * scaleY}px`
+      wrapper.style.left = `${canvasRect.left + bounds.x * scaleX}px`
+      wrapper.style.top = `${canvasRect.top + bounds.y * scaleY}px`
+      wrapper.style.width = `${bounds.width * scaleX}px`
+      wrapper.style.height = `${bounds.height * scaleY}px`
     }
 
     video.addEventListener(
@@ -1601,11 +1641,12 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
       { once: true },
     )
 
-    positionVideo()
-    document.body.appendChild(video)
+    positionWrapper()
+    document.body.appendChild(wrapper)
     this.guideVideoElement = video
-    this.guideVideoResizeHandler = positionVideo
-    window.addEventListener('resize', positionVideo)
+    this.guideVideoWrapper = wrapper
+    this.guideVideoResizeHandler = positionWrapper
+    window.addEventListener('resize', positionWrapper)
 
     void video.play().catch(() => {
       loadingText?.setText('가이드 영상을 불러오는 중입니다.').setVisible(true)
@@ -1625,8 +1666,12 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     this.guideVideoElement.pause()
     this.guideVideoElement.removeAttribute('src')
     this.guideVideoElement.load()
-    this.guideVideoElement.remove()
     this.guideVideoElement = undefined
+
+    if (this.guideVideoWrapper) {
+      this.guideVideoWrapper.remove()
+      this.guideVideoWrapper = undefined
+    }
   }
 
   private resizeCameraTexture(displayWidth: number, displayHeight: number) {
