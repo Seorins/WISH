@@ -46,6 +46,14 @@ const SONG_META: SongMeta[] = [
     tag: '클래식 · 입문',
     coverOffsetY: -30, // pull up so the star character is more centered in card
   },
+  {
+    chart: ALL_RHYTHM_CHARTS[2], // 캐논
+    coverKey: 'song-cover-canon',
+    coverPath: 'images/themes/music/ui/canon_thum.png',
+    accent: 0xffb86b,
+    tag: '클래식 · 챌린지',
+    coverOffsetY: -20,
+  },
 ]
 
 export class MusicSongSelectScene extends Phaser.Scene {
