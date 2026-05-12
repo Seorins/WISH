@@ -761,14 +761,6 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     const start = Math.max(0, buffer.length - ANALYSIS_WINDOW_FRAMES)
     const window = buffer.slice(start)
 
-    console.log('[Taegeuk1 Analyze] request', {
-      beMovementName: movementName,
-      aiMovementName,
-      framesSent: window.length,
-      totalBufferedFrames: buffer.length,
-      sessionId: this.sessionId,
-    })
-
     try {
       const response = await analyzeTaegeuk1Motion({
         session_id: this.sessionId,
@@ -782,26 +774,9 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
         return
       }
 
-      const previousBest = this.bestAiAnalysis?.score ?? null
       if (!this.bestAiAnalysis || response.score > this.bestAiAnalysis.score) {
         this.bestAiAnalysis = response
       }
-
-      console.log('[Taegeuk1 Analyze] response', {
-        beMovementName: movementName,
-        aiMovementName,
-        targetMovementFromResponse: response.target_movement_name,
-        nameMatch: aiMovementName === response.target_movement_name,
-        score: response.score,
-        passThreshold: response.pass_threshold,
-        passed: response.passed,
-        scoringMethod: response.scoring_method,
-        worstJoint: response.worst_joint,
-        weakestBodyPart: response.weakest_body_part,
-        feedbackSummary: response.feedback_summary,
-        previousBestScore: previousBest,
-        bestScoreSoFar: this.bestAiAnalysis?.score ?? null,
-      })
 
       if (this.isCapturing && response.passed && !this.hasTriggeredSuccess) {
         this.hasTriggeredSuccess = true
@@ -810,13 +785,8 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
         this.showFeedback(pickRandom(ENCOURAGEMENT_SUCCESS_MESSAGES))
         this.scheduleAdvanceAfterResult()
       }
-    } catch (error) {
-      console.warn('[Taegeuk1 Analyze] failed.', {
-        beMovementName: movementName,
-        aiMovementName,
-        framesSent: window.length,
-        error,
-      })
+    } catch {
+      // 분석 실패는 무시 — 다음 호출에서 재시도
     } finally {
       this.analysisInFlight = false
     }
@@ -835,12 +805,6 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     this.isCapturing = false
 
     const best = this.bestAiAnalysis
-    console.log('[Taegeuk1 Analyze] capture timeout', {
-      bestScore: best?.score ?? null,
-      bestPassed: best?.passed ?? null,
-      totalBufferedFrames: this.capturedSequence.length,
-    })
-
     if (best && best.score >= AI_ADVANCE_THRESHOLD) {
       this.showFeedback(pickRandom(ENCOURAGEMENT_RETRY_MESSAGES))
     } else {
