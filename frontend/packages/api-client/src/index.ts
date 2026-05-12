@@ -75,6 +75,8 @@ export {
   createTaekwondoSession,
   getMyTaekwondoSessions,
 } from './taekwondo-sessions'
+export { aiApiClient, analyzeTaegeuk1Motion } from './taekwondo-ai'
+export type { TaegeukAnalyzeRequest, TaegeukAnalyzeResponse } from './taekwondo-ai'
 export { changeUserRole, listUsers } from './users'
 export type { LoginRequest, SignupRequest, TokenResponse, UserResponse, UserRole } from './auth'
 export type { AdminUserResponse } from './users'

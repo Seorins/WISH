@@ -22,6 +22,7 @@ import {
   type MusicRecorderHandle as ScreenRecorderHandle,
 } from '@/game/systems/musicRecorder'
 import {
+  analyzeTaegeuk1Motion,
   calculateTaekwondoAverageAccuracy,
   createTaekwondoSession,
   DEFAULT_TAEKWONDO_BELT_COLOR,
@@ -33,9 +34,13 @@ import {
   type CreateTaekwondoSessionMotionRequest,
   type CreateTaekwondoSessionRequest,
   type Poomsae,
+  type TaegeukAnalyzeResponse,
   type TaekwondoBeltColor,
   type TaekwondoMotion,
 } from '@wish/api-client'
+import { FilesetResolver, PoseLandmarker } from '@mediapipe/tasks-vision'
+import { mediaPipe33ToAihub29 } from '@/game/motion/aihubPoseMapping'
+import { toAiMovementName } from '@/game/motion/taekwondoMovementName'
 
 type TaekwondoPoomsaePracticeData = {
   poomsaeId?: string
@@ -76,6 +81,43 @@ const MOTION_LOAD_ERROR_MESSAGE = '품새 동작 정보를 불러오지 못했�
 const CAMERA_DENIED_MESSAGE = '카메라를 사용할 수 없어요.'
 const GUIDE_VIDEO_PENDING_MESSAGE = '영상을 준비 중입니다.'
 const MOTION_INTRO_START_LABEL = '시작하기'
+
+const MAX_CAPTURE_DURATION_MS = 12000
+const ANALYSIS_WINDOW_FRAMES = 60
+const MIN_ANALYSIS_INTERVAL_MS = 500
+const MIN_FRAMES_FOR_FIRST_ANALYSIS = 30
+const CAPTURE_RESULT_TO_ADVANCE_DELAY_MS = 1500
+const AI_PASS_THRESHOLD = 80
+const AI_ADVANCE_THRESHOLD = 60
+const MOTION_COUNTDOWN_FROM = 3
+const MOTION_COUNTDOWN_TICK_MS = 1000
+const MOTION_COUNTDOWN_READY_FEEDBACK = '곧 시작해요!'
+const MOTION_CAPTURING_FEEDBACK = '동작 확인 중...'
+const ENCOURAGEMENT_SUCCESS_MESSAGES = [
+  '정확해요!',
+  '멋져요!',
+  '잘하고 있어요!',
+  '완벽해요!',
+] as const
+const ENCOURAGEMENT_RETRY_MESSAGES = [
+  '좋아요, 다음으로 가볼까요?',
+  '계속 도전해요!',
+  '잘 따라했어요!',
+] as const
+const ENCOURAGEMENT_FORCE_ADVANCE_MESSAGES = [
+  '잘했어요! 다음 동작도 힘차게!',
+  '멋졌어요! 다음으로 넘어가볼까요?',
+  '좋아요! 다음 동작도 해볼까요?',
+] as const
+
+const MEDIAPIPE_VERSION = '0.10.21'
+const POSE_WASM_BASE_URL = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MEDIAPIPE_VERSION}/wasm`
+const POSE_MODEL_URL =
+  'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task'
+
+function pickRandom<T>(items: readonly T[]): T {
+  return items[Math.floor(Math.random() * items.length)]
+}
 const IMAGE_ASPECT = {
   deleteButton: 344 / 336,
   feedback: 852 / 330,
@@ -116,6 +158,19 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
   private hasSubmittedSession = false
   private isSavingSession = false
   private isSceneShuttingDown = false
+  private poseLandmarker: PoseLandmarker | null = null
+  private isPoseLandmarkerLoading = false
+  private capturedSequence: number[][][] = []
+  private isCapturing = false
+  private captureTimer: Phaser.Time.TimerEvent | null = null
+  private sessionId = ''
+  private bestAiAnalysis: TaegeukAnalyzeResponse | null = null
+  private analysisInFlight = false
+  private lastAnalysisStartedAtMs = 0
+  private hasTriggeredSuccess = false
+  private lastPoseDetectTimeMs = -1
+  private countdownText?: Phaser.GameObjects.Text
+  private countdownTimer: Phaser.Time.TimerEvent | null = null
   private hasDrawnCameraPlaceholder = false
   private lastVideoTime = -1
   private poomsaeId = 'taegeuk-1'
@@ -134,23 +189,6 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     }
 
     void this.finishPracticeSession(false)
-  }
-
-  private readonly handleNextMotionTestDown = () => {
-    this.advanceToNextMotion()
-  }
-
-  private readonly handleBeltPromotionPreviewDown = () => {
-    if (!import.meta.env.DEV || this.beltPromotionOverlay) {
-      return
-    }
-
-    const textureKey = BELT_PROMOTION_TEXTURE_KEYS.PURPLE
-    if (!textureKey || !this.textures.exists(textureKey)) {
-      return
-    }
-
-    this.showBeltPromotionOverlay('PURPLE', textureKey, false)
   }
 
   constructor() {
@@ -172,6 +210,16 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     this.hasSubmittedSession = false
     this.isSavingSession = false
     this.isSceneShuttingDown = false
+    this.capturedSequence = []
+    this.isCapturing = false
+    this.captureTimer = null
+    this.bestAiAnalysis = null
+    this.countdownTimer = null
+    this.lastPoseDetectTimeMs = -1
+    this.sessionId =
+      typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? crypto.randomUUID()
+        : `taekwondo-${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`
   }
 
   preload() {
@@ -241,16 +289,68 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     this.createPracticeLayout(vw, vh)
     this.startCamera()
     void this.loadPracticeMotions()
+    void this.initPoseLandmarker()
 
     this.input.keyboard?.on('keydown-ESC', this.handleEscDown)
-    this.input.keyboard?.on('keydown-N', this.handleNextMotionTestDown)
-    this.input.keyboard?.on('keydown-B', this.handleBeltPromotionPreviewDown)
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.cleanup())
     this.cameras.main.fadeIn(FADE_DURATION, 0, 0, 0)
   }
 
+  private async initPoseLandmarker() {
+    if (this.poseLandmarker || this.isPoseLandmarkerLoading) {
+      return
+    }
+    this.isPoseLandmarkerLoading = true
+    try {
+      const vision = await FilesetResolver.forVisionTasks(POSE_WASM_BASE_URL)
+      if (this.isSceneShuttingDown) {
+        return
+      }
+      this.poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
+        baseOptions: {
+          modelAssetPath: POSE_MODEL_URL,
+          delegate: 'GPU',
+        },
+        runningMode: 'VIDEO',
+        numPoses: 1,
+        minPoseDetectionConfidence: 0.3,
+        minPosePresenceConfidence: 0.3,
+        minTrackingConfidence: 0.3,
+      })
+    } catch (error) {
+      console.warn('[TaekwondoPoomsaePracticeScene] Failed to init PoseLandmarker.', error)
+    } finally {
+      this.isPoseLandmarkerLoading = false
+    }
+  }
+
   update() {
     this.drawCameraFrame()
+    this.detectPoseIfCapturing()
+    this.maybeRunRealtimeAnalysis()
+  }
+
+  private detectPoseIfCapturing() {
+    if (!this.isCapturing || !this.poseLandmarker || !this.videoElement) {
+      return
+    }
+    if (this.videoElement.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+      return
+    }
+    const timestampMs = performance.now()
+    if (this.videoElement.currentTime === this.lastPoseDetectTimeMs) {
+      return
+    }
+    this.lastPoseDetectTimeMs = this.videoElement.currentTime
+    try {
+      const detection = this.poseLandmarker.detectForVideo(this.videoElement, timestampMs)
+      const landmarks = detection.landmarks?.[0]
+      if (landmarks && landmarks.length > 0) {
+        this.capturedSequence.push(mediaPipe33ToAihub29(landmarks))
+      }
+    } catch (error) {
+      console.warn('[TaekwondoPoomsaePracticeScene] Pose detection failed.', error)
+    }
   }
 
   private createCameraTexture() {
@@ -357,6 +457,8 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     if (this.motions.length === 0 || this.isSceneShuttingDown) {
       return
     }
+
+    this.bestAiAnalysis = null
 
     this.motionIntroOverlay?.destroy(true)
     this.destroyGuideVideoElement()
@@ -535,6 +637,8 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     this.destroyGuideVideoElement()
     this.setSideGuideMagnifierVisible(true)
 
+    this.startMotionCountdown()
+
     if (!overlay) {
       return
     }
@@ -548,6 +652,176 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
         overlay.destroy(true)
         this.showSideGuideVideo()
       },
+    })
+  }
+
+  private startMotionCountdown() {
+    if (this.isSceneShuttingDown) {
+      return
+    }
+    this.countdownTimer?.remove(false)
+    this.countdownTimer = null
+    this.destroyCountdownText()
+
+    this.showFeedback(MOTION_COUNTDOWN_READY_FEEDBACK)
+
+    const { width: vw, height: vh } = this.scale
+    const fontSize = Math.round(Phaser.Math.Clamp(vh * 0.18, 80, 200))
+    const text = this.add
+      .text(vw * 0.334, vh * 0.548, String(MOTION_COUNTDOWN_FROM), {
+        fontFamily: 'sans-serif',
+        fontSize: `${fontSize}px`,
+        color: '#fff7e0',
+        fontStyle: '900',
+        stroke: '#3a2110',
+        strokeThickness: 8,
+        align: 'center',
+      })
+      .setOrigin(0.5)
+      .setDepth(10)
+    text.setShadow(0, 4, '#2e1a08', 6, false, true)
+    this.countdownText = text
+    this.playCountdownTextTween(text)
+
+    let remaining = MOTION_COUNTDOWN_FROM
+    this.countdownTimer = this.time.addEvent({
+      delay: MOTION_COUNTDOWN_TICK_MS,
+      repeat: MOTION_COUNTDOWN_FROM - 1,
+      callback: () => {
+        if (this.isSceneShuttingDown) {
+          return
+        }
+        remaining -= 1
+        if (remaining > 0) {
+          this.countdownText?.setText(String(remaining))
+          if (this.countdownText) {
+            this.playCountdownTextTween(this.countdownText)
+          }
+        } else {
+          this.countdownTimer = null
+          this.destroyCountdownText()
+          this.beginMotionCapture()
+        }
+      },
+    })
+  }
+
+  private playCountdownTextTween(text: Phaser.GameObjects.Text) {
+    text.setScale(0.6).setAlpha(0)
+    this.tweens.add({
+      targets: text,
+      scale: 1,
+      alpha: 1,
+      duration: 240,
+      ease: 'Back.easeOut',
+    })
+  }
+
+  private destroyCountdownText() {
+    this.countdownText?.destroy()
+    this.countdownText = undefined
+  }
+
+  private beginMotionCapture() {
+    this.capturedSequence = []
+    this.lastPoseDetectTimeMs = -1
+    this.bestAiAnalysis = null
+    this.isCapturing = true
+    this.analysisInFlight = false
+    this.lastAnalysisStartedAtMs = 0
+    this.hasTriggeredSuccess = false
+    this.showFeedback(MOTION_CAPTURING_FEEDBACK)
+    this.captureTimer?.remove(false)
+    this.captureTimer = this.time.delayedCall(MAX_CAPTURE_DURATION_MS, () => {
+      this.captureTimer = null
+      this.handleCaptureTimeout()
+    })
+  }
+
+  private maybeRunRealtimeAnalysis() {
+    if (!this.isCapturing || this.analysisInFlight || this.isSceneShuttingDown) {
+      return
+    }
+    if (this.capturedSequence.length < MIN_FRAMES_FOR_FIRST_ANALYSIS) {
+      return
+    }
+    const now = performance.now()
+    if (now - this.lastAnalysisStartedAtMs < MIN_ANALYSIS_INTERVAL_MS) {
+      return
+    }
+    this.analysisInFlight = true
+    this.lastAnalysisStartedAtMs = now
+    void this.runRealtimeAnalysis()
+  }
+
+  private async runRealtimeAnalysis() {
+    const movementName = this.getCurrentMotionName()
+    const aiMovementName = toAiMovementName(movementName)
+    const buffer = this.capturedSequence
+    const start = Math.max(0, buffer.length - ANALYSIS_WINDOW_FRAMES)
+    const window = buffer.slice(start)
+
+    try {
+      const response = await analyzeTaegeuk1Motion({
+        session_id: this.sessionId,
+        movement_name: aiMovementName,
+        sequence: window,
+        input_normalized: false,
+        pass_threshold: AI_PASS_THRESHOLD,
+      })
+
+      if (this.isSceneShuttingDown) {
+        return
+      }
+
+      if (!this.bestAiAnalysis || response.score > this.bestAiAnalysis.score) {
+        this.bestAiAnalysis = response
+      }
+
+      if (this.isCapturing && response.passed && !this.hasTriggeredSuccess) {
+        this.hasTriggeredSuccess = true
+        this.stopCaptureLoop()
+        this.triggerSuccessEffect()
+        this.showFeedback(pickRandom(ENCOURAGEMENT_SUCCESS_MESSAGES))
+        this.scheduleAdvanceAfterResult()
+      }
+    } catch {
+      // 분석 실패는 무시 — 다음 호출에서 재시도
+    } finally {
+      this.analysisInFlight = false
+    }
+  }
+
+  private stopCaptureLoop() {
+    this.isCapturing = false
+    this.captureTimer?.remove(false)
+    this.captureTimer = null
+  }
+
+  private handleCaptureTimeout() {
+    if (this.hasTriggeredSuccess || this.isSceneShuttingDown) {
+      return
+    }
+    this.isCapturing = false
+
+    const best = this.bestAiAnalysis
+    if (best && best.score >= AI_ADVANCE_THRESHOLD) {
+      this.showFeedback(pickRandom(ENCOURAGEMENT_RETRY_MESSAGES))
+    } else {
+      this.showFeedback(pickRandom(ENCOURAGEMENT_FORCE_ADVANCE_MESSAGES))
+    }
+    this.scheduleAdvanceAfterResult()
+  }
+
+  private scheduleAdvanceAfterResult() {
+    if (this.isSceneShuttingDown) {
+      return
+    }
+    this.time.delayedCall(CAPTURE_RESULT_TO_ADVANCE_DELAY_MS, () => {
+      if (this.isSceneShuttingDown) {
+        return
+      }
+      this.advanceToNextMotion()
     })
   }
 
@@ -584,14 +858,19 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     const now = Date.now()
     const durationSec = Math.max(1, Math.round((now - this.motionStartedAtMs) / 1000))
     this.recordedMotionIndexes.add(this.currentMotionIndex)
+    const analysis = this.bestAiAnalysis
+    const accuracy = analysis ? Math.max(0, Math.min(1, analysis.score / 100)) : 0
+    const feedbackText = analysis?.feedback_summary?.trim() || DEFAULT_MOTION_COMPLETE_FEEDBACK
+    const completedReps = analysis && analysis.score >= AI_ADVANCE_THRESHOLD ? motion.targetReps : 0
     const motionResult: CreateTaekwondoSessionMotionRequest = {
       taekwondoMotionId: motion.id,
       durationSec,
-      accuracy: 1,
-      completedReps: motion.targetReps,
-      feedback: DEFAULT_MOTION_COMPLETE_FEEDBACK,
+      accuracy,
+      completedReps,
+      feedback: feedbackText,
     }
     this.motionResults.push(motionResult)
+    this.bestAiAnalysis = null
 
     const handle = this.motionRecorderHandle
     this.motionRecorderHandle = null
@@ -1492,8 +1771,6 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
   private cleanup() {
     this.isSceneShuttingDown = true
     this.input.keyboard?.off('keydown-ESC', this.handleEscDown)
-    this.input.keyboard?.off('keydown-N', this.handleNextMotionTestDown)
-    this.input.keyboard?.off('keydown-B', this.handleBeltPromotionPreviewDown)
     this.feedbackText = undefined
     this.currentMotionText = undefined
     this.motionIntroOverlay?.destroy(true)
@@ -1506,6 +1783,19 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     this.beltPromotionOverlay = undefined
     this.isWaitingMotionStart = false
     this.isAiJudgementPaused = false
+    this.isCapturing = false
+    this.analysisInFlight = false
+    this.hasTriggeredSuccess = false
+    this.lastAnalysisStartedAtMs = 0
+    this.capturedSequence = []
+    this.captureTimer?.remove(false)
+    this.captureTimer = null
+    this.countdownTimer?.remove(false)
+    this.countdownTimer = null
+    this.destroyCountdownText()
+    this.bestAiAnalysis = null
+    this.poseLandmarker?.close()
+    this.poseLandmarker = null
     this.progressView?.destroy()
     this.progressView = undefined
     this.motions = []
