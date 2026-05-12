@@ -1,5 +1,10 @@
 import Phaser from 'phaser'
-import { createArtwork, updateArtwork } from '@wish/api-client'
+import {
+  createArtwork,
+  submitDrawingGuess,
+  updateArtwork,
+  type DrawingGuessResult,
+} from '@wish/api-client'
 import { assetPath } from '@/game/assets/assetPath'
 import { createSceneWeatherLayer } from '@/features/weather/phaserWeatherLayer'
 import type { NormalizedLandmark } from '@mediapipe/tasks-vision'
@@ -18,6 +23,7 @@ import {
   type ArtConfirmDialog,
   type ArtConfirmDialogButtonRole,
 } from '../ui/artConfirmDialog'
+import { pickRandomPrompt, type DrawingPrompt } from './drawingPrompts'
 
 const ART_ROOM_RETURN_SPAWN = { xRatio: 0.5, yRatio: 0.76 }
 const CANVAS_SOURCE_SIZE = { width: 1535, height: 1024 }
@@ -171,6 +177,18 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
   private isSaveVisibilityConfirmOpen = false
   private saveVisibilityConfirmDialog: ArtConfirmDialog | null = null
   private editingArtwork: EditableArtworkSceneData | null = null
+  private isQuizMode = false
+  private currentPrompt: DrawingPrompt | null = null
+  private promptWordText: Phaser.GameObjects.Text | null = null
+  private isJudging = false
+  private quizResultDialog: ArtConfirmDialog | null = null
+  private isQuizResultOpen = false
+  private roundIntroDialog: ArtConfirmDialog | null = null
+  private isRoundIntroOpen = false
+  private quizSubmitButton: Phaser.GameObjects.Container | null = null
+  private quizSubmitButtonBounds = new Phaser.Geom.Rectangle()
+  private quizSubmitButtonBaseScale = { x: 1, y: 1 }
+  private judgingOverlay: Phaser.GameObjects.Container | null = null
   private contentStartedAt = 0
   private saveButtonBaseScale = { x: 1, y: 1 }
   private resetButtonBaseScale = { x: 1, y: 1 }
@@ -181,8 +199,11 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
     if (
       this.isTransitioning ||
       this.isSavingDrawing ||
+      this.isJudging ||
       this.isExitConfirmOpen ||
-      this.isSaveVisibilityConfirmOpen
+      this.isSaveVisibilityConfirmOpen ||
+      this.isQuizResultOpen ||
+      this.isRoundIntroOpen
     ) {
       return
     }
@@ -212,8 +233,11 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
     if (
       this.isTransitioning ||
       this.isSavingDrawing ||
+      this.isJudging ||
       this.isExitConfirmOpen ||
-      this.isSaveVisibilityConfirmOpen
+      this.isSaveVisibilityConfirmOpen ||
+      this.isQuizResultOpen ||
+      this.isRoundIntroOpen
     ) {
       this.stopDrawing()
       return
@@ -290,6 +314,16 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
   create(data: ArtFreeDrawingSceneData = {}) {
     const { width: vw, height: vh } = this.scale
     this.editingArtwork = data.editArtwork ?? null
+    this.isQuizMode = !this.editingArtwork
+    this.currentPrompt = this.isQuizMode ? pickRandomPrompt() : null
+    this.isJudging = false
+    this.isQuizResultOpen = false
+    this.quizResultDialog = null
+    this.judgingOverlay = null
+    this.promptWordText = null
+    this.roundIntroDialog = null
+    this.isRoundIntroOpen = false
+    this.quizSubmitButton = null
     this.contentStartedAt = this.time.now
     this.isTransitioning = false
     this.isSavingDrawing = false
@@ -358,6 +392,9 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
       this.input.setDefaultCursor('default')
       this.hideExitConfirm()
       this.hideSaveVisibilityConfirm()
+      this.hideQuizResultDialog()
+      this.hideRoundIntro()
+      this.hideJudgingOverlay()
       this.cameraPreview?.destroy()
       this.cameraPreview = null
       this.stopHandTracking()
@@ -366,6 +403,10 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
     })
 
     this.cameras.main.fadeIn(220, 0, 0, 0)
+
+    if (this.isQuizMode && this.currentPrompt) {
+      this.time.delayedCall(280, () => this.showRoundIntro(this.currentPrompt!))
+    }
   }
 
   update(time: number) {
@@ -377,6 +418,11 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
   }
 
   private createHeader(vw: number, _vh: number) {
+    if (this.isQuizMode) {
+      this.createPromptCard(vw)
+      return
+    }
+
     const headerX = this.drawBounds.left
     const headerTop = Math.max(28, this.drawBounds.top - 108)
     const titleY = headerTop
@@ -403,6 +449,39 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
       })
       .setDepth(10)
       .setOrigin(0, 0)
+  }
+
+  private createPromptCard(vw: number) {
+    // 캔버스 위 중앙에 단어만 깔끔하게 — 캐릭터 카드의 라벨 같은 톤
+    const canvasCenterX = this.drawBounds.left + this.drawBounds.width / 2
+    const cardWidth = Math.min(280, vw * 0.22)
+    const cardHeight = 60
+    const cardY = Math.max(20, this.drawBounds.top - cardHeight - 18)
+
+    const background = this.add.graphics()
+    background.fillStyle(0xfff8e5, 0.98)
+    background.fillRoundedRect(0, 0, cardWidth, cardHeight, cardHeight / 2)
+    background.lineStyle(3, 0xb88a4c, 1)
+    background.strokeRoundedRect(0, 0, cardWidth, cardHeight, cardHeight / 2)
+
+    const wordText = this.add
+      .text(cardWidth / 2, cardHeight / 2, this.currentPrompt?.word ?? '', {
+        fontFamily: 'sans-serif',
+        fontSize: `${Math.max(24, Math.round(vw * 0.02))}px`,
+        color: '#3f2615',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5, 0.5)
+    this.promptWordText = wordText
+
+    this.add
+      .container(canvasCenterX - cardWidth / 2, cardY, [background, wordText])
+      .setDepth(10)
+      .setSize(cardWidth, cardHeight)
+  }
+
+  private refreshPromptCard() {
+    this.promptWordText?.setText(this.currentPrompt?.word ?? '')
   }
 
   private createCanvas(vw: number, vh: number) {
@@ -576,14 +655,12 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
   }
 
   private createActionButtons() {
-    const saveSource = this.textures.get('art-ui-save-btn').getSourceImage() as HTMLImageElement
     const resetSource = this.textures.get('art-ui-reset-btn').getSourceImage() as HTMLImageElement
     const resetButtonHeight = 48
     const resetButtonWidth = Math.round(
       resetButtonHeight * (resetSource.width / resetSource.height),
     )
     const saveButtonHeight = 44
-    const saveButtonWidth = Math.round(saveButtonHeight * (saveSource.width / saveSource.height))
     const buttonGap = 2
     const buttonY = Math.min(
       this.scale.height - saveButtonHeight / 2 - 18,
@@ -591,27 +668,40 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
     )
     const rowRight = this.drawBounds.right - 54
     const resetButtonX = rowRight - resetButtonWidth / 2
-    const saveButtonX = rowRight - resetButtonWidth - buttonGap - saveButtonWidth / 2
-    const saveButton = this.add.image(saveButtonX, buttonY, 'art-ui-save-btn').setDepth(15)
-    saveButton.setDisplaySize(saveButtonWidth, saveButtonHeight)
-    this.saveButton = saveButton
-    this.saveButtonBaseScale = { x: saveButton.scaleX, y: saveButton.scaleY }
 
-    saveButton.setInteractive({ useHandCursor: true })
-    saveButton.on('pointerover', () => saveButton.setTint(0xf9f1d9))
-    saveButton.on('pointerout', () => saveButton.clearTint())
-    saveButton.on(
-      'pointerdown',
-      (
-        _pointer: Phaser.Input.Pointer,
-        _localX: number,
-        _localY: number,
-        event: Phaser.Types.Input.EventData,
-      ) => {
-        event.stopPropagation()
-        this.requestSaveDrawing()
-      },
-    )
+    let submitLeftEdgeX: number
+    if (this.isQuizMode) {
+      submitLeftEdgeX = this.createQuizSubmitButton(
+        rowRight - resetButtonWidth - buttonGap,
+        buttonY,
+        saveButtonHeight,
+      )
+    } else {
+      const saveSource = this.textures.get('art-ui-save-btn').getSourceImage() as HTMLImageElement
+      const saveButtonWidth = Math.round(saveButtonHeight * (saveSource.width / saveSource.height))
+      const saveButtonX = rowRight - resetButtonWidth - buttonGap - saveButtonWidth / 2
+      const saveButton = this.add.image(saveButtonX, buttonY, 'art-ui-save-btn').setDepth(15)
+      saveButton.setDisplaySize(saveButtonWidth, saveButtonHeight)
+      this.saveButton = saveButton
+      this.saveButtonBaseScale = { x: saveButton.scaleX, y: saveButton.scaleY }
+
+      saveButton.setInteractive({ useHandCursor: true })
+      saveButton.on('pointerover', () => saveButton.setTint(0xf9f1d9))
+      saveButton.on('pointerout', () => saveButton.clearTint())
+      saveButton.on(
+        'pointerdown',
+        (
+          _pointer: Phaser.Input.Pointer,
+          _localX: number,
+          _localY: number,
+          event: Phaser.Types.Input.EventData,
+        ) => {
+          event.stopPropagation()
+          this.requestSaveDrawing()
+        },
+      )
+      submitLeftEdgeX = saveButtonX - saveButtonWidth / 2
+    }
 
     const resetButton = this.add.image(resetButtonX, buttonY, 'art-ui-reset-btn').setDepth(15)
     resetButton.setDisplaySize(resetButtonWidth, resetButtonHeight)
@@ -634,7 +724,88 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
       },
     )
 
-    this.createUndoButton(saveButtonX - saveButtonWidth / 2 - buttonGap, buttonY, saveButtonHeight)
+    this.createUndoButton(submitLeftEdgeX - buttonGap, buttonY, saveButtonHeight)
+  }
+
+  // 퀴즈 모드 전용 "그렸어요!" 알약 버튼. 저장 버튼 PNG 위에 텍스트를 얹는 방식이 깨져 보였던 걸 대체.
+  // 반환값: 버튼의 왼쪽 가장자리 x — 되돌리기 버튼 배치 기준으로 사용.
+  private createQuizSubmitButton(rightX: number, buttonY: number, buttonHeight: number): number {
+    const padX = 22
+    const labelText = '그렸어요!'
+    const fontSize = Math.max(15, Math.round(buttonHeight * 0.42))
+
+    const label = this.add
+      .text(0, 0, labelText, {
+        fontFamily: 'sans-serif',
+        fontSize: `${fontSize}px`,
+        color: '#ffffff',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5, 0.5)
+
+    const buttonWidth = Math.max(buttonHeight * 2.6, label.width + padX * 2)
+    const buttonX = rightX - buttonWidth / 2
+
+    const background = this.add.graphics()
+    const drawBackground = (fill: number) => {
+      background.clear()
+      background.fillStyle(fill, 1)
+      background.fillRoundedRect(
+        -buttonWidth / 2,
+        -buttonHeight / 2,
+        buttonWidth,
+        buttonHeight,
+        buttonHeight / 2,
+      )
+      background.lineStyle(2, 0x3f752a, 1)
+      background.strokeRoundedRect(
+        -buttonWidth / 2,
+        -buttonHeight / 2,
+        buttonWidth,
+        buttonHeight,
+        buttonHeight / 2,
+      )
+    }
+    drawBackground(0x65a843)
+
+    const container = this.add.container(buttonX, buttonY, [background, label]).setDepth(15)
+    container.setSize(buttonWidth, buttonHeight)
+    container.setInteractive({
+      hitArea: new Phaser.Geom.Rectangle(
+        -buttonWidth / 2,
+        -buttonHeight / 2,
+        buttonWidth,
+        buttonHeight,
+      ),
+      hitAreaCallback: Phaser.Geom.Rectangle.Contains,
+      useHandCursor: true,
+    })
+
+    container.on('pointerover', () => drawBackground(0x77be4f))
+    container.on('pointerout', () => drawBackground(0x65a843))
+    container.on(
+      'pointerdown',
+      (
+        _pointer: Phaser.Input.Pointer,
+        _localX: number,
+        _localY: number,
+        event: Phaser.Types.Input.EventData,
+      ) => {
+        event.stopPropagation()
+        this.requestJudgeDrawing()
+      },
+    )
+
+    this.quizSubmitButton = container
+    this.quizSubmitButtonBaseScale = { x: container.scaleX, y: container.scaleY }
+    this.quizSubmitButtonBounds.setTo(
+      buttonX - buttonWidth / 2,
+      buttonY - buttonHeight / 2,
+      buttonWidth,
+      buttonHeight,
+    )
+
+    return buttonX - buttonWidth / 2
   }
 
   private createUndoButton(rightX: number, buttonY: number, buttonHeight: number) {
@@ -963,7 +1134,13 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
 
   private updateHandDrawing(timestampMs: number) {
     const tracker = this.handTracker
-    if (!tracker?.isStarted || this.isDrawing || this.isTransitioning || this.isSavingDrawing) {
+    if (
+      !tracker?.isStarted ||
+      this.isDrawing ||
+      this.isTransitioning ||
+      this.isSavingDrawing ||
+      this.isJudging
+    ) {
       return
     }
 
@@ -1339,7 +1516,12 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
   }
 
   private getActiveConfirmDialog() {
-    return this.saveVisibilityConfirmDialog ?? this.exitConfirmDialog
+    return (
+      this.roundIntroDialog ??
+      this.quizResultDialog ??
+      this.saveVisibilityConfirmDialog ??
+      this.exitConfirmDialog
+    )
   }
 
   private clearPendingHandDialogButton() {
@@ -1374,7 +1556,11 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
 
     this.activatedHandAction = action
     if (action === 'save') {
-      this.requestSaveDrawing()
+      if (this.isQuizMode) {
+        this.requestJudgeDrawing()
+      } else {
+        this.requestSaveDrawing()
+      }
     } else if (action === 'reset') {
       this.resetDrawing()
     } else if (action === 'undo') {
@@ -1401,6 +1587,13 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
     }
 
     if (
+      this.quizSubmitButton &&
+      this.containsExpandedBounds(this.quizSubmitButtonBounds, point, padding)
+    ) {
+      return 'save'
+    }
+
+    if (
       this.resetButton &&
       this.containsExpandedBounds(this.resetButton.getBounds(), point, padding)
     ) {
@@ -1422,6 +1615,12 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
     this.applyActionButtonEffect(this.resetButton, this.resetButtonBaseScale, action === 'reset')
     this.applyActionButtonEffect(this.exitButton, this.exitButtonBaseScale, action === 'exit')
     this.applyUndoButtonHover(action === 'undo')
+    if (this.quizSubmitButton) {
+      this.quizSubmitButton.setScale(
+        this.quizSubmitButtonBaseScale.x * (action === 'save' ? 1.06 : 1),
+        this.quizSubmitButtonBaseScale.y * (action === 'save' ? 1.06 : 1),
+      )
+    }
   }
 
   private applyUndoButtonHover(isActive: boolean) {
@@ -1811,6 +2010,199 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
     this.stopDrawing()
     this.stopHandDrawing()
     this.showSaveVisibilityConfirm()
+  }
+
+  private requestJudgeDrawing() {
+    if (
+      this.isTransitioning ||
+      this.isSavingDrawing ||
+      this.isJudging ||
+      this.isExitConfirmOpen ||
+      this.isQuizResultOpen
+    ) {
+      return
+    }
+    if (!this.currentPrompt) {
+      return
+    }
+    if (!this.hasStartedDrawing) {
+      // 아직 한 획도 안 그렸으면 무시 — 헛 제출 방지
+      return
+    }
+
+    this.stopDrawing()
+    this.stopHandDrawing()
+    void this.judgeAndSaveDrawing()
+  }
+
+  private async judgeAndSaveDrawing() {
+    const prompt = this.currentPrompt
+    if (!prompt) return
+
+    this.isJudging = true
+    this.showJudgingOverlay()
+    const playDurationSeconds = this.getPlayDurationSeconds()
+
+    let exported: ExportedDrawingPng | null = null
+    let guessResult: DrawingGuessResult | null = null
+    try {
+      exported = await this.exportDrawingPng(playDurationSeconds, false)
+      // 판정과 저장을 병렬로 — 판정이 실패해도 저장은 시도
+      const [guess] = await Promise.all([
+        submitDrawingGuess({
+          prompt: prompt.word,
+          image: exported.blob,
+          filename: exported.filename,
+        })
+          .then(response => response.data)
+          .catch(error => {
+            console.error('Failed to judge drawing.', error)
+            return null
+          }),
+        createArtwork({
+          image: exported.blob,
+          filename: exported.filename,
+          sketchCode: null,
+          playDurationSeconds: exported.playDurationSeconds,
+          isPublic: exported.isPublic,
+          colorCount: exported.colorCount,
+        }).catch(error => {
+          console.error('Failed to save quiz artwork.', error)
+          return null
+        }),
+      ])
+      guessResult = guess
+    } finally {
+      this.hideJudgingOverlay()
+      this.isJudging = false
+    }
+
+    this.showQuizResultDialog(prompt, guessResult)
+  }
+
+  private showJudgingOverlay() {
+    if (this.judgingOverlay) return
+    const { width: vw, height: vh } = this.scale
+    const backdrop = this.add
+      .rectangle(0, 0, vw, vh, 0x000000, 0.4)
+      .setOrigin(0, 0)
+      .setInteractive()
+    const text = this.add
+      .text(vw / 2, vh / 2, 'AI가 살펴보는 중...', {
+        fontFamily: 'sans-serif',
+        fontSize: '32px',
+        color: '#fff8ec',
+        stroke: '#3f2615',
+        strokeThickness: 6,
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5, 0.5)
+    this.judgingOverlay = this.add.container(0, 0, [backdrop, text]).setDepth(EXIT_CONFIRM_DEPTH)
+  }
+
+  private hideJudgingOverlay() {
+    this.judgingOverlay?.destroy()
+    this.judgingOverlay = null
+  }
+
+  private showQuizResultDialog(prompt: DrawingPrompt, result: DrawingGuessResult | null) {
+    if (this.isQuizResultOpen) return
+    this.pauseHandInputForConfirmDialog()
+    this.isQuizResultOpen = true
+
+    const isMatch = result?.isMatch ?? false
+    const guess = result?.guess?.trim() ?? ''
+    const title = isMatch ? '정답이에요! 🎉' : '음... 비슷한데!'
+    const message = isMatch
+      ? `"${prompt.word}" 맞췄어요!\nAI: "${guess || prompt.word}" 같아 보였어요.`
+      : result === null
+        ? `AI가 잠시 쉬고 있어요.\n그래도 멋진 "${prompt.word}" 그림이에요!`
+        : `정답: "${prompt.word}"\nAI는 "${guess}" 같다고 했어요.`
+
+    this.quizResultDialog = createArtConfirmDialog(this, {
+      depth: EXIT_CONFIRM_DEPTH,
+      title,
+      message,
+      secondaryButton: {
+        label: '그만하기',
+        fillColor: 0xfffbf1,
+        strokeColor: 0xaa875b,
+        textColor: '#5f3b22',
+        onSelect: () => {
+          this.hideQuizResultDialog()
+          this.returnToArtRoom()
+        },
+      },
+      primaryButton: {
+        label: '다음',
+        fillColor: 0x65a843,
+        strokeColor: 0x3f752a,
+        textColor: '#ffffff',
+        onSelect: () => {
+          this.hideQuizResultDialog()
+          this.startNextQuizRound()
+        },
+      },
+    })
+  }
+
+  private hideQuizResultDialog() {
+    this.quizResultDialog?.setButtonHover(null)
+    this.quizResultDialog?.destroy()
+    this.quizResultDialog = null
+    this.isQuizResultOpen = false
+    this.clearPendingHandDialogButton()
+  }
+
+  private startNextQuizRound() {
+    this.currentPrompt = pickRandomPrompt(this.currentPrompt?.word)
+    this.refreshPromptCard()
+    this.resetDrawing()
+    this.contentStartedAt = this.time.now
+    if (this.currentPrompt) {
+      this.showRoundIntro(this.currentPrompt)
+    }
+  }
+
+  private showRoundIntro(prompt: DrawingPrompt) {
+    if (this.isRoundIntroOpen) return
+    this.pauseHandInputForConfirmDialog()
+    this.isRoundIntroOpen = true
+    this.roundIntroDialog = createArtConfirmDialog(this, {
+      depth: EXIT_CONFIRM_DEPTH + 5,
+      title: prompt.word,
+      message: '이걸 그려볼까?',
+      titleFontScale: 3.2,
+      secondaryButton: {
+        label: '그만하기',
+        fillColor: 0xfffbf1,
+        strokeColor: 0xaa875b,
+        textColor: '#5f3b22',
+        onSelect: () => {
+          this.hideRoundIntro()
+          this.returnToArtRoom()
+        },
+      },
+      primaryButton: {
+        label: '시작!',
+        fillColor: 0x65a843,
+        strokeColor: 0x3f752a,
+        textColor: '#ffffff',
+        onSelect: () => {
+          this.hideRoundIntro()
+        },
+      },
+    })
+  }
+
+  private hideRoundIntro() {
+    this.roundIntroDialog?.setButtonHover(null)
+    this.roundIntroDialog?.destroy()
+    this.roundIntroDialog = null
+    this.isRoundIntroOpen = false
+    this.clearPendingHandDialogButton()
+    // 인트로 닫고 나서야 실제 플레이 타이머 시작
+    this.contentStartedAt = this.time.now
   }
 
   private saveDrawing(isPublic: boolean) {

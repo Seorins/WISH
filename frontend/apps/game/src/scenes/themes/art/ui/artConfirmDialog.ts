@@ -14,6 +14,7 @@ type ArtConfirmDialogOptions = {
   depth: number
   title: string
   message: string
+  titleFontScale?: number // 기본 1. 라운드 인트로처럼 제시어를 크게 띄우고 싶을 때 2~3 권장
   secondaryButton: ArtConfirmButtonOptions
   primaryButton: ArtConfirmButtonOptions
 }
@@ -34,13 +35,25 @@ type ArtConfirmDialogButton = {
 
 export function createArtConfirmDialog(
   scene: Phaser.Scene,
-  { depth, title, message, secondaryButton, primaryButton }: ArtConfirmDialogOptions,
+  {
+    depth,
+    title,
+    message,
+    titleFontScale = 1,
+    secondaryButton,
+    primaryButton,
+  }: ArtConfirmDialogOptions,
 ): ArtConfirmDialog {
   const { width: vw, height: vh } = scene.scale
   const centerX = vw / 2
   const centerY = vh / 2
-  const panelWidth = Phaser.Math.Clamp(vw * 0.32, 380, 540)
-  const panelHeight = Phaser.Math.Clamp(vh * 0.23, 220, 270)
+  const isHero = titleFontScale > 1.4
+  const panelWidth = Phaser.Math.Clamp(vw * (isHero ? 0.42 : 0.32), 380, isHero ? 640 : 540)
+  const panelHeight = Phaser.Math.Clamp(
+    vh * (isHero ? 0.34 : 0.23),
+    isHero ? 300 : 220,
+    isHero ? 360 : 270,
+  )
   const panelX = centerX - panelWidth / 2
   const panelY = centerY - panelHeight / 2
   const objects: Phaser.GameObjects.GameObject[] = []
@@ -66,18 +79,21 @@ export function createArtConfirmDialog(
   panel.fillRoundedRect(panelX, panelY, panelWidth, panelHeight, 22)
   panel.strokeRoundedRect(panelX, panelY, panelWidth, panelHeight, 22)
 
+  const titleFontPx = Math.max(20, Math.round(vw * 0.013 * titleFontScale))
+  const titleY = panelY + (isHero ? 110 : 54)
   const titleText = scene.add
-    .text(centerX, panelY + 54, title, {
+    .text(centerX, titleY, title, {
       fontFamily: 'sans-serif',
-      fontSize: `${Math.max(20, Math.round(vw * 0.013))}px`,
+      fontSize: `${titleFontPx}px`,
       color: '#4e321f',
       align: 'center',
+      fontStyle: isHero ? 'bold' : 'normal',
     })
     .setDepth(depth + 2)
     .setOrigin(0.5)
 
   const messageText = scene.add
-    .text(centerX, panelY + 106, message, {
+    .text(centerX, panelY + (isHero ? 56 : 106), message, {
       fontFamily: 'sans-serif',
       fontSize: `${Math.max(15, Math.round(vw * 0.009))}px`,
       color: '#70513a',
