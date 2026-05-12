@@ -23,6 +23,7 @@ import {
   type ArtConfirmDialog,
   type ArtConfirmDialogButtonRole,
 } from '../ui/artConfirmDialog'
+import { createQuizResultDialog, createQuizRoundIntroDialog } from '../ui/quizDialog'
 import { pickRandomPrompt, type DrawingPrompt } from './drawingPrompts'
 
 const ART_ROOM_RETURN_SPAWN = { xRatio: 0.5, yRatio: 0.76 }
@@ -2084,11 +2085,11 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
     if (this.judgingOverlay) return
     const { width: vw, height: vh } = this.scale
     const backdrop = this.add
-      .rectangle(0, 0, vw, vh, 0x000000, 0.4)
+      .rectangle(0, 0, vw, vh, 0x000000, 0.42)
       .setOrigin(0, 0)
       .setInteractive()
     const text = this.add
-      .text(vw / 2, vh / 2, 'AI가 살펴보는 중...', {
+      .text(vw / 2, vh / 2 - 16, 'AI가 살펴보는 중', {
         fontFamily: 'sans-serif',
         fontSize: '32px',
         color: '#fff8ec',
@@ -2097,10 +2098,42 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
         fontStyle: 'bold',
       })
       .setOrigin(0.5, 0.5)
-    this.judgingOverlay = this.add.container(0, 0, [backdrop, text]).setDepth(EXIT_CONFIRM_DEPTH)
+
+    // 점 3개 통통 튀는 애니메이션
+    const dotSpacing = 22
+    const dotY = vh / 2 + 32
+    const dotCenterX = vw / 2
+    const dotColor = 0xfff8ec
+    const dotRadius = 7
+    const dots: Phaser.GameObjects.Graphics[] = []
+    const dotTweens: Phaser.Tweens.Tween[] = []
+    for (let i = 0; i < 3; i += 1) {
+      const dot = this.add.graphics()
+      dot.fillStyle(dotColor, 1)
+      dot.fillCircle(0, 0, dotRadius)
+      dot.setPosition(dotCenterX + (i - 1) * dotSpacing, dotY)
+      dots.push(dot)
+      dotTweens.push(
+        this.tweens.add({
+          targets: dot,
+          y: dotY - 12,
+          duration: 380,
+          delay: i * 130,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.InOut',
+        }),
+      )
+    }
+
+    const overlay = this.add.container(0, 0, [backdrop, text, ...dots]).setDepth(EXIT_CONFIRM_DEPTH)
+    overlay.setData('dotTweens', dotTweens)
+    this.judgingOverlay = overlay
   }
 
   private hideJudgingOverlay() {
+    const tweens = this.judgingOverlay?.getData('dotTweens') as Phaser.Tweens.Tween[] | undefined
+    tweens?.forEach(tween => tween.stop())
     this.judgingOverlay?.destroy()
     this.judgingOverlay = null
   }
@@ -2110,38 +2143,24 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
     this.pauseHandInputForConfirmDialog()
     this.isQuizResultOpen = true
 
-    const isMatch = result?.isMatch ?? false
+    const isFallback = result === null || result.source === 'FALLBACK'
+    const isCorrect = result?.isMatch === true && !isFallback
     const guess = result?.guess?.trim() ?? ''
-    const title = isMatch ? '정답이에요! 🎉' : '음... 비슷한데!'
-    const message = isMatch
-      ? `"${prompt.word}" 맞췄어요!\nAI: "${guess || prompt.word}" 같아 보였어요.`
-      : result === null
-        ? `AI가 잠시 쉬고 있어요.\n그래도 멋진 "${prompt.word}" 그림이에요!`
-        : `정답: "${prompt.word}"\nAI는 "${guess}" 같다고 했어요.`
 
-    this.quizResultDialog = createArtConfirmDialog(this, {
+    this.quizResultDialog = createQuizResultDialog({
+      scene: this,
       depth: EXIT_CONFIRM_DEPTH,
-      title,
-      message,
-      secondaryButton: {
-        label: '그만하기',
-        fillColor: 0xfffbf1,
-        strokeColor: 0xaa875b,
-        textColor: '#5f3b22',
-        onSelect: () => {
-          this.hideQuizResultDialog()
-          this.returnToArtRoom()
-        },
+      isCorrect,
+      isFallback,
+      prompt: prompt.word,
+      aiGuess: guess.length > 0 ? guess : null,
+      onNext: () => {
+        this.hideQuizResultDialog()
+        this.startNextQuizRound()
       },
-      primaryButton: {
-        label: '다음',
-        fillColor: 0x65a843,
-        strokeColor: 0x3f752a,
-        textColor: '#ffffff',
-        onSelect: () => {
-          this.hideQuizResultDialog()
-          this.startNextQuizRound()
-        },
+      onExit: () => {
+        this.hideQuizResultDialog()
+        this.returnToArtRoom()
       },
     })
   }
@@ -2168,29 +2187,14 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
     if (this.isRoundIntroOpen) return
     this.pauseHandInputForConfirmDialog()
     this.isRoundIntroOpen = true
-    this.roundIntroDialog = createArtConfirmDialog(this, {
+    this.roundIntroDialog = createQuizRoundIntroDialog({
+      scene: this,
       depth: EXIT_CONFIRM_DEPTH + 5,
-      title: prompt.word,
-      message: '이걸 그려볼까?',
-      titleFontScale: 3.2,
-      secondaryButton: {
-        label: '그만하기',
-        fillColor: 0xfffbf1,
-        strokeColor: 0xaa875b,
-        textColor: '#5f3b22',
-        onSelect: () => {
-          this.hideRoundIntro()
-          this.returnToArtRoom()
-        },
-      },
-      primaryButton: {
-        label: '시작!',
-        fillColor: 0x65a843,
-        strokeColor: 0x3f752a,
-        textColor: '#ffffff',
-        onSelect: () => {
-          this.hideRoundIntro()
-        },
+      prompt: prompt.word,
+      onStart: () => this.hideRoundIntro(),
+      onExit: () => {
+        this.hideRoundIntro()
+        this.returnToArtRoom()
       },
     })
   }
