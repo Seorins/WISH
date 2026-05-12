@@ -61,6 +61,17 @@ livekit:
   api-key: ${LIVEKIT_API_KEY:}
   api-secret: ${LIVEKIT_API_SECRET:}
 
+# 마을 광장 실시간 동기화 (S14P31E103-714 ~). 단일 인스턴스 + 인메모리 SimpleBroker 전제.
+# enabled 가 false 면 핸드셰이크 자체를 거부 — 시연/사고 대응용 폴백 스위치 (계획서 11절 백오프 플랜).
+# 동적 변경 필요성이 낮아 환경변수로 빼지 않고 yaml 에 박는다. 운영 활성화 시 application-prod.yaml 에서 override.
+app:
+  realtime:
+    village:
+      enabled: false
+      tick-rate-hz: 5
+      room-capacity: 30
+      idle-disconnect-seconds: 60
+
 firebase:
   push:
     enabled: ${FIREBASE_PUSH_ENABLED:false}

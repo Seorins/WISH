@@ -131,7 +131,12 @@ public class SecurityConfig {
                                                 RegexRequestMatcher.regexMatcher(
                                                         HttpMethod.GET, "/artworks/\\d+"))
                                         .permitAll()
-                                        // 5. 그 외 모든 요청 (POST/PATCH/DELETE on artworks 포함) — 인증 필수
+                                        // 5. 마을 광장 WebSocket 핸드셰이크 — HTTP 단계는 permit.
+                                        //    실제 인증은 STOMP CONNECT 프레임의 ChannelInterceptor 가 수행
+                                        //    (VillageStompAuthInterceptor). S14P31E103-714.
+                                        .requestMatchers("/ws/village", "/ws/village/**")
+                                        .permitAll()
+                                        // 6. 그 외 모든 요청 (POST/PATCH/DELETE on artworks 포함) — 인증 필수
                                         .anyRequest()
                                         .authenticated())
                 .exceptionHandling(
