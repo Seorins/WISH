@@ -148,6 +148,27 @@ class VillagePresenceServiceTest {
     }
 
     @Test
+    void updatePositionAppliesNewCoordinates() {
+        stubProfile(1L, 100L, "n1");
+        presenceService.join("s1", 1L);
+
+        Optional<PlayerState> updated = presenceService.updatePosition(1L, 0.42, 0.78, "left");
+
+        assertThat(updated).isPresent();
+        assertThat(updated.get().x()).isEqualTo(0.42);
+        assertThat(updated.get().y()).isEqualTo(0.78);
+        assertThat(updated.get().dir()).isEqualTo("left");
+        assertThat(presenceService.findByUserId(1L).get().x()).isEqualTo(0.42);
+    }
+
+    @Test
+    void updatePositionReturnsEmptyForUnknownUser() {
+        Optional<PlayerState> updated = presenceService.updatePosition(999L, 0.1, 0.1, "down");
+
+        assertThat(updated).isEmpty();
+    }
+
+    @Test
     void evictIdleSkipsFreshMembers() {
         stubProfile(1L, 100L, "n1");
         presenceService.join("s1", 1L);

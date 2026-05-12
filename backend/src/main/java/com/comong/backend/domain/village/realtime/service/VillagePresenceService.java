@@ -146,6 +146,27 @@ public class VillagePresenceService {
         }
     }
 
+    /**
+     * 위치 패킷 수신 시 호출. 멤버가 있으면 위치/방향/lastSeen 을 갱신해 반환, 없으면 빈 Optional.
+     *
+     * <p>"없음" 은 latest-wins 로 evict 된 옛 세션이 늦은 position 패킷을 보내는 경우 — 이 경우 갱신/브로드캐스트하지 않는다.
+     */
+    public Optional<PlayerState> updatePosition(long userId, double x, double y, String dir) {
+        Instant now = Instant.now();
+        lock.lock();
+        try {
+            PlayerState existing = members.get(userId);
+            if (existing == null) {
+                return Optional.empty();
+            }
+            PlayerState updated = existing.withPosition(x, y, dir, now);
+            members.put(userId, updated);
+            return Optional.of(updated);
+        } finally {
+            lock.unlock();
+        }
+    }
+
     /** 좀비 정리. {@code idle-disconnect-seconds} 초과한 멤버 전부 제거 후 반환. */
     public Collection<PlayerState> evictIdle(Instant now) {
         Duration threshold = Duration.ofSeconds(properties.idleDisconnectSeconds());
