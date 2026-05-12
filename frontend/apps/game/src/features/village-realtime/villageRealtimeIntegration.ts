@@ -11,10 +11,17 @@ import { VillageRealtimeClient } from './villageRealtimeClient'
 const PUBLISH_INTERVAL_MS = 200
 /** ratio 좌표 변화 임계값. 이 이하의 변화는 publish 스킵 (유휴 트래픽 절감). */
 const POSITION_CHANGE_THRESHOLD = 0.001
+/** publishEmote 최대 빈도 (클라). 서버측 2s throttle 의 절반 — UX 용. */
+const EMOTE_INTERVAL_MS = 1_000
 
 export interface VillageRealtimeIntegration {
   /** local player 의 현재 상태를 5Hz 로 throttling 해 BE 에 보낸다. update() 매 tick 에 안전하게 호출 가능. */
   publishLocal(player: PlayerSprite, dir: PlayerDirection, moving: boolean): void
+  /**
+   * 이모티콘 발신. 클라 throttle (1s) 통과하면 BE 에 보내고 true 반환 — 호출자가 로컬 sprite 위에 즉시 버블 렌더해 latency 가림.
+   * throttle 차단 시 false. 화이트리스트 검증은 호출자가 미리.
+   */
+  publishEmote(emoji: string): boolean
   /** Phaser 씬 SHUTDOWN 시 호출. WS deactivate + 원격 sprite 정리. 멱등. */
   destroy(): void
 }
@@ -63,6 +70,8 @@ export function attachVillageRealtime(opts: AttachOptions): VillageRealtimeInteg
   let lastY = Number.NaN
   let lastDir: PlayerDirection | null = null
   let lastMoving = false
+  // publishEmote throttling
+  let lastEmoteMs = 0
 
   return {
     publishLocal(player, dir, moving) {
@@ -84,6 +93,14 @@ export function attachVillageRealtime(opts: AttachOptions): VillageRealtimeInteg
       lastY = yRatio
       lastDir = dir
       lastMoving = moving
+    },
+
+    publishEmote(emoji) {
+      const now = opts.scene.time.now
+      if (now - lastEmoteMs < EMOTE_INTERVAL_MS) return false
+      lastEmoteMs = now
+      client.publishEmote({ emoji })
+      return true
     },
 
     destroy() {

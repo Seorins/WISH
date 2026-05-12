@@ -1,0 +1,97 @@
+import Phaser from 'phaser'
+
+import { VILLAGE_EMOJIS, type VillageEmoji } from './types'
+
+/** 우하단 화면 가장자리에서 안쪽으로 띄울 여백 (px). */
+const PALETTE_MARGIN = 18
+const BUTTON_SIZE = 56
+const BUTTON_GAP = 8
+const FONT_SIZE = 32
+
+export interface VillageEmojiPaletteHandle {
+  /** 키보드 1\~6 단축키 또는 외부 트리거에서 호출 — 시각 피드백 + onSelect 발화. index 가 범위 밖이면 no-op. */
+  triggerByIndex(index: number): void
+  setVisible(visible: boolean): void
+  destroy(): void
+}
+
+interface CreateOptions {
+  onSelect: (emoji: VillageEmoji) => void
+}
+
+/**
+ * 우하단에 가로 배열된 이모지 팔레트. setScrollFactor 0 으로 카메라 이동에 따라가지 않고 항상 같은 위치 고정.
+ *
+ * <p>키보드 1~6 은 `triggerByIndex` 로 외부에서 발화 — 팔레트는 시각 피드백 (살짝 통통) + onSelect 콜백만 책임.
+ */
+export function createVillageEmojiPalette(
+  scene: Phaser.Scene,
+  options: CreateOptions,
+): VillageEmojiPaletteHandle {
+  const { width: vw, height: vh } = scene.scale
+  const totalWidth = VILLAGE_EMOJIS.length * BUTTON_SIZE + (VILLAGE_EMOJIS.length - 1) * BUTTON_GAP
+  const startX = vw - PALETTE_MARGIN - totalWidth
+  const y = vh - PALETTE_MARGIN - BUTTON_SIZE
+  const depth = 100
+
+  const container = scene.add.container(startX, y).setScrollFactor(0).setDepth(depth)
+
+  const buttons: Phaser.GameObjects.Text[] = []
+
+  VILLAGE_EMOJIS.forEach((emoji, index) => {
+    const buttonX = index * (BUTTON_SIZE + BUTTON_GAP) + BUTTON_SIZE / 2
+    const buttonY = BUTTON_SIZE / 2
+
+    const bg = scene.add
+      .rectangle(buttonX, buttonY, BUTTON_SIZE, BUTTON_SIZE, 0x000000, 0.32)
+      .setStrokeStyle(2, 0xffffff, 0.7)
+
+    const text = scene.add
+      .text(buttonX, buttonY, emoji, {
+        fontSize: `${FONT_SIZE}px`,
+        fontFamily: 'sans-serif',
+        resolution: 2,
+      })
+      .setOrigin(0.5, 0.5)
+
+    const hitArea = new Phaser.Geom.Rectangle(
+      buttonX - BUTTON_SIZE / 2,
+      buttonY - BUTTON_SIZE / 2,
+      BUTTON_SIZE,
+      BUTTON_SIZE,
+    )
+    bg.setInteractive(hitArea, Phaser.Geom.Rectangle.Contains)
+    bg.on('pointerdown', (event: Phaser.Types.Input.EventData) => {
+      ;(event as unknown as { stopPropagation?: () => void }).stopPropagation?.()
+      triggerByIndex(index)
+    })
+
+    container.add([bg, text])
+    buttons.push(text)
+  })
+
+  function triggerByIndex(index: number) {
+    if (index < 0 || index >= VILLAGE_EMOJIS.length) return
+    const emoji = VILLAGE_EMOJIS[index]
+    // 살짝 통통 피드백.
+    const target = buttons[index]
+    scene.tweens.add({
+      targets: target,
+      scale: 1.35,
+      duration: 90,
+      yoyo: true,
+      ease: 'Quad.Out',
+    })
+    options.onSelect(emoji)
+  }
+
+  return {
+    triggerByIndex,
+    setVisible(visible: boolean) {
+      container.setVisible(visible)
+    },
+    destroy() {
+      container.destroy()
+    },
+  }
+}

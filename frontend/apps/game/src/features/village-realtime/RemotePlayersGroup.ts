@@ -7,9 +7,11 @@ import {
   type PlayerSprite,
 } from '@/game/entities/player'
 
+import { emitEmoteBubble } from './emoteBubble'
 import type {
   PlayerDirection,
   SnapshotMember,
+  VillageEmoteEvent,
   VillageEvent,
   VillageJoinEvent,
   VillageLeaveEvent,
@@ -79,6 +81,9 @@ export class RemotePlayersGroup {
         break
       case 'leave':
         this.onLeave(event)
+        break
+      case 'emote':
+        this.onEmote(event)
         break
     }
   }
@@ -182,6 +187,16 @@ export class RemotePlayersGroup {
 
     member.dir = event.dir
     this.updateAnimation(member, event.dir, event.moving)
+  }
+
+  private onEmote(event: VillageEmoteEvent): void {
+    if (event.userId === this.options.localUserId) {
+      // 로컬 자기 자신은 publish 시점에 이미 로컬 렌더됨 (latency 가림). 서버 echo 는 중복 방지로 무시.
+      return
+    }
+    const member = this.members.get(event.userId)
+    if (!member) return
+    emitEmoteBubble(this.options.scene, member.sprite, event.emoji, REMOTE_SPRITE_DEPTH + 2)
   }
 
   private onLeave(event: VillageLeaveEvent): void {

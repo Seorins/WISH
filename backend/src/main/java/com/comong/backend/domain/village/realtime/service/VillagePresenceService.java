@@ -55,7 +55,11 @@ public class VillagePresenceService {
 
     private final Map<Long, PlayerState> members = new ConcurrentHashMap<>();
     private final Map<String, Long> sessionIndex = new ConcurrentHashMap<>();
+    private final Map<Long, Instant> lastEmoteByUserId = new ConcurrentHashMap<>();
     private final ReentrantLock lock = new ReentrantLock();
+
+    /** 이모티콘 서버측 throttle 간격. 도배 차단 — 클라가 1s throttle 을 우회해도 서버가 막는다 (S14P31E103-728). */
+    private static final Duration EMOTE_THROTTLE = Duration.ofSeconds(2);
 
     public enum JoinOutcome {
         JOINED,
@@ -138,9 +142,33 @@ public class VillagePresenceService {
             PlayerState member = members.get(userId);
             if (member != null && sessionId.equals(member.sessionId())) {
                 members.remove(userId);
+                lastEmoteByUserId.remove(userId);
                 return Optional.of(member);
             }
             return Optional.empty();
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /**
+     * 이모티콘 발신 시도. throttle 통과 + 멤버 존재 시 멤버 반환 (호출자가 broadcast). throttle 또는 미존재 시 빈 Optional.
+     *
+     * <p>"미존재" 는 latest-wins 로 evict 된 옛 세션의 늦은 emote 패킷 케이스 — 조용히 drop.
+     */
+    public Optional<PlayerState> registerEmote(long userId, Instant now) {
+        lock.lock();
+        try {
+            PlayerState member = members.get(userId);
+            if (member == null) {
+                return Optional.empty();
+            }
+            Instant last = lastEmoteByUserId.get(userId);
+            if (last != null && Duration.between(last, now).compareTo(EMOTE_THROTTLE) < 0) {
+                return Optional.empty();
+            }
+            lastEmoteByUserId.put(userId, now);
+            return Optional.of(member);
         } finally {
             lock.unlock();
         }

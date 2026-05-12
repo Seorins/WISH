@@ -28,7 +28,14 @@ import {
   VILLAGER_FIRST_GREETING,
   villageDialogues,
 } from '@/features/village-dialogue/villageDialogues'
-import { attachVillageRealtime, type VillageRealtimeIntegration } from '@/features/village-realtime'
+import {
+  attachVillageRealtime,
+  createVillageEmojiPalette,
+  emitEmoteBubble,
+  VILLAGE_EMOJIS,
+  type VillageEmojiPaletteHandle,
+  type VillageRealtimeIntegration,
+} from '@/features/village-realtime'
 import {
   createInitialVillagePortalState,
   createVillagePortalRectangles,
@@ -162,6 +169,7 @@ export class VillageScene extends Phaser.Scene {
   private settingsMenu!: ReturnType<typeof createSettingsMenu>
   private interactionHint!: NpcInteractionHintUi
   private villageRealtime: VillageRealtimeIntegration | null = null
+  private emojiPalette: VillageEmojiPaletteHandle | null = null
 
   constructor() {
     super({ key: 'VillageScene' })
@@ -385,6 +393,22 @@ export class VillageScene extends Phaser.Scene {
       worldWidth: W,
       worldHeight: H,
     })
+    this.emojiPalette = createVillageEmojiPalette(this, {
+      onSelect: emoji => {
+        if (this.isVillagerDialogueOpen || this.settingsMenu.isOpen()) return
+        if (!this.villageRealtime?.publishEmote(emoji)) return
+        // 로컬 즉시 렌더로 latency 가림. 서버 echo 는 RemotePlayersGroup 가 localUserId 필터링으로 무시.
+        emitEmoteBubble(this, this.player, emoji, 100)
+      },
+    })
+    const emojiKeyNames = ['ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX'] as const
+    emojiKeyNames.forEach((name, index) => {
+      if (index >= VILLAGE_EMOJIS.length) return
+      this.input.keyboard?.on(`keydown-${name}`, () => {
+        if (this.isVillagerDialogueOpen || this.settingsMenu.isOpen()) return
+        this.emojiPalette?.triggerByIndex(index)
+      })
+    })
     this.game.events.on('villager-dialogue:closed', this.handleVillagerDialogueClosed, this)
     this.game.events.on('villager-dialogue:text', this.handleVillagerDialogueText, this)
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
@@ -398,6 +422,8 @@ export class VillageScene extends Phaser.Scene {
       this.input.keyboard?.off('keydown-BACKSPACE', this.undoObstaclePolygonPoint, this)
       this.villageRealtime?.destroy()
       this.villageRealtime = null
+      this.emojiPalette?.destroy()
+      this.emojiPalette = null
     })
   }
 
@@ -416,6 +442,7 @@ export class VillageScene extends Phaser.Scene {
     this.resolvePolygonObstacleCollision()
 
     this.villageRealtime?.publishLocal(this.player, this.lastDirection, movement.moving)
+    this.emojiPalette?.setVisible(!this.isVillagerDialogueOpen && !this.settingsMenu.isOpen())
 
     const nearestNpc = this.getNearestNpcInTalkDistance()
     this.nearestNpcId = nearestNpc?.id ?? null

@@ -34,7 +34,25 @@ export interface VillageLeaveEvent {
   userId: number
 }
 
-export type VillageEvent = VillageJoinEvent | VillageMoveEvent | VillageLeaveEvent
+export interface VillageEmoteEvent {
+  type: 'emote'
+  userId: number
+  emoji: string
+}
+
+export type VillageEvent =
+  | VillageJoinEvent
+  | VillageMoveEvent
+  | VillageLeaveEvent
+  | VillageEmoteEvent
+
+export interface EmotePacket {
+  emoji: string
+}
+
+/** BE VillageEmojis.ALLOWED 와 동기. 변경 시 BE 화이트리스트도 같이. */
+export const VILLAGE_EMOJIS = ['😄', '😢', '👍', '❤️', '✨', '🐰'] as const
+export type VillageEmoji = (typeof VILLAGE_EMOJIS)[number]
 
 export interface SnapshotMember {
   userId: number

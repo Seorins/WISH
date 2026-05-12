@@ -203,6 +203,27 @@ describe('VillageRealtimeClient', () => {
     })
   })
 
+  it('publishEmote serializes packet and sends to /app/village/emote', () => {
+    const { client, fake } = createClient()
+    client.connect()
+    fake().triggerConnect()
+
+    client.publishEmote({ emoji: '😄' })
+
+    expect(fake().published).toContainEqual({
+      destination: '/app/village/emote',
+      body: JSON.stringify({ emoji: '😄' }),
+    })
+  })
+
+  it('publishEmote is no-op before connection completes', () => {
+    const { client, fake } = createClient()
+
+    client.publishEmote({ emoji: '😄' })
+
+    expect(fake().published).toEqual([])
+  })
+
   it('publishPosition is no-op before connection completes', () => {
     const { client, fake } = createClient()
 

@@ -223,6 +223,44 @@ class VillageStompIntegrationTest extends IntegrationTestSupport {
         assertThat(bJoin.get("nickname")).isEqualTo("구름");
     }
 
+    @Test
+    void emotePublishBroadcastsEmoteEventToOtherMembers() throws Exception {
+        // S14P31E103-728: 화이트리스트 이모지가 다른 멤버 토픽으로 정상 broadcast 되는지.
+        User userB = createUserWithProfile("villager-emote@example.com", "guardianB", "구름");
+
+        StompSession sessionA = connectAsUser(userA);
+        StompSession sessionB = connectAsUser(userB);
+
+        LinkedBlockingQueue<Map<String, Object>> eventsForB = subscribeTopic(sessionB);
+        Thread.sleep(SUBSCRIBE_GRACE_MS);
+
+        sessionA.send("/app/village/emote", Map.of("emoji", "😄"));
+
+        Map<String, Object> emoteEvent =
+                pollUntilType(eventsForB, "emote", RECEIVE_TIMEOUT_SECONDS);
+        assertThat(emoteEvent).isNotNull();
+        assertThat(emoteEvent.get("userId")).isEqualTo(userA.getId().intValue());
+        assertThat(emoteEvent.get("emoji")).isEqualTo("😄");
+    }
+
+    @Test
+    void emoteOutsideWhitelistIsSilentlyDropped() throws Exception {
+        // 화이트리스트 밖 이모지를 보내면 서버가 조용히 drop — 토픽에 broadcast 되지 않는다.
+        User userB = createUserWithProfile("villager-bad-emote@example.com", "guardianB", "구름");
+
+        StompSession sessionA = connectAsUser(userA);
+        StompSession sessionB = connectAsUser(userB);
+
+        LinkedBlockingQueue<Map<String, Object>> eventsForB = subscribeTopic(sessionB);
+        Thread.sleep(SUBSCRIBE_GRACE_MS);
+
+        sessionA.send("/app/village/emote", Map.of("emoji", "💀"));
+
+        // 짧은 시간 안에 emote 이벤트가 도착하지 않아야 한다.
+        Map<String, Object> emoteEvent = pollUntilType(eventsForB, "emote", 1);
+        assertThat(emoteEvent).isNull();
+    }
+
     // ---------- helpers ----------
 
     private User createUserWithProfile(
