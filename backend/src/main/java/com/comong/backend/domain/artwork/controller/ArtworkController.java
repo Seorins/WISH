@@ -21,10 +21,13 @@ import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.comong.backend.domain.artwork.dto.ArtGuessRequest;
+import com.comong.backend.domain.artwork.dto.ArtGuessResponse;
 import com.comong.backend.domain.artwork.dto.ArtworkCreateRequest;
 import com.comong.backend.domain.artwork.dto.ArtworkResponse;
 import com.comong.backend.domain.artwork.dto.ArtworkUpdateRequest;
 import com.comong.backend.domain.artwork.dto.PublicArtworkResponse;
+import com.comong.backend.domain.artwork.service.ArtGuessService;
 import com.comong.backend.domain.artwork.service.ArtworkService;
 import com.comong.backend.global.common.response.ApiResponse;
 import com.comong.backend.global.security.JwtTokenProvider.AuthenticatedUser;
@@ -42,6 +45,7 @@ import lombok.RequiredArgsConstructor;
 public class ArtworkController {
 
     private final ArtworkService artworkService;
+    private final ArtGuessService artGuessService;
 
     @Operation(
             summary = "작품 저장",
@@ -73,6 +77,30 @@ public class ArtworkController {
         ArtworkResponse response = artworkService.create(currentUser.userId(), request, image);
         URI location = URI.create("/artworks/" + response.id());
         return ResponseEntity.created(location).body(ApiResponse.success(response));
+    }
+
+    @Operation(
+            summary = "그림 퀴즈 판정",
+            description =
+                    "아이가 그린 그림을 Claude vision 으로 제시어와 비교 판정. multipart 의 request 파트(JSON)에 prompt,"
+                            + " image 파트에 PNG 를 담아 전송. 인증 불필요(게임 내 클라이언트가 직접 호출).")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "200",
+                description = "판정 완료 (source 가 fallback 이면 Claude 호출 실패 또는 비활성화)"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "400",
+                description = "메타데이터 검증 실패 (G-001) 또는 이미지 검증 실패 (S-001)"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "413",
+                description = "이미지 크기 한도 초과 (S-003) — 10MB")
+    })
+    @PostMapping(value = "/guess", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ApiResponse<ArtGuessResponse>> guess(
+            @Valid @RequestPart("request") ArtGuessRequest request,
+            @RequestPart("image") MultipartFile image) {
+        return ResponseEntity.ok(
+                ApiResponse.success(artGuessService.judge(request.prompt(), image)));
     }
 
     @Operation(summary = "내 작품 목록", description = "현재 사용자의 환자 프로필이 소유한 작품 목록 (최신순).")
