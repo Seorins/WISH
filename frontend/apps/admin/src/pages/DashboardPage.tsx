@@ -48,6 +48,9 @@ const CONTENT_COLORS: Record<string, string> = {
   GYMNASTICS: '#c92a2a',
 }
 
+const APP_USAGE_LINE_COLOR = '#102a43'
+const CONTENT_BAR_SIZE = 18
+
 const STATUS_VIEW: Record<AdminDashboardPatientStatus, { label: string; style: CSSProperties }> = {
   ACTIVE: {
     label: '활발',
@@ -273,7 +276,7 @@ export function DashboardPage() {
                       tickLine={false}
                       axisLine={false}
                       width={42}
-                      tick={{ fontSize: 12, fill: CONTENT_COLORS.login }}
+                      tick={{ fontSize: 12, fill: APP_USAGE_LINE_COLOR }}
                       tickFormatter={value => formatCompactDuration(Number(value))}
                     />
                     <Tooltip
@@ -288,33 +291,44 @@ export function DashboardPage() {
                       dataKey="art"
                       stackId="content"
                       fill={CONTENT_COLORS.art}
+                      barSize={CONTENT_BAR_SIZE}
                     />
                     <Bar
                       yAxisId="content"
                       dataKey="music"
                       stackId="content"
                       fill={CONTENT_COLORS.music}
+                      barSize={CONTENT_BAR_SIZE}
                     />
                     <Bar
                       yAxisId="content"
                       dataKey="taekwondo"
                       stackId="content"
                       fill={CONTENT_COLORS.taekwondo}
+                      barSize={CONTENT_BAR_SIZE}
                     />
                     <Bar
                       yAxisId="content"
                       dataKey="gymnastics"
                       stackId="content"
                       fill={CONTENT_COLORS.gymnastics}
+                      barSize={CONTENT_BAR_SIZE}
                     />
                     <Line
                       yAxisId="app"
                       type="monotone"
                       dataKey="login"
-                      stroke={CONTENT_COLORS.login}
-                      strokeWidth={2}
-                      dot={{ r: 2 }}
-                      activeDot={{ r: 4 }}
+                      stroke={APP_USAGE_LINE_COLOR}
+                      strokeWidth={3}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      dot={{ r: 3, fill: '#fff', stroke: APP_USAGE_LINE_COLOR, strokeWidth: 2 }}
+                      activeDot={{
+                        r: 5,
+                        fill: APP_USAGE_LINE_COLOR,
+                        stroke: '#fff',
+                        strokeWidth: 2,
+                      }}
                     />
                   </ComposedChart>
                 </ResponsiveContainer>
