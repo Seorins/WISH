@@ -7,9 +7,11 @@ import type {
 export type GymnasticsRangeStatus = 'new' | 'improved' | 'steady' | 'lower'
 
 export type GymnasticsRangeSummaryItem = {
+  motionResultId: number
   exerciseMotionId: number
   motionName: string
   routineOrder: number
+  replayAvailable: boolean
   scoreAvailable: boolean
   currentPercent: number
   previousPercent: number | null
@@ -129,9 +131,11 @@ export function buildGymnasticsRangeSummary(
       const targetCount = resolveTargetCount(current.exerciseType, motion)
 
       return {
+        motionResultId: motion.id,
         exerciseMotionId: motion.exerciseMotionId,
         motionName: motion.motionName,
         routineOrder: motion.routineOrder,
+        replayAvailable: motion.replayAvailable === true,
         scoreAvailable,
         currentPercent,
         previousPercent,
