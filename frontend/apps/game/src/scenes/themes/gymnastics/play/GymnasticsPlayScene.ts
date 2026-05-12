@@ -1611,6 +1611,13 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     return adminMotion?.demoVideoUrl?.trim() || null
   }
 
+  private getMotionDisplayTitle(index: number = this.motionIndex) {
+    const motion = this.motions[index]
+    const motionSpec = this.aiSequence[index] ?? this.aiSequence[this.aiSequence.length - 1]
+    const adminName = this.adminMotionsById.get(motionSpec.exerciseMotionId)?.name.trim()
+    return adminName || motion.title
+  }
+
   private showGuidePreview() {
     this.clearCountdownOverlay()
     this.clearGuideOverlay()
@@ -1620,6 +1627,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
 
     const { width: vw, height: vh } = this.scale
     const motion = this.motions[this.motionIndex]
+    const motionTitleText = this.getMotionDisplayTitle()
     const overlay = this.add.container(0, 0).setDepth(30)
     const dim = this.add.rectangle(vw / 2, vh / 2, vw, vh, 0x24170f, 0.9)
     const panelWidthRatio = vw < 1400 ? 0.94 : vw >= 2200 ? 0.82 : 0.9
@@ -1724,7 +1732,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     )
     const titleMaxSize = Math.round(Phaser.Math.Clamp(panelH * 0.056, 42, 60))
     const motionTitle = this.add
-      .text(infoTextX + infoTextW / 2, progress.y + stepPillH / 2 + 28, motion.title, {
+      .text(infoTextX + infoTextW / 2, progress.y + stepPillH / 2 + 28, motionTitleText, {
         fontFamily: 'sans-serif',
         fontSize: `${titleMaxSize}px`,
         color: '#2f1a0c',
@@ -2732,9 +2740,9 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     this.didDanielComplete = false
     this.updateHoldProgressUi(motionSpec)
     this.motionCounterText?.setText(
-      `${this.motionIndex + 1}/${this.motions.length} ${this.motions[this.motionIndex].title}`,
+      `${this.motionIndex + 1}/${this.motions.length} ${this.getMotionDisplayTitle()}`,
     )
-    this.motionTitleText?.setText(this.motions[this.motionIndex].title)
+    this.motionTitleText?.setText(this.getMotionDisplayTitle())
 
     this.fitTextToWidth(this.motionCounterText, this.motionCounterMaxWidth, this.headerFontSize, 14)
     this.fitTextToWidth(this.motionTitleText, this.motionTitleMaxWidth, 44, 28)
@@ -3279,11 +3287,9 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
   }
 
   private renderMotion() {
-    const motion = this.motions[this.motionIndex]
-    this.motionCounterText?.setText(
-      `${this.motionIndex + 1}/${this.motions.length} ${motion.title}`,
-    )
-    this.motionTitleText?.setText(motion.title)
+    const motionTitle = this.getMotionDisplayTitle()
+    this.motionCounterText?.setText(`${this.motionIndex + 1}/${this.motions.length} ${motionTitle}`)
+    this.motionTitleText?.setText(motionTitle)
     this.timerText?.setText(this.formatTime(this.remainingSeconds))
     this.feedbackTitleText?.setText(this.isCameraRecognized ? '좋아요!' : '기다릴게요')
     this.fitTextToWidth(this.motionCounterText, this.motionCounterMaxWidth, this.headerFontSize, 14)
