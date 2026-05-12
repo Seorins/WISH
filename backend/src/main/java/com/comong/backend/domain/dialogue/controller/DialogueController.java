@@ -5,6 +5,7 @@ import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -13,6 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.comong.backend.domain.dialogue.dto.FinishSessionRequest;
 import com.comong.backend.domain.dialogue.dto.FinishSessionResponse;
+import com.comong.backend.domain.dialogue.dto.SessionDetailResponse;
 import com.comong.backend.domain.dialogue.dto.StartSessionRequest;
 import com.comong.backend.domain.dialogue.dto.StartSessionResponse;
 import com.comong.backend.domain.dialogue.dto.SubmitTurnRequest;
@@ -63,6 +65,18 @@ public class DialogueController {
         StartSessionResponse response =
                 dialogueService.createSession(currentUser.userId(), request);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(response));
+    }
+
+    @Operation(
+            summary = "Dialogue session detail",
+            description = "Returns a dialogue session and turns owned by the current user.")
+    @GetMapping("/{sessionId}")
+    public ResponseEntity<ApiResponse<SessionDetailResponse>> detail(
+            @AuthenticationPrincipal AuthenticatedUser currentUser,
+            @Parameter(description = "Dialogue session ID", required = true) @PathVariable
+                    Long sessionId) {
+        return ResponseEntity.ok(
+                ApiResponse.success(dialogueService.getSession(currentUser.userId(), sessionId)));
     }
 
     @Operation(
