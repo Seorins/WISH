@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { DialogueLayer } from '../../dialogue/common/DialogueLayer'
 import { useVillageDialogueSession } from '../useVillageDialogueSession'
-import type { VillagerChoice, VillagerNpcId } from '../types'
+import type { DailyActivityState, VillagerChoice, VillagerNpcId } from '../types'
 
 interface VillagerDialogueControllerProps {
   npcId: VillagerNpcId | null
@@ -9,6 +9,7 @@ interface VillagerDialogueControllerProps {
   isOpen: boolean
   onClose: () => void
   onTextChange?: (text: string) => void
+  dailyActivityState?: DailyActivityState
 }
 
 export function VillagerDialogueController({
@@ -17,6 +18,7 @@ export function VillagerDialogueController({
   isOpen,
   onClose,
   onTextChange,
+  dailyActivityState,
 }: VillagerDialogueControllerProps) {
   const {
     status,
@@ -29,7 +31,7 @@ export function VillagerDialogueController({
     selectChoice,
     advanceDialogue,
     cancelDialogue,
-  } = useVillageDialogueSession(patientProfileId, onClose)
+  } = useVillageDialogueSession(patientProfileId, onClose, dailyActivityState)
 
   useEffect(() => {
     if (!isOpen || !npcId) return
@@ -40,6 +42,20 @@ export function VillagerDialogueController({
     if (!isOpen || !visibleText) return
     onTextChange?.(visibleText)
   }, [isOpen, onTextChange, visibleText])
+
+  useEffect(() => {
+    if (!isOpen || status !== 'opening_greeting') return
+
+    const handleGreetingAdvanceKey = (event: KeyboardEvent) => {
+      if (event.key !== 'e' && event.key !== 'E') return
+      event.preventDefault()
+      event.stopPropagation()
+      advanceDialogue()
+    }
+
+    window.addEventListener('keydown', handleGreetingAdvanceKey, { capture: true })
+    return () => window.removeEventListener('keydown', handleGreetingAdvanceKey, { capture: true })
+  }, [advanceDialogue, isOpen, status])
 
   if (!isOpen || !script) return null
 

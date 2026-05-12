@@ -17,13 +17,32 @@ export interface VillagerIdentity {
 export type VillagerDialogueStatus =
   | 'idle'
   | 'opening_greeting'
-  | 'opening_context'
   | 'waiting_choice'
   | 'submitting_choice'
   | 'showing_response'
-  | 'ending_wait'
+  | 'waiting_final_close'
   | 'finished'
   | 'error'
+
+export type CounselingEndingType =
+  | 'GO_LIGHT_ACTIVITY'
+  | 'REST_THEN_ACTIVITY'
+  | 'REST_ONLY'
+  | 'ASK_HELP_FIRST'
+  | 'ASK_ADULT_FIRST'
+  | 'ASK_MEDICAL_FIRST'
+  | 'EXPRESS_WITH_DRAWING'
+  | 'SOCIAL_CONNECT'
+  | 'PRIVATE_OKAY'
+  | 'CALM_DOWN'
+  | 'NO_PRESSURE'
+
+export interface DailyActivityState {
+  completedActivityCount: number
+  hasDoneAnyActivityToday: boolean
+  hasCompletedAllRecommendedActivities?: boolean
+  recommendedActivityLabel?: string
+}
 
 export interface CounselingChoice {
   choiceIntentId: string
@@ -34,7 +53,12 @@ export interface CounselingChoice {
   concernFlags: string[]
   protectiveFactors: string[]
   responseLines: string[]
+  endingType?: CounselingEndingType
   endingLines?: string[]
+  activityEndingLines?: {
+    pending: string[]
+    completed: string[]
+  }
 }
 
 export interface CounselingNode {
@@ -48,7 +72,6 @@ export interface CounselingScript {
   title: string
   domain: 'body' | 'pain' | 'fatigue' | 'family' | 'peer' | 'expression' | 'anger'
   weight?: number
-  contextLine?: string
   fallbackEndingLine?: string
   startNodeId: string
   nodes: Record<string, CounselingNode>
