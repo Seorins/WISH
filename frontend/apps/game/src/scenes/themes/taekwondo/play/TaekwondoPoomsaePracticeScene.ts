@@ -170,6 +170,7 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
   private hasTriggeredSuccess = false
   private lastPoseDetectTimeMs = -1
   private countdownText?: Phaser.GameObjects.Text
+  private countdownDim?: Phaser.GameObjects.Graphics
   private countdownTimer: Phaser.Time.TimerEvent | null = null
   private hasDrawnCameraPlaceholder = false
   private lastVideoTime = -1
@@ -635,7 +636,7 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     const overlay = this.motionIntroOverlay
     this.motionIntroOverlay = undefined
     this.destroyGuideVideoElement()
-    this.setSideGuideMagnifierVisible(true)
+    this.setSideGuideMagnifierVisible(false)
 
     this.startMotionCountdown()
 
@@ -650,7 +651,6 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
       ease: 'Sine.easeIn',
       onComplete: () => {
         overlay.destroy(true)
-        this.showSideGuideVideo()
       },
     })
   }
@@ -666,20 +666,26 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     this.showFeedback(MOTION_COUNTDOWN_READY_FEEDBACK)
 
     const { width: vw, height: vh } = this.scale
-    const fontSize = Math.round(Phaser.Math.Clamp(vh * 0.18, 80, 200))
+
+    const dim = this.add.graphics().setDepth(30)
+    dim.fillStyle(0x000000, 0.55)
+    dim.fillRect(0, 0, vw, vh)
+    this.countdownDim = dim
+
+    const fontSize = Math.round(Phaser.Math.Clamp(vh * 0.22, 100, 240))
     const text = this.add
-      .text(vw * 0.334, vh * 0.548, String(MOTION_COUNTDOWN_FROM), {
+      .text(vw / 2, vh / 2, String(MOTION_COUNTDOWN_FROM), {
         fontFamily: 'sans-serif',
         fontSize: `${fontSize}px`,
-        color: '#fff7e0',
+        color: '#ffffff',
         fontStyle: '900',
-        stroke: '#3a2110',
-        strokeThickness: 8,
+        stroke: '#ffefc0',
+        strokeThickness: 6,
         align: 'center',
       })
       .setOrigin(0.5)
-      .setDepth(10)
-    text.setShadow(0, 4, '#2e1a08', 6, false, true)
+      .setDepth(31)
+    text.setShadow(0, 6, '#000000', 12, false, true)
     this.countdownText = text
     this.playCountdownTextTween(text)
 
@@ -700,6 +706,8 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
         } else {
           this.countdownTimer = null
           this.destroyCountdownText()
+          this.setSideGuideMagnifierVisible(true)
+          this.showSideGuideVideo()
           this.beginMotionCapture()
         }
       },
@@ -720,6 +728,8 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
   private destroyCountdownText() {
     this.countdownText?.destroy()
     this.countdownText = undefined
+    this.countdownDim?.destroy()
+    this.countdownDim = undefined
   }
 
   private beginMotionCapture() {
@@ -1549,7 +1559,7 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     window.addEventListener('resize', positionVideo)
 
     void video.play().catch(() => {
-      loadingText?.setText('가이드 영상을 재생하려면 화면을 눌러주세요.').setVisible(true)
+      loadingText?.setText('가이드 영상을 불러오는 중입니다.').setVisible(true)
     })
   }
 
