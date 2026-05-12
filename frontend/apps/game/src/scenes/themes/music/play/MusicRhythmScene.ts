@@ -1059,7 +1059,11 @@ export class MusicRhythmScene extends Phaser.Scene {
     const elapsedMs = this.getSongTimeMs()
     const candidates = this.activeNotes
       .filter(an => !an.resolved && an.holdStartMs === undefined && an.note.lane === lane)
-      .map(an => ({ activeNote: an, diffMs: Math.abs(an.note.timeMs - elapsedMs) }))
+      .map(an => ({
+        activeNote: an,
+        signedDiffMs: an.note.timeMs - elapsedMs,
+        diffMs: Math.abs(an.note.timeMs - elapsedMs),
+      }))
       .filter(c => c.diffMs <= MISS_WINDOW_MS)
       .sort((a, b) => a.diffMs - b.diffMs)
 
@@ -1083,7 +1087,11 @@ export class MusicRhythmScene extends Phaser.Scene {
     } else if (best.diffMs <= GOOD_WINDOW_MS) {
       label = 'GOOD'
       color = '#a7f3d0'
+    } else if (best.signedDiffMs > 0) {
+      // 노트가 아직 도착 전인데 GOOD 밖에서 일찍 누른 경우 — 손 트래킹 떨림 보정: 빈 탭으로 무시
+      return
     } else {
+      // 노트가 판정선을 지난 뒤 늦게 누른 경우만 MISS
       this.resolveMiss(best.activeNote)
       return
     }
