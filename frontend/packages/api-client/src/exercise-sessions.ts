@@ -145,7 +145,10 @@ const INVALID_POSE_REPLAY_MESSAGE =
 const REPLAY_FPS = 30
 const REPLAY_LANDMARK_COUNT = 12
 const REPLAY_TUPLE_SIZE = 4
-const REPLAY_MAX_FRAMES = REPLAY_FPS * 180
+const REPLAY_MAX_CAPTURE_SECONDS = 180
+const REPLAY_MAX_DURATION_MS = REPLAY_MAX_CAPTURE_SECONDS * 1000
+const REPLAY_MAX_FRAMES = REPLAY_FPS * REPLAY_MAX_CAPTURE_SECONDS
+const REPLAY_NORMALIZED_COORDINATE_ABS_LIMIT = 10
 
 export function createExerciseSessionError(error: unknown) {
   const message =
@@ -218,6 +221,7 @@ function validatePoseReplay(replay: ExerciseMotionReplayClip): void {
     replay.fps !== REPLAY_FPS ||
     !Number.isFinite(replay.durationMs) ||
     replay.durationMs < 0 ||
+    replay.durationMs > REPLAY_MAX_DURATION_MS ||
     !Array.isArray(replay.landmarks) ||
     replay.landmarks.length !== REPLAY_LANDMARK_COUNT ||
     !Array.isArray(replay.frames) ||
@@ -231,7 +235,8 @@ function validatePoseReplay(replay: ExerciseMotionReplayClip): void {
   replay.frames.forEach(frame => {
     if (
       !Number.isFinite(frame.t) ||
-      frame.t < previousTimestampMs ||
+      frame.t <= previousTimestampMs ||
+      frame.t > replay.durationMs ||
       !Array.isArray(frame.lm) ||
       frame.lm.length !== REPLAY_LANDMARK_COUNT
     ) {
@@ -247,7 +252,11 @@ function validatePoseReplay(replay: ExerciseMotionReplayClip): void {
       const [x, y, z, confidence] = tuple
       const coordinates = [x, y, z]
       if (
-        coordinates.some(value => value !== null && !Number.isFinite(value)) ||
+        coordinates.some(
+          value =>
+            value !== null &&
+            (!Number.isFinite(value) || Math.abs(value) > REPLAY_NORMALIZED_COORDINATE_ABS_LIMIT),
+        ) ||
         !Number.isFinite(confidence) ||
         confidence < 0 ||
         confidence > 1
