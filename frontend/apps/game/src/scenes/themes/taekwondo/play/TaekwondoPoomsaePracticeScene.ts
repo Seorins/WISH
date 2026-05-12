@@ -334,7 +334,12 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
   }
 
   private detectPoseIfCapturing() {
-    if (!this.isCapturing || !this.poseLandmarker || !this.videoElement) {
+    if (
+      !this.isCapturing ||
+      this.isAiJudgementPaused ||
+      !this.poseLandmarker ||
+      !this.videoElement
+    ) {
       return
     }
     if (this.videoElement.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
@@ -677,7 +682,7 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     })
   }
 
-  private startMotionCountdown() {
+  private startMotionCountdown(onComplete: () => void = () => this.beginMotionCapture()) {
     if (this.isSceneShuttingDown) {
       return
     }
@@ -730,7 +735,7 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
           this.destroyCountdownText()
           this.setSideGuideMagnifierVisible(true)
           this.showSideGuideVideo()
-          this.beginMotionCapture()
+          onComplete()
         }
       },
     })
@@ -771,7 +776,12 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
   }
 
   private maybeRunRealtimeAnalysis() {
-    if (!this.isCapturing || this.analysisInFlight || this.isSceneShuttingDown) {
+    if (
+      !this.isCapturing ||
+      this.isAiJudgementPaused ||
+      this.analysisInFlight ||
+      this.isSceneShuttingDown
+    ) {
       return
     }
     if (this.capturedSequence.length < MIN_FRAMES_FOR_FIRST_ANALYSIS) {
@@ -1460,14 +1470,15 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
   private hideGuideVideoExpandOverlay() {
     const overlay = this.guideVideoExpandOverlay
     this.guideVideoExpandOverlay = undefined
-    this.resumeAiJudgement()
-    this.setSideGuideMagnifierVisible(true)
 
     if (!overlay) {
+      this.setSideGuideMagnifierVisible(true)
+      this.resumeAiJudgement()
       return
     }
 
     this.destroyGuideVideoElement()
+    const wasPausedDuringCapture = this.isCapturing && this.isAiJudgementPaused
     this.tweens.add({
       targets: overlay,
       alpha: 0,
@@ -1475,17 +1486,29 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
       ease: 'Sine.easeIn',
       onComplete: () => {
         overlay.destroy(true)
-        this.showSideGuideVideo()
+        if (wasPausedDuringCapture) {
+          this.startMotionCountdown(() => this.resumeAiJudgement())
+        } else {
+          this.setSideGuideMagnifierVisible(true)
+          this.showSideGuideVideo()
+          this.resumeAiJudgement()
+        }
       },
     })
   }
 
   private pauseAiJudgement() {
     this.isAiJudgementPaused = true
+    if (this.captureTimer) {
+      this.captureTimer.paused = true
+    }
   }
 
   private resumeAiJudgement() {
     this.isAiJudgementPaused = false
+    if (this.captureTimer) {
+      this.captureTimer.paused = false
+    }
   }
 
   private createFeedbackPanel(x: number, y: number, width: number, height: number) {
