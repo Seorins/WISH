@@ -44,6 +44,35 @@ const COMPACT_PANEL = {
   iconMarginY: 24,
 } as const
 
+const DEBUG_OBSTACLES = false
+const OBSTACLE_EDITOR_ENABLED = import.meta.env.DEV
+const OBSTACLE_EDITOR_MIN_SIZE = 0.003
+
+type ObstacleRect = { x: number; y: number; w: number; h: number }
+type ObstacleInstance = {
+  rect: ObstacleRect
+  object: Phaser.GameObjects.Rectangle
+}
+
+const ROOM_OBSTACLES: ObstacleRect[] = [
+  { x: 0, y: 0.0026, w: 0.9965, h: 0.5856 },
+  { x: 0, y: 0.481, w: 0.0764, h: 0.5163 },
+  { x: 0.0736, y: 0.7307, w: 0.0674, h: 0.1765 },
+  { x: 0.1139, y: 0.7216, w: 0.0104, h: 0.017 },
+  { x: 0.159, y: 0.5961, w: 0.0715, h: 0.0588 },
+  { x: 0.3465, y: 0.6275, w: 0.0201, h: 0.0876 },
+  { x: 0.35, y: 0.5778, w: 0.1792, h: 0.0366 },
+  { x: 0.4722, y: 0.7098, w: 0.0187, h: 0.085 },
+  { x: 0.7521, y: 0.5333, w: 0.2458, h: 0.4601 },
+  { x: 0.584, y: 0.5647, w: 0.2056, h: 0.3137 },
+  { x: 0.5104, y: 0.6954, w: 0.0986, h: 0.0431 },
+  { x: 0.5062, y: 0.6667, w: 0.0222, h: 0.051 },
+  { x: 0.5465, y: 0.566, w: 0.0646, h: 0.1752 },
+  { x: 0.3618, y: 0.6052, w: 0.2396, h: 0.0353 },
+  { x: 0.2562, y: 0.5608, w: 0.1118, h: 0.0601 },
+  { x: 0.0625, y: 0.5621, w: 0.0951, h: 0.0641 },
+]
+
 type FuelPopupState = 'emptyIcon' | 'emptyOpen' | 'arrived' | 'received' | 'complete'
 
 type FuelPanelUi = {
@@ -93,6 +122,10 @@ export class FerrySelectScene extends Phaser.Scene {
   private exitPortal!: Phaser.Geom.Rectangle
   private playerWasInExitPortal = true
   private isTransitioning = false
+  private obstacles!: Phaser.Physics.Arcade.StaticGroup
+  private obstacleInstances: ObstacleInstance[] = []
+  private obstacleEditorStart?: Phaser.Math.Vector2
+  private obstacleEditorDraft?: Phaser.GameObjects.Rectangle
   private currentFuelPercent = INITIAL_FUEL_PERCENT
   private fuelPanel?: FuelPanelUi
   private isStarFlying = false
@@ -129,20 +162,36 @@ export class FerrySelectScene extends Phaser.Scene {
     this.lastReceivedAmount = 0
     this.lastReceivedMessage = ''
     this.fuelPopupState = 'emptyIcon'
+    this.obstacleInstances = []
+    this.obstacleEditorStart = undefined
+    this.obstacleEditorDraft?.destroy()
+    this.obstacleEditorDraft = undefined
 
     const background = addCoverBackground(this, FERRY_BACKGROUND_KEY)
     void this.applyWeatherBackground(background)
     this.physics.world.setBounds(0, 0, vw, vh)
+    this.obstacles = this.physics.add.staticGroup()
+    ROOM_OBSTACLES.forEach(rect => this.addObstacleRect(rect, vw, vh))
     ensurePlayerWalkAnimations(this)
 
     const spawn = data.spawn ?? FERRY_ROOM_SPAWN
     this.player = createPlayer(this, vw * spawn.xRatio, vh * spawn.yRatio)
+    this.physics.add.collider(this.player, this.obstacles)
     this.exitPortal = createRatioRectangle(vw, vh, FERRY_EXIT_PORTAL)
 
     this.cursors = this.input.keyboard!.createCursorKeys()
     this.input.on('pointerdown', this.handlePointerDown)
+    this.input.on('pointermove', this.handleObstacleEditorPointerMove)
+    this.input.on('pointerup', this.handleObstacleEditorPointerUp)
+    this.input.keyboard!.on('keydown-E', this.exportObstacleRects)
+    this.input.keyboard!.on('keydown-R', this.clearEditedObstacleRects)
+    this.input.mouse?.disableContextMenu()
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.input.off('pointerdown', this.handlePointerDown)
+      this.input.off('pointermove', this.handleObstacleEditorPointerMove)
+      this.input.off('pointerup', this.handleObstacleEditorPointerUp)
+      this.input.keyboard?.off('keydown-E', this.exportObstacleRects)
+      this.input.keyboard?.off('keydown-R', this.clearEditedObstacleRects)
       this.fuelPanel = undefined
     })
 
@@ -190,6 +239,9 @@ export class FerrySelectScene extends Phaser.Scene {
   }
 
   private readonly handlePointerDown = (pointer: Phaser.Input.Pointer) => {
+    if (this.handleObstacleEditorPointerDown(pointer)) {
+      return
+    }
     if (this.isTransitioning) return
     if (this.fuelPanel?.container.visible && this.fuelPanel.bounds.contains(pointer.x, pointer.y)) {
       return
@@ -197,6 +249,154 @@ export class FerrySelectScene extends Phaser.Scene {
 
     this.target = new Phaser.Math.Vector2(pointer.x, pointer.y)
     createClickTargetMarker(this, pointer.x, pointer.y)
+  }
+
+  private addObstacleRect(rect: ObstacleRect, vw: number, vh: number) {
+    const x = Phaser.Math.Clamp(rect.x, 0, 1)
+    const y = Phaser.Math.Clamp(rect.y, 0, 1)
+    const w = Phaser.Math.Clamp(rect.w, 0, 1 - x)
+    const h = Phaser.Math.Clamp(rect.h, 0, 1 - y)
+    const box = this.add
+      .rectangle(
+        (x + w / 2) * vw,
+        (y + h / 2) * vh,
+        w * vw,
+        h * vh,
+        0xff0000,
+        DEBUG_OBSTACLES ? 0.22 : 0,
+      )
+      .setDepth(1)
+
+    if (DEBUG_OBSTACLES) {
+      box.setStrokeStyle(2, 0xff3333, 0.85)
+    }
+
+    this.physics.add.existing(box, true)
+    this.obstacles.add(box)
+    this.obstacleInstances.push({ rect: { x, y, w, h }, object: box })
+
+    return box
+  }
+
+  private handleObstacleEditorPointerDown(pointer: Phaser.Input.Pointer) {
+    if (!OBSTACLE_EDITOR_ENABLED || !this.obstacles) {
+      return false
+    }
+
+    const event = pointer.event as MouseEvent | PointerEvent | undefined
+    const isShiftDrag = Boolean(event?.shiftKey)
+    const isRightClick = pointer.rightButtonDown() || pointer.button === 2
+
+    if (isRightClick) {
+      this.removeObstacleAt(pointer.x, pointer.y)
+      return true
+    }
+
+    if (!isShiftDrag) {
+      return false
+    }
+
+    this.obstacleEditorStart = new Phaser.Math.Vector2(pointer.x, pointer.y)
+    this.obstacleEditorDraft?.destroy()
+    this.obstacleEditorDraft = this.add
+      .rectangle(pointer.x, pointer.y, 1, 1, 0x00aaff, 0.26)
+      .setDepth(30)
+      .setStrokeStyle(2, 0x0077ff, 0.95)
+
+    return true
+  }
+
+  private readonly handleObstacleEditorPointerMove = (pointer: Phaser.Input.Pointer) => {
+    if (!this.obstacleEditorStart || !this.obstacleEditorDraft) {
+      return
+    }
+
+    const bounds = this.getObstacleDragBounds(this.obstacleEditorStart, pointer.x, pointer.y)
+    this.obstacleEditorDraft.setPosition(bounds.centerX, bounds.centerY)
+    this.obstacleEditorDraft.setSize(bounds.width, bounds.height)
+    this.obstacleEditorDraft.setDisplaySize(bounds.width, bounds.height)
+  }
+
+  private readonly handleObstacleEditorPointerUp = (pointer: Phaser.Input.Pointer) => {
+    if (!this.obstacleEditorStart || !this.obstacleEditorDraft) {
+      return
+    }
+
+    const bounds = this.getObstacleDragBounds(this.obstacleEditorStart, pointer.x, pointer.y)
+    this.obstacleEditorDraft.destroy()
+    this.obstacleEditorDraft = undefined
+    this.obstacleEditorStart = undefined
+
+    const { width: vw, height: vh } = this.scale
+    const rect = {
+      x: bounds.x / vw,
+      y: bounds.y / vh,
+      w: bounds.width / vw,
+      h: bounds.height / vh,
+    }
+
+    if (rect.w < OBSTACLE_EDITOR_MIN_SIZE || rect.h < OBSTACLE_EDITOR_MIN_SIZE) {
+      return
+    }
+
+    this.addObstacleRect(rect, vw, vh)
+  }
+
+  private getObstacleDragBounds(start: Phaser.Math.Vector2, currentX: number, currentY: number) {
+    const { width: vw, height: vh } = this.scale
+    const x = Phaser.Math.Clamp(Math.min(start.x, currentX), 0, vw)
+    const y = Phaser.Math.Clamp(Math.min(start.y, currentY), 0, vh)
+    const right = Phaser.Math.Clamp(Math.max(start.x, currentX), 0, vw)
+    const bottom = Phaser.Math.Clamp(Math.max(start.y, currentY), 0, vh)
+    const width = Math.max(1, right - x)
+    const height = Math.max(1, bottom - y)
+
+    return new Phaser.Geom.Rectangle(x, y, width, height)
+  }
+
+  private removeObstacleAt(x: number, y: number) {
+    for (let index = this.obstacleInstances.length - 1; index >= 0; index -= 1) {
+      const instance = this.obstacleInstances[index]
+      if (!instance.object.getBounds().contains(x, y)) {
+        continue
+      }
+
+      this.obstacles.remove(instance.object, true, true)
+      this.obstacleInstances.splice(index, 1)
+      return
+    }
+  }
+
+  private readonly exportObstacleRects = () => {
+    if (!OBSTACLE_EDITOR_ENABLED) {
+      return
+    }
+
+    const lines = this.obstacleInstances.map(({ rect }) => {
+      const x = Number(rect.x.toFixed(4))
+      const y = Number(rect.y.toFixed(4))
+      const w = Number(rect.w.toFixed(4))
+      const h = Number(rect.h.toFixed(4))
+      return `  { x: ${x}, y: ${y}, w: ${w}, h: ${h} },`
+    })
+    const output = `const ROOM_OBSTACLES: ObstacleRect[] = [\n${lines.join('\n')}\n]`
+
+    console.info('[FerrySelectScene] Exported obstacle rectangles:\n' + output)
+    void navigator.clipboard?.writeText(output).catch(() => undefined)
+  }
+
+  private readonly clearEditedObstacleRects = () => {
+    if (!OBSTACLE_EDITOR_ENABLED) {
+      return
+    }
+
+    this.obstacleInstances.forEach(({ object }) => {
+      this.obstacles.remove(object, true, true)
+    })
+    this.obstacleInstances = []
+    this.obstacleEditorDraft?.destroy()
+    this.obstacleEditorDraft = undefined
+    this.obstacleEditorStart = undefined
   }
 
   private returnToVillage() {
