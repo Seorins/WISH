@@ -69,7 +69,10 @@ const PLAYER_WALK_ANIMATIONS: Array<{
   { key: 'walk-up', start: 12, end: 15 },
 ]
 
-function getPlayerWalkAnimationKey(direction: PlayerDirection, textureKey = PLAYER_TEXTURE_KEY) {
+export function getPlayerWalkAnimationKey(
+  direction: PlayerDirection,
+  textureKey = PLAYER_TEXTURE_KEY,
+) {
   return textureKey === PLAYER_TEXTURE_KEY ? `walk-${direction}` : `walk-${direction}-${textureKey}`
 }
 

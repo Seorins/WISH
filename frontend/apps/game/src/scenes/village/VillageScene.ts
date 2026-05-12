@@ -28,6 +28,7 @@ import {
   VILLAGER_FIRST_GREETING,
   villageDialogues,
 } from '@/features/village-dialogue/villageDialogues'
+import { attachVillageRealtime, type VillageRealtimeIntegration } from '@/features/village-realtime'
 import {
   createInitialVillagePortalState,
   createVillagePortalRectangles,
@@ -160,6 +161,7 @@ export class VillageScene extends Phaser.Scene {
   private activeDialogNpcId: VillagerNpcId | null = null
   private settingsMenu!: ReturnType<typeof createSettingsMenu>
   private interactionHint!: NpcInteractionHintUi
+  private villageRealtime: VillageRealtimeIntegration | null = null
 
   constructor() {
     super({ key: 'VillageScene' })
@@ -378,6 +380,11 @@ export class VillageScene extends Phaser.Scene {
     this.input.keyboard!.on('keydown-BACKSPACE', this.undoObstaclePolygonPoint, this)
 
     this.cameras.main.fadeIn(400, 0, 0, 0)
+    this.villageRealtime = attachVillageRealtime({
+      scene: this,
+      worldWidth: W,
+      worldHeight: H,
+    })
     this.game.events.on('villager-dialogue:closed', this.handleVillagerDialogueClosed, this)
     this.game.events.on('villager-dialogue:text', this.handleVillagerDialogueText, this)
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
@@ -389,6 +396,8 @@ export class VillageScene extends Phaser.Scene {
       this.input.keyboard?.off('keydown-ENTER', this.handleNpcInteract, this)
       this.input.keyboard?.off('keydown-R', this.clearEditedObstacleRects, this)
       this.input.keyboard?.off('keydown-BACKSPACE', this.undoObstaclePolygonPoint, this)
+      this.villageRealtime?.destroy()
+      this.villageRealtime = null
     })
   }
 
@@ -405,6 +414,8 @@ export class VillageScene extends Phaser.Scene {
     this.lastDirection = movement.lastDirection
     this.preventPolygonObstaclePenetration(delta)
     this.resolvePolygonObstacleCollision()
+
+    this.villageRealtime?.publishLocal(this.player, this.lastDirection, movement.moving)
 
     const nearestNpc = this.getNearestNpcInTalkDistance()
     this.nearestNpcId = nearestNpc?.id ?? null

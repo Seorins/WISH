@@ -4,6 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.lang.reflect.Type;
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -14,7 +18,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.messaging.converter.StringMessageConverter;
+import org.springframework.messaging.converter.MappingJackson2MessageConverter;
 import org.springframework.messaging.simp.stomp.StompFrameHandler;
 import org.springframework.messaging.simp.stomp.StompHeaders;
 import org.springframework.messaging.simp.stomp.StompSession;
@@ -24,15 +28,29 @@ import org.springframework.web.socket.WebSocketHttpHeaders;
 import org.springframework.web.socket.client.standard.StandardWebSocketClient;
 import org.springframework.web.socket.messaging.WebSocketStompClient;
 
+import com.comong.backend.domain.patient.entity.Gender;
+import com.comong.backend.domain.patient.entity.PatientProfile;
+import com.comong.backend.domain.patient.repository.PatientProfileRepository;
+import com.comong.backend.domain.user.entity.User;
 import com.comong.backend.domain.user.entity.UserRole;
+import com.comong.backend.domain.user.repository.UserRepository;
+import com.comong.backend.domain.village.realtime.service.VillagePresenceService;
 import com.comong.backend.global.security.JwtTokenProvider;
 import com.comong.backend.support.IntegrationTestSupport;
 
 /**
- * S14P31E103-714 STOMP 인프라 라운드트립 검증.
+ * 마을 광장 WS 인프라 + relay 라운드트립 통합 테스트.
  *
- * <p>app.realtime.village.enabled 가 기본 false 라 통합 테스트에서는 true 로 override 한다 (운영 폴백 기본값 유지 + 테스트는 정상
- * 경로 검증).
+ * <p>커버:
+ *
+ * <ul>
+ *   <li>S14P31E103-714: CONNECT 인증 (토큰 누락/위조 거부)
+ *   <li>S14P31E103-717: presence 등록/제거 (no-profile 거부, disconnect → 정리)
+ *   <li>S14P31E103-718: ready → snapshot + join, position → move broadcast, disconnect → leave
+ *       broadcast
+ * </ul>
+ *
+ * <p>이 테스트 클래스는 Spring 컨텍스트를 비용 절감 차원에서 공유한다. 케이스마다 user/profile/presence 를 초기화.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @TestPropertySource(properties = "app.realtime.village.enabled=true")
@@ -42,22 +60,42 @@ class VillageStompIntegrationTest extends IntegrationTestSupport {
     private static final long CONNECT_TIMEOUT_SECONDS = 5;
     private static final long RECEIVE_TIMEOUT_SECONDS = 5;
 
+    /** SimpleBroker 는 SUBSCRIBE 에 RECEIPT 를 보내지 않아 등록 확정 신호가 없다. 짧은 sleep 으로 충분 — 동일 JVM 환경. */
+    private static final long SUBSCRIBE_GRACE_MS = 200;
+
     @LocalServerPort private int port;
     @Autowired private JwtTokenProvider jwtTokenProvider;
+    @Autowired private UserRepository userRepository;
+    @Autowired private PatientProfileRepository patientProfileRepository;
+    @Autowired private VillagePresenceService presenceService;
 
     private WebSocketStompClient stompClient;
+    private final List<StompSession> openSessions = new ArrayList<>();
+    private User userA;
 
     @BeforeEach
     void setUp() {
+        patientProfileRepository.deleteAll();
+        userRepository.deleteAll();
+        userA = createUserWithProfile("village-tester@example.com", "guardianA", "꼬마곰");
+
         stompClient = new WebSocketStompClient(new StandardWebSocketClient());
-        stompClient.setMessageConverter(new StringMessageConverter());
+        stompClient.setMessageConverter(new MappingJackson2MessageConverter());
     }
 
     @AfterEach
     void tearDown() {
+        for (StompSession session : openSessions) {
+            if (session.isConnected()) {
+                session.disconnect();
+            }
+        }
+        openSessions.clear();
         if (stompClient != null) {
             stompClient.stop();
         }
+        patientProfileRepository.deleteAll();
+        userRepository.deleteAll();
     }
 
     @Test
@@ -70,43 +108,154 @@ class VillageStompIntegrationTest extends IntegrationTestSupport {
     void connectIsRejectedWhenJwtIsInvalid() {
         StompHeaders headers = new StompHeaders();
         headers.add("Authorization", "Bearer not-a-real-jwt");
-
         assertThatThrownBy(() -> connect(headers)).isInstanceOf(ExecutionException.class);
     }
 
     @Test
-    void pingEchoesUserIdWhenAuthenticated() throws Exception {
-        String token = jwtTokenProvider.createAccessToken(42L, "tester@example.com", UserRole.USER);
-        StompHeaders connectHeaders = new StompHeaders();
-        connectHeaders.add("Authorization", "Bearer " + token);
+    void connectIsRejectedWhenUserHasNoPatientProfile() {
+        patientProfileRepository.deleteAll();
 
-        StompSession session = connect(connectHeaders);
+        StompHeaders headers = new StompHeaders();
+        headers.add("Authorization", "Bearer " + tokenFor(userA));
 
-        LinkedBlockingQueue<String> received = new LinkedBlockingQueue<>();
-        session.subscribe(
-                "/user/queue/village.pong",
-                new StompFrameHandler() {
-                    @Override
-                    public Type getPayloadType(StompHeaders headers) {
-                        return String.class;
-                    }
+        assertThatThrownBy(() -> connect(headers)).isInstanceOf(ExecutionException.class);
+        assertThat(presenceService.size()).isZero();
+    }
 
-                    @Override
-                    public void handleFrame(StompHeaders headers, Object payload) {
-                        received.add((String) payload);
-                    }
-                });
-
-        // SimpleBroker 는 SUBSCRIBE 에 RECEIPT 를 보내지 않아 등록 확정 신호가 없다. 동일 JVM 환경이므로 짧은
-        // sleep 으로 충분 — CI 환경 변동성 고려해 200ms.
-        Thread.sleep(200);
-        session.send("/app/village/ping", "hello");
-
-        String pong = received.poll(RECEIVE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-        assertThat(pong).isNotNull();
-        assertThat(pong).isEqualTo("pong:42:hello");
+    @Test
+    void disconnectRemovesPresence() throws Exception {
+        StompSession session = connectAsUser(userA);
+        waitUntilPresenceSizeEquals(1);
 
         session.disconnect();
+        waitUntilPresenceSizeEquals(0);
+    }
+
+    @Test
+    void readySendsSnapshotAndBroadcastsJoin() throws Exception {
+        // 첫 입장자라 토픽 구독자는 자기 자신뿐 — 자기 join broadcast 도 수신한다 (FE 가 localUserId 필터링).
+        StompSession session = connectAsUser(userA);
+
+        LinkedBlockingQueue<Map<String, Object>> topicEvents = subscribeTopic(session);
+        LinkedBlockingQueue<Map<String, Object>> snapshots = subscribeSnapshot(session);
+        Thread.sleep(SUBSCRIBE_GRACE_MS);
+
+        session.send("/app/village/ready", new byte[0]);
+
+        Map<String, Object> snapshot = snapshots.poll(RECEIVE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        assertThat(snapshot).isNotNull();
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> members = (List<Map<String, Object>>) snapshot.get("members");
+        assertThat(members).hasSize(1);
+        assertThat(members.get(0).get("userId")).isEqualTo(userA.getId().intValue());
+        assertThat(members.get(0).get("nickname")).isEqualTo("꼬마곰");
+
+        Map<String, Object> joinEvent = topicEvents.poll(RECEIVE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        assertThat(joinEvent).isNotNull();
+        assertThat(joinEvent.get("type")).isEqualTo("join");
+        assertThat(joinEvent.get("userId")).isEqualTo(userA.getId().intValue());
+        assertThat(joinEvent.get("nickname")).isEqualTo("꼬마곰");
+    }
+
+    @Test
+    void positionPublishBroadcastsMoveEventToOtherMembers() throws Exception {
+        // 두 명 입장. A 가 position 발행 → B 가 move 이벤트 수신.
+        User userB = createUserWithProfile("villager-b@example.com", "guardianB", "구름");
+
+        StompSession sessionA = connectAsUser(userA);
+        StompSession sessionB = connectAsUser(userB);
+
+        LinkedBlockingQueue<Map<String, Object>> eventsForB = subscribeTopic(sessionB);
+        Thread.sleep(SUBSCRIBE_GRACE_MS);
+
+        // A 가 위치 발행
+        sessionA.send(
+                "/app/village/position",
+                Map.of("x", 0.42, "y", 0.78, "dir", "left", "moving", true));
+
+        Map<String, Object> moveEvent = pollUntilType(eventsForB, "move", RECEIVE_TIMEOUT_SECONDS);
+        assertThat(moveEvent).isNotNull();
+        assertThat(moveEvent.get("userId")).isEqualTo(userA.getId().intValue());
+        assertThat(moveEvent.get("x")).isEqualTo(0.42);
+        assertThat(moveEvent.get("y")).isEqualTo(0.78);
+        assertThat(moveEvent.get("dir")).isEqualTo("left");
+        assertThat(moveEvent.get("moving")).isEqualTo(true);
+    }
+
+    @Test
+    void disconnectBroadcastsLeaveEventToOtherMembers() throws Exception {
+        User userB = createUserWithProfile("villager-leave@example.com", "guardianB", "구름");
+
+        StompSession sessionA = connectAsUser(userA);
+        StompSession sessionB = connectAsUser(userB);
+
+        LinkedBlockingQueue<Map<String, Object>> eventsForB = subscribeTopic(sessionB);
+        Thread.sleep(SUBSCRIBE_GRACE_MS);
+
+        sessionA.disconnect();
+
+        Map<String, Object> leaveEvent =
+                pollUntilType(eventsForB, "leave", RECEIVE_TIMEOUT_SECONDS);
+        assertThat(leaveEvent).isNotNull();
+        assertThat(leaveEvent.get("userId")).isEqualTo(userA.getId().intValue());
+    }
+
+    @Test
+    void readyBroadcastsJoinToExistingMembers() throws Exception {
+        // 기존 A 가 ready 한 상태에서 B 가 입장 → B 의 ready 시 A 가 B 의 join 을 토픽에서 수신.
+        User userB = createUserWithProfile("villager-join@example.com", "guardianB", "구름");
+
+        StompSession sessionA = connectAsUser(userA);
+        LinkedBlockingQueue<Map<String, Object>> eventsForA = subscribeTopic(sessionA);
+        Thread.sleep(SUBSCRIBE_GRACE_MS);
+        sessionA.send("/app/village/ready", new byte[0]);
+        // A 자신의 join 이벤트를 한 번 소비
+        pollUntilType(eventsForA, "join", RECEIVE_TIMEOUT_SECONDS);
+
+        StompSession sessionB = connectAsUser(userB);
+        subscribeSnapshot(sessionB); // 받지 않더라도 클라가 구독해야 서버가 보낼 destination 생긴다
+        Thread.sleep(SUBSCRIBE_GRACE_MS);
+        sessionB.send("/app/village/ready", new byte[0]);
+
+        Map<String, Object> bJoin =
+                pollUntilUserId(eventsForA, "join", userB.getId(), RECEIVE_TIMEOUT_SECONDS);
+        assertThat(bJoin).isNotNull();
+        assertThat(bJoin.get("nickname")).isEqualTo("구름");
+    }
+
+    // ---------- helpers ----------
+
+    private User createUserWithProfile(
+            String email, String guardianNickname, String patientNickname) {
+        User user =
+                userRepository.save(
+                        User.builder()
+                                .email(email)
+                                .nickname(guardianNickname)
+                                .password("encoded-password")
+                                .role(UserRole.USER)
+                                .build());
+        patientProfileRepository.save(
+                PatientProfile.builder()
+                        .user(user)
+                        .name(patientNickname)
+                        .nickname(patientNickname)
+                        .birthDate(LocalDate.of(2020, 1, 1))
+                        .gender(Gender.MALE)
+                        .build());
+        return user;
+    }
+
+    private String tokenFor(User user) {
+        return jwtTokenProvider.createAccessToken(user.getId(), user.getEmail(), UserRole.USER);
+    }
+
+    private StompSession connectAsUser(User user) throws Exception {
+        StompHeaders headers = new StompHeaders();
+        headers.add("Authorization", "Bearer " + tokenFor(user));
+        StompSession session = connect(headers);
+        openSessions.add(session);
+        return session;
     }
 
     private StompSession connect(StompHeaders connectHeaders) throws Exception {
@@ -117,5 +266,89 @@ class VillageStompIntegrationTest extends IntegrationTestSupport {
                         connectHeaders,
                         new StompSessionHandlerAdapter() {})
                 .get(CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+    }
+
+    @SuppressWarnings("unchecked")
+    private LinkedBlockingQueue<Map<String, Object>> subscribeTopic(StompSession session) {
+        LinkedBlockingQueue<Map<String, Object>> queue = new LinkedBlockingQueue<>();
+        session.subscribe(
+                "/topic/village.default",
+                new StompFrameHandler() {
+                    @Override
+                    public Type getPayloadType(StompHeaders headers) {
+                        return Map.class;
+                    }
+
+                    @Override
+                    public void handleFrame(StompHeaders headers, Object payload) {
+                        queue.add((Map<String, Object>) payload);
+                    }
+                });
+        return queue;
+    }
+
+    @SuppressWarnings("unchecked")
+    private LinkedBlockingQueue<Map<String, Object>> subscribeSnapshot(StompSession session) {
+        LinkedBlockingQueue<Map<String, Object>> queue = new LinkedBlockingQueue<>();
+        session.subscribe(
+                "/user/queue/village.snapshot",
+                new StompFrameHandler() {
+                    @Override
+                    public Type getPayloadType(StompHeaders headers) {
+                        return Map.class;
+                    }
+
+                    @Override
+                    public void handleFrame(StompHeaders headers, Object payload) {
+                        queue.add((Map<String, Object>) payload);
+                    }
+                });
+        return queue;
+    }
+
+    private Map<String, Object> pollUntilType(
+            LinkedBlockingQueue<Map<String, Object>> queue, String type, long timeoutSeconds)
+            throws InterruptedException {
+        long deadline = System.currentTimeMillis() + timeoutSeconds * 1_000L;
+        while (System.currentTimeMillis() < deadline) {
+            long remaining = Math.max(50L, deadline - System.currentTimeMillis());
+            Map<String, Object> event = queue.poll(remaining, TimeUnit.MILLISECONDS);
+            if (event == null) {
+                return null;
+            }
+            if (type.equals(event.get("type"))) {
+                return event;
+            }
+        }
+        return null;
+    }
+
+    private Map<String, Object> pollUntilUserId(
+            LinkedBlockingQueue<Map<String, Object>> queue,
+            String type,
+            Long userId,
+            long timeoutSeconds)
+            throws InterruptedException {
+        long deadline = System.currentTimeMillis() + timeoutSeconds * 1_000L;
+        while (System.currentTimeMillis() < deadline) {
+            long remaining = Math.max(50L, deadline - System.currentTimeMillis());
+            Map<String, Object> event = queue.poll(remaining, TimeUnit.MILLISECONDS);
+            if (event == null) {
+                return null;
+            }
+            if (type.equals(event.get("type"))
+                    && userId.intValue() == ((Number) event.get("userId")).intValue()) {
+                return event;
+            }
+        }
+        return null;
+    }
+
+    private void waitUntilPresenceSizeEquals(int expected) throws InterruptedException {
+        long deadline = System.currentTimeMillis() + 3_000L;
+        while (presenceService.size() != expected && System.currentTimeMillis() < deadline) {
+            Thread.sleep(50);
+        }
+        assertThat(presenceService.size()).isEqualTo(expected);
     }
 }

@@ -8,6 +8,7 @@ import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBr
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
 import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
 
+import com.comong.backend.domain.village.realtime.handler.VillagePresenceInterceptor;
 import com.comong.backend.domain.village.realtime.handler.VillageStompAuthInterceptor;
 
 import lombok.RequiredArgsConstructor;
@@ -33,6 +34,7 @@ import lombok.RequiredArgsConstructor;
 public class VillageWebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     private final VillageStompAuthInterceptor stompAuthInterceptor;
+    private final VillagePresenceInterceptor presenceInterceptor;
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
@@ -46,8 +48,9 @@ public class VillageWebSocketConfig implements WebSocketMessageBrokerConfigurer 
         registry.setUserDestinationPrefix("/user");
     }
 
+    // 순서가 중요: auth 가 먼저 Principal 을 주입한 뒤 presence 가 룸에 등록한다.
     @Override
     public void configureClientInboundChannel(ChannelRegistration registration) {
-        registration.interceptors(stompAuthInterceptor);
+        registration.interceptors(stompAuthInterceptor, presenceInterceptor);
     }
 }
