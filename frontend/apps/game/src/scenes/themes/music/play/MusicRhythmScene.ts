@@ -27,6 +27,7 @@ type MusicRhythmSceneData = {
 const RHYTHM_BACKGROUND_BY_CHART: Record<string, string> = {
   'baby-shark': 'images/themes/music/background/babyshark.png',
   'twinkle-star': 'images/themes/music/background/littlestar.png',
+  canon: 'images/themes/music/background/canon.png',
 }
 
 function getRhythmBackgroundPath(chartId: string): string {
@@ -980,27 +981,16 @@ export class MusicRhythmScene extends Phaser.Scene {
     const x = this.getLaneCenterX(note.lane, y)
     body.clear()
 
-    // ── Hold note tail ──
-    // tailEndY is the timing-based Y of where the hold END would be right now
-    // It is always ABOVE y (higher on screen = earlier in time)
+    // ── Hold note tail (trapezoid that follows lane perspective) ──
+    // tailEndY is the timing-based Y of where the hold END would be right now —
+    // always ABOVE y (higher on screen = earlier in time)
     if (note.durationMs && note.durationMs > 150 && tailEndY < y - r) {
-      const tailTop = Math.max(tailEndY, -r * 2) // allow slightly above screen
-      const tailBot = y - r // just above circle top
-      const tailH = tailBot - tailTop
-      const tailW = r // half-width = r → diameter = circle diameter
+      const tailTopY = Math.max(tailEndY, -r * 2) // allow slightly above screen
+      const tailBotY = y - r // just above circle top
+      const tailH = tailBotY - tailTopY
 
       if (tailH > 4) {
-        // outer soft glow
-        body.fillStyle(lc, 0.14)
-        body.fillRoundedRect(x - tailW - 5, tailTop, tailW * 2 + 10, tailH, tailW + 5)
-        // main fill
-        body.fillStyle(lc, 0.62)
-        body.fillRoundedRect(x - tailW, tailTop, tailW * 2, tailH, tailW)
-        // left-edge highlight stripe (simulates 3D cylindrical lighting)
-        body.fillStyle(0xffffff, 0.16)
-        body.fillRoundedRect(x - tailW + 2, tailTop + 4, tailW * 0.38, tailH - 8, tailW * 0.38)
-        body.lineStyle(1.5, 0xffffff, 0.35)
-        body.strokeRoundedRect(x - tailW, tailTop, tailW * 2, tailH, tailW)
+        this.drawHoldTailTrapezoid(body, note.lane, tailTopY, tailBotY, lc, 0.62, 0.14)
       }
     }
 
@@ -1182,9 +1172,7 @@ export class MusicRhythmScene extends Phaser.Scene {
     const totalMs = note.durationMs ?? 1
     const remainingRatio = remainingMs / totalMs
 
-    const x = this.getLaneCenterX(note.lane, this.hitLineY)
     const r = this.padRadius
-    const tailW = r // same width as circle diameter
     const trackHeight = this.hitLineY - this.spawnLineY
     const maxTail = Phaser.Math.Clamp(
       (totalMs / NOTE_LEAD_MS) * trackHeight * 0.9,
@@ -1192,17 +1180,61 @@ export class MusicRhythmScene extends Phaser.Scene {
       trackHeight * 0.82,
     )
     const tailHeight = maxTail * remainingRatio
-    const tailTop = this.hitLineY - r - tailHeight
+    const tailTopY = this.hitLineY - r - tailHeight
+    const tailBotY = this.hitLineY - r
 
     body.clear()
     if (tailHeight > 4) {
-      body.fillStyle(laneColor, 0.18)
-      body.fillRoundedRect(x - tailW - 5, tailTop, tailW * 2 + 10, tailHeight, tailW + 5)
-      body.fillStyle(laneColor, 0.65)
-      body.fillRoundedRect(x - tailW, tailTop, tailW * 2, tailHeight, tailW)
-      body.lineStyle(2, 0xffffff, 0.5)
-      body.strokeRoundedRect(x - tailW, tailTop, tailW * 2, tailHeight, tailW)
+      this.drawHoldTailTrapezoid(body, note.lane, tailTopY, tailBotY, laneColor, 0.65, 0.18)
     }
+  }
+
+  // Hold tail rendered as a trapezoid: top/bottom edges follow the lane perspective,
+  // so the tail visually tracks the lane as it tapers toward the spawn line.
+  private drawHoldTailTrapezoid(
+    body: Phaser.GameObjects.Graphics,
+    lane: RhythmLane,
+    topY: number,
+    botY: number,
+    color: number,
+    fillAlpha: number,
+    glowAlpha: number,
+  ) {
+    const xTop = this.getLaneCenterX(lane, topY)
+    const xBot = this.getLaneCenterX(lane, botY)
+    const halfTop = this.getLaneWidthAtY(topY) * 0.26
+    const halfBot = this.getLaneWidthAtY(botY) * 0.26
+    const glowExpand = 5
+
+    // outer soft glow (wider trapezoid)
+    body.fillStyle(color, glowAlpha)
+    body.beginPath()
+    body.moveTo(xTop - halfTop - glowExpand, topY)
+    body.lineTo(xTop + halfTop + glowExpand, topY)
+    body.lineTo(xBot + halfBot + glowExpand, botY)
+    body.lineTo(xBot - halfBot - glowExpand, botY)
+    body.closePath()
+    body.fillPath()
+
+    // main fill (lane-aligned trapezoid)
+    body.fillStyle(color, fillAlpha)
+    body.beginPath()
+    body.moveTo(xTop - halfTop, topY)
+    body.lineTo(xTop + halfTop, topY)
+    body.lineTo(xBot + halfBot, botY)
+    body.lineTo(xBot - halfBot, botY)
+    body.closePath()
+    body.fillPath()
+
+    // rim stroke
+    body.lineStyle(1.5, 0xffffff, 0.4)
+    body.beginPath()
+    body.moveTo(xTop - halfTop, topY)
+    body.lineTo(xTop + halfTop, topY)
+    body.lineTo(xBot + halfBot, botY)
+    body.lineTo(xBot - halfBot, botY)
+    body.closePath()
+    body.strokePath()
   }
 
   private resolveHit(

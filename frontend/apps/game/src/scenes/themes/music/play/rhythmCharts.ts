@@ -152,6 +152,106 @@ function createBabySharkNotes(): RhythmNote[] {
   }))
 }
 
+// ─────────────────────────────── Canon (Pachelbel) ───────────────────────────────
+// 난이도 ↑: 16분 음표 연타 + 동시 누르기(코드) + 마지막 롱노트.
+const CANON_BPM = 100
+const CANON_BEAT_MS = 60_000 / CANON_BPM // 600ms
+const CANON_EIGHTH_MS = CANON_BEAT_MS / 2 // 300ms
+const CANON_SIXTEENTH_MS = CANON_BEAT_MS / 4 // 150ms
+const CANON_START_MS = 1_800
+const CANON_DURATION_MS = 49_876
+const CANON_FINAL_HOLD_MS = 2_000
+
+function createCanonNotes(): RhythmNote[] {
+  const notes: TimedLaneNote[] = []
+  let cursorMs = CANON_START_MS
+
+  const tap = (lane: RhythmLane, chord?: RhythmLane) => {
+    notes.push({ timeMs: Math.round(cursorMs), lane })
+    if (chord !== undefined) {
+      notes.push({ timeMs: Math.round(cursorMs), lane: chord })
+    }
+  }
+
+  const run = (interval: number, lanes: readonly RhythmLane[]) => {
+    lanes.forEach(lane => {
+      tap(lane)
+      cursorMs += interval
+    })
+  }
+
+  // Phase 1 (1~4마디 · 16beat): 8분 음표 흐르는 테마
+  run(CANON_EIGHTH_MS, [3, 2, 1, 0, 1, 2, 1, 0])
+  run(CANON_EIGHTH_MS, [0, 1, 2, 3, 2, 1, 0, 1])
+  run(CANON_EIGHTH_MS, [2, 3, 2, 1, 0, 1, 2, 3])
+  run(CANON_EIGHTH_MS, [3, 2, 1, 0, 1, 2, 1, 0])
+
+  // Phase 2 (5~8마디 · 16beat): 지그재그 8분 — 레인 이동 폭 확대
+  run(CANON_EIGHTH_MS, [0, 2, 1, 3, 2, 0, 3, 1])
+  run(CANON_EIGHTH_MS, [1, 3, 0, 2, 3, 1, 2, 0])
+  run(CANON_EIGHTH_MS, [0, 1, 2, 3, 3, 2, 1, 0])
+  run(CANON_EIGHTH_MS, [3, 2, 1, 0, 0, 1, 2, 3])
+
+  // Phase 3 (9~12마디 · 16beat): 8분 위주 + 마디당 16분 러닝 1번씩
+  const phase3Bars: readonly (readonly (readonly RhythmLane[])[])[] = [
+    // 각 마디: [4 eighths, 4 sixteenths, 2 eighths] = 4*300 + 4*150 + 2*300 = 2400ms
+    [
+      [0, 1, 2, 3],
+      [2, 1, 2, 3],
+      [0, 1],
+    ],
+    [
+      [3, 2, 1, 0],
+      [1, 2, 1, 0],
+      [3, 2],
+    ],
+    [
+      [1, 2, 0, 3],
+      [2, 3, 2, 1],
+      [0, 1],
+    ],
+    [
+      [3, 0, 2, 1],
+      [1, 0, 1, 2],
+      [3, 2],
+    ],
+  ]
+  phase3Bars.forEach(([e1, s1, e2]) => {
+    run(CANON_EIGHTH_MS, e1)
+    run(CANON_SIXTEENTH_MS, s1)
+    run(CANON_EIGHTH_MS, e2)
+  })
+
+  // Phase 4 (13~16마디 · 16beat): 클라이맥스 — 다운비트 코드 + 마디당 16분 러닝 1번
+  for (let bar = 0; bar < 4; bar++) {
+    const ascending = bar % 2 === 0
+    // beat 1: 외곽 코드 + 단일 8분
+    tap(0, 3) // 양 끝 동시 누르기
+    cursorMs += CANON_EIGHTH_MS
+    tap(ascending ? 2 : 1)
+    cursorMs += CANON_EIGHTH_MS
+    // beat 2: 2 eighths
+    run(CANON_EIGHTH_MS, ascending ? [1, 2] : [2, 1])
+    // beat 3: 16분 러닝 (한 마디에 한 번만)
+    run(CANON_SIXTEENTH_MS, ascending ? [3, 2, 1, 0] : [0, 1, 2, 3])
+    // beat 4: 회복용 8분 2개
+    run(CANON_EIGHTH_MS, ascending ? [1, 3] : [2, 0])
+  }
+
+  // Phase 5 (17~20마디 · 16beat): 정리 8분 + 마지막 롱 코드
+  run(CANON_EIGHTH_MS, [0, 1, 2, 3, 2, 1, 0, 1])
+  run(CANON_EIGHTH_MS, [3, 2, 1, 0, 1, 2, 3, 2])
+  run(CANON_EIGHTH_MS, [1, 0, 2, 3, 2, 0, 1, 3])
+  // 마지막 마디: 양 끝 레인 동시 롱노트(약 2초)
+  notes.push({ timeMs: Math.round(cursorMs), lane: 0, durationMs: CANON_FINAL_HOLD_MS })
+  notes.push({ timeMs: Math.round(cursorMs), lane: 3, durationMs: CANON_FINAL_HOLD_MS })
+
+  return notes.map((note, index) => ({
+    id: `canon-${String(index + 1).padStart(3, '0')}`,
+    ...note,
+  }))
+}
+
 export const TWINKLE_STAR_RHYTHM_CHART: RhythmChart = {
   id: 'twinkle-star',
   title: '작은별',
@@ -174,9 +274,24 @@ export const BABY_SHARK_RHYTHM_CHART: RhythmChart = {
   notes: createBabySharkNotes(),
 }
 
+export const CANON_RHYTHM_CHART: RhythmChart = {
+  id: 'canon',
+  title: '캐논',
+  subtitle: '16분 음표 · 코드 챌린지',
+  bpm: CANON_BPM,
+  audioKey: 'music-rhythm-canon',
+  audioPath: 'sounds/themes/music/canon.wav',
+  durationMs: CANON_DURATION_MS,
+  notes: createCanonNotes(),
+}
+
 export const DEFAULT_RHYTHM_CHART = BABY_SHARK_RHYTHM_CHART
 
-export const ALL_RHYTHM_CHARTS: RhythmChart[] = [BABY_SHARK_RHYTHM_CHART, TWINKLE_STAR_RHYTHM_CHART]
+export const ALL_RHYTHM_CHARTS: RhythmChart[] = [
+  BABY_SHARK_RHYTHM_CHART,
+  TWINKLE_STAR_RHYTHM_CHART,
+  CANON_RHYTHM_CHART,
+]
 
 export function getRhythmChart(id?: string | null): RhythmChart {
   if (!id) return DEFAULT_RHYTHM_CHART
