@@ -1,6 +1,7 @@
 package com.comong.backend.domain.exercise.repository;
 
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -21,6 +22,16 @@ public interface ExerciseSessionMotionRepository
                     + "order by m.routineOrder asc")
     List<ExerciseSessionMotion> findAllBySessionIdWithExerciseMotionOrderByRoutineOrderAsc(
             @Param("sessionId") Long sessionId);
+
+    @Query(
+            "select sm from ExerciseSessionMotion sm "
+                    + "join fetch sm.session s "
+                    + "join fetch s.patientProfile p "
+                    + "join fetch p.user "
+                    + "join fetch sm.exerciseMotion "
+                    + "where sm.id = :id")
+    Optional<ExerciseSessionMotion> findByIdWithSessionPatientAndExerciseMotion(
+            @Param("id") Long id);
 
     boolean existsByExerciseMotionId(Long exerciseMotionId);
 }

@@ -1,5 +1,6 @@
 package com.comong.backend.domain.exercise.dto;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
@@ -10,17 +11,22 @@ import jakarta.validation.constraints.Size;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 public record ExerciseSessionMotionSaveRequest(
-        @Schema(description = "체조 동작 ID", example = "1") @NotNull Long exerciseMotionId,
-        @Schema(description = "해당 동작 소요 시간(초)", example = "12") @NotNull @PositiveOrZero
+        @Schema(description = "Exercise motion ID", example = "1") @NotNull Long exerciseMotionId,
+        @Schema(description = "Motion duration in seconds", example = "12") @NotNull @PositiveOrZero
                 Integer durationSec,
-        @Schema(description = "해당 동작 정확도(0~1)", example = "0.91")
+        @Schema(description = "Motion accuracy from 0 to 1", example = "0.91")
                 @NotNull
                 @DecimalMin("0.0")
                 @DecimalMax("1.0")
                 Double accuracy,
-        @Schema(description = "수행 반복 수", example = "8") @NotNull @PositiveOrZero
+        @Schema(description = "Completed repetition count", example = "8") @NotNull @PositiveOrZero
                 Integer completedReps,
-        @Schema(description = "저장 피드백", example = "무릎을 조금 더 올려요") @NotBlank @Size(max = 255)
+        @Schema(description = "Saved feedback", example = "Raise your knee higher.")
+                @NotBlank
+                @Size(max = 255)
                 String feedback,
-        @Schema(description = "수행 영상 S3 object key") @Size(max = 1024) String videoKey,
-        @Schema(description = "수행 영상 썸네일 S3 object key") @Size(max = 1024) String thumbKey) {}
+        @Schema(description = "Performance video S3 object key") @Size(max = 1024) String videoKey,
+        @Schema(description = "Performance thumbnail S3 object key") @Size(max = 1024)
+                String thumbKey,
+        @Schema(description = "30fps pose replay data for this motion") @Valid
+                ExerciseMotionReplayData poseReplay) {}

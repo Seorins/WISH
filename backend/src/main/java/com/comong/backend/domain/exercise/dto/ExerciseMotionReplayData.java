@@ -1,0 +1,60 @@
+package com.comong.backend.domain.exercise.dto;
+
+import java.util.List;
+
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.PositiveOrZero;
+import jakarta.validation.constraints.Size;
+
+import io.swagger.v3.oas.annotations.media.Schema;
+
+public record ExerciseMotionReplayData(
+        @Schema(description = "Replay payload version", example = "1") @NotNull @Min(1)
+                Integer version,
+        @Schema(description = "Replay sampling rate. MVP stores 30fps only.", example = "30")
+                @NotNull
+                @Min(30)
+                @Max(30)
+                Integer fps,
+        @Schema(description = "Replay duration in milliseconds", example = "3000")
+                @NotNull
+                @PositiveOrZero
+                Integer durationMs,
+        @Schema(description = "Landmark names ordered to match every frame tuple list")
+                @NotNull
+                @Size(min = 12, max = 12)
+                List<@NotBlank String> landmarks,
+        @Schema(description = "Replay frames. lm is 12 compact [x,y,z,confidence] tuples.")
+                @NotNull
+                @Size(min = 1, max = 5400)
+                List<@Valid Frame> frames,
+        @Schema(description = "Representative segment selected from the full replay") @Valid
+                Segment representativeSegment) {
+
+    public record Frame(
+            @Schema(description = "Frame timestamp from clip start in milliseconds", example = "33")
+                    @NotNull
+                    @PositiveOrZero
+                    Integer t,
+            @Schema(description = "12 compact [x,y,z,confidence] tuples")
+                    @NotNull
+                    @Size(min = 12, max = 12)
+                    List<List<Double>> lm) {}
+
+    public record Segment(
+            @Schema(description = "Segment start in milliseconds", example = "1000")
+                    @NotNull
+                    @PositiveOrZero
+                    Integer startMs,
+            @Schema(description = "Segment end in milliseconds", example = "4000")
+                    @NotNull
+                    @PositiveOrZero
+                    Integer endMs,
+            @Schema(description = "Selection reason", example = "highest tracking/progress score")
+                    @Size(max = 120)
+                    String reason) {}
+}

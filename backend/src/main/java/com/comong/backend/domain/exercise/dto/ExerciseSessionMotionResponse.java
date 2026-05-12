@@ -17,6 +17,7 @@ public record ExerciseSessionMotionResponse(
         String feedback,
         String videoUrl,
         String thumbUrl,
+        boolean replayAvailable,
         LocalDateTime createdAt) {
 
     public static ExerciseSessionMotionResponse from(
@@ -37,6 +38,7 @@ public record ExerciseSessionMotionResponse(
                 performanceVideo == null
                         ? null
                         : performanceVideoService.toPublicUrl(performanceVideo.getThumbKey()),
+                sessionMotion.hasPoseReplay(),
                 sessionMotion.getCreatedAt());
     }
 }

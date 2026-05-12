@@ -8,6 +8,8 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.comong.backend.domain.exercise.dto.ExerciseMotionReplayData;
+import com.comong.backend.domain.exercise.dto.ExerciseMotionReplayResponse;
 import com.comong.backend.domain.exercise.dto.ExerciseSessionMotionResponse;
 import com.comong.backend.domain.exercise.dto.ExerciseSessionMotionSaveRequest;
 import com.comong.backend.domain.exercise.dto.ExerciseSessionResponse;
@@ -26,19 +28,41 @@ import com.comong.backend.domain.performance.entity.PerformanceVideo;
 import com.comong.backend.domain.performance.service.PerformanceVideoService;
 import com.comong.backend.domain.upload.dto.UploadPurpose;
 import com.comong.backend.global.exception.BusinessException;
+import com.comong.backend.global.exception.GlobalErrorCode;
 
 import lombok.RequiredArgsConstructor;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class ExerciseSessionService {
 
+    private static final int REPLAY_FPS = 30;
+    private static final int REPLAY_TUPLE_SIZE = 4;
+    private static final double REPLAY_COORDINATE_ABS_LIMIT = 10.0;
+    private static final List<String> REPLAY_LANDMARK_NAMES =
+            List.of(
+                    "LEFT_SHOULDER",
+                    "RIGHT_SHOULDER",
+                    "LEFT_ELBOW",
+                    "RIGHT_ELBOW",
+                    "LEFT_WRIST",
+                    "RIGHT_WRIST",
+                    "LEFT_HIP",
+                    "RIGHT_HIP",
+                    "LEFT_KNEE",
+                    "RIGHT_KNEE",
+                    "LEFT_ANKLE",
+                    "RIGHT_ANKLE");
+
     private final ExerciseSessionRepository exerciseSessionRepository;
     private final ExerciseSessionMotionRepository exerciseSessionMotionRepository;
     private final ExerciseMotionRepository exerciseMotionRepository;
     private final PatientProfileService patientProfileService;
     private final PerformanceVideoService performanceVideoService;
+    private final ObjectMapper objectMapper;
 
     @Transactional
     public ExerciseSessionResponse create(Long userId, ExerciseSessionSaveRequest request) {
@@ -98,6 +122,26 @@ public class ExerciseSessionService {
         return ExerciseSessionResponse.of(session, motions);
     }
 
+    public ExerciseMotionReplayResponse findMotionReplay(Long userId, Long motionResultId) {
+        ExerciseSessionMotion sessionMotion =
+                exerciseSessionMotionRepository
+                        .findByIdWithSessionPatientAndExerciseMotion(motionResultId)
+                        .filter(
+                                motion ->
+                                        motion.getSession()
+                                                .getPatientProfile()
+                                                .getUser()
+                                                .getId()
+                                                .equals(userId))
+                        .orElseThrow(
+                                () ->
+                                        new BusinessException(
+                                                ExerciseErrorCode.EXERCISE_SESSION_NOT_FOUND));
+
+        return ExerciseMotionReplayResponse.from(
+                sessionMotion, deserializeReplay(sessionMotion.getPoseReplay()));
+    }
+
     private ExerciseSession findOwnedSessionOrThrow(Long userId, Long sessionId) {
         return exerciseSessionRepository
                 .findByIdWithPatientProfileAndUser(sessionId)
@@ -146,6 +190,88 @@ public class ExerciseSessionService {
                 .completedReps(request.completedReps())
                 .feedback(request.feedback())
                 .performanceVideo(performanceVideo)
+                .poseReplay(serializeReplay(request.poseReplay()))
                 .build();
+    }
+
+    private String serializeReplay(ExerciseMotionReplayData replay) {
+        if (replay == null) {
+            return null;
+        }
+        validateReplay(replay);
+        try {
+            return objectMapper.writeValueAsString(replay);
+        } catch (JacksonException e) {
+            throw new BusinessException(GlobalErrorCode.INVALID_INPUT);
+        }
+    }
+
+    private ExerciseMotionReplayData deserializeReplay(String replayJson) {
+        if (replayJson == null || replayJson.isBlank()) {
+            return null;
+        }
+        try {
+            return objectMapper.readValue(replayJson, ExerciseMotionReplayData.class);
+        } catch (JacksonException e) {
+            throw new BusinessException(GlobalErrorCode.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    private void validateReplay(ExerciseMotionReplayData replay) {
+        if (replay.durationMs() == null
+                || replay.frames() == null
+                || replay.fps() == null
+                || replay.fps() != REPLAY_FPS) {
+            throw new BusinessException(GlobalErrorCode.INVALID_INPUT);
+        }
+        if (!REPLAY_LANDMARK_NAMES.equals(replay.landmarks())) {
+            throw new BusinessException(GlobalErrorCode.INVALID_INPUT);
+        }
+
+        int previousTimestampMs = -1;
+        for (ExerciseMotionReplayData.Frame frame : replay.frames()) {
+            if (frame.t() == null || frame.t() < previousTimestampMs) {
+                throw new BusinessException(GlobalErrorCode.INVALID_INPUT);
+            }
+            previousTimestampMs = frame.t();
+            validateReplayFrame(frame);
+        }
+
+        ExerciseMotionReplayData.Segment segment = replay.representativeSegment();
+        if (segment != null
+                && (segment.startMs() > segment.endMs() || segment.endMs() > replay.durationMs())) {
+            throw new BusinessException(GlobalErrorCode.INVALID_INPUT);
+        }
+    }
+
+    private void validateReplayFrame(ExerciseMotionReplayData.Frame frame) {
+        if (frame.lm() == null || frame.lm().size() != REPLAY_LANDMARK_NAMES.size()) {
+            throw new BusinessException(GlobalErrorCode.INVALID_INPUT);
+        }
+
+        for (List<Double> landmark : frame.lm()) {
+            if (landmark == null || landmark.size() != REPLAY_TUPLE_SIZE) {
+                throw new BusinessException(GlobalErrorCode.INVALID_INPUT);
+            }
+            validateCoordinate(landmark.get(0));
+            validateCoordinate(landmark.get(1));
+            validateCoordinate(landmark.get(2));
+            validateConfidence(landmark.get(3));
+        }
+    }
+
+    private void validateCoordinate(Double value) {
+        if (value == null) {
+            return;
+        }
+        if (!Double.isFinite(value) || Math.abs(value) > REPLAY_COORDINATE_ABS_LIMIT) {
+            throw new BusinessException(GlobalErrorCode.INVALID_INPUT);
+        }
+    }
+
+    private void validateConfidence(Double value) {
+        if (value == null || !Double.isFinite(value) || value < 0.0 || value > 1.0) {
+            throw new BusinessException(GlobalErrorCode.INVALID_INPUT);
+        }
     }
 }

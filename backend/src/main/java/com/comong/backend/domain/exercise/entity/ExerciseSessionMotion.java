@@ -55,6 +55,9 @@ public class ExerciseSessionMotion {
     @JoinColumn(name = "performance_video_id")
     private PerformanceVideo performanceVideo;
 
+    @Column(name = "pose_replay", columnDefinition = "TEXT")
+    private String poseReplay;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -66,7 +69,8 @@ public class ExerciseSessionMotion {
             double accuracy,
             int completedReps,
             String feedback,
-            PerformanceVideo performanceVideo) {
+            PerformanceVideo performanceVideo,
+            String poseReplay) {
         this.session = Objects.requireNonNull(session, "session must not be null");
         this.exerciseMotion =
                 Objects.requireNonNull(exerciseMotion, "exerciseMotion must not be null");
@@ -79,6 +83,11 @@ public class ExerciseSessionMotion {
         this.completedReps = completedReps;
         this.feedback = Objects.requireNonNull(feedback, "feedback must not be null");
         this.performanceVideo = performanceVideo;
+        this.poseReplay = poseReplay;
+    }
+
+    public boolean hasPoseReplay() {
+        return poseReplay != null && !poseReplay.isBlank();
     }
 
     @PrePersist
