@@ -143,11 +143,27 @@ const INVALID_POSE_REPLAY_MESSAGE =
   '\uC88C\uD45C \uB9AC\uD50C\uB808\uC774 \uB370\uC774\uD130\uAC00 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.'
 
 const REPLAY_FPS = 30
-const REPLAY_LANDMARK_COUNT = 12
+const REPLAY_LANDMARK_NAMES = [
+  'LEFT_SHOULDER',
+  'RIGHT_SHOULDER',
+  'LEFT_ELBOW',
+  'RIGHT_ELBOW',
+  'LEFT_WRIST',
+  'RIGHT_WRIST',
+  'LEFT_HIP',
+  'RIGHT_HIP',
+  'LEFT_KNEE',
+  'RIGHT_KNEE',
+  'LEFT_ANKLE',
+  'RIGHT_ANKLE',
+] as const
+const REPLAY_LANDMARK_COUNT = REPLAY_LANDMARK_NAMES.length
 const REPLAY_TUPLE_SIZE = 4
 const REPLAY_MAX_CAPTURE_SECONDS = 180
 const REPLAY_MAX_DURATION_MS = REPLAY_MAX_CAPTURE_SECONDS * 1000
 const REPLAY_MAX_FRAMES = REPLAY_FPS * REPLAY_MAX_CAPTURE_SECONDS
+// Avatar replay stores normalized pose coordinates. z/pose normalization can exceed [-1, 1],
+// but values outside this bound are treated as corrupted payloads.
 const REPLAY_NORMALIZED_COORDINATE_ABS_LIMIT = 10
 
 export function createExerciseSessionError(error: unknown) {
@@ -215,15 +231,22 @@ function assertCompletionRate(value: number, message: string) {
   }
 }
 
+function hasExpectedReplayLandmarks(landmarks: readonly string[]): boolean {
+  return (
+    landmarks.length === REPLAY_LANDMARK_COUNT &&
+    landmarks.every((landmark, index) => landmark === REPLAY_LANDMARK_NAMES[index])
+  )
+}
+
 function validatePoseReplay(replay: ExerciseMotionReplayClip): void {
   if (
     replay.version !== 1 ||
     replay.fps !== REPLAY_FPS ||
-    !Number.isFinite(replay.durationMs) ||
+    !Number.isInteger(replay.durationMs) ||
     replay.durationMs < 0 ||
     replay.durationMs > REPLAY_MAX_DURATION_MS ||
     !Array.isArray(replay.landmarks) ||
-    replay.landmarks.length !== REPLAY_LANDMARK_COUNT ||
+    !hasExpectedReplayLandmarks(replay.landmarks) ||
     !Array.isArray(replay.frames) ||
     replay.frames.length === 0 ||
     replay.frames.length > REPLAY_MAX_FRAMES
@@ -234,7 +257,8 @@ function validatePoseReplay(replay: ExerciseMotionReplayClip): void {
   let previousTimestampMs = -1
   replay.frames.forEach(frame => {
     if (
-      !Number.isFinite(frame.t) ||
+      !Number.isInteger(frame.t) ||
+      frame.t < 0 ||
       frame.t <= previousTimestampMs ||
       frame.t > replay.durationMs ||
       !Array.isArray(frame.lm) ||
