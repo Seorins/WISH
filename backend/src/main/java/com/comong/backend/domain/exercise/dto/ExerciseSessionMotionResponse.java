@@ -17,6 +17,7 @@ public record ExerciseSessionMotionResponse(
         String feedback,
         String videoUrl,
         String thumbUrl,
+        boolean replayAvailable,
         LocalDateTime createdAt) {
 
     public static ExerciseSessionMotionResponse from(
@@ -37,6 +38,24 @@ public record ExerciseSessionMotionResponse(
                 performanceVideo == null
                         ? null
                         : performanceVideoService.toPublicUrl(performanceVideo.getThumbKey()),
+                sessionMotion.hasPoseReplay(),
                 sessionMotion.getCreatedAt());
+    }
+
+    public static ExerciseSessionMotionResponse from(
+            ExerciseSessionMotionResponseRow row, PerformanceVideoService performanceVideoService) {
+        return new ExerciseSessionMotionResponse(
+                row.id(),
+                row.exerciseMotionId(),
+                row.motionName(),
+                row.routineOrder(),
+                row.durationSec(),
+                row.accuracy(),
+                row.completedReps(),
+                row.feedback(),
+                row.videoKey() == null ? null : performanceVideoService.toPublicUrl(row.videoKey()),
+                row.thumbKey() == null ? null : performanceVideoService.toPublicUrl(row.thumbKey()),
+                row.replayAvailable(),
+                row.createdAt());
     }
 }

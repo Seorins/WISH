@@ -55,6 +55,9 @@ public class ExerciseSessionMotion {
     @JoinColumn(name = "performance_video_id")
     private PerformanceVideo performanceVideo;
 
+    @Column(name = "pose_replay", columnDefinition = "TEXT")
+    private String poseReplay;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -66,7 +69,8 @@ public class ExerciseSessionMotion {
             double accuracy,
             int completedReps,
             String feedback,
-            PerformanceVideo performanceVideo) {
+            PerformanceVideo performanceVideo,
+            String poseReplay) {
         this.session = Objects.requireNonNull(session, "session must not be null");
         this.exerciseMotion =
                 Objects.requireNonNull(exerciseMotion, "exerciseMotion must not be null");
@@ -79,6 +83,11 @@ public class ExerciseSessionMotion {
         this.completedReps = completedReps;
         this.feedback = Objects.requireNonNull(feedback, "feedback must not be null");
         this.performanceVideo = performanceVideo;
+        this.poseReplay = normalizeNullableText(poseReplay);
+    }
+
+    public boolean hasPoseReplay() {
+        return poseReplay != null && !poseReplay.isBlank();
     }
 
     @PrePersist
@@ -103,5 +112,12 @@ public class ExerciseSessionMotion {
         if (value < 0.0 || value > 1.0) {
             throw new IllegalArgumentException("accuracy must be between 0.0 and 1.0");
         }
+    }
+
+    private String normalizeNullableText(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value;
     }
 }

@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.comong.backend.domain.exercise.dto.ExerciseMotionReplayResponse;
 import com.comong.backend.domain.exercise.dto.ExerciseSessionResponse;
 import com.comong.backend.domain.exercise.dto.ExerciseSessionSaveRequest;
 import com.comong.backend.domain.exercise.dto.ExerciseSessionSummaryResponse;
@@ -107,5 +108,20 @@ public class ExerciseSessionController {
         ExerciseSessionResponse response =
                 exerciseSessionService.create(currentUser.userId(), request);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(response));
+    }
+
+    @Operation(
+            summary = "Exercise motion pose replay detail",
+            description = "Returns stored 30fps pose replay data for one saved motion result.")
+    @GetMapping("/motions/{motionResultId}/replay")
+    public ResponseEntity<ApiResponse<ExerciseMotionReplayResponse>> replay(
+            @AuthenticationPrincipal AuthenticatedUser currentUser,
+            @Parameter(description = "Saved exercise session motion result ID", required = true)
+                    @PathVariable
+                    Long motionResultId) {
+        return ResponseEntity.ok(
+                ApiResponse.success(
+                        exerciseSessionService.findMotionReplay(
+                                currentUser.userId(), motionResultId)));
     }
 }
