@@ -1,7 +1,13 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { DialogueLayer } from '../../dialogue/common/DialogueLayer'
+import { resolvePatientProfileIdOrFetch } from '../../exerciseSessions/patientProfile'
 import { getNpcIdentity } from '../../npcIdentity'
-import { useLighthouseEmotionSession } from '../useLighthouseEmotionSession'
+import {
+  LIGHTHOUSE_LOADING_LINE,
+  LIGHTHOUSE_OPENING_SAFE_LINES,
+  LIGHTHOUSE_OPENING_WELCOME_LINES,
+  useLighthouseEmotionSession,
+} from '../useLighthouseEmotionSession'
 import type { EmotionChoiceViewModel, LighthouseDialogueStatus } from '../types'
 
 type LighthouseEmotionControllerProps = {
@@ -12,20 +18,11 @@ type LighthouseEmotionControllerProps = {
 }
 
 const LIGHTHOUSE_IDENTITY = getNpcIdentity('lighthouse_keeper')
-
-function getLoadingText(status: LighthouseDialogueStatus) {
-  if (status === 'starting') return '등대지기가 불빛을 살피고 있어요'
-  if (status === 'finishing') return '등대 불빛을 정리하고 있어요'
-  return '등대지기가 불빛을 모으는 중이에요'
-}
+const SAFE_EMPTY_LINE = '괜찮아. 천천히 말해도 된단다.'
+const SAFE_FINAL_LINE = '오늘은 여기까지 해도 괜찮아.'
 
 function isLoadingStatus(status: LighthouseDialogueStatus) {
-  return (
-    status === 'starting' ||
-    status === 'submitting_choice' ||
-    status === 'loading_next' ||
-    status === 'finishing'
-  )
+  return status === 'loading_llm'
 }
 
 function getVisibleLines({
@@ -33,24 +30,30 @@ function getVisibleLines({
   currentSceneQuestion,
   npcResponseLines,
   closingLines,
-  errorMessage,
 }: {
   status: LighthouseDialogueStatus
   currentSceneQuestion?: string
   npcResponseLines: string[]
   closingLines: string[]
-  errorMessage: string | null
 }) {
-  if (status === 'showing_response') {
-    return npcResponseLines.length > 0 ? npcResponseLines : ['천천히 골라도 괜찮아.']
+  if (status === 'opening_welcome') {
+    return LIGHTHOUSE_OPENING_WELCOME_LINES
   }
 
-  if (status === 'showing_closing' || status === 'finished') {
-    return closingLines.length > 0 ? closingLines : ['오늘 이야기해줘서 고맙구나.']
+  if (status === 'opening_safe_line') {
+    return LIGHTHOUSE_OPENING_SAFE_LINES
   }
 
-  if (status === 'error') {
-    return [errorMessage ?? '잠시 후 다시 말을 걸어줘.']
+  if (status === 'showing_local_bridge' || status === 'showing_response') {
+    return npcResponseLines.length > 0 ? npcResponseLines : [SAFE_EMPTY_LINE]
+  }
+
+  if (status === 'loading_llm') {
+    return [LIGHTHOUSE_LOADING_LINE]
+  }
+
+  if (status === 'waiting_final_close' || status === 'finished') {
+    return closingLines.length > 0 ? closingLines : [SAFE_FINAL_LINE]
   }
 
   return currentSceneQuestion ? [currentSceneQuestion] : []
@@ -60,8 +63,7 @@ function getVisibleChoices(
   sceneChoices: EmotionChoiceViewModel[],
   secondaryAction: EmotionChoiceViewModel | null,
 ) {
-  const primaryChoices = sceneChoices.filter(choice => choice.choiceIntentId !== 'rest_today')
-  const visibleChoices = primaryChoices.slice(0, 3)
+  const visibleChoices = sceneChoices.slice(0, 3)
 
   if (
     secondaryAction &&
@@ -79,10 +81,39 @@ export function LighthouseEmotionController({
   onClose,
   onTextChange,
 }: LighthouseEmotionControllerProps) {
-  const { state, start, selectChoice, cancel, close, reset } = useLighthouseEmotionSession({
-    patientProfileId,
-    onFinished: onClose,
-  })
+  const [resolvedPatientProfileId, setResolvedPatientProfileId] = useState<number | undefined>()
+  const effectivePatientProfileId =
+    Number.isInteger(patientProfileId) && patientProfileId > 0
+      ? patientProfileId
+      : resolvedPatientProfileId
+  const hasValidPatientProfileId =
+    Number.isInteger(effectivePatientProfileId) && (effectivePatientProfileId ?? 0) > 0
+  const { state, start, advance, selectChoice, cancel, close, reset } = useLighthouseEmotionSession(
+    {
+      patientProfileId: effectivePatientProfileId ?? 0,
+      onFinished: onClose,
+    },
+  )
+
+  useEffect(() => {
+    if (!isOpen) {
+      setResolvedPatientProfileId(undefined)
+      return
+    }
+
+    if (hasValidPatientProfileId) return
+
+    let cancelled = false
+
+    void resolvePatientProfileIdOrFetch().then(id => {
+      if (cancelled) return
+      setResolvedPatientProfileId(id)
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [hasValidPatientProfileId, isOpen])
 
   useEffect(() => {
     if (!isOpen) {
@@ -90,10 +121,10 @@ export function LighthouseEmotionController({
       return
     }
 
-    if (state.status === 'idle') {
+    if (state.status === 'idle' && hasValidPatientProfileId) {
       void start()
     }
-  }, [isOpen, reset, start, state.status])
+  }, [hasValidPatientProfileId, isOpen, reset, start, state.status])
 
   const loading = isLoadingStatus(state.status)
   const visibleLines = getVisibleLines({
@@ -101,38 +132,46 @@ export function LighthouseEmotionController({
     currentSceneQuestion: state.currentScene?.questionText,
     npcResponseLines: state.npcResponseLines,
     closingLines: state.closingLines,
-    errorMessage: state.errorMessage,
   })
 
   useEffect(() => {
     if (!isOpen) return
-    const text = loading ? getLoadingText(state.status) : visibleLines.join('\n')
+    if (!hasValidPatientProfileId && state.status === 'idle') return
+    const text = visibleLines.join('\n')
     if (!text) return
     onTextChange?.(text)
-  }, [isOpen, loading, onTextChange, state.status, visibleLines])
+  }, [hasValidPatientProfileId, isOpen, onTextChange, state.status, visibleLines])
 
   if (!isOpen) return null
 
-  const showChoices = state.status === 'waiting_choice' && state.currentScene !== null
+  const showChoices =
+    (state.status === 'entry_question' || state.status === 'waiting_choice') &&
+    state.currentScene !== null
   const visibleChoices = showChoices
     ? getVisibleChoices(
         state.currentScene?.choices ?? [],
         state.currentScene?.secondaryAction ?? null,
       )
     : []
+  const canAdvance =
+    state.status === 'opening_welcome' ||
+    state.status === 'opening_safe_line' ||
+    state.status === 'waiting_final_close'
+
   return (
     <DialogueLayer
       isOpen={isOpen}
       displayName={LIGHTHOUSE_IDENTITY.displayName}
       visibleLines={visibleLines}
       choices={visibleChoices}
-      showChoices={showChoices}
+      showChoices={showChoices && !loading}
       selectedChoiceId={state.selectedChoiceIntentId}
       loading={loading}
-      loadingText={getLoadingText(state.status)}
+      loadingText={LIGHTHOUSE_LOADING_LINE}
       footerAction={null}
       showFrame={false}
       onSelectChoice={choice => void selectChoice(choice)}
+      onAdvance={canAdvance ? advance : undefined}
       onClose={close}
       onCancel={cancel}
     />

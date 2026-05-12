@@ -100,7 +100,7 @@ public class ClaudeClient {
                                                                 "type",
                                                                 "array",
                                                                 "minItems",
-                                                                1,
+                                                                0,
                                                                 "maxItems",
                                                                 3,
                                                                 "items",

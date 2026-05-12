@@ -8,113 +8,146 @@ import org.springframework.stereotype.Component;
 import com.comong.backend.domain.dialogue.dto.ChoiceResponse;
 import com.comong.backend.domain.dialogue.dto.SceneResponse;
 import com.comong.backend.domain.dialogue.entity.DialogueFinishReason;
-import com.comong.backend.domain.dialogue.entity.DialogueSession;
 import com.comong.backend.domain.dialogue.entity.DialogueTurnGeneratedBy;
 import com.comong.backend.domain.dialogue.entity.NpcName;
 
-/**
- * LLM 미연동 / Claude 실패 시 사용할 정적 시나리오 트리. 등대지기 영철의 전 흐름을 결정론적으로 제공한다.
- *
- * <p>구조: (이전 선택, 누적 stepCount) → (다음 장면 + ack 멘트). 모든 라우팅은 in-memory 상수로 표현하여 외부 의존성 없이 즉시 fallback
- * 가능.
- *
- * <p>마을 주민 6인은 FE 가 정적 스크립트를 보유하므로 본 provider 는 호출되지 않는다 — 호출자({@link DialogueService})가 {@link
- * NpcName#isBackendDriven()} 으로 분기 후 BE-driven NPC 만 진입한다.
- */
 @Component
 public class FallbackSceneProvider {
 
-    // ===== 첫 화면 (npcResponse 비어있음 — 직전 선택 없음) =====
+    private record SceneTemplate(String questionText, List<ChoiceResponse> choices) {}
 
     private static final SceneResponse YEONGCHEOL_FIRST_SCENE =
             new SceneResponse(
-                    "오늘 기분은 어떠니?",
+                    "오늘은 어떻게 지내고 싶니?",
                     List.of(
-                            ChoiceResponse.of("mood_okay", "괜찮아요"),
-                            ChoiceResponse.of("mood_worried", "걱정돼요"),
-                            ChoiceResponse.of("mood_hard", "힘들어요")),
-                    ChoiceResponse.of("rest_today", "오늘은 쉬고 싶어요"),
-                    /* shouldEndSession= */ false,
+                            ChoiceResponse.of("entry_rest", "쉬고 싶어요"),
+                            ChoiceResponse.of("entry_activity", "뭔가 해보고 싶어요"),
+                            ChoiceResponse.of("entry_talk", "잠깐 얘기하고 싶어요")),
+                    null,
+                    false,
                     DialogueTurnGeneratedBy.FALLBACK,
-                    /* npcResponse= */ List.of());
+                    List.of());
 
-    // ===== 후속 장면 템플릿 (질문 + 선택지). ack 는 prev choice 에 따라 외부에서 주입 =====
-
-    private record SceneTemplate(String questionText, List<ChoiceResponse> choices) {}
-
-    private static final SceneTemplate TEMPLATE_WORRY_SOURCE =
+    private static final SceneTemplate REST_SCENE =
             new SceneTemplate(
-                    "무엇이 가장 걱정되니?",
+                    "어떻게 쉬고 싶니?",
                     List.of(
-                            ChoiceResponse.of("worry_pain", "아픈 게 걱정돼요"),
-                            ChoiceResponse.of("worry_unknown", "잘 모르겠어요"),
-                            ChoiceResponse.of("worry_family", "가족이 걱정돼요")));
+                            ChoiceResponse.of("rest_quiet", "조용히 있을래요"),
+                            ChoiceResponse.of("rest_close_eyes", "눈을 감고 있을래요"),
+                            ChoiceResponse.of("rest_near_family", "가족 옆에 있을래요")));
 
-    private static final SceneTemplate TEMPLATE_HARD_PART =
+    private static final SceneTemplate ACTIVITY_SCENE =
             new SceneTemplate(
-                    "지금 가장 힘든 건 뭐니?",
+                    "가볍게 뭘 해볼까?",
                     List.of(
-                            ChoiceResponse.of("hard_body", "몸이 힘들어요"),
-                            ChoiceResponse.of("hard_lonely", "외로워요"),
-                            ChoiceResponse.of("hard_angry", "화가 나요")));
+                            ChoiceResponse.of("activity_music", "음악을 들어볼래요"),
+                            ChoiceResponse.of("activity_art", "그림을 그려볼래요"),
+                            ChoiceResponse.of("activity_move", "조금 움직여볼래요")));
 
-    private static final SceneTemplate TEMPLATE_SMALL_ACTION =
+    private static final SceneTemplate TALK_SCENE =
             new SceneTemplate(
-                    "지금 해볼 수 있는 작은 일은?",
+                    "무슨 얘기가 좋을까?",
                     List.of(
-                            ChoiceResponse.of("action_breathe", "숨을 천천히 쉬어요"),
-                            ChoiceResponse.of("action_draw", "그림을 그려요"),
-                            ChoiceResponse.of("action_tell", "한마디 해볼래요")));
+                            ChoiceResponse.of("talk_body", "몸 얘기"),
+                            ChoiceResponse.of("talk_peer", "친구나 학교 얘기"),
+                            ChoiceResponse.of("talk_worry", "걱정되는 얘기")));
 
-    private static final SceneTemplate TEMPLATE_SUPPORT_CHOICE =
+    private static final SceneTemplate BODY_SCENE =
             new SceneTemplate(
-                    "어떻게 도움을 받아볼까?",
+                    "지금 몸은 어때?",
                     List.of(
-                            ChoiceResponse.of("support_family", "가족에게 말할래요"),
-                            ChoiceResponse.of("support_medical", "선생님께 말할래요"),
-                            ChoiceResponse.of("support_draw", "그림으로 전할래요")));
+                            ChoiceResponse.of("body_okay", "괜찮아요"),
+                            ChoiceResponse.of("body_tired", "금방 힘이 빠져요"),
+                            ChoiceResponse.of("body_pain_worry", "아픈 게 걱정돼요")));
 
-    // ===== 직전 선택 → ack 멘트 =====
+    private static final SceneTemplate BODY_SUPPORT_SCENE =
+            new SceneTemplate(
+                    "그럴 땐 어떻게 하면 좋을까?",
+                    List.of(
+                            ChoiceResponse.of("body_tell_adult", "가까운 사람에게 말할래요"),
+                            ChoiceResponse.of("body_point_place", "손으로 알려줄래요"),
+                            ChoiceResponse.of("body_hold_hand", "손을 잡아줬으면 해요")));
+
+    private static final SceneTemplate PEER_SCENE =
+            new SceneTemplate(
+                    "친구나 학교 생각이 나?",
+                    List.of(
+                            ChoiceResponse.of("peer_miss", "친구가 보고 싶어요"),
+                            ChoiceResponse.of("peer_school", "학교 소식이 궁금해요"),
+                            ChoiceResponse.of("peer_okay", "지금은 괜찮아요")));
+
+    private static final SceneTemplate WORRY_SCENE =
+            new SceneTemplate(
+                    "어떤 게 제일 신경 쓰여?",
+                    List.of(
+                            ChoiceResponse.of("worry_hospital", "병원 일이 걱정돼요"),
+                            ChoiceResponse.of("worry_family", "가족이 걱정돼요"),
+                            ChoiceResponse.of("worry_upset", "속상한 일이 있어요")));
+
+    private static final SceneTemplate HOSPITAL_SCENE =
+            new SceneTemplate(
+                    "어떤 게 조금 걸려?",
+                    List.of(
+                            ChoiceResponse.of("hospital_injection", "주사가 걱정돼요"),
+                            ChoiceResponse.of("hospital_unknown", "어떻게 하는지 모르겠어요"),
+                            ChoiceResponse.of("hospital_okay", "지금은 괜찮아요")));
+
+    private static final SceneTemplate HOSPITAL_SUPPORT_SCENE =
+            new SceneTemplate(
+                    "그럴 땐 뭐가 조금 나을까?",
+                    List.of(
+                            ChoiceResponse.of("support_family", "가족이 옆에 있으면 좋아요"),
+                            ChoiceResponse.of("support_teacher", "선생님 설명이 좋아요"),
+                            ChoiceResponse.of("support_hold_hand", "손을 잡아줬으면 해요")));
+
+    private static final SceneTemplate FAMILY_SCENE =
+            new SceneTemplate(
+                    "그럴 땐 어떻게 전하고 싶니?",
+                    List.of(
+                            ChoiceResponse.of("express_words", "말로 해볼래요"),
+                            ChoiceResponse.of("express_drawing", "그림으로 보여줄래요"),
+                            ChoiceResponse.of("express_private", "나중에 말할래요")));
+
+    private static final SceneTemplate UPSET_SCENE =
+            new SceneTemplate(
+                    "그럴 땐 어떻게 하고 싶어?",
+                    List.of(
+                            ChoiceResponse.of("anger_pause", "잠깐 멈출래요"),
+                            ChoiceResponse.of("anger_say_upset", "속상하다고 말할래요"),
+                            ChoiceResponse.of("anger_call_help", "도와달라고 말할래요")));
 
     private static final Map<String, List<String>> ACK_BY_PREV_CHOICE =
             Map.ofEntries(
-                    Map.entry("mood_okay", List.of("좋구나. 작은 햇빛이 보이는 날이네.")),
-                    Map.entry("mood_worried", List.of("걱정이 찾아왔구나.")),
-                    Map.entry("mood_hard", List.of("말해줘서 고맙구나.")),
-                    Map.entry("worry_pain", List.of("아픈 게 걱정될 수 있지.")),
-                    Map.entry("worry_unknown", List.of("잘 모를 때 더 답답할 수 있단다.")),
-                    Map.entry("worry_family", List.of("가족을 많이 아끼는구나.")),
-                    Map.entry("hard_body", List.of("몸이 힘들면 마음도 지치기 쉽지.")),
-                    Map.entry("hard_lonely", List.of("혼자 있는 것처럼 느껴졌구나.")),
-                    Map.entry("hard_angry", List.of("화나는 마음도 말해도 괜찮아.")),
-                    Map.entry("support_family", List.of("가족에게 한마디 건네보자.")),
-                    Map.entry("support_medical", List.of("선생님께 말해도 된단다.")),
-                    Map.entry("support_draw", List.of("말이 어려우면 그림도 좋단다.")),
-                    Map.entry("action_breathe", List.of("좋구나. 숨은 작은 닻이 된단다.")),
-                    Map.entry("action_draw", List.of("그림도 마음의 말이 될 수 있지.")),
-                    Map.entry("action_tell", List.of("좋다. 한마디면 충분할 때도 있단다.")));
-
-    // ===== 마무리 대사 =====
+                    Map.entry("entry_rest", List.of("그래, 쉬고 싶은 날도 있지.", "잠깐 등대 옆에서 쉬어가자.")),
+                    Map.entry("entry_activity", List.of("좋구나. 가볍게 시작해도 괜찮단다.", "힘들면 언제든 멈춰도 돼.")),
+                    Map.entry("entry_talk", List.of("그래, 길게 말하지 않아도 괜찮단다.", "편한 얘기부터 골라보자.")),
+                    Map.entry("talk_body", List.of("좋아. 몸 이야기를 해도 괜찮단다.")),
+                    Map.entry("talk_peer", List.of("친구나 학교 생각이 날 수 있지.")),
+                    Map.entry("talk_worry", List.of("걱정되는 게 있으면 조금만 말해도 돼.")),
+                    Map.entry("body_tired", List.of("몸에 힘이 빠질 때가 있지.", "그럴 땐 쉬어도 괜찮아.")),
+                    Map.entry("body_pain_worry", List.of("아픈 게 걱정되면 혼자 참지 않아도 돼.")),
+                    Map.entry("worry_hospital", List.of("병원 일이 신경 쓰일 수 있어.")),
+                    Map.entry("worry_family", List.of("가족이 걱정될 때도 있지.")),
+                    Map.entry("worry_upset", List.of("속상한 일이 있었구나.", "지금 바로 다 말하지 않아도 돼.")),
+                    Map.entry("hospital_injection", List.of("주사 생각만 해도 걱정될 때가 있지.")),
+                    Map.entry("hospital_unknown", List.of("모르면 더 걱정될 수 있어.")),
+                    Map.entry("peer_miss", List.of("친구가 보고 싶은 마음이 들 수 있어.")),
+                    Map.entry("peer_school", List.of("학교 소식이 궁금할 수 있어.")));
 
     private static final List<String> CLOSING_LINES_COMPLETED =
-            List.of("오늘 말해줘서 고맙구나.", "등대 불은 여기 켜두마.");
+            List.of("오늘은 여기까지 해도 괜찮단다.", "등대 불빛은 천천히 켜둘게.");
 
     private static final List<String> CLOSING_LINES_REST =
-            List.of("알겠다. 오늘은 쉬어도 괜찮단다.", "등대 불은 조용히 켜두마.");
+            List.of("지금은 쉬어도 괜찮단다.", "등대 옆에서 천천히 쉬어가자.");
 
     private static final List<String> CLOSING_LINES_TIMEOUT =
-            List.of("오늘 여기서 멈추자꾸나.", "등대 불은 조용히 켜두마.");
+            List.of("괜찮아, 천천히 골라도 된단다.", "등대 불빛은 여기서 기다릴게.");
 
-    /** 새 세션의 첫 장면. BE-driven NPC 에 한해 호출되어야 한다. */
     public SceneResponse firstScene(NpcName npcName) {
         requireBackendDriven(npcName);
         return YEONGCHEOL_FIRST_SCENE;
     }
 
-    /**
-     * 직전 선택 + 현재 stepCount 를 보고 다음 장면을 결정. {@link DialogueSession#isAtMaxSteps()} 인 경우와 일부
-     * 선택지(action_breathe/draw, support_*)에선 즉시 종료 신호를 반환한다. ack 멘트는 직전 선택에 따라 주입된다.
-     */
     public SceneResponse nextScene(
             NpcName npcName, String prevChoiceIntentId, int newStepCount, int maxSteps) {
         requireBackendDriven(npcName);
@@ -129,7 +162,6 @@ public class FallbackSceneProvider {
         return toScene(template, ack);
     }
 
-    /** 종료 시 NPC 가 남기는 짧은 마무리 대사 (1~2 줄). BE-driven NPC 에 한해 호출되어야 한다. */
     public List<String> closingLines(NpcName npcName, DialogueFinishReason reason) {
         requireBackendDriven(npcName);
         return switch (reason) {
@@ -139,20 +171,23 @@ public class FallbackSceneProvider {
         };
     }
 
-    /** 직전 선택지에 대응하는 ack 멘트. 매핑 외 선택은 빈 리스트. */
     public List<String> ackFor(String prevChoiceIntentId) {
         return ACK_BY_PREV_CHOICE.getOrDefault(prevChoiceIntentId, List.of());
     }
 
     private static SceneTemplate chooseTemplate(String prevChoiceIntentId) {
         return switch (prevChoiceIntentId) {
-            case "mood_okay" -> TEMPLATE_SMALL_ACTION;
-            case "mood_worried" -> TEMPLATE_WORRY_SOURCE;
-            case "mood_hard" -> TEMPLATE_HARD_PART;
-            case "worry_pain", "worry_unknown", "worry_family" -> TEMPLATE_SUPPORT_CHOICE;
-            case "hard_body", "hard_lonely", "hard_angry" -> TEMPLATE_SUPPORT_CHOICE;
-            case "action_tell" -> TEMPLATE_SUPPORT_CHOICE;
-            // action_breathe / action_draw / support_* / 알 수 없는 choice → 종료 신호 (null)
+            case "entry_rest" -> REST_SCENE;
+            case "entry_activity" -> ACTIVITY_SCENE;
+            case "entry_talk" -> TALK_SCENE;
+            case "talk_body" -> BODY_SCENE;
+            case "body_tired", "body_pain_worry" -> BODY_SUPPORT_SCENE;
+            case "talk_peer" -> PEER_SCENE;
+            case "talk_worry" -> WORRY_SCENE;
+            case "worry_hospital" -> HOSPITAL_SCENE;
+            case "hospital_injection", "hospital_unknown" -> HOSPITAL_SUPPORT_SCENE;
+            case "worry_family" -> FAMILY_SCENE;
+            case "worry_upset" -> UPSET_SCENE;
             default -> null;
         };
     }
@@ -161,26 +196,19 @@ public class FallbackSceneProvider {
         return new SceneResponse(
                 template.questionText(),
                 template.choices(),
-                /* secondaryAction= */ null,
-                /* shouldEndSession= */ false,
+                null,
+                false,
                 DialogueTurnGeneratedBy.FALLBACK,
                 npcResponse);
     }
 
     private static SceneResponse endScene(List<String> npcResponse) {
         return new SceneResponse(
-                "",
-                List.of(),
-                /* secondaryAction= */ null,
-                /* shouldEndSession= */ true,
-                DialogueTurnGeneratedBy.FALLBACK,
-                npcResponse);
+                "", List.of(), null, true, DialogueTurnGeneratedBy.FALLBACK, npcResponse);
     }
 
     private static void requireBackendDriven(NpcName npcName) {
         if (!npcName.isBackendDriven()) {
-            // 호출자(DialogueService)가 NpcName.isBackendDriven() 으로 분기해야 한다.
-            // 이 시점에 도달하면 라우팅 버그.
             throw new IllegalStateException(
                     "FallbackSceneProvider only handles backend-driven NPC, got " + npcName);
         }

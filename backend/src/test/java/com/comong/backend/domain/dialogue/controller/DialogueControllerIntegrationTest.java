@@ -65,8 +65,8 @@ class DialogueControllerIntegrationTest extends IntegrationTestSupport {
     // ===== 등대지기 (BE-driven) — 세션 시작 =====
 
     @Test
-    @DisplayName("등대지기 세션 시작 — 첫 장면에 mood 선택지 3개 + rest_today secondaryAction")
-    void createSession_yeongcheol_returnsFirstSceneWithRestTodaySecondary() throws Exception {
+    @DisplayName("등대지기 세션 시작 — 첫 장면에 entry 선택지 3개")
+    void createSession_yeongcheol_returnsFirstSceneWithEntryChoices() throws Exception {
         TestUser user = setupUserWithProfile("create-session@example.com", "create-session");
 
         mockMvc.perform(
@@ -78,11 +78,10 @@ class DialogueControllerIntegrationTest extends IntegrationTestSupport {
                 .andExpect(jsonPath("$.code").value("SUCCESS"))
                 .andExpect(jsonPath("$.data.sessionId").isNumber())
                 .andExpect(jsonPath("$.data.status").value("IN_PROGRESS"))
-                .andExpect(jsonPath("$.data.scene.questionText").value("오늘 기분은 어떠니?"))
+                .andExpect(jsonPath("$.data.scene.questionText").value("오늘은 어떻게 지내고 싶니?"))
                 .andExpect(jsonPath("$.data.scene.choices.length()").value(3))
-                .andExpect(jsonPath("$.data.scene.choices[0].choiceIntentId").value("mood_okay"))
-                .andExpect(
-                        jsonPath("$.data.scene.secondaryAction.choiceIntentId").value("rest_today"))
+                .andExpect(jsonPath("$.data.scene.choices[0].choiceIntentId").value("entry_rest"))
+                .andExpect(jsonPath("$.data.scene.secondaryAction").doesNotExist())
                 .andExpect(jsonPath("$.data.scene.shouldEndSession").value(false))
                 .andExpect(jsonPath("$.data.scene.generatedBy").value("FALLBACK"));
 
@@ -185,8 +184,8 @@ class DialogueControllerIntegrationTest extends IntegrationTestSupport {
     // ===== 등대지기 turn 처리 / 라우팅 =====
 
     @Test
-    @DisplayName("mood_worried 선택 → worry_source 장면으로 라우팅")
-    void submitTurn_moodWorried_routesToWorrySource() throws Exception {
+    @DisplayName("entry_talk 선택 → 주제 선택 장면으로 라우팅")
+    void submitTurn_entryTalk_routesToTalkTopic() throws Exception {
         TestUser user = setupUserWithProfile("turn-worry@example.com", "turn-worry");
         long sessionId = startSession(user, "YEONGCHEOL");
 
@@ -194,12 +193,14 @@ class DialogueControllerIntegrationTest extends IntegrationTestSupport {
                         post("/dialogue/sessions/{id}/turns", sessionId)
                                 .header("Authorization", "Bearer " + user.token())
                                 .contentType(MediaType.APPLICATION_JSON)
-                                .content(turnBody("오늘 기분은 어떠니?", "mood_worried", "걱정돼요", 2)))
+                                .content(
+                                        turnBody(
+                                                "오늘은 어떻게 지내고 싶니?", "entry_talk", "잠깐 얘기하고 싶어요", 0)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("SUCCESS"))
-                .andExpect(jsonPath("$.data.nextScene.questionText").value("무엇이 가장 걱정되니?"))
+                .andExpect(jsonPath("$.data.nextScene.questionText").value("무슨 얘기가 좋을까?"))
                 .andExpect(
-                        jsonPath("$.data.nextScene.choices[0].choiceIntentId").value("worry_pain"))
+                        jsonPath("$.data.nextScene.choices[0].choiceIntentId").value("talk_body"))
                 .andExpect(jsonPath("$.data.nextScene.secondaryAction").doesNotExist())
                 .andExpect(jsonPath("$.data.nextScene.shouldEndSession").value(false));
 
@@ -406,7 +407,7 @@ class DialogueControllerIntegrationTest extends IntegrationTestSupport {
                 .andExpect(jsonPath("$.data.sessionId").value(sessionId))
                 .andExpect(jsonPath("$.data.status").value("FINISHED"))
                 .andExpect(jsonPath("$.data.closingLines.length()").value(2))
-                .andExpect(jsonPath("$.data.closingLines[0]").value("오늘 말해줘서 고맙구나."))
+                .andExpect(jsonPath("$.data.closingLines[0]").value("오늘은 여기까지 해도 괜찮단다."))
                 .andExpect(jsonPath("$.data.caregiverFacingNote").doesNotExist());
     }
 
@@ -422,7 +423,7 @@ class DialogueControllerIntegrationTest extends IntegrationTestSupport {
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("{\"finishReason\":\"REST_TODAY\"}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.closingLines[0]").value("알겠다. 오늘은 쉬어도 괜찮단다."));
+                .andExpect(jsonPath("$.data.closingLines[0]").value("지금은 쉬어도 괜찮단다."));
     }
 
     @Test

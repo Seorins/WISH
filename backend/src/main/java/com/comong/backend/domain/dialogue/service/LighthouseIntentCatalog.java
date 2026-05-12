@@ -6,109 +6,213 @@ import java.util.Optional;
 
 import org.springframework.stereotype.Component;
 
-/**
- * 등대지기 16개 {@code choiceIntentId} 의 분석 metadata catalog. {@code intensity} / {@code concernFlags} /
- * {@code protectiveFactors} 를 한 곳에서 관리한다.
- *
- * <p>등대지기는 BE 가 Claude/fallback 으로 흐름을 책임지고 intent 풀이 고정(16종)이라 BE catalog 가 진실. {@link
- * com.comong.backend.domain.dialogue.service.DialogueService#submitTurn} 가 등대지기 turn 적재 시 FE 가 보낸
- * 값을 무시하고 본 catalog 값으로 override 한다 (FE 변조 차단 + LLM 응답에 metadata 없어도 적재 보장).
- *
- * <p>마을 주민은 본 catalog 미사용 — FE 가 자체 스크립트의 metadata 그대로 보내고 BE 가 그대로 저장 (NPC 별 고유 intent 풀 + 멘트라 BE
- * 카탈로그화 부적합).
- *
- * <p>데이터 출처: {@code frontend/.../lighthouse/dialog/lighthouseEmotionDialogue.ts} 의 각 choice 정의 값
- * 그대로 이식 (호환성 유지).
- */
 @Component
 public class LighthouseIntentCatalog {
 
-    /** 16개 등대지기 choiceIntentId → 분석 metadata. */
     private static final Map<String, ChoiceIntentMetadata> METADATA =
             Map.ofEntries(
-                    Map.entry(
-                            "mood_okay",
-                            new ChoiceIntentMetadata(
-                                    (short) 0, List.of(), List.of("positive_mood"))),
-                    Map.entry(
-                            "mood_worried",
-                            new ChoiceIntentMetadata(
-                                    (short) 2, List.of("worry_present"), List.of("emotion_named"))),
-                    Map.entry(
-                            "mood_hard",
-                            new ChoiceIntentMetadata(
-                                    (short) 2,
-                                    List.of("distress_present"),
-                                    List.of("emotion_named"))),
-                    Map.entry(
-                            "rest_today",
-                            new ChoiceIntentMetadata(
-                                    (short) 1, List.of("ended_checkin"), List.of("sets_boundary"))),
-                    Map.entry(
-                            "worry_pain",
-                            new ChoiceIntentMetadata(
-                                    (short) 3,
-                                    List.of("pain_concern", "procedure_fear"),
-                                    List.of("can_name_fear"))),
-                    Map.entry(
-                            "worry_unknown",
-                            new ChoiceIntentMetadata(
-                                    (short) 2,
-                                    List.of("uncertainty"),
-                                    List.of("information_need_named"))),
-                    Map.entry(
+                    entry(
+                            "entry_rest",
+                            1,
+                            List.of("needs_rest"),
+                            List.of("sets_boundary", "rest_need_named")),
+                    entry(
+                            "entry_activity",
+                            0,
+                            List.of(),
+                            List.of("agency_coping", "positive_activity_interest")),
+                    entry(
+                            "entry_talk",
+                            0,
+                            List.of(),
+                            List.of("support_seeking", "verbal_expression")),
+                    entry("rest_quiet", 1, List.of("needs_rest"), List.of("sets_boundary")),
+                    entry(
+                            "rest_close_eyes",
+                            1,
+                            List.of("fatigue_present"),
+                            List.of("self_care_action", "rest_need_named")),
+                    entry(
+                            "rest_near_family",
+                            0,
+                            List.of(),
+                            List.of("family_support_preference", "support_need_named")),
+                    entry(
+                            "activity_music",
+                            0,
+                            List.of(),
+                            List.of("positive_activity_interest", "music_interest")),
+                    entry(
+                            "activity_art",
+                            0,
+                            List.of(),
+                            List.of("creative_expression", "positive_activity_interest")),
+                    entry(
+                            "activity_move",
+                            0,
+                            List.of(),
+                            List.of("movement_interest", "agency_coping")),
+                    entry("talk_body", 0, List.of(), List.of("body_checkin_interest")),
+                    entry("talk_peer", 0, List.of(), List.of("social_connection_interest")),
+                    entry(
+                            "talk_worry",
+                            1,
+                            List.of("worry_present"),
+                            List.of("emotion_named", "support_seeking")),
+                    entry("body_okay", 0, List.of(), List.of("positive_body_state")),
+                    entry(
+                            "body_tired",
+                            2,
+                            List.of("fatigue_present", "body_discomfort"),
+                            List.of("body_state_named")),
+                    entry(
+                            "body_pain_worry",
+                            3,
+                            List.of("pain_concern", "procedure_fear"),
+                            List.of("can_name_fear")),
+                    entry(
+                            "body_tell_adult",
+                            0,
+                            List.of(),
+                            List.of("support_seeking", "adult_support_preference")),
+                    entry(
+                            "body_point_place",
+                            1,
+                            List.of("prefers_nonverbal_expression"),
+                            List.of("alternative_expression", "body_state_named")),
+                    entry(
+                            "body_hold_hand",
+                            1,
+                            List.of("needs_comfort"),
+                            List.of("comfort_preference_named", "support_need_named")),
+                    entry(
+                            "peer_miss",
+                            2,
+                            List.of("peer_separation", "loneliness"),
+                            List.of("relationship_named")),
+                    entry(
+                            "peer_school",
+                            1,
+                            List.of("school_connection"),
+                            List.of("social_connection", "information_seeking")),
+                    entry("peer_okay", 0, List.of(), List.of("positive_social_state")),
+                    entry(
+                            "worry_hospital",
+                            2,
+                            List.of("hospital_worry", "worry_present"),
+                            List.of("emotion_named")),
+                    entry(
                             "worry_family",
-                            new ChoiceIntentMetadata(
-                                    (short) 3, List.of("parent_concern"), List.of("empathy"))),
-                    Map.entry(
-                            "hard_body",
-                            new ChoiceIntentMetadata(
-                                    (short) 3,
-                                    List.of("body_discomfort"),
-                                    List.of("body_state_named"))),
-                    Map.entry(
-                            "hard_lonely",
-                            new ChoiceIntentMetadata(
-                                    (short) 3, List.of("loneliness"), List.of("emotion_named"))),
-                    Map.entry(
-                            "hard_angry",
-                            new ChoiceIntentMetadata(
-                                    (short) 2,
-                                    List.of("anger_or_frustration"),
-                                    List.of("emotion_named"))),
-                    Map.entry(
+                            3,
+                            List.of("family_worry", "parent_concern"),
+                            List.of("relationship_named", "empathy")),
+                    entry(
+                            "worry_upset",
+                            2,
+                            List.of("anger_or_frustration", "distress_present"),
+                            List.of("emotion_named")),
+                    entry(
+                            "hospital_injection",
+                            3,
+                            List.of("procedure_fear", "pain_concern"),
+                            List.of("can_name_fear")),
+                    entry(
+                            "hospital_unknown",
+                            2,
+                            List.of("uncertainty", "information_need"),
+                            List.of("uncertainty_named")),
+                    entry("hospital_okay", 0, List.of(), List.of("positive_mood")),
+                    entry(
                             "support_family",
-                            new ChoiceIntentMetadata(
-                                    (short) 0, List.of(), List.of("family_support_preference"))),
-                    Map.entry(
-                            "support_medical",
-                            new ChoiceIntentMetadata(
-                                    (short) 0, List.of(), List.of("medical_support_preference"))),
-                    Map.entry(
+                            0,
+                            List.of(),
+                            List.of("family_support_preference", "support_need_named")),
+                    entry(
+                            "support_teacher",
+                            0,
+                            List.of(),
+                            List.of("information_seeking", "medical_support_preference")),
+                    entry(
+                            "support_hold_hand",
+                            1,
+                            List.of("needs_comfort"),
+                            List.of("comfort_preference_named", "support_need_named")),
+                    entry(
+                            "express_words",
+                            0,
+                            List.of(),
+                            List.of("verbal_expression", "family_support_preference")),
+                    entry(
+                            "express_drawing",
+                            0,
+                            List.of("prefers_nonverbal_expression"),
+                            List.of("creative_expression", "alternative_expression")),
+                    entry(
+                            "express_private",
+                            1,
+                            List.of("hesitation_to_share"),
+                            List.of("sets_boundary")),
+                    entry(
+                            "anger_pause",
+                            1,
+                            List.of("anger_or_frustration"),
+                            List.of("pause_coping", "self_regulation")),
+                    entry(
+                            "anger_say_upset",
+                            1,
+                            List.of("anger_or_frustration"),
+                            List.of("emotion_named", "verbal_expression")),
+                    entry(
+                            "anger_call_help",
+                            1,
+                            List.of("anger_or_frustration"),
+                            List.of("support_seeking", "self_regulation")),
+                    // Legacy ids kept so older clients and stored fallback flows still work.
+                    entry("mood_okay", 0, List.of(), List.of("positive_mood")),
+                    entry("mood_worried", 2, List.of("worry_present"), List.of("emotion_named")),
+                    entry("mood_hard", 2, List.of("distress_present"), List.of("emotion_named")),
+                    entry("rest_today", 1, List.of("ended_checkin"), List.of("sets_boundary")),
+                    entry(
+                            "worry_pain",
+                            3,
+                            List.of("pain_concern", "procedure_fear"),
+                            List.of("can_name_fear")),
+                    entry(
+                            "worry_unknown",
+                            2,
+                            List.of("uncertainty"),
+                            List.of("information_need_named")),
+                    entry("hard_body", 3, List.of("body_discomfort"), List.of("body_state_named")),
+                    entry("hard_lonely", 3, List.of("loneliness"), List.of("emotion_named")),
+                    entry(
+                            "hard_angry",
+                            2,
+                            List.of("anger_or_frustration"),
+                            List.of("emotion_named")),
+                    entry("support_medical", 0, List.of(), List.of("medical_support_preference")),
+                    entry(
                             "support_draw",
-                            new ChoiceIntentMetadata(
-                                    (short) 0,
-                                    List.of("prefers_nonverbal_expression"),
-                                    List.of("alternative_expression"))),
-                    Map.entry(
-                            "action_breathe",
-                            new ChoiceIntentMetadata(
-                                    (short) 0, List.of(), List.of("breathing_coping"))),
-                    Map.entry(
-                            "action_draw",
-                            new ChoiceIntentMetadata(
-                                    (short) 0, List.of(), List.of("creative_expression"))),
-                    Map.entry(
-                            "action_tell",
-                            new ChoiceIntentMetadata(
-                                    (short) 0, List.of(), List.of("adult_support_plan"))));
+                            0,
+                            List.of("prefers_nonverbal_expression"),
+                            List.of("alternative_expression")),
+                    entry("action_breathe", 0, List.of(), List.of("breathing_coping")),
+                    entry("action_draw", 0, List.of(), List.of("creative_expression")),
+                    entry("action_tell", 0, List.of(), List.of("adult_support_plan")));
 
-    /** 주어진 choiceIntentId 의 metadata 조회. 16종 외면 empty. */
     public Optional<ChoiceIntentMetadata> lookup(String choiceIntentId) {
         return Optional.ofNullable(METADATA.get(choiceIntentId));
     }
 
-    /** 등대지기 turn 저장 시 BE 가 부여하는 분석 metadata. FE 가 보낸 값은 무시되고 본 record 값이 적재된다. */
+    private static Map.Entry<String, ChoiceIntentMetadata> entry(
+            String intentId,
+            int intensity,
+            List<String> concernFlags,
+            List<String> protectiveFactors) {
+        return Map.entry(
+                intentId,
+                new ChoiceIntentMetadata((short) intensity, concernFlags, protectiveFactors));
+    }
+
     public record ChoiceIntentMetadata(
             short intensity, List<String> concernFlags, List<String> protectiveFactors) {}
 }

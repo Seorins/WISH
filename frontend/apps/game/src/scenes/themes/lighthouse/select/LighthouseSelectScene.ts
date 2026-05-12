@@ -469,11 +469,6 @@ export class LighthouseSelectScene extends Phaser.Scene {
       return
     }
 
-    if (this.isNearYoungcheol(pointer.x, pointer.y)) {
-      this.startYoungcheolConversation()
-      return
-    }
-
     this.target = new Phaser.Math.Vector2(pointer.x, pointer.y)
     createClickTargetMarker(this, pointer.x, pointer.y)
   }
@@ -483,18 +478,13 @@ export class LighthouseSelectScene extends Phaser.Scene {
       this.activateFocusedPostcardAction()
       return
     }
-    if (!this.isDialogVisible) {
-      this.handleInteractDown()
-      return
-    }
+    if (!this.isDialogVisible) return
     if (this.uiMode === 'PLAYER_CHOICE') this.selectFocusedChoice()
     else this.advanceDialog()
   }
 
   private readonly handleInteractDown = () => {
-    if (this.isDialogVisible || this.isTransitioning || this.dialogDismissed) return
-    if (!this.isNearYoungcheol(this.player.x, this.player.y)) return
-    this.startYoungcheolConversation()
+    return
   }
 
   private readonly handleSpaceDown = () => {
@@ -1103,6 +1093,12 @@ export class LighthouseSelectScene extends Phaser.Scene {
     if (!isNearYoungcheol) {
       this.dialogDismissed = false
       this.interactionHint.hide()
+      return
+    }
+
+    if (!this.isDialogVisible && !this.dialogDismissed) {
+      this.interactionHint.hide()
+      this.startYoungcheolConversation()
       return
     }
 

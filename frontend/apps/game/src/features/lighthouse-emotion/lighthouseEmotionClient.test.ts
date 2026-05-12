@@ -1,9 +1,11 @@
-﻿import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   getDialogueSessionDetail,
+  LIGHTHOUSE_ENTRY_QUESTION,
   sanitizeEmotionScene,
   submitLighthouseEmotionTurn,
 } from './lighthouseEmotionClient'
+import type { EmotionSceneViewModel } from './types'
 
 function jsonResponse(body: unknown, ok = true) {
   return {
@@ -13,18 +15,17 @@ function jsonResponse(body: unknown, ok = true) {
 }
 
 describe('sanitizeEmotionScene', () => {
-  it('keeps only display-safe choices and allows rest_today only as first secondary action', () => {
-    const firstScene = sanitizeEmotionScene(
+  it('keeps up to three display-safe choices and hides secondary actions', () => {
+    const scene = sanitizeEmotionScene(
       {
-        questionText: '오늘 마음은 어때?',
+        questionText: '무슨 얘기가 좋을까?',
         choices: [
-          { choiceIntentId: 'mood_okay', text: '괜찮아요' },
-          { choiceIntentId: 'rest_today', text: '오늘은 쉬고 싶어요' },
-          { choiceIntentId: 'mood_worried', text: '걱정돼요' },
-          { choiceIntentId: 'mood_hard', text: '힘들어요' },
-          { choiceIntentId: 'extra_choice', text: '네 번째' },
+          { choiceIntentId: 'talk_body', text: '몸 얘기' },
+          { choiceIntentId: 'talk_peer', text: '친구나 학교 얘기' },
+          { choiceIntentId: 'talk_worry', text: '걱정되는 얘기' },
+          { choiceIntentId: 'extra_choice', text: '더 보기' },
         ],
-        secondaryAction: { choiceIntentId: 'rest_today', text: '오늘은 쉬고 싶어요' },
+        secondaryAction: { choiceIntentId: 'rest_today', text: '오늘은 쉴래요' },
         shouldEndSession: false,
         generatedBy: 'CLAUDE',
         reasonCode: 'internal_reason',
@@ -32,33 +33,17 @@ describe('sanitizeEmotionScene', () => {
       true,
     )
 
-    expect(firstScene.choices.map(choice => choice.choiceIntentId)).toEqual([
-      'mood_okay',
-      'mood_worried',
-      'mood_hard',
+    expect(scene.choices.map(choice => choice.choiceIntentId)).toEqual([
+      'talk_body',
+      'talk_peer',
+      'talk_worry',
     ])
-    expect(firstScene.secondaryAction).toEqual({
-      choiceIntentId: 'rest_today',
-      text: '오늘은 쉬고 싶어요',
-    })
-    expect(firstScene.generatedBy).toBeUndefined()
-    expect(firstScene.reasonCode).toBeUndefined()
-
-    const followUpScene = sanitizeEmotionScene(
-      {
-        questionText: '조금 더 말해줄래?',
-        choices: [{ choiceIntentId: 'rest_today', text: '오늘은 쉬고 싶어요' }],
-        secondaryAction: { choiceIntentId: 'rest_today', text: '오늘은 쉬고 싶어요' },
-        shouldEndSession: false,
-      },
-      false,
-    )
-
-    expect(followUpScene.choices).toEqual([])
-    expect(followUpScene.secondaryAction).toBeNull()
+    expect(scene.secondaryAction).toBeNull()
+    expect(scene.generatedBy).toBe('CLAUDE')
+    expect(scene.reasonCode).toBeUndefined()
   })
 
-  it('uses a safe fallback question when backend text is empty', () => {
+  it('uses the lighthouse entry fallback when backend text is empty', () => {
     const scene = sanitizeEmotionScene(
       {
         questionText: '',
@@ -69,7 +54,12 @@ describe('sanitizeEmotionScene', () => {
       true,
     )
 
-    expect(scene.questionText).toBe('오늘 기분은 어떠니?')
+    expect(scene.questionText).toBe(LIGHTHOUSE_ENTRY_QUESTION)
+    expect(scene.choices.map(choice => choice.choiceIntentId)).toEqual([
+      'entry_rest',
+      'entry_activity',
+      'entry_talk',
+    ])
   })
 })
 
@@ -95,12 +85,12 @@ describe('getDialogueSessionDetail', () => {
         {
           id: 1,
           stepIndex: 0,
-          questionText: '오늘 기분은 어떠니?',
-          choiceIntentId: 'mood_worried',
-          choiceText: '걱정돼요',
-          intensity: 1,
-          concernFlags: ['worry'],
-          protectiveFactors: ['talked'],
+          questionText: LIGHTHOUSE_ENTRY_QUESTION,
+          choiceIntentId: 'entry_talk',
+          choiceText: '잠깐 얘기하고 싶어요',
+          intensity: 0,
+          concernFlags: [],
+          protectiveFactors: ['support_seeking'],
           generatedBy: 'CLAUDE',
           createdAt: '2026-05-10T13:51:02.586Z',
         },
@@ -109,7 +99,7 @@ describe('getDialogueSessionDetail', () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse({
         code: 'OK',
-        message: '조회 성공',
+        message: 'ok',
         data: detail,
       }),
     )
@@ -143,11 +133,11 @@ describe('submitLighthouseEmotionTurn', () => {
     localStorage.clear()
   })
 
-  it('submits a dialogue turn with question text and unwraps next scene', async () => {
+  it('submits a dialogue turn for response rewriting and unwraps npc response', async () => {
     localStorage.setItem('wish_access_token', 'token-1')
-    const nextScene = {
-      questionText: 'è­°ê³Œíˆ‘ ??ï§ë¨°ë¹ä»¥ê¾¨ì˜’?',
-      choices: [{ choiceIntentId: 'worry_body', text: 'ï§ëª„ì”  å«„ê¹†ì ™?ì‡±ìŠ‚' }],
+    const nextScene: EmotionSceneViewModel = {
+      questionText: 'Backend flow is ignored by the hook',
+      choices: [{ choiceIntentId: 'ignored', text: 'Ignored' }],
       secondaryAction: null,
       shouldEndSession: false,
       generatedBy: 'CLAUDE',
@@ -155,10 +145,11 @@ describe('submitLighthouseEmotionTurn', () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse({
         code: 'OK',
-        message: 'è­°ê³ ì‰¶ ?ê¹ƒë‚¬',
+        message: 'ok',
         data: {
           sessionId: 42,
           status: 'IN_PROGRESS',
+          npcResponse: ['그래, 편한 얘기부터 골라보자.'],
           nextScene,
         },
       }),
@@ -167,16 +158,22 @@ describe('submitLighthouseEmotionTurn', () => {
 
     await expect(
       submitLighthouseEmotionTurn('42', {
-        questionText: '?ã…»ë’› æ¹²ê³•í…‡?Â€ ?ëŒ€ë¼š??',
+        questionText: LIGHTHOUSE_ENTRY_QUESTION,
+        route: 'talk_topic_01',
+        historyIntentIds: ['entry_talk'],
+        previousQuestionTexts: [LIGHTHOUSE_ENTRY_QUESTION],
         selectedChoice: {
-          choiceIntentId: 'mood_worried',
-          text: 'å«„ê¹†ì ™?ì‡±ìŠ‚',
-          intensity: 2,
-          concernFlags: ['worry_present'],
-          protectiveFactors: ['emotion_named'],
+          choiceIntentId: 'entry_talk',
+          text: '잠깐 얘기하고 싶어요',
+          intensity: 0,
+          concernFlags: [],
+          protectiveFactors: ['support_seeking', 'verbal_expression'],
         },
       }),
-    ).resolves.toEqual({ nextScene })
+    ).resolves.toEqual({
+      npcResponse: ['그래, 편한 얘기부터 골라보자.'],
+      nextScene: sanitizeEmotionScene(nextScene, false),
+    })
 
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringMatching(/\/api\/v1\/dialogue\/sessions\/42\/turns$/),
@@ -190,27 +187,25 @@ describe('submitLighthouseEmotionTurn', () => {
         body: JSON.stringify({
           npcId: 'lighthouse_keeper',
           npcName: 'YEONGCHEOL',
-          questionText: '?ã…»ë’› æ¹²ê³•í…‡?Â€ ?ëŒ€ë¼š??',
+          questionText: LIGHTHOUSE_ENTRY_QUESTION,
           selectedChoice: {
-            choiceIntentId: 'mood_worried',
-            text: 'å«„ê¹†ì ™?ì‡±ìŠ‚',
-            intensity: 2,
-            concernFlags: ['worry_present'],
-            protectiveFactors: ['emotion_named'],
+            choiceIntentId: 'entry_talk',
+            text: '잠깐 얘기하고 싶어요',
+            intensity: 0,
+            concernFlags: [],
+            protectiveFactors: ['support_seeking', 'verbal_expression'],
           },
+          route: 'talk_topic_01',
+          historyIntentIds: ['entry_talk'],
+          previousQuestionTexts: [LIGHTHOUSE_ENTRY_QUESTION],
+          dailyActivityState: undefined,
         }),
       },
     )
   })
 
-  it('fills backend-required choice metadata when backend scene omits it', async () => {
+  it('fills backend-required choice metadata when choice omits it', async () => {
     localStorage.setItem('wish_access_token', 'token-1')
-    const nextScene = {
-      questionText: '다음 질문',
-      choices: [{ choiceIntentId: 'next', text: '다음 선택' }],
-      secondaryAction: null,
-      shouldEndSession: false,
-    }
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse({
         code: 'OK',
@@ -218,7 +213,8 @@ describe('submitLighthouseEmotionTurn', () => {
         data: {
           sessionId: 42,
           status: 'IN_PROGRESS',
-          nextScene,
+          npcResponse: ['좋구나. 가볍게 시작해도 괜찮단다.'],
+          nextScene: null,
         },
       }),
     )
@@ -226,13 +222,16 @@ describe('submitLighthouseEmotionTurn', () => {
 
     await expect(
       submitLighthouseEmotionTurn('42', {
-        questionText: '오늘 기분은 어떠니?',
+        questionText: LIGHTHOUSE_ENTRY_QUESTION,
         selectedChoice: {
-          choiceIntentId: 'mood_okay',
-          text: '괜찮아요',
+          choiceIntentId: 'entry_activity',
+          text: '뭔가 해보고 싶어요',
         },
       }),
-    ).resolves.toEqual({ nextScene })
+    ).resolves.toEqual({
+      npcResponse: ['좋구나. 가볍게 시작해도 괜찮단다.'],
+      nextScene: sanitizeEmotionScene(null, true),
+    })
 
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringMatching(/\/api\/v1\/dialogue\/sessions\/42\/turns$/),
@@ -240,10 +239,10 @@ describe('submitLighthouseEmotionTurn', () => {
         body: JSON.stringify({
           npcId: 'lighthouse_keeper',
           npcName: 'YEONGCHEOL',
-          questionText: '오늘 기분은 어떠니?',
+          questionText: LIGHTHOUSE_ENTRY_QUESTION,
           selectedChoice: {
-            choiceIntentId: 'mood_okay',
-            text: '괜찮아요',
+            choiceIntentId: 'entry_activity',
+            text: '뭔가 해보고 싶어요',
             intensity: 0,
             concernFlags: [],
             protectiveFactors: [],
