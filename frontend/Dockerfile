@@ -38,6 +38,28 @@ RUN rm /etc/nginx/conf.d/default.conf && \
       '    root /usr/share/nginx/html;' \
       '    index index.html;' \
       '' \
+      '    gzip on;' \
+      '    gzip_vary on;' \
+      '    gzip_comp_level 6;' \
+      '    gzip_min_length 1024;' \
+      '    gzip_proxied any;' \
+      '    gzip_types text/plain text/css text/xml application/json application/javascript application/xml application/rss+xml image/svg+xml application/wasm;' \
+      '' \
+      '    location = /index.html {' \
+      '        add_header Cache-Control "no-cache";' \
+      '        try_files /index.html =404;' \
+      '    }' \
+      '' \
+      '    location ~* "^/assets/.*-[0-9A-Za-z_-]{8,}\.(js|css)$" {' \
+      '        add_header Cache-Control "public, max-age=31536000, immutable";' \
+      '        try_files $uri =404;' \
+      '    }' \
+      '' \
+      '    location ~* "^/assets/.*\.(png|jpg|jpeg|gif|webp|avif|svg|ico|mp3|ogg|wav|woff|woff2)$" {' \
+      '        add_header Cache-Control "public, max-age=86400";' \
+      '        try_files $uri =404;' \
+      '    }' \
+      '' \
       '    location / {' \
       '        try_files $uri $uri/ /index.html;' \
       '    }' \
