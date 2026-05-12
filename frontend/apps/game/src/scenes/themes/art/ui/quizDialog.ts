@@ -218,22 +218,18 @@ export function createQuizResultDialog({
     }),
   )
 
-  // 본문 — AI 추측 말풍선 (오답/fallback 시) 또는 점수 스티커 (정답)
+  // 본문 — AI 추측 말풍선 (오답/fallback 시) 또는 정답 메시지 (정답)
   if (isCorrect) {
-    buildScoreSticker(scene, objects, tweens, {
-      depth,
-      x: ctx.panelX + ctx.panelWidth / 2,
-      y: ctx.panelY + 134,
-    })
     const aiMessage = scene.add
       .text(
         ctx.panelX + ctx.panelWidth / 2,
-        ctx.panelY + 192,
+        ctx.panelY + 150,
         aiGuess && !isFallback ? `AI: "${aiGuess}" 같아 보였대요!` : '잘 그렸어요!',
         {
           fontFamily: 'sans-serif',
-          fontSize: '16px',
-          color: '#8a6b48',
+          fontSize: '22px',
+          color: '#6b4226',
+          fontStyle: 'bold',
         },
       )
       .setOrigin(0.5)
@@ -533,48 +529,6 @@ function buildDialogHandle(
       objects.forEach(object => object.destroy())
     },
   }
-}
-
-function buildScoreSticker(
-  scene: Phaser.Scene,
-  objects: Phaser.GameObjects.GameObject[],
-  tweens: Phaser.Tweens.Tween[],
-  { depth, x, y }: { depth: number; x: number; y: number },
-) {
-  const radius = 36
-  const circle = scene.add.graphics().setDepth(depth + 2)
-  circle.fillStyle(0xfbbf24, 1)
-  circle.fillCircle(0, 0, radius)
-  circle.lineStyle(3, 0xd97706, 1)
-  circle.strokeCircle(0, 0, radius)
-
-  const star = drawStar(scene, 0, -2, 16, 0xffffff)
-
-  const text = scene.add
-    .text(0, 14, '+1', {
-      fontFamily: 'sans-serif',
-      fontSize: '14px',
-      color: '#7c4a03',
-      fontStyle: 'bold',
-    })
-    .setOrigin(0.5)
-
-  const container = scene.add
-    .container(x, y, [circle, star, text])
-    .setDepth(depth + 2)
-    .setScale(0)
-    .setAngle(-12)
-  objects.push(container)
-  tweens.push(
-    scene.tweens.add({
-      targets: container,
-      scale: 1,
-      angle: 0,
-      duration: 420,
-      delay: 120,
-      ease: 'Back.Out',
-    }),
-  )
 }
 
 function buildThoughtBubble(
