@@ -31,15 +31,19 @@ import com.comong.backend.global.exception.BusinessException;
 import com.comong.backend.global.exception.GlobalErrorCode;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class ExerciseSessionService {
 
     private static final int REPLAY_FPS = 30;
+    private static final int MAX_REPLAY_DURATION_MS = 180_000;
+    private static final int MAX_REPLAY_FRAMES = REPLAY_FPS * 180;
     private static final int REPLAY_TUPLE_SIZE = 4;
     private static final double REPLAY_COORDINATE_ABS_LIMIT = 10.0;
     private static final List<String> REPLAY_LANDMARK_NAMES =
@@ -139,7 +143,8 @@ public class ExerciseSessionService {
                                                 ExerciseErrorCode.EXERCISE_SESSION_NOT_FOUND));
 
         return ExerciseMotionReplayResponse.from(
-                sessionMotion, deserializeReplay(sessionMotion.getPoseReplay()));
+                sessionMotion,
+                deserializeReplay(sessionMotion.getId(), sessionMotion.getPoseReplay()));
     }
 
     private ExerciseSession findOwnedSessionOrThrow(Long userId, Long sessionId) {
@@ -175,6 +180,7 @@ public class ExerciseSessionService {
         if (session.getExerciseType() != exerciseMotion.getExerciseType()) {
             throw new BusinessException(ExerciseErrorCode.EXERCISE_SESSION_MOTION_TYPE_MISMATCH);
         }
+        String poseReplay = serializeReplay(request.poseReplay());
         PerformanceVideo performanceVideo =
                 performanceVideoService.createIfPresent(
                         session.getPatientProfile(),
@@ -190,7 +196,7 @@ public class ExerciseSessionService {
                 .completedReps(request.completedReps())
                 .feedback(request.feedback())
                 .performanceVideo(performanceVideo)
-                .poseReplay(serializeReplay(request.poseReplay()))
+                .poseReplay(poseReplay)
                 .build();
     }
 
@@ -206,13 +212,17 @@ public class ExerciseSessionService {
         }
     }
 
-    private ExerciseMotionReplayData deserializeReplay(String replayJson) {
+    private ExerciseMotionReplayData deserializeReplay(Long motionResultId, String replayJson) {
         if (replayJson == null || replayJson.isBlank()) {
             return null;
         }
         try {
             return objectMapper.readValue(replayJson, ExerciseMotionReplayData.class);
         } catch (JacksonException e) {
+            log.error(
+                    "Exercise motion replay JSON parse failed. motionResultId={}",
+                    motionResultId,
+                    e);
             throw new BusinessException(GlobalErrorCode.INTERNAL_SERVER_ERROR);
         }
     }
@@ -224,13 +234,18 @@ public class ExerciseSessionService {
                 || replay.fps() != REPLAY_FPS) {
             throw new BusinessException(GlobalErrorCode.INVALID_INPUT);
         }
+        if (replay.durationMs() > MAX_REPLAY_DURATION_MS
+                || replay.frames().isEmpty()
+                || replay.frames().size() > MAX_REPLAY_FRAMES) {
+            throw new BusinessException(GlobalErrorCode.INVALID_INPUT);
+        }
         if (!REPLAY_LANDMARK_NAMES.equals(replay.landmarks())) {
             throw new BusinessException(GlobalErrorCode.INVALID_INPUT);
         }
 
         int previousTimestampMs = -1;
         for (ExerciseMotionReplayData.Frame frame : replay.frames()) {
-            if (frame.t() == null || frame.t() < previousTimestampMs) {
+            if (frame.t() == null || frame.t() <= previousTimestampMs) {
                 throw new BusinessException(GlobalErrorCode.INVALID_INPUT);
             }
             previousTimestampMs = frame.t();
