@@ -398,6 +398,7 @@ const REPLAY_FPS = 30
 const REPLAY_SAMPLE_INTERVAL_MS = 1000 / REPLAY_FPS
 const REPLAY_MAX_FRAMES = REPLAY_FPS * 180
 const REPLAY_MIN_CONFIDENCE = 0.5
+const REPLAY_MIN_SHOULDER_WIDTH = 0.02
 const REPLAY_LANDMARK_NAMES: readonly ReplayLandmarkName[] = [
   'LEFT_SHOULDER',
   'RIGHT_SHOULDER',
@@ -3439,11 +3440,16 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     }
     const leftShoulder = raw.get('LEFT_SHOULDER')
     const rightShoulder = raw.get('RIGHT_SHOULDER')
-    const shoulderWidth =
-      leftShoulder && rightShoulder
-        ? Math.hypot(rightShoulder.x - leftShoulder.x, rightShoulder.y - leftShoulder.y)
-        : 1
-    const scale = Math.max(shoulderWidth, 0.000001)
+    if (!leftShoulder || !rightShoulder) return null
+
+    const shoulderWidth = Math.hypot(
+      rightShoulder.x - leftShoulder.x,
+      rightShoulder.y - leftShoulder.y,
+    )
+    if (!Number.isFinite(shoulderWidth) || shoulderWidth < REPLAY_MIN_SHOULDER_WIDTH) {
+      return null
+    }
+    const scale = shoulderWidth
 
     const tuples = REPLAY_LANDMARK_NAMES.map<MotionReplayLandmarkTuple>(name => {
       const landmark = raw.get(name)
@@ -3671,6 +3677,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     this.clearGuideOverlay()
     this.clearCountdownOverlay()
     this.cancelCurrentMotionRecording()
+    this.resetCurrentMotionReplay()
     this.pendingMotionUploads = []
   }
 }
