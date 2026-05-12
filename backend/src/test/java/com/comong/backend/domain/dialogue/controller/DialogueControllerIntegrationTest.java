@@ -301,9 +301,14 @@ class DialogueControllerIntegrationTest extends IntegrationTestSupport {
                                         """))
                 .andExpect(status().isOk());
 
-        // 세션 상세 조회 → 저장된 turn 은 catalog 값
+        // 세션 상세 조회 → 저장된 turn 은 catalog 값.
+        // 환자측 GET /dialogue/sessions/{id} 는 의도적으로 노출하지 않아 (TurnDetailResponse 가 디버그/QA 용),
+        // 동일한 SessionDetailResponse 를 반환하는 보호자 detail endpoint 로 검증한다.
         mockMvc.perform(
-                        get("/dialogue/sessions/{id}", sessionId)
+                        get(
+                                        "/guardian/patients/{patientProfileId}/dialogue/sessions/{sessionId}",
+                                        user.patientProfileId(),
+                                        sessionId)
                                 .header("Authorization", "Bearer " + user.token()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.turns[0].intensity").value(3))
@@ -355,7 +360,10 @@ class DialogueControllerIntegrationTest extends IntegrationTestSupport {
                 .andExpect(status().isOk());
 
         mockMvc.perform(
-                        get("/dialogue/sessions/{id}", sessionId)
+                        get(
+                                        "/guardian/patients/{patientProfileId}/dialogue/sessions/{sessionId}",
+                                        user.patientProfileId(),
+                                        sessionId)
                                 .header("Authorization", "Bearer " + user.token()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.turns[0].choiceIntentId").value("nurse_body_tired"))
