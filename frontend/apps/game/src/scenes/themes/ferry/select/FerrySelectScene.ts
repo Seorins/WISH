@@ -13,10 +13,13 @@ import {
 } from '@/game/entities/player'
 import { getPlayerMoveSpeed } from '@/game/settings/gameSettings'
 import { fadeToScene } from '@/game/systems/sceneTransition'
+import { getGameWeather } from '@/features/weather/weatherStore'
+import type { WeatherCondition } from '@/features/weather/types'
 import { addCoverBackground } from '@/game/world/background'
 import { createRatioRectangle, getRectangleEntryState } from '@/game/world/portal'
 
 const FERRY_BACKGROUND_KEY = 'ferry-background'
+const FERRY_CLOUDY_BACKGROUND_KEY = 'ferry-background-cloudy'
 const FERRY_FRAME_KEY = 'ferry-frame'
 const STAR_FRAME_KEY = 'ferry-star-frame'
 const FERRY_ROOM_SPAWN = { xRatio: 0.5, yRatio: 0.78 }
@@ -70,6 +73,18 @@ type FerrySelectSceneData = {
   spawn?: RatioPoint
 }
 
+function isFerryCloudyWeather(condition: WeatherCondition) {
+  return (
+    condition === 'CLOUDY' ||
+    condition === 'PARTLY_CLOUDY' ||
+    condition === 'RAIN' ||
+    condition === 'HEAVY_RAIN' ||
+    condition === 'SNOW' ||
+    condition === 'FOG' ||
+    condition === 'THUNDER'
+  )
+}
+
 export class FerrySelectScene extends Phaser.Scene {
   private player!: PlayerSprite
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys
@@ -93,6 +108,10 @@ export class FerrySelectScene extends Phaser.Scene {
 
   preload() {
     this.load.image(FERRY_BACKGROUND_KEY, assetPath('images/themes/ferry/background/ferry.png'))
+    this.load.image(
+      FERRY_CLOUDY_BACKGROUND_KEY,
+      assetPath('images/themes/ferry/background/cloudyferry.png'),
+    )
     this.load.image(FERRY_FRAME_KEY, assetPath('images/themes/ferry/ui/ferryframe.png'))
     this.load.image(STAR_FRAME_KEY, assetPath('images/themes/ferry/ui/starframe.png'))
     loadPlayerSpritesheet(this)
@@ -111,7 +130,8 @@ export class FerrySelectScene extends Phaser.Scene {
     this.lastReceivedMessage = ''
     this.fuelPopupState = 'emptyIcon'
 
-    addCoverBackground(this, FERRY_BACKGROUND_KEY)
+    const background = addCoverBackground(this, FERRY_BACKGROUND_KEY)
+    void this.applyWeatherBackground(background)
     this.physics.world.setBounds(0, 0, vw, vh)
     ensurePlayerWalkAnimations(this)
 
@@ -130,6 +150,19 @@ export class FerrySelectScene extends Phaser.Scene {
     void this.loadFuelState()
 
     this.cameras.main.fadeIn(250, 0, 0, 0)
+  }
+
+  private async applyWeatherBackground(background: Phaser.GameObjects.Image) {
+    const weather = await getGameWeather()
+
+    if (!this.scene.isActive() || !isFerryCloudyWeather(weather.condition)) {
+      return
+    }
+
+    const displayWidth = background.displayWidth
+    const displayHeight = background.displayHeight
+    background.setTexture(FERRY_CLOUDY_BACKGROUND_KEY)
+    background.setDisplaySize(displayWidth, displayHeight)
   }
 
   update() {
