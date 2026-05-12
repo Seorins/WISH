@@ -5,6 +5,7 @@ import type { VillageMoveEvent, VillageSnapshot } from './types'
 interface FakeSprite {
   x: number
   y: number
+  displayHeight: number
   destroy: ReturnType<typeof vi.fn>
   anims: {
     currentAnim: { key: string } | null
@@ -12,6 +13,16 @@ interface FakeSprite {
     play: ReturnType<typeof vi.fn>
     stop: ReturnType<typeof vi.fn>
   }
+}
+
+interface FakeText {
+  x: number
+  y: number
+  content: string
+  destroy: ReturnType<typeof vi.fn>
+  setOrigin: ReturnType<typeof vi.fn>
+  setDepth: ReturnType<typeof vi.fn>
+  setPosition: ReturnType<typeof vi.fn>
 }
 
 interface FakeTween {
@@ -38,6 +49,7 @@ function newFakeSprite(): FakeSprite {
   return {
     x: 0,
     y: 0,
+    displayHeight: 100,
     destroy: vi.fn(),
     anims: {
       currentAnim: null,
@@ -48,8 +60,27 @@ function newFakeSprite(): FakeSprite {
   }
 }
 
+function newFakeText(x: number, y: number, content: string): FakeText {
+  const text: FakeText = {
+    x,
+    y,
+    content,
+    destroy: vi.fn(),
+    setOrigin: vi.fn().mockReturnThis(),
+    setDepth: vi.fn().mockReturnThis(),
+    setPosition: vi.fn(),
+  }
+  text.setPosition.mockImplementation((nx: number, ny: number) => {
+    text.x = nx
+    text.y = ny
+    return text
+  })
+  return text
+}
+
 function setupScene() {
   const sprites: FakeSprite[] = []
+  const texts: FakeText[] = []
   const tweens: FakeTween[] = []
 
   createPlayerMock.mockImplementation((_scene: unknown, x: number, y: number) => {
@@ -69,13 +100,23 @@ function setupScene() {
         const targets = config.targets as FakeSprite
         targets.x = config.x as number
         targets.y = config.y as number
+        // onUpdate / onComplete 가 등록돼 있으면 동기 호출 — 닉네임 텍스트 sync 검증.
+        ;(config.onUpdate as (() => void) | undefined)?.()
+        ;(config.onComplete as (() => void) | undefined)?.()
         tweens.push(tween)
         return tween
       }),
     },
+    add: {
+      text: vi.fn((x: number, y: number, content: string) => {
+        const t = newFakeText(x, y, content)
+        texts.push(t)
+        return t
+      }),
+    },
   }
 
-  return { scene, sprites, tweens }
+  return { scene, sprites, texts, tweens }
 }
 
 function group(scene: unknown, opts: Partial<{ localUserId: number; w: number; h: number }> = {}) {
@@ -252,6 +293,76 @@ describe('RemotePlayersGroup', () => {
 
     expect(g.size()).toBe(0)
     expect(sprites).toHaveLength(0)
+  })
+
+  it('join creates a nickname text above the sprite', () => {
+    const { scene, sprites, texts } = setupScene()
+    const g = group(scene)
+    g.applyEvent({
+      type: 'join',
+      userId: 1,
+      nickname: '꼬마곰',
+      textureKey: 'character',
+      x: 0.5,
+      y: 0.5,
+      dir: 'down',
+    })
+
+    expect(texts).toHaveLength(1)
+    expect(texts[0].content).toBe('꼬마곰')
+    // sprite.displayHeight=100, gap=8 → text y = sprite.y - 50 - 8
+    expect(texts[0].x).toBe(sprites[0].x)
+    expect(texts[0].y).toBe(sprites[0].y - 100 / 2 - 8)
+    expect(texts[0].setOrigin).toHaveBeenCalledWith(0.5, 1)
+    expect(texts[0].setDepth).toHaveBeenCalled()
+  })
+
+  it('lazy-spawned member without nickname does not create a text', () => {
+    const { scene, texts } = setupScene()
+    const g = group(scene)
+
+    g.applyEvent({ type: 'move', userId: 7, x: 0.5, y: 0.5, dir: 'left', moving: true })
+
+    expect(texts).toHaveLength(0)
+  })
+
+  it('move tween syncs nickname text position via onUpdate', () => {
+    const { scene, texts } = setupScene()
+    const g = group(scene)
+    g.applyEvent({
+      type: 'join',
+      userId: 1,
+      nickname: '구름',
+      textureKey: 'character',
+      x: 0.1,
+      y: 0.1,
+      dir: 'down',
+    })
+
+    g.applyEvent({ type: 'move', userId: 1, x: 0.5, y: 0.7, dir: 'right', moving: true })
+
+    // setupScene 의 tween 모의가 onUpdate 를 호출. text 가 새 sprite 위치 위로 따라옴.
+    expect(texts[0].x).toBe(500)
+    expect(texts[0].y).toBe(560 - 100 / 2 - 8)
+  })
+
+  it('leave destroys both sprite and nickname text', () => {
+    const { scene, sprites, texts } = setupScene()
+    const g = group(scene)
+    g.applyEvent({
+      type: 'join',
+      userId: 1,
+      nickname: 'a',
+      textureKey: 'character',
+      x: 0.1,
+      y: 0.1,
+      dir: 'down',
+    })
+
+    g.applyEvent({ type: 'leave', userId: 1 })
+
+    expect(sprites[0].destroy).toHaveBeenCalled()
+    expect(texts[0].destroy).toHaveBeenCalled()
   })
 
   it('destroy clears all members and stops tweens', () => {

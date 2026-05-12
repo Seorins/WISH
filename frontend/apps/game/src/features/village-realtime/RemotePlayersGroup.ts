@@ -23,6 +23,17 @@ const POSITION_CHANGE_THRESHOLD_PX = 1
 const MOVE_TWEEN_DURATION_MS = 200
 /** 원격 sprite depth 는 VillageScene 의 local player 와 동일하게 두어 자연스러운 레이어링. */
 const REMOTE_SPRITE_DEPTH = 5
+/** 닉네임 텍스트는 sprite 보다 약간 위에 배치. */
+const NAME_VERTICAL_GAP_PX = 8
+
+const NAME_TEXT_STYLE = {
+  fontSize: '16px',
+  color: '#ffffff',
+  stroke: '#000000',
+  strokeThickness: 3,
+  fontFamily: 'sans-serif',
+  resolution: 2,
+} as const
 
 export interface RemotePlayersGroupOptions {
   scene: Phaser.Scene
@@ -36,6 +47,7 @@ export interface RemotePlayersGroupOptions {
 interface RemoteMember {
   userId: number
   sprite: PlayerSprite
+  nameText: Phaser.GameObjects.Text | null
   textureKey: string
   dir: PlayerDirection
   currentTween: Phaser.Tweens.Tween | null
@@ -74,6 +86,7 @@ export class RemotePlayersGroup {
   destroy(): void {
     for (const member of this.members.values()) {
       member.currentTween?.stop()
+      member.nameText?.destroy()
       member.sprite.destroy()
     }
     this.members.clear()
@@ -101,9 +114,22 @@ export class RemotePlayersGroup {
       textureKey: payload.textureKey,
       depth: REMOTE_SPRITE_DEPTH,
     })
+    // 빈 닉네임 (lazy spawn 경로) 은 텍스트를 만들지 않는다 — 빈 텍스트로 시야를 가리지 않게.
+    const nameText = payload.nickname
+      ? this.options.scene.add
+          .text(
+            sprite.x,
+            sprite.y - sprite.displayHeight / 2 - NAME_VERTICAL_GAP_PX,
+            payload.nickname,
+            NAME_TEXT_STYLE,
+          )
+          .setOrigin(0.5, 1)
+          .setDepth(REMOTE_SPRITE_DEPTH + 1)
+      : null
     this.members.set(payload.userId, {
       userId: payload.userId,
       sprite,
+      nameText,
       textureKey: payload.textureKey,
       dir: payload.dir,
       currentTween: null,
@@ -150,6 +176,8 @@ export class RemotePlayersGroup {
       y: targetY,
       duration: MOVE_TWEEN_DURATION_MS,
       ease: 'Linear',
+      onUpdate: () => syncNameText(member),
+      onComplete: () => syncNameText(member),
     })
 
     member.dir = event.dir
@@ -160,6 +188,7 @@ export class RemotePlayersGroup {
     const member = this.members.get(event.userId)
     if (!member) return
     member.currentTween?.stop()
+    member.nameText?.destroy()
     member.sprite.destroy()
     this.members.delete(event.userId)
   }
@@ -183,4 +212,13 @@ export class RemotePlayersGroup {
   has(userId: number): boolean {
     return this.members.has(userId)
   }
+}
+
+/** sprite 가 tween 으로 움직이는 동안 닉네임 텍스트가 위치를 따라오도록 동기화. */
+function syncNameText(member: RemoteMember): void {
+  if (!member.nameText) return
+  member.nameText.setPosition(
+    member.sprite.x,
+    member.sprite.y - member.sprite.displayHeight / 2 - NAME_VERTICAL_GAP_PX,
+  )
 }
