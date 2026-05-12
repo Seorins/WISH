@@ -3,16 +3,25 @@ import {
   calculateAverageCompletionRate,
   createExerciseSession,
   listExerciseMotions,
+  requestPresignedUploadUrls,
   toCreateExerciseSessionRequest,
+  uploadToPresignedUrl,
   type CreateExerciseSessionRecord,
   type ExerciseMotion,
   type ExerciseType,
 } from '@wish/api-client'
 import { assetPath } from '@/game/assets/assetPath'
 import { POSE_LANDMARK_NAMES, PoseTracker } from '@/game/motion/poseTracker'
+import {
+  startMusicRecording as startScreenRecording,
+  type MusicRecorderHandle as ScreenRecorderHandle,
+} from '@/game/systems/musicRecorder'
 import { fadeToScene } from '@/game/systems/sceneTransition'
 import { addCoverBackground } from '@/game/world/background'
-import { resolvePatientProfileId } from '@/features/exerciseSessions/patientProfile'
+import {
+  resolvePatientProfileId,
+  resolvePatientProfileIdOrFetch,
+} from '@/features/exerciseSessions/patientProfile'
 import {
   EXERCISE_SESSION_REPORT_QUERY_KEY,
   EXERCISE_SESSIONS_QUERY_KEY,
@@ -76,6 +85,8 @@ type LocalExerciseMotionRecord = {
   completionRate: number
   completedCount: number
   feedback: string
+  videoKey?: string
+  thumbKey?: string
 }
 
 type LandmarkPayload = {
@@ -461,6 +472,8 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
   private motionStartedAtMs = 0
   private motionAccumulatedDurationMs = 0
   private motionRecords: LocalExerciseMotionRecord[] = []
+  private motionRecorderHandle: ScreenRecorderHandle | null = null
+  private pendingMotionUploads: Promise<void>[] = []
   private hasSubmittedSession = false
   private saveState: 'idle' | 'saving' | 'success' | 'error' = 'idle'
   private saveRetryButton?: Phaser.GameObjects.Text
@@ -534,6 +547,8 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     this.motionStartedAtMs = 0
     this.motionAccumulatedDurationMs = 0
     this.motionRecords = []
+    this.motionRecorderHandle = null
+    this.pendingMotionUploads = []
     this.hasSubmittedSession = false
     this.saveState = 'idle'
     this.lastTtsKey = null
@@ -1832,6 +1847,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
       this.motionAccumulatedDurationMs += Math.max(0, Date.now() - this.motionStartedAtMs)
       this.motionStartedAtMs = 0
     }
+    this.cancelCurrentMotionRecording()
     this.aiRequestsEnabled = false
     this.requestInFlight = false
     this.resetFeedbackTts()
@@ -1846,6 +1862,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     this.isMotionAdvancing = false
     this.motionStartedAtMs = 0
     this.motionAccumulatedDurationMs = 0
+    this.cancelCurrentMotionRecording()
     this.aiState = createInitialAiState()
     this.aiError = null
     this.displayedFeedbackTitle = ''
@@ -1918,6 +1935,8 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     this.requestInFlight = false
     this.isMotionAdvancing = false
     this.motionStartedAtMs = Date.now()
+    this.cancelCurrentMotionRecording()
+    this.motionRecorderHandle = startScreenRecording({ scene: this })
     if (this.sessionStartedAtMs <= 0) {
       this.sessionStartedAtMs = this.motionStartedAtMs
     }
@@ -3031,13 +3050,39 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
         this.aiState.feedback,
     )
 
-    this.motionRecords.push({
+    const motionRecord: LocalExerciseMotionRecord = {
       exerciseMotionId: motionSpec.exerciseMotionId,
       durationSec,
       completionRate,
       completedCount,
       feedback,
-    })
+    }
+    this.motionRecords.push(motionRecord)
+
+    const handle = this.motionRecorderHandle
+    this.motionRecorderHandle = null
+    if (handle) {
+      const uploadPromise = (async () => {
+        try {
+          const rec = await handle.stop()
+          const presigned = await requestPresignedUploadUrls({
+            videoContentType: rec.videoMimeType,
+            thumbContentType: rec.thumbMimeType,
+            purpose: 'GYMNASTICS_PERFORMANCE',
+          })
+          const { video, thumb } = presigned.data
+          await Promise.all([
+            uploadToPresignedUrl(video, rec.videoBlob),
+            uploadToPresignedUrl(thumb, rec.thumbBlob),
+          ])
+          motionRecord.videoKey = video.key
+          motionRecord.thumbKey = thumb.key
+        } catch (error) {
+          console.warn('[GymnasticsPlayScene] motion recording upload failed', error)
+        }
+      })()
+      this.pendingMotionUploads.push(uploadPromise)
+    }
   }
 
   private normalizeSessionFeedback(feedback: string | null | undefined) {
@@ -3045,8 +3090,8 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     return trimmedFeedback ? trimmedFeedback.slice(0, 255) : '\uC6B4\uB3D9 \uC644\uB8CC'
   }
 
-  private buildExerciseSessionRecord(): CreateExerciseSessionRecord {
-    const patientProfileId = resolvePatientProfileId()
+  private async buildExerciseSessionRecord(): Promise<CreateExerciseSessionRecord> {
+    const patientProfileId = await resolvePatientProfileIdOrFetch()
     if (!patientProfileId) {
       throw new Error('환자 정보가 올바르지 않습니다.')
     }
@@ -3075,7 +3120,11 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     this.renderSaveState()
 
     try {
-      const payload = toCreateExerciseSessionRequest(this.buildExerciseSessionRecord())
+      if (this.pendingMotionUploads.length > 0) {
+        await Promise.allSettled(this.pendingMotionUploads)
+        this.pendingMotionUploads = []
+      }
+      const payload = toCreateExerciseSessionRequest(await this.buildExerciseSessionRecord())
       const savedSession = await createExerciseSession(payload)
       this.saveState = 'success'
       await Promise.all([
@@ -3152,6 +3201,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
       this.feedbackDetailChangedAtMs = 0
       this.motionStartedAtMs = 0
       this.motionAccumulatedDurationMs = 0
+      this.cancelCurrentMotionRecording()
       this.renderMotion()
       this.showGuidePreview()
       return
@@ -3173,6 +3223,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     this.feedbackDetailChangedAtMs = 0
     this.motionStartedAtMs = 0
     this.motionAccumulatedDurationMs = 0
+    this.cancelCurrentMotionRecording()
     this.renderMotion()
   }
 
@@ -3307,6 +3358,11 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
   }
 
+  private cancelCurrentMotionRecording() {
+    this.motionRecorderHandle?.cancel()
+    this.motionRecorderHandle = null
+  }
+
   private cleanup() {
     this.timerEvent?.remove(false)
     this.timerEvent = undefined
@@ -3316,6 +3372,8 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     this.resetFeedbackTts()
     this.clearGuideOverlay()
     this.clearCountdownOverlay()
+    this.cancelCurrentMotionRecording()
+    this.pendingMotionUploads = []
   }
 }
 

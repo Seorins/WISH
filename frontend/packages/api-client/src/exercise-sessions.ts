@@ -20,6 +20,8 @@ export type CreateExerciseMotionResultRequest = {
   accuracy: number
   completedReps: number
   feedback?: string
+  videoKey?: string
+  thumbKey?: string
 }
 
 export type CreateExerciseMotionRecord = {
@@ -28,6 +30,8 @@ export type CreateExerciseMotionRecord = {
   completionRate: number
   completedCount: number
   feedback?: string
+  videoKey?: string
+  thumbKey?: string
 }
 
 export type CreateExerciseSessionRequest = {
@@ -55,6 +59,8 @@ export type ExerciseSessionMotionResult = {
   accuracy: number
   completedReps: number
   feedback: string
+  videoUrl?: string | null
+  thumbUrl?: string | null
   createdAt: string
 }
 
@@ -195,6 +201,8 @@ export function toCreateExerciseSessionRequest(
       accuracy: motion.completionRate,
       completedReps: motion.completedCount,
       feedback: motion.feedback,
+      ...(motion.videoKey ? { videoKey: motion.videoKey } : {}),
+      ...(motion.thumbKey ? { thumbKey: motion.thumbKey } : {}),
     })),
   }
 }

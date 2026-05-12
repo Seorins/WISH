@@ -176,6 +176,14 @@ const overlayStyles = {
     display: 'grid',
     gap: 10,
   },
+  motionVideo: {
+    width: '100%',
+    maxHeight: 280,
+    marginTop: 12,
+    borderRadius: 8,
+    background: '#2a2118',
+    objectFit: 'contain',
+  },
 } satisfies Record<string, CSSProperties>
 
 export function ExerciseSessionListOverlay({ open, onClose }: ExerciseSessionListOverlayProps) {
@@ -367,6 +375,15 @@ function ExerciseSessionDetailModal({
                       <p style={{ margin: '10px 0 0' }}>
                         {'\uD53C\uB4DC\uBC31'}: {motion.feedback}
                       </p>
+                    )}
+                    {motion.videoUrl && (
+                      <video
+                        controls
+                        preload="metadata"
+                        src={motion.videoUrl}
+                        poster={motion.thumbUrl ?? undefined}
+                        style={overlayStyles.motionVideo}
+                      />
                     )}
                   </article>
                 ))}

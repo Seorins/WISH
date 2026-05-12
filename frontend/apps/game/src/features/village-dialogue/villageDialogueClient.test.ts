@@ -6,13 +6,13 @@ const baseEvent: VillagerChoiceEvent = {
   sessionId: '42',
   clientEventId: 'event-1',
   npcId: 'monkey_friend',
-  displayName: '코몽',
+  displayName: 'Komong',
   npcName: 'SEORIN',
   sceneId: 'monkey_friend_01_move',
   nodeId: 'monkey_friend_01_move',
-  questionText: '지금 움직이고 싶어?',
+  questionText: 'What should we do?',
   choiceIntentId: 'monkey_move_little',
-  choiceText: '조금 움직일래요',
+  choiceText: 'Move a little',
   intensity: 0,
   concernFlags: [],
   protectiveFactors: ['playful_coping', 'agency_coping'],
@@ -34,12 +34,12 @@ describe('saveVillagerChoiceEvent', () => {
     expect(events).toHaveLength(1)
     expect(events[0]).toMatchObject({
       npcId: 'monkey_friend',
-      displayName: '코몽',
+      displayName: 'Komong',
       npcName: 'SEORIN',
     })
   })
 
-  it('sends backend enum npcName in backend mode payload', async () => {
+  it('sends backend enum npcName and nested choice metadata in backend mode payload', async () => {
     vi.stubEnv('VITE_VILLAGE_DIALOGUE_SAVE_MODE', 'backend')
     const fetchMock = vi.fn().mockResolvedValue({ ok: true } as Response)
     vi.stubGlobal('fetch', fetchMock)
@@ -62,14 +62,14 @@ describe('saveVillagerChoiceEvent', () => {
       npcName: 'SEORIN',
       sceneId: 'monkey_friend_01_move',
       nodeId: 'monkey_friend_01_move',
-      questionText: '지금 움직이고 싶어?',
+      questionText: 'What should we do?',
       selectedChoice: {
         choiceIntentId: 'monkey_move_little',
-        text: '조금 움직일래요',
+        text: 'Move a little',
+        intensity: 0,
+        concernFlags: [],
+        protectiveFactors: ['playful_coping', 'agency_coping'],
       },
-      intensity: 0,
-      concernFlags: [],
-      protectiveFactors: ['playful_coping', 'agency_coping'],
       generatedBy: 'STATIC',
     })
   })
