@@ -18,18 +18,18 @@ import tools.jackson.databind.JsonNode;
 /**
  * 그림 퀴즈 판정용 GMS Anthropic(Claude vision) 어댑터.
  *
- * <p>{@link com.comong.backend.domain.dialogue.service.ClaudeClient} 와 같은 게이트웨이/모델/타임아웃을 공유하지만 multimodal
- * (image + text) 콘텐츠를 보내고 {@code judge_drawing_guess} tool_use 응답에서 판정만 추출한다.
+ * <p>{@link com.comong.backend.domain.dialogue.service.ClaudeClient} 와 같은 게이트웨이/모델/타임아웃을 공유하지만
+ * multimodal (image + text) 콘텐츠를 보내고 {@code judge_drawing_guess} tool_use 응답에서 판정만 추출한다.
  *
- * <p>실패 정책: 키 미설정·timeout·schema 위반 모두 {@link Optional#empty()} → 호출자가 fallback 으로 응답. 5xx 일시 장애는 1회 재시도.
+ * <p>실패 정책: 키 미설정·timeout·schema 위반 모두 {@link Optional#empty()} → 호출자가 fallback 으로 응답. 5xx 일시 장애는
+ * 1회 재시도.
  */
 @Component
 public class ArtGuessClient {
 
     private static final Logger log = LoggerFactory.getLogger(ArtGuessClient.class);
     private static final String TOOL_NAME = "judge_drawing_guess";
-    private static final String TOOL_DESCRIPTION =
-            "아이가 그린 그림을 보고 제시어와 일치하는지 친절하게 판정한다.";
+    private static final String TOOL_DESCRIPTION = "아이가 그린 그림을 보고 제시어와 일치하는지 친절하게 판정한다.";
     private static final String SYSTEM_PROMPT =
             """
             너는 아이가 그린 그림을 보고 제시어와 비교해 친절하게 알아맞히는 도우미야.
@@ -98,8 +98,10 @@ public class ArtGuessClient {
                         "messages",
                                 List.of(
                                         Map.of(
-                                                "role", "user",
-                                                "content", List.of(imageBlock, textBlock))),
+                                                "role",
+                                                "user",
+                                                "content",
+                                                List.of(imageBlock, textBlock))),
                         "tools", List.of(toolDefinition()),
                         "tool_choice", Map.of("type", "tool", "name", TOOL_NAME));
 
@@ -124,10 +126,7 @@ public class ArtGuessClient {
                                 "properties",
                                         Map.of(
                                                 "isMatch", Map.of("type", "boolean"),
-                                                "guess",
-                                                        Map.of(
-                                                                "type", "string",
-                                                                "maxLength", 20),
+                                                "guess", Map.of("type", "string", "maxLength", 20),
                                                 "confidence",
                                                         Map.of(
                                                                 "type", "number",
