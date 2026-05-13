@@ -29,4 +29,6 @@ public record ExerciseSessionMotionSaveRequest(
         @Schema(description = "Performance thumbnail S3 object key") @Size(max = 1024)
                 String thumbKey,
         @Schema(description = "30fps pose replay data for this motion") @Valid
-                ExerciseMotionReplayData poseReplay) {}
+                ExerciseMotionReplayData poseReplay,
+        @Schema(description = "5~10fps AI compact pose replay data for comparison") @Valid
+                ExerciseMotionReplayData compactPoseReplay) {}

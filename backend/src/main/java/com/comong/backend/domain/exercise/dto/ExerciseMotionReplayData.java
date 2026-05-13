@@ -15,9 +15,9 @@ import io.swagger.v3.oas.annotations.media.Schema;
 public record ExerciseMotionReplayData(
         @Schema(description = "Replay payload version", example = "1") @NotNull @Min(1)
                 Integer version,
-        @Schema(description = "Replay sampling rate. MVP stores 30fps only.", example = "30")
+        @Schema(description = "Replay sampling rate. Raw replay stores 30fps; compact replay stores 5~10fps.", example = "30")
                 @NotNull
-                @Min(30)
+                @Min(5)
                 @Max(30)
                 Integer fps,
         @Schema(description = "Replay duration in milliseconds", example = "3000")
@@ -33,7 +33,10 @@ public record ExerciseMotionReplayData(
                 @Size(min = 1, max = 5400)
                 List<@Valid Frame> frames,
         @Schema(description = "Representative segment selected from the full replay") @Valid
-                Segment representativeSegment) {
+                Segment representativeSegment,
+        @Schema(description = "Optional coaching or comparison segments for compact replay")
+                @Size(max = 32)
+                List<@Valid Segment> markers) {
 
     public record Frame(
             @Schema(

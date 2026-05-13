@@ -116,6 +116,69 @@ class ExerciseSessionControllerIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
+    void createExerciseSession_persistsRawAndCompactPoseReplay() throws Exception {
+        TestUser user = setupUserWithProfile("replay@example.com", "replay-user");
+        ExerciseMotion march = exerciseMotionRepository.save(exerciseMotion("March", 1));
+
+        String body =
+                mockMvc.perform(
+                                post("/exercise-sessions")
+                                        .header("Authorization", "Bearer " + user.token())
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .content(
+                                                """
+                                                {
+                                                  "patientProfileId": %d,
+                                                  "exerciseType": "TOP",
+                                                  "durationSec": 12,
+                                                  "averageAccuracy": 0.91,
+                                                  "motions": [
+                                                    {
+                                                      "exerciseMotionId": %d,
+                                                      "durationSec": 12,
+                                                      "accuracy": 0.91,
+                                                      "completedReps": 8,
+                                                      "feedback": "Good",
+                                                      "poseReplay": %s,
+                                                      "compactPoseReplay": %s
+                                                    }
+                                                  ]
+                                                }
+                                                """
+                                                        .formatted(
+                                                                user.patientProfileId(),
+                                                                march.getId(),
+                                                                replayJson(30, 67, "raw window"),
+                                                                replayJson(
+                                                                        5,
+                                                                        400,
+                                                                        "compact count window"))))
+                        .andExpect(status().isCreated())
+                        .andExpect(jsonPath("$.data.motions[0].replayAvailable").value(true))
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString();
+
+        JsonNode motion = objectMapper.readTree(body).get("data").get("motions").get(0);
+        Long motionResultId = motion.get("id").asLong();
+
+        ExerciseSessionMotion savedMotion =
+                exerciseSessionMotionRepository.findById(motionResultId).orElseThrow();
+        assertThat(savedMotion.getPoseReplay()).isNotBlank();
+        assertThat(savedMotion.getCompactPoseReplay()).isNotBlank();
+
+        mockMvc.perform(
+                        get("/exercise-sessions/motions/{motionResultId}/replay", motionResultId)
+                                .header("Authorization", "Bearer " + user.token()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.replayAvailable").value(true))
+                .andExpect(jsonPath("$.data.replay.fps").value(30))
+                .andExpect(jsonPath("$.data.compactReplay.fps").value(5))
+                .andExpect(jsonPath("$.data.compactReplay.markers[0].reason")
+                        .value("compact count window"));
+    }
+
+    @Test
     void listExerciseSessions_returnsOwnedPatientSessionsOrderedByCreatedAtDesc() throws Exception {
         TestUser user = setupUserWithProfile("list-session@example.com", "list-session-user");
         PatientProfile profile = findProfile(user);
@@ -388,6 +451,73 @@ class ExerciseSessionControllerIntegrationTest extends IntegrationTestSupport {
                 }
                 """
                 .formatted(patientProfileId, exerciseType, exerciseMotionId);
+    }
+
+    private String replayJson(int fps, int endMs, String reason) {
+        return """
+                {
+                  "version": 1,
+                  "fps": %d,
+                  "durationMs": %d,
+                  "landmarks": %s,
+                  "frames": [
+                    {"t": 0, "lm": %s},
+                    {"t": %d, "lm": %s}
+                  ],
+                  "representativeSegment": {
+                    "startMs": 0,
+                    "endMs": %d,
+                    "reason": "%s"
+                  },
+                  "markers": [
+                    {
+                      "startMs": 0,
+                      "endMs": %d,
+                      "reason": "%s"
+                    }
+                  ]
+                }
+                """
+                .formatted(
+                        fps,
+                        endMs,
+                        replayLandmarkNamesJson(),
+                        replayFrameTuplesJson(),
+                        endMs,
+                        replayFrameTuplesJson(),
+                        endMs,
+                        reason,
+                        endMs,
+                        reason);
+    }
+
+    private String replayLandmarkNamesJson() {
+        return """
+                [
+                  "LEFT_SHOULDER", "RIGHT_SHOULDER", "LEFT_ELBOW", "RIGHT_ELBOW",
+                  "LEFT_WRIST", "RIGHT_WRIST", "LEFT_HIP", "RIGHT_HIP",
+                  "LEFT_KNEE", "RIGHT_KNEE", "LEFT_ANKLE", "RIGHT_ANKLE"
+                ]
+                """;
+    }
+
+    private String replayFrameTuplesJson() {
+        return """
+                [
+                  [0.1, 0.9, 0.0, 0.92],
+                  [0.2, 0.9, 0.0, 0.92],
+                  [0.1, 1.1, 0.0, 0.91],
+                  [0.2, 1.1, 0.0, 0.91],
+                  [0.1, 1.3, 0.0, 0.9],
+                  [0.2, 1.3, 0.0, 0.9],
+                  [0.1, 1.6, 0.0, 0.93],
+                  [0.2, 1.6, 0.0, 0.93],
+                  [0.1, 1.9, 0.0, 0.91],
+                  [0.2, 1.9, 0.0, 0.91],
+                  [0.1, 2.2, 0.0, 0.9],
+                  [0.2, 2.2, 0.0, 0.9]
+                ]
+                """;
     }
 
     private TestUser setupUserWithProfile(String email, String nickname) throws Exception {
