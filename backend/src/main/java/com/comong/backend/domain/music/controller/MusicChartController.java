@@ -26,7 +26,9 @@ public class MusicChartController {
 
     private final MusicResultService musicResultService;
 
-    @Operation(summary = "곡별 랭킹 조회", description = "곡 chartId 의 환자별 최고기록 상위 N 명과 내 순위/최고기록을 함께 반환한다.")
+    @Operation(
+            summary = "곡별 랭킹 조회",
+            description = "곡 chartId 의 환자별 최고기록 상위 N 명과 내 순위/최고기록을 함께 반환한다.")
     @ApiResponses({
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
                 responseCode = "200",

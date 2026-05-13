@@ -160,11 +160,7 @@ public class MusicResultService {
         MusicMyRankingResponse me = buildMyRanking(myPatientProfileId, musicChart);
 
         return new MusicChartRankingResponse(
-                musicChart.getChartId(),
-                musicChart.getTitle(),
-                (int) totalPlayers,
-                entries,
-                me);
+                musicChart.getChartId(), musicChart.getTitle(), (int) totalPlayers, entries, me);
     }
 
     private MusicRankingEntryResponse toRankingEntry(

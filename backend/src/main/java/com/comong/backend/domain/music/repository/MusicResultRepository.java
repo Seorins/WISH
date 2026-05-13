@@ -14,8 +14,8 @@ import com.comong.backend.domain.music.entity.MusicResult;
 public interface MusicResultRepository extends JpaRepository<MusicResult, Long> {
 
     /**
-     * 곡별 환자 best 결과 TOP N. 환자별로 score → accuracy → playedAt 우선순위로 단일 best 행을 뽑은 뒤,
-     * 그 best 들을 동일한 우선순위로 다시 정렬해 상위 N 개만 반환한다.
+     * 곡별 환자 best 결과 TOP N. 환자별로 score → accuracy → playedAt 우선순위로 단일 best 행을 뽑은 뒤, 그 best 들을 동일한
+     * 우선순위로 다시 정렬해 상위 N 개만 반환한다.
      */
     @Query(
             value =
