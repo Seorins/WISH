@@ -38,7 +38,9 @@ public class VillageWebSocketConfig implements WebSocketMessageBrokerConfigurer 
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
-        registry.addEndpoint("/ws/village");
+        // Spring 기본은 same-origin only — FE 가 별도 origin (dev: 3001, prod: 별 서브도메인) 에서 핸드셰이크
+        // 하므로 패턴 와일드카드 허용. 실제 인증은 STOMP CONNECT 프레임의 JWT 가 책임지므로 origin 자체는 차단 가치 없음.
+        registry.addEndpoint("/ws/village").setAllowedOriginPatterns("*");
     }
 
     @Override
