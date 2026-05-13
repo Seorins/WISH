@@ -71,6 +71,13 @@ TARGET_RULE_AGGREGATION_TOP_MEAN_WEIGHT = 0.35
 SEQUENCE_CENTERED_PROTOTYPE_WEIGHT = 0.65
 SEQUENCE_CENTERED_CAMERA_WEIGHT = 0.15
 SEQUENCE_CENTERED_TARGET_RULE_WEIGHT = 0.20
+SEQUENCE_CENTERED_WEIGHT_TOTAL = (
+    SEQUENCE_CENTERED_PROTOTYPE_WEIGHT
+    + SEQUENCE_CENTERED_CAMERA_WEIGHT
+    + SEQUENCE_CENTERED_TARGET_RULE_WEIGHT
+)
+if abs(SEQUENCE_CENTERED_WEIGHT_TOTAL - 1.0) > 1e-9:
+    raise ValueError("Sequence-centered score weights must sum to 1.0")
 CORE_SCORING_JOINT_NAMES = (
     "코",
     "목",
@@ -570,6 +577,7 @@ def _sequence_centered_score(
     target_rule_score: float | None,
 ) -> tuple[float, str]:
     prototype = _safe_score(prototype_score, 0.0)
+    # Missing supplementary signals fall back to the prototype score so they do not move the final score.
     camera = _safe_score(camera_score, prototype) if camera_score is not None else prototype
     target_rule = _safe_score(target_rule_score, prototype) if target_rule_score is not None else prototype
     weighted_score = _safe_score(

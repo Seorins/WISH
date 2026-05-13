@@ -230,6 +230,7 @@ def test_sequence_centered_score_keeps_prototype_score_dominant() -> None:
     )
 
     assert method == "sequence_weighted"
+    assert score == pytest.approx(46.25)
     assert score < TARGET_RULE_TEST_PASS_SCORE
 
 
@@ -241,7 +242,20 @@ def test_sequence_centered_score_can_pass_when_whole_sequence_is_close() -> None
     )
 
     assert method == "prototype_distance"
+    assert score == pytest.approx(86.0)
     assert score >= TARGET_RULE_TEST_PASS_SCORE
+
+
+def test_sequence_centered_score_uses_prototype_for_missing_supplementary_signal() -> None:
+    score, method = _sequence_centered_score(
+        prototype_score=50.0,
+        camera_score=None,
+        target_rule_score=95.0,
+    )
+
+    assert method == "sequence_weighted"
+    assert score == pytest.approx(59.0)
+    assert score < TARGET_RULE_TEST_PASS_SCORE
 
 
 def test_camera_prediction_probabilities_ignore_overconfident_softmax(monkeypatch: pytest.MonkeyPatch) -> None:
