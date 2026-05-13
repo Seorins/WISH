@@ -60,10 +60,10 @@ const GAME_FONT = '"Arial Black", "Pretendard", "Noto Sans KR", "Malgun Gothic",
 const LANE_COUNT = 4
 const LANE_COLORS = [0x4fd8ff, 0x8b7cff, 0xffcf5d, 0xff6fbd] as const
 const NOTE_LEAD_MS = 1_800
-const PERFECT_WINDOW_MS = 70
-const GREAT_WINDOW_MS = 140
-const GOOD_WINDOW_MS = 230
-const MISS_WINDOW_MS = 350
+const PERFECT_WINDOW_MS = 45
+const GREAT_WINDOW_MS = 90
+const GOOD_WINDOW_MS = 150
+const MISS_WINDOW_MS = 220
 const HIT_LINE_RATIO = 0.78
 const SPAWN_LINE_RATIO = 0.16
 
