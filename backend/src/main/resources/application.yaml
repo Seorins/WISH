@@ -54,6 +54,8 @@ security:
     # 운영 환경에서는 반드시 환경변수로 주입할 것 (256비트 이상 랜덤)
     secret: ${JWT_SECRET:local-dev-only-change-me-please-use-at-least-32-chars}
     access-token-ttl-seconds: ${JWT_ACCESS_TTL_SECONDS:3600}
+    # Refresh token TTL — 클라가 백그라운드에서 자동 회전. 30일 기본 (S14P31E103-780).
+    refresh-token-ttl-seconds: ${JWT_REFRESH_TTL_SECONDS:2592000}
     issuer: ${JWT_ISSUER:comong}
 
 livekit:
