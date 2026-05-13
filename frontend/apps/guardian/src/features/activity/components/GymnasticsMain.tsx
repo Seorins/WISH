@@ -98,12 +98,12 @@ export function GymnasticsMain() {
   // list 응답 motion 의 videoUrl 은 비어있으므로, 선택된 motion 이 들어있는 가장 최근 세션의
   // detail 을 호출해 presigned URL 을 받아온다. react-query 캐시로 재선택 시엔 즉시.
   const latestSessionId = useMemo(() => {
-    if (!selectedMotion || !sessionsPage) return null
-    const candidates = sessionsPage.content
+    if (!selectedMotion || exerciseSessions.length === 0) return null
+    const candidates = exerciseSessions
       .filter(s => s.motions.some(m => m.exerciseMotionId === selectedMotion.id))
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     return candidates[0]?.id ?? null
-  }, [selectedMotion, sessionsPage])
+  }, [selectedMotion, exerciseSessions])
 
   const { data: latestSessionDetail } = useQuery({
     queryKey: ['exercise-session-detail', latestSessionId],
