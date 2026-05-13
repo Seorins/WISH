@@ -70,6 +70,10 @@ const SPAWN_LINE_RATIO = 0.16
 export class MusicRhythmScene extends Phaser.Scene {
   private chart: RhythmChart = DEFAULT_RHYTHM_CHART
   private chartId: string | undefined = undefined
+
+  private get noteLeadMs(): number {
+    return this.chart.noteLeadMs ?? NOTE_LEAD_MS
+  }
   private lanes: LaneView[] = []
   private activeNotes: ActiveNote[] = []
   private keyBindings: Phaser.Input.Keyboard.Key[] = []
@@ -971,7 +975,7 @@ export class MusicRhythmScene extends Phaser.Scene {
   private spawnDueNotes(elapsedMs: number) {
     while (
       this.nextNoteIndex < this.chart.notes.length &&
-      this.chart.notes[this.nextNoteIndex].timeMs - elapsedMs <= NOTE_LEAD_MS
+      this.chart.notes[this.nextNoteIndex].timeMs - elapsedMs <= this.noteLeadMs
     ) {
       this.spawnNote(this.chart.notes[this.nextNoteIndex])
       this.nextNoteIndex += 1
@@ -993,14 +997,14 @@ export class MusicRhythmScene extends Phaser.Scene {
       }
 
       const untilHitMs = activeNote.note.timeMs - elapsedMs
-      const progress = Phaser.Math.Clamp(1 - untilHitMs / NOTE_LEAD_MS, 0, 1.0)
+      const progress = Phaser.Math.Clamp(1 - untilHitMs / this.noteLeadMs, 0, 1.0)
       const y = Phaser.Math.Linear(this.spawnLineY, this.hitLineY, progress)
 
       // For hold notes: tail end Y = where the hold-end timestamp would visually be
       let tailEndY = y
       if (activeNote.note.durationMs && activeNote.note.durationMs > 150) {
         const tailUntilHit = activeNote.note.timeMs + activeNote.note.durationMs - elapsedMs
-        const tailProgress = Phaser.Math.Clamp(1 - tailUntilHit / NOTE_LEAD_MS, 0, 1.0)
+        const tailProgress = Phaser.Math.Clamp(1 - tailUntilHit / this.noteLeadMs, 0, 1.0)
         tailEndY = Phaser.Math.Linear(this.spawnLineY, this.hitLineY, tailProgress)
       }
 
@@ -1220,7 +1224,7 @@ export class MusicRhythmScene extends Phaser.Scene {
     const r = this.padRadius
     const trackHeight = this.hitLineY - this.spawnLineY
     const maxTail = Phaser.Math.Clamp(
-      (totalMs / NOTE_LEAD_MS) * trackHeight * 0.9,
+      (totalMs / this.noteLeadMs) * trackHeight * 0.9,
       r * 2,
       trackHeight * 0.82,
     )

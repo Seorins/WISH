@@ -14,17 +14,15 @@ type VideoItem = {
   durationMs: number
 }
 
-const BPM_OPTIONS = [60, 80, 100, 120, 140, 160] as const
-const DIFF_OPTIONS: { key: YouTubeDifficulty; label: string }[] = [
-  { key: 'easy', label: '쉬움' },
-  { key: 'normal', label: '보통' },
-  { key: 'hard', label: '어려움' },
+const DIFF_OPTIONS: { key: YouTubeDifficulty; label: string; hint: string }[] = [
+  { key: 'easy', label: '쉬움', hint: '느린 속도 · 노트 적음' },
+  { key: 'normal', label: '보통', hint: '기본 속도 · 적당한 밀도' },
+  { key: 'hard', label: '어려움', hint: '빠른 속도 · 노트 많음' },
 ]
 
 export class YouTubeSearchScene extends Phaser.Scene {
   private overlay: HTMLDivElement | null = null
   private selected: VideoItem | null = null
-  private bpm = 120
   private difficulty: YouTubeDifficulty = 'normal'
   private isLeaving = false
 
@@ -44,7 +42,6 @@ export class YouTubeSearchScene extends Phaser.Scene {
   create() {
     this.isLeaving = false
     this.selected = null
-    this.bpm = 120
     this.difficulty = 'normal'
 
     addCoverBackground(this, 'music-background')
@@ -220,19 +217,14 @@ export class YouTubeSearchScene extends Phaser.Scene {
           </div>
         </div>
 
-        <div class="yts-settings-row">
-          <div class="yts-group">
-            <span class="yts-lbl">BPM</span>
-            <div class="yts-opts" id="yts-bpm-opts">
-              ${BPM_OPTIONS.map(b => `<button class="yts-opt${b === 120 ? ' active' : ''}" data-bpm="${b}">${b}</button>`).join('')}
-            </div>
-          </div>
-          <div class="yts-group">
-            <span class="yts-lbl">난이도</span>
-            <div class="yts-opts" id="yts-diff-opts">
-              ${DIFF_OPTIONS.map(d => `<button class="yts-opt${d.key === 'normal' ? ' active' : ''}" data-diff="${d.key}">${d.label}</button>`).join('')}
-            </div>
-          </div>
+        <div class="yts-diff-row">
+          ${DIFF_OPTIONS.map(
+            d => `
+            <button class="yts-diff-card${d.key === 'normal' ? ' active' : ''}" data-diff="${d.key}">
+              <span class="yts-diff-label">${d.label}</span>
+              <span class="yts-diff-hint">${d.hint}</span>
+            </button>`,
+          ).join('')}
         </div>
 
         <div class="yts-start-row">
@@ -242,14 +234,6 @@ export class YouTubeSearchScene extends Phaser.Scene {
     `
 
     body.querySelector('.yts-cfg-back')!.addEventListener('click', () => this.resetToSearch())
-
-    body.querySelectorAll<HTMLButtonElement>('[data-bpm]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        this.bpm = parseInt(btn.dataset.bpm!, 10)
-        body.querySelectorAll('[data-bpm]').forEach(b => b.classList.remove('active'))
-        btn.classList.add('active')
-      })
-    })
 
     body.querySelectorAll<HTMLButtonElement>('[data-diff]').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -280,7 +264,6 @@ export class YouTubeSearchScene extends Phaser.Scene {
       title: this.selected.title,
       channelTitle: this.selected.channelTitle,
       durationMs: this.selected.durationMs,
-      bpm: this.bpm,
       difficulty: this.difficulty,
     })
 
@@ -359,7 +342,7 @@ function injectStyles() {
     .yts-header {
       flex-shrink: 0;
       border-bottom: 1px solid rgba(255,255,255,.07);
-      padding: 14px 28px;
+      padding: 26px 28px;
     }
     .yts-header-inner {
       max-width: 960px; margin: 0 auto;
@@ -374,13 +357,13 @@ function injectStyles() {
       transition: background .15s, color .15s; white-space: nowrap;
     }
     .yts-back:hover { background: rgba(255,255,255,.14); color: #fff; }
-    .yts-title-row { display: flex; align-items: center; gap: 10px; }
+    .yts-title-row { display: flex; align-items: center; gap: 12px; }
     .yts-logo {
-      width: 32px; height: 22px; background: #ff0000;
-      border-radius: 6px; display: flex; align-items: center;
-      justify-content: center; font-size: 11px; color: #fff; flex-shrink: 0;
+      width: 40px; height: 28px; background: #ff0000;
+      border-radius: 7px; display: flex; align-items: center;
+      justify-content: center; font-size: 14px; color: #fff; flex-shrink: 0;
     }
-    .yts-title { font-size: 18px; font-weight: 700; margin: 0; color: #fffaf2; }
+    .yts-title { font-size: 22px; font-weight: 700; margin: 0; color: #fffaf2; }
 
     /* ── scrollable content ── */
     .yts-scroll {
@@ -415,6 +398,7 @@ function injectStyles() {
 
     /* ── empty state ── */
     .yts-empty {
+      grid-column: 1 / -1;
       display: flex; flex-direction: column; align-items: center;
       justify-content: center; gap: 12px; padding: 56px 0;
     }
@@ -427,7 +411,7 @@ function injectStyles() {
     }
 
     /* ── loading msg ── */
-    .yts-msg { color: #5a6280; text-align: center; padding: 48px 0; font-size: 14px; margin: 0; }
+    .yts-msg { grid-column: 1 / -1; color: #5a6280; text-align: center; padding: 48px 0; font-size: 14px; margin: 0; }
 
     /* ── results grid ── */
     .yts-results {
@@ -484,25 +468,22 @@ function injectStyles() {
     }
     .yts-sel-ch { font-size: 13px; color: #6870a0; margin: 0; }
 
-    .yts-settings-row {
-      display: grid; grid-template-columns: 1fr 1fr; gap: 20px;
+    .yts-diff-row {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px;
     }
-    .yts-group { display: flex; flex-direction: column; gap: 10px; }
-    .yts-lbl {
-      font-size: 11px; font-weight: 700; color: #6870a0;
-      letter-spacing: 1px; text-transform: uppercase;
-    }
-    .yts-opts { display: flex; gap: 8px; flex-wrap: wrap; }
-    .yts-opt {
-      padding: 8px 20px;
-      background: rgba(255,255,255,.06); border: 1.5px solid rgba(255,255,255,.11);
-      border-radius: 20px; color: #c0c8d8; font-size: 14px; font-weight: 600;
+    .yts-diff-card {
+      display: flex; flex-direction: column; align-items: center;
+      gap: 6px; padding: 18px 14px;
+      background: rgba(255,255,255,.05); border: 1.5px solid rgba(255,255,255,.11);
+      border-radius: 14px; color: #c0c8d8;
       font-family: inherit; cursor: pointer; transition: all .15s;
     }
-    .yts-opt:hover { background: rgba(255,255,255,.11); border-color: rgba(255,255,255,.2); }
-    .yts-opt.active {
+    .yts-diff-card:hover { background: rgba(255,255,255,.1); border-color: rgba(255,255,255,.22); }
+    .yts-diff-card.active {
       background: rgba(101,216,255,.13); border-color: #65d8ff; color: #65d8ff;
     }
+    .yts-diff-label { font-size: 17px; font-weight: 700; letter-spacing: 1px; }
+    .yts-diff-hint { font-size: 12px; opacity: .75; }
 
     .yts-start-row { display: flex; justify-content: center; padding-top: 8px; }
     .yts-start {

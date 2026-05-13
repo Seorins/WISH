@@ -16,6 +16,8 @@ export type RhythmChart = {
   audioPath: string
   durationMs: number
   notes: RhythmNote[]
+  // Override default note lead-in time (spawn → hit line). Higher = slower fall.
+  noteLeadMs?: number
   // YouTube mode: skip Phaser audio, use IFrame player instead
   youtubeVideoId?: string
   youtubeThumbnailUrl?: string
@@ -311,24 +313,32 @@ const DYNAMIC_CHARTS = new Map<string, RhythmChart>()
 
 export type YouTubeDifficulty = 'easy' | 'normal' | 'hard'
 
+// 난이도가 BPM(밀도) + 낙하 속도(반응 시간) 둘 다 결정.
+const DIFFICULTY_PRESETS: Record<YouTubeDifficulty, { bpm: number; leadMs: number }> = {
+  easy: { bpm: 80, leadMs: 2200 },
+  normal: { bpm: 120, leadMs: 1800 },
+  hard: { bpm: 160, leadMs: 1300 },
+}
+
 export function generateYouTubeChart(params: {
   videoId: string
   title: string
   channelTitle: string
   durationMs: number
-  bpm: number
   difficulty: YouTubeDifficulty
 }): RhythmChart {
-  const { videoId, title, channelTitle, durationMs, bpm, difficulty } = params
+  const { videoId, title, channelTitle, durationMs, difficulty } = params
+  const preset = DIFFICULTY_PRESETS[difficulty]
   const chart: RhythmChart = {
     id: `youtube-${videoId}`,
     title,
     subtitle: channelTitle,
-    bpm,
+    bpm: preset.bpm,
     audioKey: '',
     audioPath: '',
     durationMs,
-    notes: buildYouTubeNotes(durationMs, bpm, difficulty),
+    notes: buildYouTubeNotes(durationMs, preset.bpm, difficulty),
+    noteLeadMs: preset.leadMs,
     youtubeVideoId: videoId,
     youtubeThumbnailUrl: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
   }
@@ -342,9 +352,8 @@ function buildYouTubeNotes(
   difficulty: YouTubeDifficulty,
 ): RhythmNote[] {
   const beatMs = 60_000 / bpm
-  // easy: half-note interval, normal: quarter-note, hard: 8th-note
-  const stepMs =
-    difficulty === 'easy' ? beatMs * 2 : difficulty === 'normal' ? beatMs : beatMs * 0.5
+  // easy/normal: 매 비트, hard: 반 비트(8분음표) 간격
+  const stepMs = difficulty === 'hard' ? beatMs * 0.5 : beatMs
 
   // Lane patterns (no consecutive same lane, spread across all 4)
   const PATTERNS: Record<YouTubeDifficulty, RhythmLane[]> = {
