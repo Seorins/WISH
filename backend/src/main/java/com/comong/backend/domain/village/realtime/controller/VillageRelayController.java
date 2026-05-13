@@ -5,8 +5,10 @@ import java.time.Instant;
 
 import jakarta.validation.Valid;
 
+import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.Payload;
+import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
 import org.springframework.stereotype.Controller;
 
 import com.comong.backend.domain.village.realtime.dto.EmotePacket;
@@ -56,21 +58,28 @@ public class VillageRelayController {
     }
 
     @MessageMapping("/village/position")
-    public void onPosition(@Valid @Payload PositionPacket packet, Principal principal) {
+    public void onPosition(
+            @Valid @Payload PositionPacket packet,
+            @Header(SimpMessageHeaderAccessor.SESSION_ID_HEADER) String simpSessionId,
+            Principal principal) {
         if (!(principal instanceof VillageStompPrincipal vsp)) {
             return;
         }
+        // latest-wins 로 evict 된 옛 세션이 보낸 패킷은 service 가 sessionId 불일치로 drop.
         presenceService
-                .updatePosition(vsp.userId(), packet.x(), packet.y(), packet.dir())
+                .updatePosition(vsp.userId(), simpSessionId, packet.x(), packet.y(), packet.dir())
                 .ifPresent(member -> broadcastService.broadcastMove(member, packet.moving()));
     }
 
     /**
-     * 이모티콘 발신. 화이트리스트 + 서버측 throttle (2s) 통과 시 토픽에 emote 이벤트 broadcast. 거부 시 조용히 drop — 클라에 ERROR
-     * 프레임 안 보냄 (도배 / 위조 시도가 사용자 응답으로 가지 않도록).
+     * 이모티콘 발신. 화이트리스트 + 서버측 throttle (2s) + sessionId 일치 시 토픽에 emote 이벤트 broadcast. 거부 시 조용히 drop —
+     * 클라에 ERROR 프레임 안 보냄 (도배 / 위조 / ghost 세션 시도가 사용자 응답으로 가지 않도록).
      */
     @MessageMapping("/village/emote")
-    public void onEmote(@Valid @Payload EmotePacket packet, Principal principal) {
+    public void onEmote(
+            @Valid @Payload EmotePacket packet,
+            @Header(SimpMessageHeaderAccessor.SESSION_ID_HEADER) String simpSessionId,
+            Principal principal) {
         if (!(principal instanceof VillageStompPrincipal vsp)) {
             return;
         }
@@ -78,7 +87,7 @@ public class VillageRelayController {
             return;
         }
         presenceService
-                .registerEmote(vsp.userId(), Instant.now())
+                .registerEmote(vsp.userId(), simpSessionId, Instant.now())
                 .ifPresent(member -> broadcastService.broadcastEmote(member, packet.emoji()));
     }
 }

@@ -23,6 +23,7 @@ export const MY_MUSIC_RESULTS_QUERY_KEY = 'music-results-me'
 export const MY_TAEKWONDO_SESSIONS_QUERY_KEY = 'taekwondo-sessions-me'
 export const MY_EXERCISE_SESSIONS_QUERY_KEY = 'exercise-sessions-me'
 
+type PatientTaekwondoSessionsParams = Omit<GetMyTaekwondoSessionsParams, 'patientProfileId'>
 type PatientExerciseSessionsParams = Omit<GetMyExerciseSessionsParams, 'patientProfileId'>
 
 export function useUsageAverages(params: UsageAveragesParams = {}) {
@@ -85,21 +86,24 @@ export function useMyMusicResults(params: GetMyMusicResultsParams = {}) {
   })
 }
 
-// BE me-sessions 엔드포인트가 아직 없을 때는 404 가 떨어지는데, 그 경우 retry
-// 무한 루프 방지를 위해 retry: false. 엔드포인트 머지 후엔 default(3회)로 복구해도 됨.
-export function useMyTaekwondoSessions(params: GetMyTaekwondoSessionsParams = {}) {
+export function useMyTaekwondoSessions(
+  patientId: number | undefined,
+  params: PatientTaekwondoSessionsParams = {},
+) {
   return useQuery({
     queryKey: [
       MY_TAEKWONDO_SESSIONS_QUERY_KEY,
+      patientId,
       params.poomsae,
       params.page ?? 0,
       params.size ?? 50,
       params.sort ?? 'createdAt,desc',
     ],
     queryFn: async () => {
-      const response = await getMyTaekwondoSessions(params)
+      const response = await getMyTaekwondoSessions({ ...params, patientProfileId: patientId })
       return response.data
     },
+    enabled: typeof patientId === 'number' && Number.isInteger(patientId) && patientId > 0,
     retry: false,
   })
 }

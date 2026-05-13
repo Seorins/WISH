@@ -78,6 +78,7 @@ export {
   createTaekwondoSession,
   formatTaekwondoAiFeedback,
   getMyTaekwondoSessions,
+  getTaekwondoSessions,
   getTaekwondoSessionDetail,
   toCreateTaekwondoSessionMotionRequest,
   toTaekwondoAccuracy,
@@ -217,4 +218,5 @@ export type {
   TaekwondoSessionMotionResult,
   TaekwondoSessionPage,
   ToCreateTaekwondoSessionMotionRequestParams,
+  TaekwondoSessionSummary,
 } from './taekwondo-sessions'
