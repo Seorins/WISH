@@ -15,7 +15,10 @@ import io.swagger.v3.oas.annotations.media.Schema;
 public record ExerciseMotionReplayData(
         @Schema(description = "Replay payload version", example = "1") @NotNull @Min(1)
                 Integer version,
-        @Schema(description = "Replay sampling rate. Raw replay stores 30fps; compact replay stores 5~10fps.", example = "30")
+        @Schema(
+                        description =
+                                "Replay sampling rate. Raw replay stores 30fps; compact replay stores 5~10fps.",
+                        example = "30")
                 @NotNull
                 @Min(5)
                 @Max(30)

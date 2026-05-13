@@ -174,8 +174,9 @@ class ExerciseSessionControllerIntegrationTest extends IntegrationTestSupport {
                 .andExpect(jsonPath("$.data.replayAvailable").value(true))
                 .andExpect(jsonPath("$.data.replay.fps").value(30))
                 .andExpect(jsonPath("$.data.compactReplay.fps").value(5))
-                .andExpect(jsonPath("$.data.compactReplay.markers[0].reason")
-                        .value("compact count window"));
+                .andExpect(
+                        jsonPath("$.data.compactReplay.markers[0].reason")
+                                .value("compact count window"));
     }
 
     @Test
