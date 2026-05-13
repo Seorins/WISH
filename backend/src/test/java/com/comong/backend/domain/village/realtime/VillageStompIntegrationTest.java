@@ -192,6 +192,16 @@ class VillageStompIntegrationTest extends IntegrationTestSupport {
         LinkedBlockingQueue<Map<String, Object>> eventsForB = subscribeTopic(sessionB);
         Thread.sleep(SUBSCRIBE_GRACE_MS);
 
+        // disconnect 는 WS close → async SessionDisconnectEvent → listener → broadcast 의 다단계 비동기.
+        // 위 sleep 만으로 SimpleBroker 의 구독 등록 완료가 보장되지 않아 느린 CI 에선 leave broadcast 가
+        // 미등록 구독으로 빠지면 유실된다. A 가 먼저 position 을 쏴 B 가 move 를 받으면 구독이 결정적으로 활성.
+        sessionA.send(
+                "/app/village/position",
+                Map.of("x", 0.5, "y", 0.5, "dir", "down", "moving", false));
+        Map<String, Object> subscriptionWarmup =
+                pollUntilType(eventsForB, "move", RECEIVE_TIMEOUT_SECONDS);
+        assertThat(subscriptionWarmup).isNotNull();
+
         sessionA.disconnect();
 
         Map<String, Object> leaveEvent =
