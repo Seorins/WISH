@@ -61,11 +61,11 @@ export const VILLAGE_EMOJIS = [
   '좋아',
   '고마워',
   '힘내',
-  '❓',
   '😄',
   '😢',
   '👍',
   '❤️',
+  '❓',
 ] as const
 export type VillageEmoji = (typeof VILLAGE_EMOJIS)[number]
 
