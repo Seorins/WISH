@@ -55,8 +55,11 @@ public class YoutubeSearchService {
         if (!properties.isEnabled()) {
             throw new BusinessException(MusicErrorCode.YOUTUBE_SEARCH_DISABLED);
         }
-        int safeLimit =
-                limit == null ? DEFAULT_LIMIT : Math.max(1, Math.min(limit, MAX_LIMIT));
+        if (query == null || query.isBlank()) {
+            // 빈/공백 쿼리는 외부 호출 없이 빈 결과로 단락 — YouTube 의 400 으로 할당량을 낭비하지 않는다.
+            return new YoutubeSearchResponse(List.of());
+        }
+        int safeLimit = limit == null ? DEFAULT_LIMIT : Math.max(1, Math.min(limit, MAX_LIMIT));
 
         try {
             JsonNode searchResult = callSearchList(query, safeLimit);
@@ -144,7 +147,9 @@ public class YoutubeSearchService {
         if (searchResult == null || !searchResult.has("items")) {
             return List.of();
         }
-        return searchResult.get("items").valueStream()
+        return searchResult
+                .get("items")
+                .valueStream()
                 .map(item -> toItem(item, durations))
                 .filter(item -> item != null)
                 .collect(Collectors.toList());
