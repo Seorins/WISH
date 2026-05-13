@@ -35,6 +35,9 @@ from app.services.taekwondo.stgcn_taegeuk1 import (
 )
 
 
+TARGET_RULE_TEST_PASS_SCORE = 80.0
+
+
 def _keypoint_index(resources, landmark_name: str) -> int:
     for index, keypoint_name in enumerate(resources.keypoint_names):
         if KOREAN_TO_TAEKWONDO_LANDMARK.get(keypoint_name) == landmark_name:
@@ -156,9 +159,9 @@ def test_taegeuk1_success_decision_uses_pass_threshold() -> None:
     matched_result = analyze_taegeuk1_sequence(
         resources.prototypes[0].tolist(),
         movement_name,
-        pass_threshold=80.0,
+        pass_threshold=TARGET_RULE_TEST_PASS_SCORE,
     )
-    assert matched_result.pass_threshold == 80.0
+    assert matched_result.pass_threshold == TARGET_RULE_TEST_PASS_SCORE
     assert matched_result.passed is True
     assert matched_result.passed == (matched_result.score >= matched_result.pass_threshold)
 
@@ -188,10 +191,10 @@ def test_taegeuk1_scoring_ignores_small_unstable_joints() -> None:
         sequence.tolist(),
         movement_name,
         input_normalized=True,
-        pass_threshold=80.0,
+        pass_threshold=TARGET_RULE_TEST_PASS_SCORE,
     )
 
-    assert result.score >= 80.0
+    assert result.score >= TARGET_RULE_TEST_PASS_SCORE
     assert result.worst_joint in core_joint_names
     assert {str(row["joint"]) for row in result.joint_errors_top5}.issubset(core_joint_names)
 
@@ -204,7 +207,7 @@ def test_camera_adjusted_score_recovers_when_target_is_nearest() -> None:
         probabilities=np.array([0.02, 0.84, 0.1, 0.04], dtype=np.float32),
     )
 
-    assert score >= 80.0
+    assert score >= TARGET_RULE_TEST_PASS_SCORE
 
 
 def test_camera_adjusted_score_stays_low_when_target_is_not_close() -> None:
@@ -215,7 +218,7 @@ def test_camera_adjusted_score_stays_low_when_target_is_not_close() -> None:
         probabilities=np.array([0.64, 0.2, 0.12, 0.04], dtype=np.float32),
     )
 
-    assert score < 80.0
+    assert score < TARGET_RULE_TEST_PASS_SCORE
 
 
 def test_camera_prediction_probabilities_ignore_overconfident_softmax(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -275,7 +278,7 @@ def test_target_rule_score_accepts_animated_walking_low_block_sequence() -> None
     score = _target_rule_score(sequence, resources.keypoint_names, resources.class_names[4])
 
     assert score is not None
-    assert score >= 80.0
+    assert score >= TARGET_RULE_TEST_PASS_SCORE
 
 
 def test_target_rule_score_rejects_single_good_late_camera_frame() -> None:
@@ -306,7 +309,7 @@ def test_target_rule_score_rejects_single_good_late_camera_frame() -> None:
     score = _target_rule_score(sequence, resources.keypoint_names, "앞서고 아래막기")
 
     assert score is not None
-    assert score < 80.0
+    assert score < TARGET_RULE_TEST_PASS_SCORE
 
 
 def test_camera_sequence_normalization_handles_all_nan_input() -> None:
