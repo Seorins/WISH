@@ -7,7 +7,13 @@ export interface EmoteBubbleTarget {
   displayHeight: number
 }
 
-const EMOTE_FONT_SIZE = 40
+/** 이모지/단일 글자용 큰 폰트. */
+const EMOTE_FONT_SIZE_EMOJI = 40
+/** 한글 단축 메시지용 폰트 — 글자수가 많아 가독성 위해 한 단계 축소 (S14P31E103-769). */
+const EMOTE_FONT_SIZE_TEXT = 26
+/** 한글 (Hangul 음절 + Jamo) 포함 여부 — 폰트 크기 분기에 사용. */
+const HANGUL_PATTERN = /[㄰-㆏가-힣]/
+
 /** sprite 상단 위로 띄울 여백 (px). */
 const EMOTE_VERTICAL_GAP_PX = 16
 /** scale 0.5 → 1.2 → 1.0 통통 tween 의 첫 단계 길이 (overshoot). */
@@ -20,10 +26,10 @@ const DISPLAY_DURATION_MS = 2_500
 const FADE_OUT_MS = 400
 
 /**
- * sprite 위에 이모티콘 텍스트를 띄운다. 통통 뛰는 tween + 자동 fade out + destroy.
+ * sprite 위에 빠른 표현 (이모지/한글 단축 메시지) 텍스트를 띄운다. 통통 tween + 자동 fade out + destroy.
  *
- * <p>버블은 분출 시점 sprite 위치에 고정된다 (이후 sprite 가 움직여도 따라오지 않음). 2.5초 + 0.4초 fade 동안 표시되므로 그 시간 안에 움직임은
- * 자연스럽게 무시할 수 있는 정도.
+ * <p>S14P31E103-769: 캐릭터가 움직이면 버블도 따라오도록 매 프레임 위치 동기화. cleanup 은 fade out 의 onComplete 단계에서 listener
+ * off + bubble destroy.
  */
 export function emitEmoteBubble(
   scene: Phaser.Scene,
@@ -31,16 +37,26 @@ export function emitEmoteBubble(
   emoji: string,
   depth: number,
 ): void {
-  const textY = target.y - target.displayHeight / 2 - EMOTE_VERTICAL_GAP_PX
+  const fontSize = HANGUL_PATTERN.test(emoji) ? EMOTE_FONT_SIZE_TEXT : EMOTE_FONT_SIZE_EMOJI
+  const bubblePosition = computePosition(target)
   const bubble = scene.add
-    .text(target.x, textY, emoji, {
-      fontSize: `${EMOTE_FONT_SIZE}px`,
+    .text(bubblePosition.x, bubblePosition.y, emoji, {
+      fontSize: `${fontSize}px`,
       fontFamily: 'sans-serif',
       resolution: 2,
     })
     .setOrigin(0.5, 1)
     .setDepth(depth)
     .setScale(0.5)
+
+  // sprite 가 움직일 때마다 버블이 같이 움직이도록.
+  const follow = () => {
+    if (!bubble.active) return
+    const next = computePosition(target)
+    bubble.x = next.x
+    bubble.y = next.y
+  }
+  scene.events.on(Phaser.Scenes.Events.UPDATE, follow)
 
   // overshoot pop-in
   scene.tweens.add({
@@ -49,7 +65,7 @@ export function emitEmoteBubble(
     duration: POP_IN_MS,
     ease: 'Back.Out',
     onComplete: () => {
-      // settle 0.2 → 1.0
+      // settle 1.2 → 1.0
       scene.tweens.add({
         targets: bubble,
         scale: 1.0,
@@ -65,7 +81,17 @@ export function emitEmoteBubble(
       targets: bubble,
       alpha: 0,
       duration: FADE_OUT_MS,
-      onComplete: () => bubble.destroy(),
+      onComplete: () => {
+        scene.events.off(Phaser.Scenes.Events.UPDATE, follow)
+        bubble.destroy()
+      },
     })
   })
+}
+
+function computePosition(target: EmoteBubbleTarget): { x: number; y: number } {
+  return {
+    x: target.x,
+    y: target.y - target.displayHeight / 2 - EMOTE_VERTICAL_GAP_PX,
+  }
 }
