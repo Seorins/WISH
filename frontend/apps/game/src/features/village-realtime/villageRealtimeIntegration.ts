@@ -11,6 +11,11 @@ import { VillageRealtimeClient } from './villageRealtimeClient'
 const PUBLISH_INTERVAL_MS = 200
 /** ratio 좌표 변화 임계값. 이 이하의 변화는 publish 스킵 (유휴 트래픽 절감). */
 const POSITION_CHANGE_THRESHOLD = 0.001
+/**
+ * 정지 상태에서도 강제 publish 하는 간격 — BE idle-disconnect (기본 60s) 안 쪽으로 안전 마진. 사용자가 한 자리에 가만히 있어도
+ * lastSeen 이 갱신되어 좀비 정리에 걸리지 않게 한다 (S14P31E103-767).
+ */
+const HEARTBEAT_INTERVAL_MS = 30_000
 /** publishEmote 최대 빈도 (클라). 서버측 2s throttle 의 절반 — UX 용. */
 const EMOTE_INTERVAL_MS = 1_000
 
@@ -84,8 +89,11 @@ export function attachVillageRealtime(opts: AttachOptions): VillageRealtimeInteg
         Math.abs(xRatio - lastX) > POSITION_CHANGE_THRESHOLD ||
         Math.abs(yRatio - lastY) > POSITION_CHANGE_THRESHOLD
       const stateChanged = moving !== lastMoving || dir !== lastDir
+      // 정지 상태에서도 idle-disconnect (기본 60s) 안 쪽으로 keep-alive 발행. BE 좀비 정리에 걸려 다른
+      // 사용자 화면에서 사라지는 문제를 차단한다 (S14P31E103-767).
+      const heartbeatDue = now - lastPublishMs >= HEARTBEAT_INTERVAL_MS
 
-      if (!positionChanged && !stateChanged) return
+      if (!positionChanged && !stateChanged && !heartbeatDue) return
 
       // 연결 전이면 publishPosition 이 false 반환 → throttle state 유지해야 onReady 후 첫 publish 가
       // skip 되지 않는다 (S14P31E103-763).
