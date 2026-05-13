@@ -56,11 +56,13 @@ function getErrorMessage(error: unknown) {
 
 const ASSET_KEYS = {
   background: 'taekwondo-room-background',
+  deleteButton: 'taekwondo-poomsae-select-delete-button',
   guideArrow: 'taekwondo-guide-arrow',
 } as const
 
 const FADE_DURATION = 220
 const OVERLAY_ALPHA = 0.06
+const DELETE_BUTTON_ASPECT = 344 / 336
 const CARD_GAP = 56
 const CARD_ASPECT_RATIO = 408 / 612
 const CARD_VISIBLE_COUNT = 3
@@ -205,6 +207,7 @@ export class TaekwondoPoomsaeSelectScene extends Phaser.Scene {
       assetPath('images/themes/taekwondo/background/taekwondo_inside.png'),
     )
     this.load.image(ASSET_KEYS.guideArrow, assetPath('images/themes/taekwondo/ui/guide_arrow.png'))
+    this.load.image(ASSET_KEYS.deleteButton, assetPath('images/themes/taekwondo/ui/delete_btn.png'))
     this.poomsaeOptions.forEach(option => {
       this.load.image(
         option.imageKey,
@@ -221,6 +224,7 @@ export class TaekwondoPoomsaeSelectScene extends Phaser.Scene {
     this.add.rectangle(vw / 2, vh / 2, vw, vh, 0x120d08, OVERLAY_ALPHA).setDepth(1)
 
     this.createHorizontalOptionList(vw, vh)
+    this.createDeleteButton(vw, vh)
 
     this.optionCards.forEach(card => this.updateCardStyle(card))
     this.showCards()
@@ -359,6 +363,29 @@ export class TaekwondoPoomsaeSelectScene extends Phaser.Scene {
     dragZone.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       this.startDrag(pointer)
     })
+  }
+
+  private createDeleteButton(vw: number, vh: number) {
+    const size = Math.round(Phaser.Math.Clamp(vh * 0.073, 48, 76))
+    const width = size * DELETE_BUTTON_ASPECT
+    const x = vw - size * 1.25
+    const y = size * 1.15
+
+    const button = this.add
+      .image(x, y, ASSET_KEYS.deleteButton)
+      .setDisplaySize(width, size)
+      .setDepth(6)
+
+    const hitArea = this.add
+      .rectangle(x, y, width, size, 0xffffff, 0)
+      .setInteractive({ useHandCursor: true })
+      .setDepth(7)
+
+    hitArea.on('pointerdown', () => {
+      this.returnToDojang()
+    })
+    hitArea.on('pointerover', () => button.setTint(0xffefc4))
+    hitArea.on('pointerout', () => button.clearTint())
   }
 
   private createOptionCard(
