@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useEffect, useMemo, useState } from 'react'
 import { listExerciseMotions, type ExerciseMotion, type ExerciseType } from '@wish/api-client'
 import { useMyPatientId } from '@/features/auth/hooks/useMyPatientId'
-import { useDailyUsageStats, useMyExerciseSessions, useUsageAverages } from '../hooks'
+import { useDailyUsageStats, usePatientExerciseSessions, useUsageAverages } from '../hooks'
 import { aggregateExerciseMotionStats, type MotionStats } from '../utils/aggregateMotionStats'
 import { ActivityEmptyState } from './ActivityEmptyState'
 import styles from './MotionActivity.module.css'
@@ -59,11 +59,14 @@ export function GymnasticsMain() {
   const [exerciseType, setExerciseType] = useState<ExerciseType>(DEFAULT_EXERCISE_TYPE)
   const { data: motions = [], isLoading, error } = useExerciseMotions(exerciseType)
 
-  // me-sessions: 같은 운동 종류로 필터링 (서버가 지원하면) 후 motion-별 집계.
-  const { data: sessionsPage } = useMyExerciseSessions({ exerciseType, size: 100 })
+  // 환아별 세션 상세를 가져와 같은 운동 종류의 motion별 통계를 집계한다.
+  const { data: exerciseSessions = [] } = usePatientExerciseSessions(patientId ?? undefined, {
+    exerciseType,
+    size: 100,
+  })
   const motionStatsMap = useMemo(
-    () => aggregateExerciseMotionStats(sessionsPage?.content ?? []),
-    [sessionsPage],
+    () => aggregateExerciseMotionStats(exerciseSessions),
+    [exerciseSessions],
   )
 
   const sortedMotions = useMemo<ExerciseMotion[]>(() => {

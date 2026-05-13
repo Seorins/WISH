@@ -23,6 +23,8 @@ export const MY_MUSIC_RESULTS_QUERY_KEY = 'music-results-me'
 export const MY_TAEKWONDO_SESSIONS_QUERY_KEY = 'taekwondo-sessions-me'
 export const MY_EXERCISE_SESSIONS_QUERY_KEY = 'exercise-sessions-me'
 
+type PatientExerciseSessionsParams = Omit<GetMyExerciseSessionsParams, 'patientProfileId'>
+
 export function useUsageAverages(params: UsageAveragesParams = {}) {
   return useQuery({
     queryKey: [USAGE_STATS_AVERAGES_QUERY_KEY, params.from, params.to],
@@ -102,19 +104,24 @@ export function useMyTaekwondoSessions(params: GetMyTaekwondoSessionsParams = {}
   })
 }
 
-export function useMyExerciseSessions(params: GetMyExerciseSessionsParams = {}) {
+export function usePatientExerciseSessions(
+  patientId: number | undefined,
+  params: PatientExerciseSessionsParams = {},
+) {
   return useQuery({
     queryKey: [
       MY_EXERCISE_SESSIONS_QUERY_KEY,
+      patientId,
       params.exerciseType,
       params.page ?? 0,
       params.size ?? 50,
       params.sort ?? 'createdAt,desc',
     ],
     queryFn: async () => {
-      const response = await getMyExerciseSessions(params)
-      return response.data
+      const response = await getMyExerciseSessions({ ...params, patientProfileId: patientId })
+      return response.data.content
     },
+    enabled: typeof patientId === 'number' && Number.isInteger(patientId) && patientId > 0,
     retry: false,
   })
 }
