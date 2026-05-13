@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { ensureFreshAccessToken } from '@wish/api-client'
 
 import { useAuthStore } from '@/features/auth/store'
 import type { PlayerDirection, PlayerSprite } from '@/game/entities/player'
@@ -58,7 +59,9 @@ export function attachVillageRealtime(opts: AttachOptions): VillageRealtimeInteg
 
   const client = new VillageRealtimeClient({
     url: opts.brokerUrl,
-    token,
+    // 매 (재)접속마다 최신 토큰. refresh 인터셉터가 갱신한 토큰이 자동 반영되도록 store 보다 ensureFreshAccessToken
+    // 우선 — store 는 메모리 캐시이고 만료 임박 시 자동 갱신은 ensureFresh 가 담당 (S14P31E103-782).
+    getAccessToken: () => ensureFreshAccessToken(),
     onEvent: event => remotePlayers.applyEvent(event),
     onSnapshot: snapshot => remotePlayers.applySnapshot(snapshot),
     onError: error => {

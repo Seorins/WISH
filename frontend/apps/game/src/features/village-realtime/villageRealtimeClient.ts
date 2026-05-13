@@ -9,18 +9,24 @@ const APP_READY = '/app/village/ready'
 const APP_POSITION = '/app/village/position'
 const APP_EMOTE = '/app/village/emote'
 
+/** 재접속 대기 시간 (ms). 너무 짧으면 BE 가 받는 부담 — 5s 면 사용자 체감/서버 부담 균형 (S14P31E103-782). */
+const RECONNECT_DELAY_MS = 5_000
+
 export interface VillageRealtimeClientOptions {
   /** WS broker URL — 미지정 시 동일 origin 의 {@code /api/v1/ws/village} 사용. */
   url?: string
-  /** STOMP CONNECT 프레임에 실릴 Bearer 토큰 (Authorization 헤더). */
-  token: string
+  /**
+   * 매 CONNECT 시 호출되는 token fetcher. 만료 임박이면 refresh 후 새 토큰을 돌려주고, 인증 불가면 null. null 일 땐 클라이언트를
+   * deactivate 해서 무한 재접속 루프를 끊는다 (S14P31E103-782).
+   */
+  getAccessToken: () => Promise<string | null>
   /** join/move/leave 이벤트 콜백. */
   onEvent: (event: VillageEvent) => void
   /** ready 직후 1회 도착하는 룸 스냅샷 콜백. */
   onSnapshot: (snapshot: VillageSnapshot) => void
-  /** CONNECT + 구독 + ready 발행이 끝난 직후. */
+  /** CONNECT + 구독 + ready 발행이 끝난 직후. 재접속할 때마다 호출된다. */
   onReady?: () => void
-  /** WebSocket 연결이 종료된 후 (정상/비정상 공통). */
+  /** WebSocket 연결이 종료된 후 (정상/비정상 공통). 재접속이 켜져 있으면 곧 다음 onConnect 가 따라온다. */
   onDisconnect?: () => void
   /** STOMP ERROR 프레임 또는 WS 에러. */
   onError?: (error: Error) => void
@@ -31,8 +37,8 @@ export interface VillageRealtimeClientOptions {
  *
  * <p>흐름: connect() → CONNECT → 구독 (snapshot 큐 + 토픽) → ready 발행 → 서버로부터 snapshot + 자기 join 수신.
  *
- * <p>한 번 만들면 한 세션. 재접속이 필요하면 새 인스턴스를 생성. 자동 재접속은 끄고 (reconnectDelay: 0) 호출자가 라이프사이클을 관리한다 — Phaser 씬
- * shutdown 과 자연스럽게 묶기 위함.
+ * <p>S14P31E103-782: 자동 재접속 (5s) 활성화. 매 연결 시 {@link VillageRealtimeClientOptions#getAccessToken} 로 최신 토큰을
+ * 받아 CONNECT 프레임에 싣는다 — JWT 만료 후 refresh 인터셉터가 갱신한 새 토큰이 자동 반영. 토큰을 못 받으면 deactivate 해서 무한 루프 차단.
  */
 export class VillageRealtimeClient {
   private readonly client: Client
@@ -42,8 +48,8 @@ export class VillageRealtimeClient {
   constructor(private readonly options: VillageRealtimeClientOptions) {
     this.client = new Client({
       brokerURL: options.url ?? defaultBrokerUrl(),
-      connectHeaders: { Authorization: `Bearer ${options.token}` },
-      reconnectDelay: 0,
+      reconnectDelay: RECONNECT_DELAY_MS,
+      beforeConnect: () => this.refreshConnectHeaders(),
       onConnect: () => this.handleConnect(),
       onStompError: frame => this.handleStompError(frame),
       onWebSocketError: e => this.options.onError?.(coerceError(e)),
@@ -85,6 +91,17 @@ export class VillageRealtimeClient {
       body: JSON.stringify(packet),
     })
     return true
+  }
+
+  private async refreshConnectHeaders(): Promise<void> {
+    const token = await this.options.getAccessToken()
+    if (!token) {
+      // 인증 복구 불가 — 재접속 폭주 방지 위해 클라이언트 자체를 정지. 사용자 재로그인 시 새 인스턴스가 생성된다.
+      void this.client.deactivate()
+      this.options.onError?.(new Error('No access token available for village WS connect.'))
+      return
+    }
+    this.client.connectHeaders = { Authorization: `Bearer ${token}` }
   }
 
   private handleConnect(): void {

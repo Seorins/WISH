@@ -1,4 +1,4 @@
-export { apiClient } from './client'
+export { apiClient, ensureFreshAccessToken } from './client'
 export { getAdminDashboard, getAdminPatientDashboard, notifyGuardian } from './admin-dashboard'
 export { authInterceptor } from './interceptors/auth'
 export { login, refreshTokens, signup } from './auth'
