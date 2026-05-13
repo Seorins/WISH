@@ -36,6 +36,11 @@ public class VillageBroadcastService {
         messagingTemplate.convertAndSend(DEFAULT_ROOM_TOPIC, VillageEvent.leave(userId));
     }
 
+    public void broadcastEmote(PlayerState member, String emoji) {
+        messagingTemplate.convertAndSend(
+                DEFAULT_ROOM_TOPIC, VillageEvent.emote(member.userId(), emoji));
+    }
+
     /**
      * 신규 입장자에게 현재 룸 스냅샷을 1회 전송.
      *

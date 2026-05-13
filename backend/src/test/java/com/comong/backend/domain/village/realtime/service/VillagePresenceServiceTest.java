@@ -169,6 +169,63 @@ class VillagePresenceServiceTest {
     }
 
     @Test
+    void registerEmoteReturnsMemberWhenFirstCall() {
+        stubProfile(1L, 100L, "n1");
+        presenceService.join("s1", 1L);
+
+        Optional<PlayerState> result = presenceService.registerEmote(1L, Instant.now());
+
+        assertThat(result).isPresent();
+        assertThat(result.get().userId()).isEqualTo(1L);
+    }
+
+    @Test
+    void registerEmoteThrottlesSecondCallWithinTwoSeconds() {
+        stubProfile(1L, 100L, "n1");
+        presenceService.join("s1", 1L);
+
+        Instant now = Instant.now();
+        presenceService.registerEmote(1L, now);
+        Optional<PlayerState> tooSoon = presenceService.registerEmote(1L, now.plusMillis(500));
+
+        assertThat(tooSoon).isEmpty();
+    }
+
+    @Test
+    void registerEmoteAllowsAfterThrottleWindow() {
+        stubProfile(1L, 100L, "n1");
+        presenceService.join("s1", 1L);
+
+        Instant now = Instant.now();
+        presenceService.registerEmote(1L, now);
+        Optional<PlayerState> afterWindow = presenceService.registerEmote(1L, now.plusSeconds(3));
+
+        assertThat(afterWindow).isPresent();
+    }
+
+    @Test
+    void registerEmoteReturnsEmptyForUnknownMember() {
+        Optional<PlayerState> result = presenceService.registerEmote(999L, Instant.now());
+
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    void leaveBySessionClearsEmoteThrottle() {
+        // 떠난 멤버가 같은 userId 로 재접속했을 때 옛 throttle 이 남아 새 세션을 막으면 안 된다.
+        stubProfile(1L, 100L, "n1");
+        presenceService.join("s1", 1L);
+        Instant now = Instant.now();
+        presenceService.registerEmote(1L, now);
+
+        presenceService.leaveBySession("s1");
+        presenceService.join("s2", 1L);
+
+        Optional<PlayerState> fresh = presenceService.registerEmote(1L, now.plusMillis(100));
+        assertThat(fresh).isPresent();
+    }
+
+    @Test
     void evictIdleSkipsFreshMembers() {
         stubProfile(1L, 100L, "n1");
         presenceService.join("s1", 1L);

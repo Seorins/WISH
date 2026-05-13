@@ -1,12 +1,13 @@
 import { Client, type IFrame, type StompSubscription } from '@stomp/stompjs'
 
-import type { PositionPacket, VillageEvent, VillageSnapshot } from './types'
+import type { EmotePacket, PositionPacket, VillageEvent, VillageSnapshot } from './types'
 
-// BE 라우팅 규약 (S14P31E103-714 / 718). 변경 시 BE 와 함께 손본다.
+// BE 라우팅 규약 (S14P31E103-714 / 718 / 728). 변경 시 BE 와 함께 손본다.
 const TOPIC_VILLAGE = '/topic/village.default'
 const QUEUE_SNAPSHOT = '/user/queue/village.snapshot'
 const APP_READY = '/app/village/ready'
 const APP_POSITION = '/app/village/position'
+const APP_EMOTE = '/app/village/emote'
 
 export interface VillageRealtimeClientOptions {
   /** WS broker URL — 미지정 시 동일 origin 의 {@code /api/v1/ws/village} 사용. */
@@ -68,6 +69,15 @@ export class VillageRealtimeClient {
     if (!this.client.connected) return
     this.client.publish({
       destination: APP_POSITION,
+      body: JSON.stringify(packet),
+    })
+  }
+
+  /** 이모티콘 발신. 연결 전이면 no-op. 서버측 throttle / 화이트리스트 검증은 BE 가 담당. */
+  publishEmote(packet: EmotePacket): void {
+    if (!this.client.connected) return
+    this.client.publish({
+      destination: APP_EMOTE,
       body: JSON.stringify(packet),
     })
   }

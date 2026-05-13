@@ -32,11 +32,16 @@ interface FakeTween {
 
 const createPlayerMock = vi.fn()
 const getPlayerWalkAnimationKeyMock = vi.fn()
+const emitEmoteBubbleMock = vi.fn()
 
 vi.mock('@/game/entities/player', () => ({
   createPlayer: (...args: unknown[]) => createPlayerMock(...args),
   getPlayerWalkAnimationKey: (...args: unknown[]) => getPlayerWalkAnimationKeyMock(...args),
   PLAYER_TEXTURE_KEY: 'character',
+}))
+
+vi.mock('./emoteBubble', () => ({
+  emitEmoteBubble: (...args: unknown[]) => emitEmoteBubbleMock(...args),
 }))
 
 // Phaser 는 ESM 으로 import 되지만 RemotePlayersGroup 가 Phaser.Tweens.Tween 타입만 참조해서 런타임에는 사용하지 않으므로
@@ -131,6 +136,7 @@ function group(scene: unknown, opts: Partial<{ localUserId: number; w: number; h
 beforeEach(() => {
   createPlayerMock.mockReset()
   getPlayerWalkAnimationKeyMock.mockReset()
+  emitEmoteBubbleMock.mockReset()
 })
 
 describe('RemotePlayersGroup', () => {
@@ -363,6 +369,43 @@ describe('RemotePlayersGroup', () => {
 
     expect(sprites[0].destroy).toHaveBeenCalled()
     expect(texts[0].destroy).toHaveBeenCalled()
+  })
+
+  it('emote event spawns a bubble on the matching remote sprite', () => {
+    const { scene, sprites } = setupScene()
+    const g = group(scene)
+    g.applyEvent({
+      type: 'join',
+      userId: 7,
+      nickname: '구름',
+      textureKey: 'character',
+      x: 0.3,
+      y: 0.3,
+      dir: 'down',
+    })
+
+    g.applyEvent({ type: 'emote', userId: 7, emoji: '😄' })
+
+    expect(emitEmoteBubbleMock).toHaveBeenCalledTimes(1)
+    expect(emitEmoteBubbleMock).toHaveBeenCalledWith(scene, sprites[0], '😄', expect.any(Number))
+  })
+
+  it('emote event is ignored for the local user (already rendered locally)', () => {
+    const { scene } = setupScene()
+    const g = group(scene, { localUserId: 1 })
+
+    g.applyEvent({ type: 'emote', userId: 1, emoji: '😄' })
+
+    expect(emitEmoteBubbleMock).not.toHaveBeenCalled()
+  })
+
+  it('emote event for unknown member is silently ignored', () => {
+    const { scene } = setupScene()
+    const g = group(scene)
+
+    g.applyEvent({ type: 'emote', userId: 99, emoji: '😄' })
+
+    expect(emitEmoteBubbleMock).not.toHaveBeenCalled()
   })
 
   it('destroy clears all members and stops tweens', () => {
