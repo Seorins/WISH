@@ -75,13 +75,26 @@ SEQUENCE_FINAL_ACTIVE_JOINT_MIN_RANGE = 0.08
 SEQUENCE_CENTERED_PROTOTYPE_WEIGHT = 0.65
 SEQUENCE_CENTERED_CAMERA_WEIGHT = 0.15
 SEQUENCE_CENTERED_TARGET_RULE_WEIGHT = 0.20
+SEQUENCE_CENTERED_LIVE_PROTOTYPE_WEIGHT = 0.25
+SEQUENCE_CENTERED_LIVE_CAMERA_WEIGHT = 0.10
+SEQUENCE_CENTERED_LIVE_TARGET_RULE_WEIGHT = 0.65
+# Live camera input can be farther from the stored prototype because of camera angle and user scale.
+# If target-rule scoring already passes, keep most of that rule score while motion caps still guard static poses.
+SEQUENCE_CENTERED_LIVE_TARGET_RULE_RECOVERY_RATIO = 0.90
 SEQUENCE_CENTERED_WEIGHT_TOTAL = (
     SEQUENCE_CENTERED_PROTOTYPE_WEIGHT
     + SEQUENCE_CENTERED_CAMERA_WEIGHT
     + SEQUENCE_CENTERED_TARGET_RULE_WEIGHT
 )
+SEQUENCE_CENTERED_LIVE_WEIGHT_TOTAL = (
+    SEQUENCE_CENTERED_LIVE_PROTOTYPE_WEIGHT
+    + SEQUENCE_CENTERED_LIVE_CAMERA_WEIGHT
+    + SEQUENCE_CENTERED_LIVE_TARGET_RULE_WEIGHT
+)
 if abs(SEQUENCE_CENTERED_WEIGHT_TOTAL - 1.0) > 1e-9:
     raise ValueError("Sequence-centered score weights must sum to 1.0")
+if abs(SEQUENCE_CENTERED_LIVE_WEIGHT_TOTAL - 1.0) > 1e-9:
+    raise ValueError("Live camera sequence-centered score weights must sum to 1.0")
 CORE_SCORING_JOINT_NAMES = (
     "코",
     "목",
@@ -337,6 +350,7 @@ def analyze_taegeuk1_sequence(
         prototype_score=prototype_score,
         camera_score=camera_score,
         target_rule_score=target_rule_score,
+        live_camera=not input_normalized,
     )
     if not input_normalized:
         score, scoring_method = _apply_sequence_motion_final_cap(
@@ -586,17 +600,35 @@ def _sequence_centered_score(
     prototype_score: float,
     camera_score: float | None,
     target_rule_score: float | None,
+    live_camera: bool = False,
 ) -> tuple[float, str]:
     prototype = _safe_score(prototype_score, 0.0)
     # Missing supplementary signals fall back to the prototype score so they do not move the final score.
     camera = _safe_score(camera_score, prototype) if camera_score is not None else prototype
     target_rule = _safe_score(target_rule_score, prototype) if target_rule_score is not None else prototype
+
+    # Live camera weights depend on target-rule evidence. If that signal is absent,
+    # use the default prototype-centered weights instead of overweighting a fallback value.
+    if live_camera and target_rule_score is not None:
+        prototype_weight = SEQUENCE_CENTERED_LIVE_PROTOTYPE_WEIGHT
+        camera_weight = SEQUENCE_CENTERED_LIVE_CAMERA_WEIGHT
+        target_rule_weight = SEQUENCE_CENTERED_LIVE_TARGET_RULE_WEIGHT
+    else:
+        prototype_weight = SEQUENCE_CENTERED_PROTOTYPE_WEIGHT
+        camera_weight = SEQUENCE_CENTERED_CAMERA_WEIGHT
+        target_rule_weight = SEQUENCE_CENTERED_TARGET_RULE_WEIGHT
+
     weighted_score = _safe_score(
-        (SEQUENCE_CENTERED_PROTOTYPE_WEIGHT * prototype)
-        + (SEQUENCE_CENTERED_CAMERA_WEIGHT * camera)
-        + (SEQUENCE_CENTERED_TARGET_RULE_WEIGHT * target_rule),
+        (prototype_weight * prototype)
+        + (camera_weight * camera)
+        + (target_rule_weight * target_rule),
         prototype,
     )
+    if live_camera and target_rule_score is not None and target_rule >= PASS_THRESHOLD_DEFAULT:
+        weighted_score = max(
+            weighted_score,
+            target_rule * SEQUENCE_CENTERED_LIVE_TARGET_RULE_RECOVERY_RATIO,
+        )
     weighted_score = max(0.0, min(100.0, weighted_score))
     if camera_score is None and target_rule_score is None:
         return prototype, "prototype_distance"
