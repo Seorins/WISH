@@ -16,6 +16,9 @@ export type RhythmChart = {
   audioPath: string
   durationMs: number
   notes: RhythmNote[]
+  // YouTube mode: skip Phaser audio, use IFrame player instead
+  youtubeVideoId?: string
+  youtubeThumbnailUrl?: string
 }
 
 type TimedLaneNote = {
@@ -295,5 +298,78 @@ export const ALL_RHYTHM_CHARTS: RhythmChart[] = [
 
 export function getRhythmChart(id?: string | null): RhythmChart {
   if (!id) return DEFAULT_RHYTHM_CHART
-  return ALL_RHYTHM_CHARTS.find(chart => chart.id === id) ?? DEFAULT_RHYTHM_CHART
+  return (
+    ALL_RHYTHM_CHARTS.find(chart => chart.id === id) ??
+    DYNAMIC_CHARTS.get(id) ??
+    DEFAULT_RHYTHM_CHART
+  )
+}
+
+// ── Dynamic YouTube charts ─────────────────────────────────────────────────
+
+const DYNAMIC_CHARTS = new Map<string, RhythmChart>()
+
+export type YouTubeDifficulty = 'easy' | 'normal' | 'hard'
+
+export function generateYouTubeChart(params: {
+  videoId: string
+  title: string
+  channelTitle: string
+  durationMs: number
+  bpm: number
+  difficulty: YouTubeDifficulty
+}): RhythmChart {
+  const { videoId, title, channelTitle, durationMs, bpm, difficulty } = params
+  const chart: RhythmChart = {
+    id: `youtube-${videoId}`,
+    title,
+    subtitle: channelTitle,
+    bpm,
+    audioKey: '',
+    audioPath: '',
+    durationMs,
+    notes: buildYouTubeNotes(durationMs, bpm, difficulty),
+    youtubeVideoId: videoId,
+    youtubeThumbnailUrl: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+  }
+  DYNAMIC_CHARTS.set(chart.id, chart)
+  return chart
+}
+
+function buildYouTubeNotes(
+  durationMs: number,
+  bpm: number,
+  difficulty: YouTubeDifficulty,
+): RhythmNote[] {
+  const beatMs = 60_000 / bpm
+  // easy: half-note interval, normal: quarter-note, hard: 8th-note
+  const stepMs =
+    difficulty === 'easy' ? beatMs * 2 : difficulty === 'normal' ? beatMs : beatMs * 0.5
+
+  // Lane patterns (no consecutive same lane, spread across all 4)
+  const PATTERNS: Record<YouTubeDifficulty, RhythmLane[]> = {
+    easy: [0, 2, 1, 3, 0, 3, 1, 2],
+    normal: [0, 2, 1, 3, 2, 0, 3, 1, 0, 3, 2, 1, 3, 0, 1, 2],
+    hard: [
+      0, 1, 2, 3, 1, 0, 3, 2, 2, 3, 0, 1, 3, 2, 1, 0, 0, 2, 3, 1, 2, 0, 1, 3, 1, 3, 2, 0, 3, 1, 0,
+      2,
+    ],
+  }
+
+  const pattern = PATTERNS[difficulty]
+  const notes: RhythmNote[] = []
+  let t = 1_500
+  let i = 0
+
+  while (t <= durationMs - 1_500) {
+    notes.push({
+      id: `yt-${String(i).padStart(4, '0')}`,
+      timeMs: Math.round(t),
+      lane: pattern[i % pattern.length],
+    })
+    t += stepMs
+    i++
+  }
+
+  return notes
 }
