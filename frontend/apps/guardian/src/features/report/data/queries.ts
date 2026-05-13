@@ -22,14 +22,17 @@ import {
 import { useFuelStatus } from '@/features/fuel/hooks'
 import { buildMockReport, buildUsageRanking } from './mock'
 import type {
+  AchievementStat,
   GameAchievement,
   ParticipationDay,
   ReportData,
   ReportSummary,
+  TimeBucket,
+  TimeBucketId,
   UsageCompare,
   WeekRange,
 } from './types'
-import { toISODate } from './week'
+import { shiftWeek, toISODate } from './week'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
@@ -47,6 +50,10 @@ function inWeek(isoTs: string | null | undefined, week: WeekRange): boolean {
   return date >= week.start && date <= week.end
 }
 
+function contentSecondsOfDay(item: DailyUsageStats['items'][number]): number {
+  return (item.art ?? 0) + (item.music ?? 0) + (item.taekwondo ?? 0) + (item.gymnastics ?? 0)
+}
+
 function buildParticipationFromDaily(
   daily: DailyUsageStats | undefined,
   week: WeekRange,
@@ -55,7 +62,7 @@ function buildParticipationFromDaily(
   const map = new Map<string, number>()
   if (daily?.items) {
     for (const item of daily.items) {
-      const minutes = Math.round((item.login ?? 0) / 60)
+      const minutes = Math.round(contentSecondsOfDay(item) / 60)
       map.set(item.date, minutes)
     }
   }
@@ -66,9 +73,9 @@ function buildParticipationFromDaily(
   })
 }
 
-function sumDailyLoginMinutes(daily: DailyUsageStats | undefined): number {
+function sumDailyContentMinutes(daily: DailyUsageStats | undefined): number {
   if (!daily?.items) return 0
-  return daily.items.reduce((sum, item) => sum + Math.round((item.login ?? 0) / 60), 0)
+  return daily.items.reduce((sum, item) => sum + Math.round(contentSecondsOfDay(item) / 60), 0)
 }
 
 function countWeekResults<T>(
@@ -100,8 +107,8 @@ function buildSummary({
   exerciseWeek: ExerciseSessionDetail[]
   fuelEarned: number
 }): ReportSummary {
-  const totalMinutes = sumDailyLoginMinutes(daily)
-  const participatedDays = (daily?.items ?? []).filter(item => (item.login ?? 0) > 0).length
+  const totalMinutes = sumDailyContentMinutes(daily)
+  const participatedDays = (daily?.items ?? []).filter(item => contentSecondsOfDay(item) > 0).length
   const sessionCount = musicWeek.length + taekwondoWeek.length + exerciseWeek.length
   return {
     participatedDays,
@@ -117,7 +124,13 @@ function buildUsageCompare(
   selfMinutes: number,
   selfName: string,
 ): UsageCompare {
-  const othersAverageMinutes = averages ? Math.round((averages.login?.averageSeconds ?? 0) / 60) : 0
+  // 컨텐츠 평균(art/music/taekwondo/gymnastics)만 합산 — LOGIN 은 로비/메뉴 포함이라 의미 부풀려짐
+  const othersAverageSeconds = averages
+    ? averages.contentAverages
+        .filter(c => c.contentType !== 'LOGIN')
+        .reduce((sum, c) => sum + (c.averageSeconds ?? 0), 0)
+    : 0
+  const othersAverageMinutes = Math.round(othersAverageSeconds / 60)
   return {
     selfMinutes,
     othersAverageMinutes,
@@ -125,22 +138,48 @@ function buildUsageCompare(
   }
 }
 
-function mostFrequent<T, K extends string | number>(items: T[], keyFn: (item: T) => K): K | null {
-  if (items.length === 0) return null
-  const counts = new Map<K, number>()
-  for (const item of items) {
-    const k = keyFn(item)
-    counts.set(k, (counts.get(k) ?? 0) + 1)
+function hourToBucket(hour: number): TimeBucketId {
+  if (hour >= 6 && hour < 12) return 'morning'
+  if (hour >= 12 && hour < 18) return 'day'
+  if (hour >= 18 && hour < 21) return 'evening'
+  return 'night'
+}
+
+function buildTimeBucketsFromSessions({
+  musicWeek,
+  taekwondoWeek,
+  exerciseWeek,
+  artworksWeek,
+}: {
+  musicWeek: MusicResultDetail[]
+  taekwondoWeek: TaekwondoSessionDetail[]
+  exerciseWeek: ExerciseSessionDetail[]
+  artworksWeek: Artwork[]
+}): { buckets: TimeBucket[]; topBucketId: TimeBucketId } {
+  const minutes: Record<TimeBucketId, number> = {
+    morning: 0,
+    day: 0,
+    evening: 0,
+    night: 0,
   }
-  let top: K | null = null
-  let topCount = 0
-  for (const [k, c] of counts.entries()) {
-    if (c > topCount) {
-      top = k
-      topCount = c
-    }
+  const add = (iso: string, secondsOrMs: number, isMs = false) => {
+    const hour = new Date(iso).getHours()
+    const secs = isMs ? secondsOrMs / 1000 : secondsOrMs
+    minutes[hourToBucket(hour)] += Math.round(secs / 60)
   }
-  return top
+  for (const m of musicWeek) add(m.playedAt, m.playedDurationMs ?? 0, true)
+  for (const t of taekwondoWeek) add(t.createdAt, t.durationSec ?? 0)
+  for (const e of exerciseWeek) add(e.createdAt, e.durationSec ?? 0)
+  for (const a of artworksWeek) add(a.createdAt, a.playDurationSeconds ?? 0)
+
+  const buckets: TimeBucket[] = [
+    { id: 'morning', label: '아침', range: '6~12시', minutes: minutes.morning },
+    { id: 'day', label: '낮', range: '12~18시', minutes: minutes.day },
+    { id: 'evening', label: '저녁', range: '18~21시', minutes: minutes.evening },
+    { id: 'night', label: '밤', range: '21~24시', minutes: minutes.night },
+  ]
+  const topBucketId = buckets.reduce((top, b) => (b.minutes > top.minutes ? b : top), buckets[0]).id
+  return { buckets, topBucketId }
 }
 
 function sumDailyField(
@@ -155,13 +194,11 @@ function buildMusicAchievement(results: MusicResultDetail[], minutes: number): G
   if (results.length === 0) {
     return {
       gameId: 'music',
-      label: '음악 게임',
+      label: '음악',
       emoji: '🎵',
       minutes,
       hasData: minutes > 0,
-      averageAccuracy: null,
-      bestRecord: null,
-      topContent: null,
+      stats: [],
       highlight: null,
     }
   }
@@ -169,17 +206,17 @@ function buildMusicAchievement(results: MusicResultDetail[], minutes: number): G
     (results.reduce((s, r) => s + (r.accuracy ?? 0), 0) / results.length) * 100,
   )
   const best = results.reduce<MusicResultDetail>((b, r) => (r.score > b.score ? r : b), results[0])
-  const topChart = mostFrequent(results, r => r.chartTitle ?? r.chartId) ?? '—'
   const hasNewBest = results.some(r => r.score === best.score)
   return {
     gameId: 'music',
-    label: '음악 게임',
+    label: '음악',
     emoji: '🎵',
     minutes,
     hasData: true,
-    averageAccuracy: avgAccuracy,
-    bestRecord: `최고 점수 ${best.score.toLocaleString()}`,
-    topContent: String(topChart),
+    stats: [
+      { prefix: '평균 정확도 ', value: `${avgAccuracy}%`, strong: true },
+      { value: `최고 점수 ${best.score.toLocaleString()}`, strong: true },
+    ],
     highlight: hasNewBest && results.length >= 3 ? '신기록' : null,
   }
 }
@@ -195,9 +232,7 @@ function buildTaekwondoAchievement(
       emoji: '🥋',
       minutes,
       hasData: minutes > 0,
-      averageAccuracy: null,
-      bestRecord: null,
-      topContent: null,
+      stats: [],
       highlight: null,
     }
   }
@@ -208,16 +243,19 @@ function buildTaekwondoAchievement(
     (b, s) => (s.averageAccuracy > b.averageAccuracy ? s : b),
     sessions[0],
   )
-  const topPoomsae = mostFrequent(sessions, s => s.poomsae) ?? '—'
   return {
     gameId: 'taekwondo',
     label: '태권도',
     emoji: '🥋',
     minutes,
     hasData: true,
-    averageAccuracy: avgAccuracy,
-    bestRecord: `최고 정확도 ${Math.round(bestSession.averageAccuracy * 100)}%`,
-    topContent: String(topPoomsae),
+    stats: [
+      { prefix: '평균 정확도 ', value: `${avgAccuracy}%`, strong: true },
+      {
+        value: `최고 정확도 ${Math.round(bestSession.averageAccuracy * 100)}%`,
+        strong: true,
+      },
+    ],
     highlight: null,
   }
 }
@@ -233,9 +271,7 @@ function buildExerciseAchievement(
       emoji: '🤸',
       minutes,
       hasData: minutes > 0,
-      averageAccuracy: null,
-      bestRecord: null,
-      topContent: null,
+      stats: [],
       highlight: null,
     }
   }
@@ -246,16 +282,19 @@ function buildExerciseAchievement(
     (b, s) => (s.averageAccuracy > b.averageAccuracy ? s : b),
     sessions[0],
   )
-  const topType = mostFrequent(sessions, s => s.exerciseType) ?? '—'
   return {
     gameId: 'exercise',
     label: '체조',
     emoji: '🤸',
     minutes,
     hasData: true,
-    averageAccuracy: avgAccuracy,
-    bestRecord: `최고 정확도 ${Math.round(bestSession.averageAccuracy * 100)}%`,
-    topContent: String(topType),
+    stats: [
+      { prefix: '평균 정확도 ', value: `${avgAccuracy}%`, strong: true },
+      {
+        value: `최고 정확도 ${Math.round(bestSession.averageAccuracy * 100)}%`,
+        strong: true,
+      },
+    ],
     highlight: null,
   }
 }
@@ -268,11 +307,20 @@ function buildArtAchievement(artworks: Artwork[], minutes: number): GameAchievem
       emoji: '🎨',
       minutes,
       hasData: minutes > 0,
-      averageAccuracy: null,
-      bestRecord: null,
-      topContent: null,
+      stats: [],
       highlight: null,
     }
+  }
+  const totalSeconds = artworks.reduce((s, a) => s + (a.playDurationSeconds ?? 0), 0)
+  const avgMinutes = Math.max(1, Math.round(totalSeconds / artworks.length / 60))
+  const latest = artworks.reduce((b, a) => (a.createdAt > b.createdAt ? a : b), artworks[0])
+  const latestTitle = latest.title?.trim()
+  const stats: AchievementStat[] = [
+    { value: `${artworks.length}개 작품 완성`, strong: true },
+    { prefix: '작품당 평균 ', value: `${avgMinutes}분`, strong: true },
+  ]
+  if (latestTitle) {
+    stats.push({ prefix: '최근 작품: ', value: latestTitle })
   }
   return {
     gameId: 'art',
@@ -280,9 +328,7 @@ function buildArtAchievement(artworks: Artwork[], minutes: number): GameAchievem
     emoji: '🎨',
     minutes,
     hasData: true,
-    averageAccuracy: null,
-    bestRecord: `${artworks.length}개 작품 완성`,
-    topContent: null,
+    stats,
     highlight: null,
   }
 }
@@ -298,7 +344,13 @@ export function useReportData({ patientId, patientName, week }: UseReportDataOpt
   isLoading: boolean
   isError: boolean
 } {
+  const lastWeek = useMemo(() => shiftWeek(week, -1), [week])
+
   const dailyQuery = useDailyUsageStats(patientId, { from: week.start, to: week.end })
+  const lastDailyQuery = useDailyUsageStats(patientId, {
+    from: lastWeek.start,
+    to: lastWeek.end,
+  })
   const averagesQuery = useUsageAverages({ from: week.start, to: week.end })
   const musicQuery = useMyMusicResults({ size: 100 })
   const taekwondoQuery = useMyTaekwondoSessions(patientId, { size: 100 })
@@ -307,10 +359,11 @@ export function useReportData({ patientId, patientName, week }: UseReportDataOpt
   const fuelQuery = useFuelStatus()
 
   const data = useMemo<ReportData>(() => {
-    // mock 기반: ROM 추이 / 시간대 분포 / one-liner 만 사용
+    // ROM 추이 / one-liner 만 mock — 나머지는 BE 실데이터
     const mock = buildMockReport(week, patientName)
 
     const dailyData = dailyQuery.data as DailyUsageStats | undefined
+    const lastDailyData = lastDailyQuery.data as DailyUsageStats | undefined
     const averagesData = averagesQuery.data as UsageAverages | undefined
     const musicPage = musicQuery.data as MusicResultPage | undefined
     const taekwondoPage = taekwondoQuery.data as TaekwondoSessionPage | undefined
@@ -326,15 +379,47 @@ export function useReportData({ patientId, patientName, week }: UseReportDataOpt
     const artworksWeek = countWeekResults(artworksPage, a => a.createdAt, week)
     const fuelEarned = sumFuelEarnedThisWeek(fuelData, week)
 
+    // 지난주 데이터 (변화량 계산용) — 세션은 동일 list 에서 필터, daily 만 추가 fetch
+    const lastMusicWeek = countWeekResults(musicPage, r => r.playedAt, lastWeek)
+    const lastTaekwondoWeek = countWeekResults(taekwondoPage, s => s.createdAt, lastWeek)
+    const lastExerciseWeek = exerciseSessions
+      ? exerciseSessions.filter(s => inWeek(s.createdAt, lastWeek))
+      : []
+    const lastFuelEarned = sumFuelEarnedThisWeek(fuelData, lastWeek)
+
     const participation = buildParticipationFromDaily(dailyData, week)
-    const summary = buildSummary({
+    const thisSummary = buildSummary({
       daily: dailyData,
       musicWeek,
       taekwondoWeek,
       exerciseWeek,
       fuelEarned,
     })
+    const lastSummary = buildSummary({
+      daily: lastDailyData,
+      musicWeek: lastMusicWeek,
+      taekwondoWeek: lastTaekwondoWeek,
+      exerciseWeek: lastExerciseWeek,
+      fuelEarned: lastFuelEarned,
+    })
+    const summary: ReportSummary = {
+      ...thisSummary,
+      diff: {
+        participatedDays: thisSummary.participatedDays - lastSummary.participatedDays,
+        totalMinutes: thisSummary.totalMinutes - lastSummary.totalMinutes,
+        sessionCount: thisSummary.sessionCount - lastSummary.sessionCount,
+        fuelEarned: thisSummary.fuelEarned - lastSummary.fuelEarned,
+      },
+    }
+
     const usage = buildUsageCompare(averagesData, summary.totalMinutes, patientName)
+
+    const { buckets: timeBuckets, topBucketId } = buildTimeBucketsFromSessions({
+      musicWeek,
+      taekwondoWeek,
+      exerciseWeek,
+      artworksWeek,
+    })
 
     const achievements: GameAchievement[] = [
       buildMusicAchievement(musicWeek, sumDailyField(dailyData, 'music')),
@@ -351,14 +436,16 @@ export function useReportData({ patientId, patientName, week }: UseReportDataOpt
       participation,
       romTrends: mock.romTrends,
       usage,
-      timeBuckets: mock.timeBuckets,
-      topBucketId: mock.topBucketId,
+      timeBuckets,
+      topBucketId,
       achievements,
     }
   }, [
     week,
+    lastWeek,
     patientName,
     dailyQuery.data,
+    lastDailyQuery.data,
     averagesQuery.data,
     musicQuery.data,
     taekwondoQuery.data,

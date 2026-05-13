@@ -1,3 +1,58 @@
+/* ===== Top action bar (PDF export 등) ===== */
+.reportActionBar {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--dash-space-2);
+}
+
+.reportExportBtn {
+  appearance: none;
+  border: 1px solid var(--dash-color-primary-100);
+  background: var(--dash-color-surface);
+  color: var(--dash-color-primary);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 8px 16px;
+  border-radius: var(--dash-radius-pill);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: var(--dash-shadow-soft);
+  transition:
+    background 0.15s,
+    color 0.15s,
+    transform 0.1s;
+}
+
+.reportExportBtn:hover:not(:disabled) {
+  background: var(--dash-color-primary-50);
+}
+
+.reportExportBtn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.reportExportBtn:disabled {
+  opacity: 0.55;
+  cursor: progress;
+}
+
+.reportCapture {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dash-space-4);
+  min-width: 0;
+  width: 100%;
+}
+
+@media (max-width: 1024px) {
+  .reportCapture {
+    gap: var(--dash-space-3);
+  }
+}
+
 /* ===== Layout helpers ===== */
 .cardRow {
   display: grid;
@@ -718,10 +773,10 @@
 .achievementCard {
   background: var(--dash-color-surface-muted);
   border-radius: var(--dash-radius-md);
-  padding: var(--dash-space-3) var(--dash-space-4);
+  padding: 14px 16px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   position: relative;
   border: 1px solid var(--dash-color-border);
 }
@@ -729,22 +784,23 @@
 .achievementHead {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .achievementEmoji {
-  font-size: 22px;
+  font-size: 24px;
   line-height: 1;
 }
 
 .achievementName {
-  font-size: 13px;
+  font-size: 14.5px;
   font-weight: 700;
   color: var(--dash-color-text-strong);
 }
 
 .achievementMinutes {
-  font-size: 20px;
+  font-size: 24px;
   font-weight: 800;
   color: var(--dash-color-text-strong);
   letter-spacing: -0.015em;
@@ -752,10 +808,18 @@
   margin-top: 2px;
 }
 
+.achievementStats {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: auto;
+}
+
 .achievementStat {
-  font-size: 11.5px;
+  font-size: 13px;
   font-weight: 500;
   color: var(--dash-color-text-muted);
+  line-height: 1.4;
 }
 
 .achievementStatStrong {
@@ -773,19 +837,17 @@
 }
 
 .achievementEmptyText {
-  font-size: 11.5px;
+  font-size: 13px;
   font-weight: 500;
   color: var(--dash-color-text-subtle);
   margin-top: 2px;
 }
 
 .achievementHighlight {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  font-size: 10.5px;
+  margin-left: auto;
+  font-size: 11px;
   font-weight: 700;
-  padding: 3px 8px;
+  padding: 3px 9px;
   border-radius: var(--dash-radius-pill);
   background: var(--dash-gradient-primary);
   color: #fff;
@@ -793,6 +855,7 @@
   display: inline-flex;
   align-items: center;
   gap: 3px;
+  line-height: 1.2;
 }
 
 /* ===== Empty state ===== */

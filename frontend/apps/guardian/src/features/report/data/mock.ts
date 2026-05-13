@@ -91,15 +91,18 @@ function buildTimeBuckets(): TimeBucket[] {
   ]
 }
 
+// 실제 다른 환자 목록은 보호자 권한으로 조회 불가 (BE /patient-profiles 는 본인 소유만).
+// BE 평균(약 30분)에 맞춰 8명 분포 평균이 ~38분이 되도록 스케일링한 mock.
+// 향후 BE 가 leaderboard 엔드포인트 제공하면 실제 닉네임+분 으로 교체.
 const PSEUDONYM_PEERS: ReadonlyArray<{ name: string; minutes: number }> = [
-  { name: '별이', minutes: 1620 },
-  { name: '토끼', minutes: 1240 },
-  { name: '곰돌이', minutes: 980 },
-  { name: '햇님', minutes: 820 },
-  { name: '다람이', minutes: 640 },
-  { name: '미미', minutes: 420 },
-  { name: '뽀뽀', minutes: 280 },
-  { name: '솜이', minutes: 180 },
+  { name: '별이', minutes: 90 },
+  { name: '토끼', minutes: 65 },
+  { name: '곰돌이', minutes: 50 },
+  { name: '햇님', minutes: 38 },
+  { name: '다람이', minutes: 28 },
+  { name: '미미', minutes: 18 },
+  { name: '뽀뽀', minutes: 10 },
+  { name: '솜이', minutes: 4 },
 ]
 
 export function buildUsageRanking(selfName: string, selfMinutes: number): UsageRankEntry[] {
@@ -115,13 +118,14 @@ function buildAchievements(): GameAchievement[] {
   return [
     {
       gameId: 'music',
-      label: '음악 게임',
+      label: '음악',
       emoji: '🎵',
       minutes: 42,
       hasData: true,
-      averageAccuracy: 88,
-      bestRecord: '최고 점수 89,400',
-      topContent: '반짝반짝 작은별',
+      stats: [
+        { prefix: '평균 정확도 ', value: '88%', strong: true },
+        { value: '최고 점수 89,400', strong: true },
+      ],
       highlight: '새 곡 잠금해제',
     },
     {
@@ -130,9 +134,10 @@ function buildAchievements(): GameAchievement[] {
       emoji: '🥋',
       minutes: 28,
       hasData: true,
-      averageAccuracy: 82,
-      bestRecord: '최고 정확도 91%',
-      topContent: '태극 1장',
+      stats: [
+        { prefix: '평균 정확도 ', value: '82%', strong: true },
+        { value: '최고 정확도 91%', strong: true },
+      ],
       highlight: null,
     },
     {
@@ -141,9 +146,10 @@ function buildAchievements(): GameAchievement[] {
       emoji: '🤸',
       minutes: 36,
       hasData: true,
-      averageAccuracy: 91,
-      bestRecord: '최고 정확도 96%',
-      topContent: '어깨 풀기',
+      stats: [
+        { prefix: '평균 정확도 ', value: '91%', strong: true },
+        { value: '최고 정확도 96%', strong: true },
+      ],
       highlight: '신기록',
     },
     {
@@ -152,9 +158,11 @@ function buildAchievements(): GameAchievement[] {
       emoji: '🎨',
       minutes: 18,
       hasData: true,
-      averageAccuracy: null,
-      bestRecord: '3개 작품 완성',
-      topContent: '바다 풍경',
+      stats: [
+        { value: '3개 작품 완성', strong: true },
+        { prefix: '작품당 평균 ', value: '6분', strong: true },
+        { prefix: '최근 작품: ', value: '바다 풍경' },
+      ],
       highlight: null,
     },
   ]

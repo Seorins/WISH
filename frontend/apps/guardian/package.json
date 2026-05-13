@@ -19,6 +19,8 @@
     "@wish/api-client": "workspace:*",
     "@wish/domain": "workspace:*",
     "@wish/ui": "workspace:*",
+    "html2canvas-pro": "^2.0.2",
+    "jspdf": "^4.2.1",
     "livekit-client": "^2.18.9",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

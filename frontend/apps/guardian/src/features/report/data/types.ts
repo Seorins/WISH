@@ -63,15 +63,19 @@ export type TimeBucket = {
 
 export type GameId = 'music' | 'taekwondo' | 'exercise' | 'art'
 
+export type AchievementStat = {
+  prefix?: string
+  value: string
+  strong?: boolean
+}
+
 export type GameAchievement = {
   gameId: GameId
   label: string
   emoji: string
   minutes: number
   hasData: boolean
-  averageAccuracy: number | null
-  bestRecord: string | null
-  topContent: string | null
+  stats: AchievementStat[]
   highlight: string | null
 }
 
