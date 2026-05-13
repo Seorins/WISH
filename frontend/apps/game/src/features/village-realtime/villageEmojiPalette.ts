@@ -63,7 +63,7 @@ export function createVillageEmojiPalette(
     const text = scene.add
       .text(buttonX, buttonY, emoji, {
         fontSize: `${fontSize}px`,
-        fontFamily: 'sans-serif',
+        fontFamily: "'Galmuri11', 'Apple SD Gothic Neo', sans-serif",
         resolution: 2,
       })
       .setOrigin(0.5, 0.5)
@@ -73,7 +73,7 @@ export function createVillageEmojiPalette(
     const keyText = scene.add
       .text(buttonX - BUTTON_SIZE / 2 + 4, buttonY - BUTTON_SIZE / 2 + 2, String(keyLabel), {
         fontSize: '10px',
-        fontFamily: 'sans-serif',
+        fontFamily: "'Galmuri11', 'Apple SD Gothic Neo', sans-serif",
         color: '#ffffffaa',
         resolution: 2,
       })
