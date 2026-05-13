@@ -3537,14 +3537,51 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     if (frames.length === 0) return null
 
     const firstCountMarker = this.compactReplayMarkers.find(marker => marker.kind === 'count')
-    const representativeSegment =
-      motionSpec.type === 'top'
-        ? (firstCountMarker ?? this.pickRepresentativeReplaySegment(replayDurationMs))
-        : {
+    if (motionSpec.type === 'top') {
+      const segment = firstCountMarker ?? this.pickRepresentativeReplaySegment(replayDurationMs)
+      if (segment) {
+        const startMs = Math.max(0, Math.min(replayDurationMs, segment.startMs))
+        const endMs = Math.max(startMs, Math.min(replayDurationMs, segment.endMs))
+        const clippedFrames = frames
+          .filter(frame => frame.t >= startMs && frame.t <= endMs)
+          .map(frame => ({ ...frame, t: Math.max(0, Math.round(frame.t - startMs)) }))
+        const replayFrames =
+          clippedFrames.length > 0
+            ? clippedFrames
+            : frames.slice(0, 1).map(frame => ({ ...frame, t: 0 }))
+        const clipDurationMs = Math.max(
+          0,
+          endMs - startMs,
+          replayFrames[replayFrames.length - 1]?.t ?? 0,
+        )
+
+        return {
+          version: 1,
+          fps: COMPACT_REPLAY_FPS,
+          durationMs: clipDurationMs,
+          landmarks: REPLAY_LANDMARK_NAMES,
+          frames: replayFrames,
+          representativeSegment: {
             startMs: 0,
-            endMs: replayDurationMs,
-            reason: 'daniel full session compact replay',
-          }
+            endMs: clipDurationMs,
+            reason: segment.reason ?? 'top count compact replay',
+          },
+          markers: [
+            {
+              startMs: 0,
+              endMs: clipDurationMs,
+              reason: segment.reason ?? 'top count compact replay',
+            },
+          ],
+        }
+      }
+    }
+
+    const representativeSegment = {
+      startMs: 0,
+      endMs: replayDurationMs,
+      reason: 'daniel full session compact replay',
+    }
     const markers = this.compactReplayMarkers.map<MotionReplaySegment>(
       ({ startMs, endMs, reason }) => ({
         startMs,
