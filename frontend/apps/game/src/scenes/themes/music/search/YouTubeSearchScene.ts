@@ -75,12 +75,18 @@ export class YouTubeSearchScene extends Phaser.Scene {
     div.innerHTML = `
       <div class="yts-wrap">
         <div class="yts-header">
-          <button class="yts-back">← 돌아가기</button>
-          <span class="yts-logo">▶</span>
-          <h2 class="yts-title">유튜브로 노래 찾기</h2>
+          <div class="yts-header-inner">
+            <button class="yts-back">← 돌아가기</button>
+            <div class="yts-title-row">
+              <span class="yts-logo">▶</span>
+              <h2 class="yts-title">유튜브로 노래 찾기</h2>
+            </div>
+          </div>
         </div>
-        <div class="yts-body" id="yts-body">
-          ${searchPanelHTML()}
+        <div class="yts-scroll">
+          <div class="yts-body" id="yts-body">
+            ${searchPanelHTML()}
+          </div>
         </div>
       </div>
     `
@@ -214,7 +220,7 @@ export class YouTubeSearchScene extends Phaser.Scene {
           </div>
         </div>
 
-        <div class="yts-settings">
+        <div class="yts-settings-row">
           <div class="yts-group">
             <span class="yts-lbl">BPM</span>
             <div class="yts-opts" id="yts-bpm-opts">
@@ -229,7 +235,9 @@ export class YouTubeSearchScene extends Phaser.Scene {
           </div>
         </div>
 
-        <button class="yts-start">▶  시작하기</button>
+        <div class="yts-start-row">
+          <button class="yts-start">▶  시작하기</button>
+        </div>
       </div>
     `
 
@@ -316,11 +324,14 @@ function escapeHtml(str: string): string {
 function searchPanelHTML(): string {
   return `
     <div class="yts-search-bar">
-      <input class="yts-input" type="text" placeholder="노래 제목이나 아티스트 검색..." autocomplete="off" />
+      <input class="yts-input" type="text" placeholder="노래 제목이나 아티스트를 검색하세요" autocomplete="off" />
       <button class="yts-search-btn">검색</button>
     </div>
     <div id="yts-results" class="yts-results">
-      <p class="yts-msg">검색어를 입력하면 유튜브에서 노래를 찾아드려요 🎵</p>
+      <div class="yts-empty">
+        <div class="yts-empty-icon">♪</div>
+        <p class="yts-empty-text">원하는 노래를 검색하면<br>유튜브에서 찾아드려요</p>
+      </div>
     </div>
   `
 }
@@ -340,120 +351,166 @@ function injectStyles() {
     .yts-wrap {
       width: 100%; height: 100%;
       display: flex; flex-direction: column;
-      background: rgba(8,8,20,.94);
-      padding: 20px 28px 16px;
-      box-sizing: border-box; overflow: hidden;
+      background: rgba(8,8,20,.95);
+      box-sizing: border-box;
     }
+
+    /* ── header (full-width bar) ── */
     .yts-header {
-      display: flex; align-items: center; gap: 12px;
-      margin-bottom: 18px; flex-shrink: 0;
+      flex-shrink: 0;
+      border-bottom: 1px solid rgba(255,255,255,.07);
+      padding: 14px 28px;
+    }
+    .yts-header-inner {
+      max-width: 960px; margin: 0 auto;
+      display: flex; align-items: center; gap: 16px;
     }
     .yts-back {
       background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.14);
       color: #c9ced8; padding: 7px 15px; border-radius: 20px;
       cursor: pointer; font-size: 13px; font-family: inherit;
-      transition: background .15s, color .15s;
+      transition: background .15s, color .15s; white-space: nowrap;
     }
     .yts-back:hover { background: rgba(255,255,255,.14); color: #fff; }
+    .yts-title-row { display: flex; align-items: center; gap: 10px; }
     .yts-logo {
-      width: 28px; height: 20px; background: #ff0000;
-      border-radius: 5px; display: flex; align-items: center;
-      justify-content: center; font-size: 10px; color: #fff;
-      flex-shrink: 0;
+      width: 32px; height: 22px; background: #ff0000;
+      border-radius: 6px; display: flex; align-items: center;
+      justify-content: center; font-size: 11px; color: #fff; flex-shrink: 0;
     }
-    .yts-title { font-size: 20px; font-weight: 700; margin: 0; color: #fffaf2; }
+    .yts-title { font-size: 18px; font-weight: 700; margin: 0; color: #fffaf2; }
+
+    /* ── scrollable content ── */
+    .yts-scroll {
+      flex: 1; overflow-y: auto; overflow-x: hidden;
+    }
+    .yts-scroll::-webkit-scrollbar { width: 4px; }
+    .yts-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,.15); border-radius: 2px; }
+
+    /* ── body: max-width centered ── */
     .yts-body {
-      flex: 1; display: flex; flex-direction: column;
-      min-height: 0; overflow: hidden;
+      max-width: 960px; margin: 0 auto;
+      padding: 24px 28px 32px;
+      display: flex; flex-direction: column; gap: 18px;
     }
-    .yts-search-bar {
-      display: flex; gap: 10px; margin-bottom: 16px; flex-shrink: 0;
-    }
+
+    /* ── search bar ── */
+    .yts-search-bar { display: flex; gap: 10px; }
     .yts-input {
-      flex: 1; padding: 11px 16px;
-      background: rgba(255,255,255,.07); border: 1.5px solid rgba(255,255,255,.14);
-      border-radius: 11px; color: #f0f3f8; font-size: 15px;
+      flex: 1; padding: 12px 18px;
+      background: rgba(255,255,255,.07); border: 1.5px solid rgba(255,255,255,.13);
+      border-radius: 12px; color: #f0f3f8; font-size: 15px;
       font-family: inherit; outline: none; transition: border-color .15s;
     }
-    .yts-input:focus { border-color: rgba(255,68,68,.7); }
-    .yts-input::placeholder { color: rgba(255,255,255,.3); }
+    .yts-input:focus { border-color: rgba(255,68,68,.75); }
+    .yts-input::placeholder { color: rgba(255,255,255,.28); }
     .yts-search-btn {
-      padding: 11px 22px; background: #ff4444; border: none;
-      border-radius: 11px; color: #fff; font-size: 14px; font-weight: 700;
-      font-family: inherit; cursor: pointer; transition: opacity .15s;
+      padding: 12px 26px; background: #e03333; border: none;
+      border-radius: 12px; color: #fff; font-size: 14px; font-weight: 700;
+      font-family: inherit; cursor: pointer; transition: opacity .15s; white-space: nowrap;
     }
-    .yts-search-btn:hover { opacity: .85; }
-    .yts-msg { color: #7880a0; text-align: center; padding: 40px 0; font-size: 14px; margin: 0; }
+    .yts-search-btn:hover { opacity: .88; }
+
+    /* ── empty state ── */
+    .yts-empty {
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; gap: 12px; padding: 56px 0;
+    }
+    .yts-empty-icon {
+      font-size: 44px; color: rgba(255,255,255,.12); line-height: 1;
+    }
+    .yts-empty-text {
+      font-size: 14px; color: #5a6280; text-align: center;
+      line-height: 1.7; margin: 0; word-break: keep-all;
+    }
+
+    /* ── loading msg ── */
+    .yts-msg { color: #5a6280; text-align: center; padding: 48px 0; font-size: 14px; margin: 0; }
+
+    /* ── results grid ── */
     .yts-results {
-      flex: 1; overflow-y: auto;
-      display: grid; grid-template-columns: repeat(auto-fill, minmax(260px,1fr));
-      gap: 12px; align-content: start; padding-right: 4px;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
     }
-    .yts-results::-webkit-scrollbar { width: 4px; }
-    .yts-results::-webkit-scrollbar-thumb { background: rgba(255,255,255,.2); border-radius: 2px; }
+    @media (max-width: 900px) { .yts-results { grid-template-columns: repeat(3, 1fr); } }
+    @media (max-width: 640px) { .yts-results { grid-template-columns: repeat(2, 1fr); } }
     .yts-card {
       display: flex; flex-direction: column;
       background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.08);
-      border-radius: 11px; overflow: hidden; cursor: pointer;
+      border-radius: 12px; overflow: hidden; cursor: pointer;
       transition: background .15s, border-color .15s, transform .15s;
     }
     .yts-card:hover {
-      background: rgba(255,255,255,.1); border-color: rgba(255,68,68,.4);
-      transform: translateY(-2px);
+      background: rgba(255,255,255,.09); border-color: rgba(255,68,68,.45);
+      transform: translateY(-3px);
     }
     .yts-thumb { width: 100%; aspect-ratio: 16/9; object-fit: cover; display: block; }
-    .yts-card-info { padding: 9px 11px; }
+    .yts-card-info { padding: 10px 12px 12px; }
     .yts-card-title {
-      font-size: 13px; font-weight: 600; color: #e8ecf4; margin: 0 0 4px;
+      font-size: 13px; font-weight: 600; color: #e8ecf4; margin: 0 0 5px;
       display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
-      overflow: hidden; line-height: 1.4;
+      overflow: hidden; line-height: 1.45; word-break: keep-all;
     }
-    .yts-card-ch { font-size: 11px; color: #7880a0; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .yts-card-ch {
+      font-size: 11px; color: #6870a0; margin: 0;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
 
-    /* config panel */
-    .yts-cfg {
-      display: flex; flex-direction: column; gap: 18px;
-      height: 100%; overflow-y: auto;
-    }
+    /* ── config panel ── */
+    .yts-cfg { display: flex; flex-direction: column; gap: 22px; }
     .yts-cfg-back {
       align-self: flex-start; background: rgba(255,255,255,.06);
-      border: 1px solid rgba(255,255,255,.12); color: #9098b0;
+      border: 1px solid rgba(255,255,255,.11); color: #8890b0;
       padding: 7px 15px; border-radius: 20px; cursor: pointer;
-      font-size: 13px; font-family: inherit; transition: all .15s; flex-shrink: 0;
+      font-size: 13px; font-family: inherit; transition: all .15s;
     }
     .yts-cfg-back:hover { background: rgba(255,255,255,.12); color: #f0f3f8; }
     .yts-selected {
-      display: flex; gap: 14px; align-items: center;
+      display: flex; gap: 16px; align-items: flex-start;
       background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08);
-      border-radius: 13px; padding: 13px; flex-shrink: 0;
+      border-radius: 14px; padding: 16px;
     }
     .yts-sel-thumb {
-      width: 176px; height: 99px; object-fit: cover;
-      border-radius: 7px; flex-shrink: 0;
+      width: 200px; height: 113px; object-fit: cover;
+      border-radius: 8px; flex-shrink: 0;
     }
-    .yts-sel-title { font-size: 15px; font-weight: 700; color: #fffaf2; margin: 0 0 6px; line-height: 1.4; }
-    .yts-sel-ch { font-size: 12px; color: #7880a0; margin: 0; }
-    .yts-settings { display: flex; flex-direction: column; gap: 18px; flex-shrink: 0; }
-    .yts-group { display: flex; flex-direction: column; gap: 9px; }
-    .yts-lbl { font-size: 12px; font-weight: 700; color: #7880a0; letter-spacing: .8px; text-transform: uppercase; }
+    .yts-sel-info { flex: 1; min-width: 0; padding-top: 2px; }
+    .yts-sel-title {
+      font-size: 16px; font-weight: 700; color: #fffaf2;
+      margin: 0 0 8px; line-height: 1.4; word-break: keep-all;
+    }
+    .yts-sel-ch { font-size: 13px; color: #6870a0; margin: 0; }
+
+    .yts-settings-row {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 20px;
+    }
+    .yts-group { display: flex; flex-direction: column; gap: 10px; }
+    .yts-lbl {
+      font-size: 11px; font-weight: 700; color: #6870a0;
+      letter-spacing: 1px; text-transform: uppercase;
+    }
     .yts-opts { display: flex; gap: 8px; flex-wrap: wrap; }
     .yts-opt {
-      padding: 7px 18px; background: rgba(255,255,255,.06);
-      border: 1.5px solid rgba(255,255,255,.12); border-radius: 18px;
-      color: #c9ced8; font-size: 14px; font-weight: 600; font-family: inherit;
-      cursor: pointer; transition: all .15s;
+      padding: 8px 20px;
+      background: rgba(255,255,255,.06); border: 1.5px solid rgba(255,255,255,.11);
+      border-radius: 20px; color: #c0c8d8; font-size: 14px; font-weight: 600;
+      font-family: inherit; cursor: pointer; transition: all .15s;
     }
-    .yts-opt:hover { background: rgba(255,255,255,.12); }
-    .yts-opt.active { background: rgba(101,216,255,.14); border-color: #65d8ff; color: #65d8ff; }
+    .yts-opt:hover { background: rgba(255,255,255,.11); border-color: rgba(255,255,255,.2); }
+    .yts-opt.active {
+      background: rgba(101,216,255,.13); border-color: #65d8ff; color: #65d8ff;
+    }
+
+    .yts-start-row { display: flex; justify-content: center; padding-top: 8px; }
     .yts-start {
-      padding: 15px 40px;
-      background: linear-gradient(135deg,#ff6fbd,#c85fff);
-      border: none; border-radius: 26px; color: #fff;
+      padding: 15px 52px;
+      background: linear-gradient(135deg, #ff6fbd, #c85fff);
+      border: none; border-radius: 28px; color: #fff;
       font-size: 17px; font-weight: 700; font-family: inherit;
-      cursor: pointer; align-self: center; flex-shrink: 0;
+      cursor: pointer; letter-spacing: 2px;
       transition: transform .15s, opacity .15s;
-      letter-spacing: 2px;
-      box-shadow: 0 4px 20px rgba(200,95,255,.35);
+      box-shadow: 0 6px 24px rgba(200,95,255,.4);
     }
     .yts-start:hover { transform: scale(1.04); opacity: .92; }
   `

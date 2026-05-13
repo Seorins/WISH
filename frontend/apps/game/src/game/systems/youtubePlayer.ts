@@ -61,6 +61,7 @@ export class YouTubePlayerBridge {
   private container: HTMLDivElement
   private _ready = false
   onEnded?: () => void
+  onPaused?: () => void
 
   constructor(private readonly videoId: string) {
     this.container = document.createElement('div')
@@ -104,6 +105,7 @@ export class YouTubePlayerBridge {
           },
           onStateChange: e => {
             if (e.data === 0) this.onEnded?.()
+            if (e.data === 2) this.onPaused?.()
           },
           onError: e => reject(new Error(`YT error code ${e.data}`)),
         },

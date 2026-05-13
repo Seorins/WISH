@@ -212,6 +212,12 @@ export class MusicRhythmScene extends Phaser.Scene {
     if (this.chart.youtubeVideoId) {
       this.youtubePlayer = new YouTubePlayerBridge(this.chart.youtubeVideoId)
       this.youtubePlayer.onEnded = () => this.finishRound()
+      // Auto-resume if YouTube pauses mid-game (account conflict, autoplay policy, etc.)
+      this.youtubePlayer.onPaused = () => {
+        if (this.isStarted && !this.isFinished) {
+          this.time.delayedCall(400, () => this.youtubePlayer?.play())
+        }
+      }
       this.youtubePlayer.load().catch(err => {
         console.warn('[MusicRhythmScene] YouTube player preload failed:', err)
       })
