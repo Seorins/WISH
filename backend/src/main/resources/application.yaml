@@ -111,6 +111,13 @@ storage:
     prefix: ${AWS_S3_PRIVATE_PREFIX:local}
     presigned-ttl-seconds: ${AWS_S3_PRESIGNED_TTL_SECONDS:900}
 
+# YouTube Data API v3 프록시 설정 (S14P31E103-781).
+# 프론트엔드에 API 키를 노출하지 않기 위해 BE 를 경유한다. api-key 가 비어있으면 검색 비활성화 (FE 가 빈 결과 처리).
+youtube:
+  api-key: ${YOUTUBE_API_KEY:}
+  base-url: ${YOUTUBE_BASE_URL:https://www.googleapis.com/youtube/v3}
+  timeout-seconds: ${YOUTUBE_TIMEOUT_SECONDS:5}
+
 # GMS Anthropic Claude 설정 (등대지기 LLM 후속 질문 생성용, S14P31E103-558).
 # api-key 가 비어있으면 Claude 호출을 시도하지 않고 항상 FallbackSceneProvider 로 동작 — 로컬/테스트 환경에서 키 없이도
 # 컨텍스트 로드가 깨지지 않도록 한다. 운영/dev 에선 GMS_KEY 를 반드시 환경변수로 주입.

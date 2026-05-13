@@ -18,6 +18,7 @@ import { LighthouseSelectScene } from './scenes/themes/lighthouse/select/Lightho
 import { MusicRhythmScene } from './scenes/themes/music/play/MusicRhythmScene'
 import { MusicSelectScene } from './scenes/themes/music/select/MusicSelectScene'
 import { MusicSongSelectScene } from './scenes/themes/music/select/MusicSongSelectScene'
+import { YouTubeSearchScene } from './scenes/themes/music/search/YouTubeSearchScene'
 import { VillageScene } from './scenes/village/VillageScene'
 
 function configureTouchSurface(element: HTMLElement) {
@@ -77,6 +78,7 @@ export function createGame(parent: HTMLElement): Phaser.Game {
       LighthouseSelectScene,
       MusicSelectScene,
       MusicSongSelectScene,
+      YouTubeSearchScene,
       MusicRhythmScene,
     ],
     scale: {
