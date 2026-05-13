@@ -1,6 +1,7 @@
 import type { AxiosInstance } from 'axios'
 import { apiClient } from './client'
 import type { ApiResponse, PageResponse } from './artworks'
+import type { TaegeukAnalyzeResponse } from './taekwondo-ai'
 import type { Poomsae } from './taekwondo-motions'
 
 export type CreateTaekwondoSessionMotionRequest = {
@@ -56,6 +57,68 @@ function calculateTaekwondoAverageAccuracy(motions: CreateTaekwondoSessionMotion
 
   const total = motions.reduce((sum, motion) => sum + motion.accuracy, 0)
   return total / motions.length
+}
+
+function clampTaekwondoAccuracy(value: number) {
+  if (!Number.isFinite(value)) {
+    return 0
+  }
+
+  return Math.max(0, Math.min(1, value))
+}
+
+export function toTaekwondoAccuracy(score: number) {
+  return clampTaekwondoAccuracy(score / 100)
+}
+
+export function calculateTaekwondoMonstersDefeated(motions: CreateTaekwondoSessionMotionRequest[]) {
+  return motions.reduce((count, motion) => count + (motion.completedReps > 0 ? 1 : 0), 0)
+}
+
+const MAX_TAEKWONDO_FEEDBACK_LENGTH = 255
+
+export function formatTaekwondoAiFeedback(
+  analysis: Pick<TaegeukAnalyzeResponse, 'weakest_body_part' | 'worst_joint' | 'feedback_summary'>,
+  fallback = 'Taekwondo motion analysis completed.',
+) {
+  const summary = analysis.feedback_summary?.trim() || fallback
+  const detailParts = [analysis.weakest_body_part, analysis.worst_joint]
+    .map(part => part?.trim())
+    .filter((part): part is string => Boolean(part))
+  const prefix = detailParts.length > 0 ? `[${detailParts.join('/')}] ` : ''
+  const feedback = `${prefix}${summary}`.trim()
+
+  if (feedback.length <= MAX_TAEKWONDO_FEEDBACK_LENGTH) {
+    return feedback
+  }
+
+  return `${feedback.slice(0, MAX_TAEKWONDO_FEEDBACK_LENGTH - 3)}...`
+}
+
+export type ToCreateTaekwondoSessionMotionRequestParams = {
+  taekwondoMotionId: number
+  durationSec: number
+  targetReps: number
+  analysis: TaegeukAnalyzeResponse | null | undefined
+  feedbackFallback?: string
+}
+
+export function toCreateTaekwondoSessionMotionRequest({
+  taekwondoMotionId,
+  durationSec,
+  targetReps,
+  analysis,
+  feedbackFallback,
+}: ToCreateTaekwondoSessionMotionRequestParams): CreateTaekwondoSessionMotionRequest {
+  return {
+    taekwondoMotionId,
+    durationSec,
+    accuracy: analysis ? toTaekwondoAccuracy(analysis.score) : 0,
+    completedReps: analysis?.passed ? Math.max(1, targetReps) : 0,
+    feedback: analysis
+      ? formatTaekwondoAiFeedback(analysis, feedbackFallback)
+      : feedbackFallback || 'Taekwondo motion analysis was not completed.',
+  }
 }
 
 export { calculateTaekwondoAverageAccuracy }

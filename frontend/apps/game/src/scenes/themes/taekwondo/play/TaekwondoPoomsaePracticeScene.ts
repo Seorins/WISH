@@ -24,12 +24,14 @@ import {
 import {
   analyzeTaegeuk1Motion,
   calculateTaekwondoAverageAccuracy,
+  calculateTaekwondoMonstersDefeated,
   createTaekwondoSession,
   DEFAULT_TAEKWONDO_BELT_COLOR,
   getTaekwondoBeltHistory,
   getTaekwondoPoomsaeNumber,
   listTaekwondoMotions,
   requestPresignedUploadUrls,
+  toCreateTaekwondoSessionMotionRequest,
   uploadToPresignedUrl,
   type CreateTaekwondoSessionMotionRequest,
   type CreateTaekwondoSessionRequest,
@@ -1025,16 +1027,15 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     const durationSec = Math.max(1, Math.round((now - this.motionStartedAtMs) / 1000))
     this.recordedMotionIndexes.add(this.currentMotionIndex)
     const analysis = this.bestAiAnalysis
-    const accuracy = analysis ? Math.max(0, Math.min(1, analysis.score / 100)) : 0
-    const feedbackText = analysis?.feedback_summary?.trim() || DEFAULT_MOTION_COMPLETE_FEEDBACK
-    const completedReps = analysis && analysis.score >= AI_ADVANCE_THRESHOLD ? motion.targetReps : 0
-    const motionResult: CreateTaekwondoSessionMotionRequest = {
-      taekwondoMotionId: motion.id,
-      durationSec,
-      accuracy,
-      completedReps,
-      feedback: feedbackText,
-    }
+    const motionResult: CreateTaekwondoSessionMotionRequest = toCreateTaekwondoSessionMotionRequest(
+      {
+        taekwondoMotionId: motion.id,
+        durationSec,
+        targetReps: motion.targetReps,
+        analysis,
+        feedbackFallback: DEFAULT_MOTION_COMPLETE_FEEDBACK,
+      },
+    )
     this.motionResults.push(motionResult)
     this.bestAiAnalysis = null
 
@@ -1101,7 +1102,7 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
       poomsae: this.getPoomsaeForApi(),
       durationSec,
       averageAccuracy: calculateTaekwondoAverageAccuracy(this.motionResults),
-      monstersDefeated: this.motionResults.length,
+      monstersDefeated: calculateTaekwondoMonstersDefeated(this.motionResults),
       motions: this.motionResults,
     }
   }
