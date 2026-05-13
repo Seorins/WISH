@@ -1,8 +1,10 @@
 import { isAxiosError, type AxiosInstance } from 'axios'
 import { apiClient } from './client'
 import type { ApiResponse, PageResponse } from './artworks'
+import { listPatientProfiles } from './patient-profiles'
 
 export type ExerciseSessionType = string
+const EXERCISE_SESSION_DETAIL_CONCURRENCY = 6
 
 export type ExerciseSessionSummary = {
   id: number
@@ -471,22 +473,127 @@ export type GetMyExerciseSessionsParams = {
   size?: number
   sort?: string
   exerciseType?: ExerciseSessionType
+  patientProfileId?: number
 }
 
-// 본인 환자 프로필의 체조 세션 목록 — 음악(`/music/results/me`)과 동일 패턴.
-// 페이지 응답에 motions[] 가 embedding 되어 있어야 우측 동작 리스트의 motion-별
-// 통계 집계가 가능. BE 엔드포인트가 추가되기 전엔 404 → react-query 가 error
-// 상태로 처리하고 UI 는 placeholder('—') 그대로 유지.
+// 본인 환자 프로필의 체조 세션 목록을 백엔드 환자별 컬렉션 규칙에 맞춰 조회한다.
+// 서버에는 /exercise-sessions/me가 없으므로 list + detail 조합으로 page shape을 맞춘다.
+function normalizeExerciseSessionPage(page: number | undefined): number {
+  return Number.isInteger(page) && page != null && page >= 0 ? page : 0
+}
+
+function normalizeExerciseSessionPageSize(size: number | undefined): number {
+  return Number.isInteger(size) && size != null && size > 0 ? size : 50
+}
+
+function sortExerciseSessionSummaries(
+  sessions: ExerciseSessionSummary[],
+  sort = 'createdAt,desc',
+): ExerciseSessionSummary[] {
+  const [field, rawDirection] = sort.split(',')
+  if (field !== 'createdAt') return [...sessions]
+
+  const direction = rawDirection?.toLowerCase() === 'asc' ? 1 : -1
+  return [...sessions].sort((a, b) => {
+    const left = new Date(a.createdAt).getTime()
+    const right = new Date(b.createdAt).getTime()
+    return (left - right) * direction
+  })
+}
+
+function toExerciseSessionPage(
+  content: ExerciseSessionDetail[],
+  totalElements: number,
+  page: number,
+  size: number,
+): ExerciseSessionPage {
+  const totalPages = totalElements === 0 ? 0 : Math.ceil(totalElements / size)
+
+  return {
+    totalElements,
+    totalPages,
+    pageable: {
+      unpaged: false,
+      pageNumber: page,
+      paged: true,
+      pageSize: size,
+      offset: page * size,
+      sort: {
+        unsorted: false,
+        sorted: true,
+        empty: false,
+      },
+    },
+    numberOfElements: content.length,
+    first: page === 0,
+    last: totalPages === 0 || page >= totalPages - 1,
+    size,
+    content,
+    number: page,
+    sort: {
+      unsorted: false,
+      sorted: true,
+      empty: false,
+    },
+    empty: content.length === 0,
+  }
+}
+
+async function resolveMyExerciseSessionPatientProfileId(patientProfileId?: number) {
+  if (patientProfileId !== undefined) {
+    assertValidPatientProfileId(patientProfileId)
+    return patientProfileId
+  }
+
+  const profiles = await listPatientProfiles()
+  return profiles.data[0]?.id
+}
+
+async function fetchExerciseSessionDetails(
+  sessions: ExerciseSessionSummary[],
+): Promise<ExerciseSessionDetail[]> {
+  const details: ExerciseSessionDetail[] = []
+
+  for (let index = 0; index < sessions.length; index += EXERCISE_SESSION_DETAIL_CONCURRENCY) {
+    const chunk = sessions.slice(index, index + EXERCISE_SESSION_DETAIL_CONCURRENCY)
+    details.push(...(await Promise.all(chunk.map(session => getExerciseSessionDetail(session.id)))))
+  }
+
+  return details
+}
+
 export async function getMyExerciseSessions({
   page = 0,
   size = 50,
   sort = 'createdAt,desc',
   exerciseType,
+  patientProfileId,
 }: GetMyExerciseSessionsParams = {}) {
-  const response = await apiClient.get<ApiResponse<ExerciseSessionPage>>('/exercise-sessions/me', {
-    params: { page, size, sort, ...(exerciseType ? { exerciseType } : {}) },
-  })
-  return response.data
+  const normalizedPage = normalizeExerciseSessionPage(page)
+  const normalizedSize = normalizeExerciseSessionPageSize(size)
+  const resolvedPatientProfileId = await resolveMyExerciseSessionPatientProfileId(patientProfileId)
+
+  if (!resolvedPatientProfileId) {
+    return {
+      code: 'OK',
+      message: 'ok',
+      data: toExerciseSessionPage([], 0, normalizedPage, normalizedSize),
+    } satisfies ApiResponse<ExerciseSessionPage>
+  }
+
+  const sessions = await getExerciseSessions(resolvedPatientProfileId)
+  const filtered = exerciseType
+    ? sessions.filter(session => session.exerciseType === exerciseType)
+    : sessions
+  const start = normalizedPage * normalizedSize
+  const selected = sortExerciseSessionSummaries(filtered, sort).slice(start, start + normalizedSize)
+  const details = await fetchExerciseSessionDetails(selected)
+
+  return {
+    code: 'OK',
+    message: 'ok',
+    data: toExerciseSessionPage(details, filtered.length, normalizedPage, normalizedSize),
+  } satisfies ApiResponse<ExerciseSessionPage>
 }
 
 export async function getExerciseSessionDetail(
