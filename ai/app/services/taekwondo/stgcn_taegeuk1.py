@@ -582,8 +582,12 @@ def _target_rule_score(
     if not candidate_scores:
         return None
 
-    score = _aggregate_target_rule_frame_scores(candidate_scores)
-    score = min(score, _sequence_motion_score_cap(sequence, keypoint_names))
+    score = _safe_score(_aggregate_target_rule_frame_scores(candidate_scores), 0.0)
+    motion_score_cap = _safe_score(
+        _sequence_motion_score_cap(sequence, keypoint_names),
+        TARGET_RULE_LOW_MOTION_SCORE_CAP,
+    )
+    score = min(score, motion_score_cap)
 
     action_motion_cap = _target_action_motion_score_cap(
         sequence,
@@ -592,8 +596,20 @@ def _target_rule_score(
         expected_action,
     )
     if action_motion_cap is not None:
-        score = min(score, action_motion_cap)
+        score = min(score, _safe_score(action_motion_cap, TARGET_RULE_LOW_MOTION_SCORE_CAP))
 
+    return _safe_score(score, 0.0)
+
+
+def _safe_score(value: float | None, default: float) -> float:
+    if value is None:
+        return default
+    try:
+        score = float(value)
+    except (TypeError, ValueError):
+        return default
+    if not np.isfinite(score):
+        return default
     return score
 
 
@@ -677,15 +693,20 @@ def _target_rule_candidate_frame_indexes(frame_count: int, start_frame: int) -> 
 
 def _sequence_motion_score_cap(sequence: np.ndarray, keypoint_names: list[str]) -> float:
     motion_amount = _sequence_motion_amount(sequence, keypoint_names)
+    if not np.isfinite(motion_amount) or motion_amount < 0.0:
+        return TARGET_RULE_LOW_MOTION_SCORE_CAP
     if motion_amount >= TARGET_RULE_MIN_SEQUENCE_MOTION:
         return 100.0
 
-    return _interpolate(
-        motion_amount,
-        0.0,
-        TARGET_RULE_MIN_SEQUENCE_MOTION,
+    return _safe_score(
+        _interpolate(
+            motion_amount,
+            0.0,
+            TARGET_RULE_MIN_SEQUENCE_MOTION,
+            TARGET_RULE_LOW_MOTION_SCORE_CAP,
+            100.0,
+        ),
         TARGET_RULE_LOW_MOTION_SCORE_CAP,
-        100.0,
     )
 
 
@@ -709,15 +730,28 @@ def _sequence_motion_amount(sequence: np.ndarray, keypoint_names: list[str]) -> 
     joint_ranges: list[float] = []
     for index in indexes.values():
         points = _tracked_joint_points(sequence, index)
-        if points is None:
+        if points is None or points.size == 0 or not np.isfinite(points).all():
             continue
-        ranges = np.nanpercentile(points, 90, axis=0) - np.nanpercentile(points, 10, axis=0)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=RuntimeWarning)
+            lower = np.nanpercentile(points, 10, axis=0)
+            upper = np.nanpercentile(points, 90, axis=0)
+        ranges = upper - lower
         if np.isfinite(ranges).all():
             joint_ranges.append(float(np.linalg.norm(ranges)))
 
     if not joint_ranges:
         return 0.0
-    return float(np.nanpercentile(np.asarray(joint_ranges, dtype=np.float32), 75))
+    range_values = np.asarray(joint_ranges, dtype=np.float32)
+    range_values = range_values[np.isfinite(range_values)]
+    if range_values.size == 0:
+        return 0.0
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=RuntimeWarning)
+        motion_amount = float(np.nanpercentile(range_values, 75))
+    if not np.isfinite(motion_amount):
+        return 0.0
+    return motion_amount
 
 
 def _target_action_motion_score_cap(
@@ -735,15 +769,18 @@ def _target_action_motion_score_cap(
     else:
         return None
 
-    if delta is None:
+    if delta is None or not np.isfinite(delta):
         return TARGET_RULE_LOW_MOTION_SCORE_CAP
 
-    return _interpolate(
-        delta,
-        TARGET_RULE_ACTION_MOTION_MIN_DELTA,
-        TARGET_RULE_ACTION_MOTION_FULL_DELTA,
+    return _safe_score(
+        _interpolate(
+            delta,
+            TARGET_RULE_ACTION_MOTION_MIN_DELTA,
+            TARGET_RULE_ACTION_MOTION_FULL_DELTA,
+            TARGET_RULE_LOW_MOTION_SCORE_CAP,
+            100.0,
+        ),
         TARGET_RULE_LOW_MOTION_SCORE_CAP,
-        100.0,
     )
 
 
@@ -765,9 +802,11 @@ def _max_wrist_vertical_delta(
         if early is None or late is None:
             continue
         if direction == "up":
-            deltas.append(float(early[1] - late[1]))
+            delta = float(early[1] - late[1])
         else:
-            deltas.append(float(late[1] - early[1]))
+            delta = float(late[1] - early[1])
+        if np.isfinite(delta):
+            deltas.append(delta)
 
     return max(deltas) if deltas else None
 
@@ -803,7 +842,9 @@ def _max_arm_extension_delta(sequence: np.ndarray, keypoint_names: list[str]) ->
 
         early_extension = float(np.linalg.norm(early_wrist - early_shoulder))
         late_extension = float(np.linalg.norm(late_wrist - late_shoulder))
-        deltas.append(late_extension - early_extension)
+        delta = late_extension - early_extension
+        if np.isfinite(delta):
+            deltas.append(delta)
 
     return max(deltas) if deltas else None
 
