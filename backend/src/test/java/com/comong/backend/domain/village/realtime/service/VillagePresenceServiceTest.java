@@ -152,7 +152,8 @@ class VillagePresenceServiceTest {
         stubProfile(1L, 100L, "n1");
         presenceService.join("s1", 1L);
 
-        Optional<PlayerState> updated = presenceService.updatePosition(1L, 0.42, 0.78, "left");
+        Optional<PlayerState> updated =
+                presenceService.updatePosition(1L, "s1", 0.42, 0.78, "left");
 
         assertThat(updated).isPresent();
         assertThat(updated.get().x()).isEqualTo(0.42);
@@ -163,9 +164,26 @@ class VillagePresenceServiceTest {
 
     @Test
     void updatePositionReturnsEmptyForUnknownUser() {
-        Optional<PlayerState> updated = presenceService.updatePosition(999L, 0.1, 0.1, "down");
+        Optional<PlayerState> updated =
+                presenceService.updatePosition(999L, "any", 0.1, 0.1, "down");
 
         assertThat(updated).isEmpty();
+    }
+
+    @Test
+    void updatePositionRejectsGhostSession() {
+        // S14P31E103-763: latest-wins 후 옛 세션이 보낸 패킷이 새 세션 좌표를 덮어쓰면 안 된다.
+        stubProfile(1L, 100L, "n1");
+        presenceService.join("s1-old", 1L);
+        presenceService.join("s1-new", 1L); // replaced
+
+        Optional<PlayerState> ghost =
+                presenceService.updatePosition(1L, "s1-old", 0.9, 0.9, "right");
+
+        assertThat(ghost).isEmpty();
+        // 새 세션 좌표는 그대로 (기본 spawn)
+        assertThat(presenceService.findByUserId(1L).get().x()).isNotEqualTo(0.9);
+        assertThat(presenceService.findByUserId(1L).get().sessionId()).isEqualTo("s1-new");
     }
 
     @Test
@@ -173,7 +191,7 @@ class VillagePresenceServiceTest {
         stubProfile(1L, 100L, "n1");
         presenceService.join("s1", 1L);
 
-        Optional<PlayerState> result = presenceService.registerEmote(1L, Instant.now());
+        Optional<PlayerState> result = presenceService.registerEmote(1L, "s1", Instant.now());
 
         assertThat(result).isPresent();
         assertThat(result.get().userId()).isEqualTo(1L);
@@ -185,8 +203,9 @@ class VillagePresenceServiceTest {
         presenceService.join("s1", 1L);
 
         Instant now = Instant.now();
-        presenceService.registerEmote(1L, now);
-        Optional<PlayerState> tooSoon = presenceService.registerEmote(1L, now.plusMillis(500));
+        presenceService.registerEmote(1L, "s1", now);
+        Optional<PlayerState> tooSoon =
+                presenceService.registerEmote(1L, "s1", now.plusMillis(500));
 
         assertThat(tooSoon).isEmpty();
     }
@@ -197,17 +216,35 @@ class VillagePresenceServiceTest {
         presenceService.join("s1", 1L);
 
         Instant now = Instant.now();
-        presenceService.registerEmote(1L, now);
-        Optional<PlayerState> afterWindow = presenceService.registerEmote(1L, now.plusSeconds(3));
+        presenceService.registerEmote(1L, "s1", now);
+        Optional<PlayerState> afterWindow =
+                presenceService.registerEmote(1L, "s1", now.plusSeconds(3));
 
         assertThat(afterWindow).isPresent();
     }
 
     @Test
     void registerEmoteReturnsEmptyForUnknownMember() {
-        Optional<PlayerState> result = presenceService.registerEmote(999L, Instant.now());
+        Optional<PlayerState> result = presenceService.registerEmote(999L, "any", Instant.now());
 
         assertThat(result).isEmpty();
+    }
+
+    @Test
+    void registerEmoteRejectsGhostSession() {
+        // S14P31E103-763: 옛 세션의 emote 가 새 세션의 throttle 상태를 갉아먹지 않아야 한다.
+        stubProfile(1L, 100L, "n1");
+        presenceService.join("s1-old", 1L);
+        presenceService.join("s1-new", 1L); // replaced
+
+        Instant now = Instant.now();
+        Optional<PlayerState> ghost = presenceService.registerEmote(1L, "s1-old", now);
+        assertThat(ghost).isEmpty();
+
+        // 새 세션은 throttle 영향 없이 즉시 emote 가능
+        Optional<PlayerState> fresh =
+                presenceService.registerEmote(1L, "s1-new", now.plusMillis(10));
+        assertThat(fresh).isPresent();
     }
 
     @Test
@@ -216,12 +253,12 @@ class VillagePresenceServiceTest {
         stubProfile(1L, 100L, "n1");
         presenceService.join("s1", 1L);
         Instant now = Instant.now();
-        presenceService.registerEmote(1L, now);
+        presenceService.registerEmote(1L, "s1", now);
 
         presenceService.leaveBySession("s1");
         presenceService.join("s2", 1L);
 
-        Optional<PlayerState> fresh = presenceService.registerEmote(1L, now.plusMillis(100));
+        Optional<PlayerState> fresh = presenceService.registerEmote(1L, "s2", now.plusMillis(100));
         assertThat(fresh).isPresent();
     }
 

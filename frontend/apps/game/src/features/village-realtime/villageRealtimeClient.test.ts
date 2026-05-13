@@ -203,34 +203,44 @@ describe('VillageRealtimeClient', () => {
     })
   })
 
-  it('publishEmote serializes packet and sends to /app/village/emote', () => {
+  it('publishEmote serializes packet and sends to /app/village/emote, returns true', () => {
     const { client, fake } = createClient()
     client.connect()
     fake().triggerConnect()
 
-    client.publishEmote({ emoji: '😄' })
+    const sent = client.publishEmote({ emoji: '😄' })
 
+    expect(sent).toBe(true)
     expect(fake().published).toContainEqual({
       destination: '/app/village/emote',
       body: JSON.stringify({ emoji: '😄' }),
     })
   })
 
-  it('publishEmote is no-op before connection completes', () => {
+  it('publishEmote returns false before connection completes', () => {
     const { client, fake } = createClient()
 
-    client.publishEmote({ emoji: '😄' })
+    const sent = client.publishEmote({ emoji: '😄' })
 
+    expect(sent).toBe(false)
     expect(fake().published).toEqual([])
   })
 
-  it('publishPosition is no-op before connection completes', () => {
+  it('publishPosition returns true on success and false before connection', () => {
     const { client, fake } = createClient()
 
-    client.publishPosition({ x: 0.1, y: 0.1, dir: 'down', moving: false })
-
-    // activate 도 안 부른 상태라 published 비어있음
+    // 미연결 — false 반환 + 송신 없음
+    expect(client.publishPosition({ x: 0.1, y: 0.1, dir: 'down', moving: false })).toBe(false)
     expect(fake().published).toEqual([])
+
+    // 연결 후 — true 반환 + 송신
+    client.connect()
+    fake().triggerConnect()
+    expect(client.publishPosition({ x: 0.2, y: 0.3, dir: 'up', moving: true })).toBe(true)
+    expect(fake().published).toContainEqual({
+      destination: '/app/village/position',
+      body: JSON.stringify({ x: 0.2, y: 0.3, dir: 'up', moving: true }),
+    })
   })
 
   it('disconnect unsubscribes both destinations and deactivates the client', async () => {
