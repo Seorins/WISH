@@ -55,7 +55,7 @@ export function FuelHeroCard({
           <div>
             <span className={styles.heroLabel}>
               <SparklesIcon className={styles.heroLabelStar} />
-              별빛 연료
+              별빛 에너지
             </span>
             <div className={styles.heroBigPercent}>
               {currentPercent}
@@ -80,7 +80,7 @@ export function FuelHeroCard({
 
       <div className={styles.body}>
         <div>
-          <div className={styles.sectionLabel}>연료 선택</div>
+          <div className={styles.sectionLabel}>에너지 선택</div>
           <div className={styles.optionGrid}>
             {FUEL_OPTIONS.map(option => {
               const isActive = option.id === selectedId
@@ -153,10 +153,10 @@ export function FuelHeroCard({
                 disabled={!canSend}
               >
                 <StarIcon color="#ffd55c" width={20} height={20} />
-                {isSending ? '보내는 중...' : '별빛 연료 보내기'}
+                {isSending ? '보내는 중...' : '별빛 에너지 보내기'}
               </button>
               <div className={styles.sendCaption}>
-                {isFull ? '연료가 가득 찼어요!' : '보내면 아이에게 응원 메시지가 전달돼요.'}
+                {isFull ? '에너지가 가득 찼어요!' : '보내면 아이에게 응원 메시지가 전달돼요.'}
               </div>
             </div>
           </div>
