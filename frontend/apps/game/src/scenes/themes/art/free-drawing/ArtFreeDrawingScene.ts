@@ -44,8 +44,8 @@ const PINCH_EXIT_RATIO = 0.2
 const PINCH_TRANSITION_RATIO_DELTA = 0.07
 // 핀치 들어간 직후 이 시간 동안은 그리기 차단 — 접근 모션 끝자락의 짧은 선 방지
 const PINCH_SETTLING_MS = 35
-// 손이 한 프레임에 캔버스 폭의 9% 이상 튀면 연결선 끊고 새 스트로크 시작
-const HAND_DRAW_JUMP_DISTANCE_RATIO = 0.09
+// 손이 한 프레임에 캔버스 폭의 이 비율 이상 튀면 연결선 끊고 새 스트로크 시작
+const HAND_DRAW_JUMP_DISTANCE_RATIO = 0.2
 // 핀치 직전 호버 위치를 펜다운 위치로 스냅하는 최대 거리(캔버스 폭 비율) — 7% 안이면 같은 자리로 간주
 const HOVER_AIM_REJOIN_RATIO = 0.07
 // 호버 위치가 너무 오래되면 무시(500ms)
@@ -134,7 +134,7 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
   private readonly handPointerSmoother = new PointerSmoother({ alpha: 0.24 })
   private readonly handDrawingSmoother = new PointerSmoother({ alpha: 0.16 })
   private readonly handTrackingGuard = new PointerTrackingGuard<Phaser.Math.Vector2>({
-    holdDurationMs: 40,
+    holdDurationMs: 120,
   })
 
   private isDrawing = false
