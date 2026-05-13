@@ -15,6 +15,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.comong.backend.domain.music.dto.MusicBestResultResponse;
+import com.comong.backend.domain.music.dto.MusicChartRankingResponse;
+import com.comong.backend.domain.music.dto.MusicMyRankingResponse;
+import com.comong.backend.domain.music.dto.MusicRankingEntryResponse;
 import com.comong.backend.domain.music.dto.MusicResultDetailResponse;
 import com.comong.backend.domain.music.dto.MusicResultListItemResponse;
 import com.comong.backend.domain.music.dto.MusicResultResponse;
@@ -24,6 +27,7 @@ import com.comong.backend.domain.music.entity.MusicRank;
 import com.comong.backend.domain.music.entity.MusicResult;
 import com.comong.backend.domain.music.exception.MusicErrorCode;
 import com.comong.backend.domain.music.repository.MusicChartRepository;
+import com.comong.backend.domain.music.repository.MusicRankingProjection;
 import com.comong.backend.domain.music.repository.MusicResultRepository;
 import com.comong.backend.domain.patient.entity.PatientProfile;
 import com.comong.backend.domain.patient.exception.PatientErrorCode;
@@ -128,6 +132,79 @@ public class MusicResultService {
         return musicResultRepository
                 .findPageByPatientProfileUserIdWithMusicChart(userId, pageable)
                 .map(MusicResultListItemResponse::of);
+    }
+
+    public MusicChartRankingResponse findChartRanking(Long userId, String chartId, int limit) {
+        MusicChart musicChart = findActiveChartOrThrow(chartId);
+
+        int safeLimit = Math.max(1, Math.min(limit, 100));
+        List<MusicRankingProjection> topProjections =
+                musicResultRepository.findChartRankingTop(chartId, safeLimit);
+
+        Long myPatientProfileId =
+                patientProfileService
+                        .findEntityByUserId(userId)
+                        .map(PatientProfile::getId)
+                        .orElse(null);
+
+        List<MusicRankingEntryResponse> entries =
+                java.util.stream.IntStream.range(0, topProjections.size())
+                        .mapToObj(
+                                i ->
+                                        toRankingEntry(
+                                                topProjections.get(i), i + 1, myPatientProfileId))
+                        .toList();
+
+        long totalPlayers = musicResultRepository.countDistinctPatientsByChartId(chartId);
+
+        MusicMyRankingResponse me = buildMyRanking(myPatientProfileId, musicChart);
+
+        return new MusicChartRankingResponse(
+                musicChart.getChartId(),
+                musicChart.getTitle(),
+                (int) totalPlayers,
+                entries,
+                me);
+    }
+
+    private MusicRankingEntryResponse toRankingEntry(
+            MusicRankingProjection projection, int rank, Long myPatientProfileId) {
+        boolean isMe =
+                myPatientProfileId != null
+                        && myPatientProfileId.equals(projection.getPatientProfileId());
+        return new MusicRankingEntryResponse(
+                rank,
+                projection.getPatientProfileId(),
+                projection.getNickname(),
+                projection.getScore(),
+                projection.getAccuracy(),
+                projection.getMaxCombo(),
+                projection.getRankGrade(),
+                projection.getPlayedAt(),
+                isMe);
+    }
+
+    private MusicMyRankingResponse buildMyRanking(Long myPatientProfileId, MusicChart musicChart) {
+        if (myPatientProfileId == null) {
+            return MusicMyRankingResponse.empty();
+        }
+        return musicResultRepository
+                .findTopByPatientProfileIdAndMusicChartIdOrderByScoreDescAccuracyDescPlayedAtDesc(
+                        myPatientProfileId, musicChart.getId())
+                .map(
+                        myBest -> {
+                            long better =
+                                    musicResultRepository.countPatientsWithBetterScore(
+                                            musicChart.getChartId(), myBest.getScore());
+                            return new MusicMyRankingResponse(
+                                    (int) better + 1,
+                                    myBest.getScore(),
+                                    myBest.getAccuracy(),
+                                    myBest.getMaxCombo(),
+                                    myBest.getRank().name(),
+                                    myBest.getPlayedAt());
+                        })
+                .orElseGet(MusicMyRankingResponse::empty);
     }
 
     public MusicResultDetailResponse findById(Long userId, Long resultId) {
