@@ -4,7 +4,6 @@ import type {
   ArtworkPage,
   DailyUsageStats,
   ExerciseSessionDetail,
-  ExerciseSessionPage,
   FuelStatus,
   MusicResultDetail,
   MusicResultPage,
@@ -15,7 +14,7 @@ import type {
 import {
   useDailyUsageStats,
   useMyArtworks,
-  useMyExerciseSessions,
+  usePatientExerciseSessions,
   useMyMusicResults,
   useMyTaekwondoSessions,
   useUsageAverages,
@@ -302,8 +301,8 @@ export function useReportData({ patientId, patientName, week }: UseReportDataOpt
   const dailyQuery = useDailyUsageStats(patientId, { from: week.start, to: week.end })
   const averagesQuery = useUsageAverages({ from: week.start, to: week.end })
   const musicQuery = useMyMusicResults({ size: 100 })
-  const taekwondoQuery = useMyTaekwondoSessions({ size: 100 })
-  const exerciseQuery = useMyExerciseSessions({ size: 100 })
+  const taekwondoQuery = useMyTaekwondoSessions(patientId, { size: 100 })
+  const exerciseQuery = usePatientExerciseSessions(patientId, { size: 100 })
   const artworksQuery = useMyArtworks({ size: 100 })
   const fuelQuery = useFuelStatus()
 
@@ -315,13 +314,15 @@ export function useReportData({ patientId, patientName, week }: UseReportDataOpt
     const averagesData = averagesQuery.data as UsageAverages | undefined
     const musicPage = musicQuery.data as MusicResultPage | undefined
     const taekwondoPage = taekwondoQuery.data as TaekwondoSessionPage | undefined
-    const exercisePage = exerciseQuery.data as ExerciseSessionPage | undefined
+    const exerciseSessions = exerciseQuery.data as ExerciseSessionDetail[] | undefined
     const artworksPage = artworksQuery.data as ArtworkPage | undefined
     const fuelData = fuelQuery.data as FuelStatus | undefined
 
     const musicWeek = countWeekResults(musicPage, r => r.playedAt, week)
     const taekwondoWeek = countWeekResults(taekwondoPage, s => s.createdAt, week)
-    const exerciseWeek = countWeekResults(exercisePage, s => s.createdAt, week)
+    const exerciseWeek = exerciseSessions
+      ? exerciseSessions.filter(s => inWeek(s.createdAt, week))
+      : []
     const artworksWeek = countWeekResults(artworksPage, a => a.createdAt, week)
     const fuelEarned = sumFuelEarnedThisWeek(fuelData, week)
 

@@ -2,7 +2,6 @@ import { useQuery } from '@tanstack/react-query'
 import { useEffect, useMemo, useState } from 'react'
 import {
   getTaekwondoPoomsaeLabel,
-  getTaekwondoSessionDetail,
   listTaekwondoMotions,
   TAEKWONDO_POOMSAE_VALUES,
   type Poomsae,
@@ -18,6 +17,13 @@ const DEFAULT_POOMSAE: Poomsae = 'TAEGEUK_1'
 
 function todayKst(): string {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' })
+}
+
+function dateKstFromIso(iso: string): string {
+  const localDate = iso.match(/^\d{4}-\d{2}-\d{2}/)?.[0]
+  const hasTimezone = /(?:Z|[+-]\d{2}:\d{2})$/i.test(iso)
+  if (localDate && !hasTimezone) return localDate
+  return new Date(iso).toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' })
 }
 
 function formatDurationSec(seconds: number): string {
@@ -44,9 +50,8 @@ function useTaekwondoMotions(poomsae: Poomsae) {
  * 좌측: 선택된 동작의 영상 + 설명 + 통계 + (우측 또래 비교).
  * 우측: 품새별 동작 리스트(클릭 시 좌측 영상 교체) + 다른 사용자들과 비교.
  *
- * 좌측 영상은 me-sessions 의 가장 최근 수행본(`latestVideoUrl`) 우선,
- * 없으면 motion 의 시범영상(`demoVideoUrl`)으로 폴백. me-sessions 엔드포인트
- * 미구현 상태에서는 stats 가 undefined 로 떨어지고 통계 칸은 '—' 표시.
+ * 좌측 영상은 오늘 기록 중 가장 최근 수행본(`latestVideoUrl`)만 사용한다.
+ * 영상이 없는 동작은 시범영상으로 폴백하지 않고 빈 상태를 표시한다.
  */
 export function TaekwondoMain() {
   const { data: patientId } = useMyPatientId()
@@ -60,12 +65,34 @@ export function TaekwondoMain() {
   const [poomsae, setPoomsae] = useState<Poomsae>(DEFAULT_POOMSAE)
   const { data: motions = [], isLoading, error } = useTaekwondoMotions(poomsae)
 
-  // me-sessions: 같은 품새로 필터링 (서버가 지원하면) 후 motion-별 집계.
-  const { data: sessionsPage } = useMyTaekwondoSessions({ poomsae, size: 100 })
+  const { data: sessionsPage } = useMyTaekwondoSessions(patientId ?? undefined, {
+    poomsae,
+    size: 100,
+  })
+  const todaySessions = useMemo(() => {
+    return (sessionsPage?.content ?? []).filter(
+      session => dateKstFromIso(session.createdAt) === today,
+    )
+  }, [sessionsPage, today])
   const motionStatsMap = useMemo(
-    () => aggregateTaekwondoMotionStats(sessionsPage?.content ?? []),
-    [sessionsPage],
+    () => aggregateTaekwondoMotionStats(todaySessions),
+    [todaySessions],
   )
+  const latestTodayMotionId = useMemo(() => {
+    const latestMotion = todaySessions
+      .flatMap(session =>
+        session.motions.map(motion => ({
+          motionId: motion.taekwondoMotionId,
+          playedAt: motion.createdAt,
+          videoUrl: motion.videoUrl,
+        })),
+      )
+      .filter(motion => Boolean(motion.videoUrl))
+      .sort((a, b) => new Date(b.playedAt).getTime() - new Date(a.playedAt).getTime())[0]
+
+    return latestMotion?.motionId ?? null
+  }, [todaySessions])
+  const hasRecordedSessions = todaySessions.length > 0
 
   const sortedMotions = useMemo<TaekwondoMotion[]>(() => {
     return [...motions].sort((a, b) => a.routineOrder - b.routineOrder)
@@ -73,49 +100,26 @@ export function TaekwondoMain() {
 
   const [selectedMotionId, setSelectedMotionId] = useState<number | null>(null)
 
-  // 품새 변경 시 첫 번째 동작 자동 선택
+  // 품새 변경 시 오늘 수행 영상이 있는 최신 동작을 우선 선택한다.
   useEffect(() => {
     if (sortedMotions.length === 0) {
       setSelectedMotionId(null)
       return
     }
     setSelectedMotionId(prev => {
+      if (latestTodayMotionId != null && sortedMotions.some(m => m.id === latestTodayMotionId)) {
+        return latestTodayMotionId
+      }
       if (prev != null && sortedMotions.some(m => m.id === prev)) return prev
       return sortedMotions[0].id
     })
-  }, [sortedMotions])
+  }, [latestTodayMotionId, sortedMotions])
 
   const selectedMotion = sortedMotions.find(m => m.id === selectedMotionId) ?? null
-  const baseStats = selectedMotion ? motionStatsMap[selectedMotion.id] : undefined
-
-  // list 응답 motion 의 videoUrl 은 비어있으므로, 선택된 motion 이 들어있는 가장 최근 세션의
-  // detail 을 호출해 presigned URL 을 받아온다. react-query 캐시로 재선택 시엔 즉시.
-  const latestSessionId = useMemo(() => {
-    if (!selectedMotion || !sessionsPage) return null
-    const candidates = sessionsPage.content
-      .filter(s => s.motions.some(m => m.taekwondoMotionId === selectedMotion.id))
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    return candidates[0]?.id ?? null
-  }, [selectedMotion, sessionsPage])
-
-  const { data: latestSessionDetail } = useQuery({
-    queryKey: ['taekwondo-session-detail', latestSessionId],
-    queryFn: () => getTaekwondoSessionDetail(latestSessionId!),
-    enabled: latestSessionId != null,
-    staleTime: 5 * 60_000,
-  })
-
-  const selectedStats = useMemo<MotionStats | undefined>(() => {
-    if (!baseStats || !selectedMotion) return baseStats
-    const detailVideoUrl =
-      latestSessionDetail?.motions.find(m => m.taekwondoMotionId === selectedMotion.id)?.videoUrl ??
-      null
-    if (!detailVideoUrl) return baseStats
-    return { ...baseStats, latestVideoUrl: detailVideoUrl }
-  }, [baseStats, selectedMotion, latestSessionDetail])
+  const selectedStats = selectedMotion ? motionStatsMap[selectedMotion.id] : undefined
 
   const dailyLoaded = daily !== undefined
-  const noActivityToday = dailyLoaded && todayTaekwondoSeconds === 0
+  const noActivityToday = dailyLoaded && todayTaekwondoSeconds === 0 && !hasRecordedSessions
 
   if (noActivityToday) {
     return (
@@ -196,8 +200,7 @@ function PoomsaeTabBar({ value, onChange }: { value: Poomsae; onChange: (v: Poom
 }
 
 function VideoCard({ motion, stats }: { motion: TaekwondoMotion; stats: MotionStats | undefined }) {
-  // 아이가 수행한 가장 최근 영상 → 시범영상 순 폴백.
-  const videoUrl = stats?.latestVideoUrl ?? motion.demoVideoUrl ?? null
+  const videoUrl = stats?.latestVideoUrl ?? null
   const hasVideo = Boolean(videoUrl)
   return (
     <section className={styles.videoCard}>
@@ -207,7 +210,7 @@ function VideoCard({ motion, stats }: { motion: TaekwondoMotion; stats: MotionSt
             key={`${motion.id}-${videoUrl}`}
             className={styles.video}
             src={videoUrl ?? undefined}
-            poster={motion.thumbnailUrl ?? undefined}
+            poster={stats?.latestThumbUrl ?? undefined}
             controls
             playsInline
             preload="metadata"

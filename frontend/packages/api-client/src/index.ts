@@ -76,6 +76,7 @@ export {
   calculateTaekwondoAverageAccuracy,
   createTaekwondoSession,
   getMyTaekwondoSessions,
+  getTaekwondoSessions,
   getTaekwondoSessionDetail,
 } from './taekwondo-sessions'
 export { aiApiClient, analyzeTaegeuk1Motion } from './taekwondo-ai'
@@ -212,4 +213,5 @@ export type {
   TaekwondoSessionDetail,
   TaekwondoSessionMotionResult,
   TaekwondoSessionPage,
+  TaekwondoSessionSummary,
 } from './taekwondo-sessions'
