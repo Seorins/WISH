@@ -319,7 +319,10 @@ function CharacterModel({
     }
 
     if (!activeMotion) return
-    const shouldPlayKeypointMotion = activeMotion.source === 'recorded' || ENABLE_SIN_MARKER_MOTION
+    const shouldPlayKeypointMotion =
+      activeMotion.source === 'recorded' ||
+      activeMotion.source === 'compact' ||
+      ENABLE_SIN_MARKER_MOTION
     if (!shouldPlayKeypointMotion) return
 
     const durationMs = Math.max(1, activeMotion.durationMs)

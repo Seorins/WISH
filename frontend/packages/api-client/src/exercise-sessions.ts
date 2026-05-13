@@ -25,6 +25,7 @@ export type CreateExerciseMotionResultRequest = {
   videoKey?: string
   thumbKey?: string
   poseReplay?: ExerciseMotionReplayClip
+  compactPoseReplay?: ExerciseMotionReplayClip
 }
 
 export type CreateExerciseMotionRecord = {
@@ -36,6 +37,7 @@ export type CreateExerciseMotionRecord = {
   videoKey?: string
   thumbKey?: string
   poseReplay?: ExerciseMotionReplayClip
+  compactPoseReplay?: ExerciseMotionReplayClip
 }
 
 export type MotionReplayLandmarkTuple = readonly [
@@ -58,11 +60,12 @@ export type MotionReplaySegment = {
 
 export type ExerciseMotionReplayClip = {
   version: number
-  fps: 30
+  fps: number
   durationMs: number
   landmarks: readonly string[]
   frames: readonly MotionReplayFrame[]
   representativeSegment?: MotionReplaySegment | null
+  markers?: readonly MotionReplaySegment[] | null
 }
 
 export type ExerciseMotionReplayResponse = {
@@ -72,6 +75,7 @@ export type ExerciseMotionReplayResponse = {
   routineOrder: number
   replayAvailable: boolean
   replay: ExerciseMotionReplayClip | null
+  compactReplay?: ExerciseMotionReplayClip | null
 }
 
 export type CreateExerciseSessionRequest = {
@@ -144,7 +148,9 @@ const INVALID_REPLAY_RESPONSE_MESSAGE =
 const INVALID_POSE_REPLAY_MESSAGE =
   '\uC88C\uD45C \uB9AC\uD50C\uB808\uC774 \uB370\uC774\uD130\uAC00 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.'
 
-const REPLAY_FPS = 30
+const RAW_REPLAY_FPS = 30
+const COMPACT_REPLAY_MIN_FPS = 5
+const COMPACT_REPLAY_MAX_FPS = 10
 const REPLAY_LANDMARK_NAMES = [
   'LEFT_SHOULDER',
   'RIGHT_SHOULDER',
@@ -163,7 +169,6 @@ const REPLAY_LANDMARK_COUNT = REPLAY_LANDMARK_NAMES.length
 const REPLAY_TUPLE_SIZE = 4
 const REPLAY_MAX_CAPTURE_SECONDS = 180
 const REPLAY_MAX_DURATION_MS = REPLAY_MAX_CAPTURE_SECONDS * 1000
-const REPLAY_MAX_FRAMES = REPLAY_FPS * REPLAY_MAX_CAPTURE_SECONDS
 // Avatar replay stores normalized pose coordinates. z/pose normalization can exceed [-1, 1],
 // but values outside this bound are treated as corrupted payloads.
 const REPLAY_NORMALIZED_COORDINATE_ABS_LIMIT = 10
@@ -240,10 +245,32 @@ function hasExpectedReplayLandmarks(landmarks: readonly string[]): boolean {
   )
 }
 
-function validatePoseReplay(replay: ExerciseMotionReplayClip): void {
+function isValidReplayFps(fps: number, mode: 'raw' | 'compact'): boolean {
+  if (mode === 'raw') return fps === RAW_REPLAY_FPS
+  return fps >= COMPACT_REPLAY_MIN_FPS && fps <= COMPACT_REPLAY_MAX_FPS
+}
+
+function validateReplaySegment(
+  segment: MotionReplaySegment | null | undefined,
+  durationMs: number,
+): void {
+  if (!segment) return
+  if (
+    !Number.isFinite(segment.startMs) ||
+    !Number.isFinite(segment.endMs) ||
+    segment.startMs < 0 ||
+    segment.endMs < segment.startMs ||
+    segment.endMs > durationMs
+  ) {
+    throw new Error(INVALID_POSE_REPLAY_MESSAGE)
+  }
+}
+
+function validatePoseReplay(replay: ExerciseMotionReplayClip, mode: 'raw' | 'compact'): void {
   if (
     replay.version !== 1 ||
-    replay.fps !== REPLAY_FPS ||
+    !Number.isInteger(replay.fps) ||
+    !isValidReplayFps(replay.fps, mode) ||
     !Number.isInteger(replay.durationMs) ||
     replay.durationMs < 0 ||
     replay.durationMs > REPLAY_MAX_DURATION_MS ||
@@ -251,7 +278,7 @@ function validatePoseReplay(replay: ExerciseMotionReplayClip): void {
     !hasExpectedReplayLandmarks(replay.landmarks) ||
     !Array.isArray(replay.frames) ||
     replay.frames.length === 0 ||
-    replay.frames.length > REPLAY_MAX_FRAMES
+    replay.frames.length > replay.fps * REPLAY_MAX_CAPTURE_SECONDS
   ) {
     throw new Error(INVALID_POSE_REPLAY_MESSAGE)
   }
@@ -292,16 +319,12 @@ function validatePoseReplay(replay: ExerciseMotionReplayClip): void {
     })
   })
 
-  const segment = replay.representativeSegment
-  if (
-    segment &&
-    (!Number.isFinite(segment.startMs) ||
-      !Number.isFinite(segment.endMs) ||
-      segment.startMs < 0 ||
-      segment.endMs < segment.startMs ||
-      segment.endMs > replay.durationMs)
-  ) {
-    throw new Error(INVALID_POSE_REPLAY_MESSAGE)
+  validateReplaySegment(replay.representativeSegment, replay.durationMs)
+  if (replay.markers != null) {
+    if (!Array.isArray(replay.markers) || replay.markers.length > 32) {
+      throw new Error(INVALID_POSE_REPLAY_MESSAGE)
+    }
+    replay.markers.forEach(marker => validateReplaySegment(marker, replay.durationMs))
   }
 }
 
@@ -356,6 +379,7 @@ export function toCreateExerciseSessionRequest(
       ...(motion.videoKey ? { videoKey: motion.videoKey } : {}),
       ...(motion.thumbKey ? { thumbKey: motion.thumbKey } : {}),
       ...(motion.poseReplay ? { poseReplay: motion.poseReplay } : {}),
+      ...(motion.compactPoseReplay ? { compactPoseReplay: motion.compactPoseReplay } : {}),
     })),
   }
 }
@@ -402,7 +426,11 @@ export function validateCreateExerciseSessionRequest(payload: CreateExerciseSess
     }
 
     if (motion.poseReplay) {
-      validatePoseReplay(motion.poseReplay)
+      validatePoseReplay(motion.poseReplay, 'raw')
+    }
+
+    if (motion.compactPoseReplay) {
+      validatePoseReplay(motion.compactPoseReplay, 'compact')
     }
   })
 }

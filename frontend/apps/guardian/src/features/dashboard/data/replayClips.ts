@@ -23,8 +23,9 @@ export function toRecordedMotionClip(
   replay: ExerciseMotionReplayClip | null | undefined,
   id: string,
   name: string,
+  source: 'recorded' | 'compact' = 'recorded',
 ): MotionClip | null {
-  if (!replay || replay.fps !== 30 || !Array.isArray(replay.frames)) return null
+  if (!replay || replay.fps < 5 || replay.fps > 30 || !Array.isArray(replay.frames)) return null
   if (!replay.landmarks.every(isLandmarkName)) return null
 
   const landmarkIndexes = LANDMARK_NAMES.map(landmarkName => replay.landmarks.indexOf(landmarkName))
@@ -46,7 +47,8 @@ export function toRecordedMotionClip(
     durationMs: Math.max(0, replay.durationMs),
     landmarks: LANDMARK_NAMES,
     frames,
-    source: 'recorded',
+    source,
     representativeSegment: replay.representativeSegment ?? null,
+    markers: replay.markers ?? null,
   }
 }
