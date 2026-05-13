@@ -41,9 +41,9 @@ const HAND_POINTER_REJECT_MARGIN = 0.08
 const PINCH_ENTER_RATIO = 0.15
 const PINCH_EXIT_RATIO = 0.2
 // 한 프레임에 ratio가 이만큼 이상 변하면 "손 모으는/펴는 중" → 그리기 비활성화
-const PINCH_TRANSITION_RATIO_DELTA = 0.025
+const PINCH_TRANSITION_RATIO_DELTA = 0.07
 // 핀치 들어간 직후 이 시간 동안은 그리기 차단 — 접근 모션 끝자락의 짧은 선 방지
-const PINCH_SETTLING_MS = 80
+const PINCH_SETTLING_MS = 35
 // 손이 한 프레임에 캔버스 폭의 9% 이상 튀면 연결선 끊고 새 스트로크 시작
 const HAND_DRAW_JUMP_DISTANCE_RATIO = 0.09
 // 핀치 직전 호버 위치를 펜다운 위치로 스냅하는 최대 거리(캔버스 폭 비율) — 7% 안이면 같은 자리로 간주
