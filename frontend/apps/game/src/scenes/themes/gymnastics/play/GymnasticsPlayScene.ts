@@ -92,6 +92,7 @@ type LocalExerciseMotionRecord = {
   videoKey?: string
   thumbKey?: string
   poseReplay?: ExerciseMotionReplayClip
+  compactPoseReplay?: ExerciseMotionReplayClip
 }
 
 type ReplayLandmarkName =
@@ -115,6 +116,10 @@ type LocalMotionReplaySample = {
   progress: number
 }
 
+type CompactReplayMarker = MotionReplaySegment & {
+  kind: 'count' | 'coaching'
+}
+
 type RawReplayLandmark = {
   x: number
   y: number
@@ -135,6 +140,32 @@ type GymnasticsFeedbackTts = {
   key: string | null
   text: string | null
   priority: 'tracking' | 'posture' | null
+}
+
+type GymnasticsNormalizedPoseLandmark = {
+  name: string
+  x: number | null
+  y: number | null
+  z: number | null
+  confidence: number | null
+}
+
+type GymnasticsNormalizedPose = {
+  tracking: string
+  timestamp_ms: number
+  landmarks: GymnasticsNormalizedPoseLandmark[]
+}
+
+type GymnasticsReplayMetadata = {
+  motion_id: string
+  timestamp_ms: number
+  tracking: string
+  frame_label?: string | null
+  progress_count?: number | null
+  hold_duration_ms?: number | null
+  hold_completed?: boolean | null
+  guidance_code?: string | null
+  guidance_text?: string | null
 }
 
 type GymnasticsAiResponse = {
@@ -170,6 +201,8 @@ type GymnasticsAiResponse = {
   baseline_right_wrist_forward?: number | null
   baseline_stance_span?: number | null
   tts?: GymnasticsFeedbackTts
+  normalized_pose?: GymnasticsNormalizedPose | null
+  replay_metadata?: GymnasticsReplayMetadata | null
 }
 
 type GymnasticsAiState = {
@@ -395,10 +428,14 @@ const FEEDBACK_TIMER_MAX_FONT_SIZE = 44
 const FEEDBACK_TIMER_MIN_FONT_SIZE = 26
 const AI_EVALUATION_INTERVAL_MS = 550
 const REPLAY_FPS = 30
+const COMPACT_REPLAY_FPS = 5
 const REPLAY_SAMPLE_INTERVAL_MS = 1000 / REPLAY_FPS
 const REPLAY_MAX_FRAMES = REPLAY_FPS * 180
-const REPLAY_MIN_CONFIDENCE = 0.5
+const REPLAY_MIN_CONFIDENCE = 0.05
 const REPLAY_MIN_SHOULDER_WIDTH = 0.02
+const COMPACT_REPLAY_MAX_MARKERS = 32
+const TOP_COUNT_MARKER_WINDOW_MS = 2000
+const COACHING_MARKER_WINDOW_MS = 1200
 const REPLAY_LANDMARK_NAMES: readonly ReplayLandmarkName[] = [
   'LEFT_SHOULDER',
   'RIGHT_SHOULDER',
@@ -534,6 +571,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
   private motionStartedAtMs = 0
   private motionAccumulatedDurationMs = 0
   private motionReplaySamples: LocalMotionReplaySample[] = []
+  private compactReplayMarkers: CompactReplayMarker[] = []
   private lastReplaySampleAtMs = Number.NEGATIVE_INFINITY
   private motionRecords: LocalExerciseMotionRecord[] = []
   private motionRecorderHandle: ScreenRecorderHandle | null = null
@@ -2212,6 +2250,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     const payload = (await response.json()) as GymnasticsAiResponse
     this.playFeedbackTtsIfNeeded(payload)
     this.updateAiState(payload)
+    this.captureCompactReplayMarkers(payload)
     this.clearAiConnectionIssue()
     this.applyAiFeedback()
     this.advanceMotionIfCompleted()
@@ -3077,6 +3116,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
         this.aiState.feedback,
     )
     const poseReplay = this.buildCurrentMotionReplayClip(durationSec * 1000)
+    const compactPoseReplay = this.buildCompactMotionReplayClip(durationSec * 1000, motionSpec)
 
     const motionRecord: LocalExerciseMotionRecord = {
       exerciseMotionId: motionSpec.exerciseMotionId,
@@ -3085,6 +3125,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
       completedCount,
       feedback,
       ...(poseReplay ? { poseReplay } : {}),
+      ...(compactPoseReplay ? { compactPoseReplay } : {}),
     }
     this.motionRecords.push(motionRecord)
 
@@ -3288,7 +3329,69 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
 
   private resetCurrentMotionReplay() {
     this.motionReplaySamples = []
+    this.compactReplayMarkers = []
     this.lastReplaySampleAtMs = Number.NEGATIVE_INFINITY
+  }
+
+  private captureCompactReplayMarkers(payload: GymnasticsAiResponse) {
+    const motionSpec = this.getCurrentAiMotionSpec()
+    const metadata = payload.replay_metadata
+    const elapsedMs = Math.round(this.getCurrentMotionElapsedMs())
+
+    if (motionSpec.type === 'top' && this.didTopCountIncrease) {
+      this.addCompactReplayMarker(
+        'count',
+        elapsedMs - TOP_COUNT_MARKER_WINDOW_MS,
+        elapsedMs,
+        'top count increment window',
+      )
+    }
+
+    const hasCoachingCue =
+      metadata?.tracking === 'tracking_low' ||
+      metadata?.frame_label === 'guidance_needed' ||
+      Boolean(metadata?.guidance_code || metadata?.guidance_text)
+    if (!hasCoachingCue) return
+
+    this.addCompactReplayMarker(
+      'coaching',
+      elapsedMs - COACHING_MARKER_WINDOW_MS / 2,
+      elapsedMs + COACHING_MARKER_WINDOW_MS / 2,
+      metadata?.guidance_text ?? metadata?.guidance_code ?? metadata?.frame_label ?? 'coaching cue',
+    )
+  }
+
+  private addCompactReplayMarker(
+    kind: CompactReplayMarker['kind'],
+    startMs: number,
+    endMs: number,
+    reason: string,
+  ) {
+    if (this.compactReplayMarkers.length >= COMPACT_REPLAY_MAX_MARKERS) return
+
+    const durationMs = Math.max(0, Math.round(this.getCurrentMotionElapsedMs()))
+    const marker: CompactReplayMarker = {
+      kind,
+      startMs: Math.max(0, Math.round(startMs)),
+      endMs: Math.max(0, Math.round(Math.min(durationMs, endMs))),
+      reason: reason.slice(0, 120),
+    }
+    if (marker.endMs < marker.startMs) {
+      marker.endMs = marker.startMs
+    }
+
+    const previous = this.compactReplayMarkers[this.compactReplayMarkers.length - 1]
+    if (
+      previous &&
+      previous.kind === marker.kind &&
+      previous.reason === marker.reason &&
+      marker.startMs <= previous.endMs + 500
+    ) {
+      previous.endMs = Math.max(previous.endMs, marker.endMs)
+      return
+    }
+
+    this.compactReplayMarkers.push(marker)
   }
 
   private sampleCurrentMotionReplay(
@@ -3410,6 +3513,54 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
       landmarks: REPLAY_LANDMARK_NAMES,
       frames,
       representativeSegment: this.pickRepresentativeReplaySegment(replayDurationMs),
+    }
+  }
+
+  private buildCompactMotionReplayClip(
+    durationMs: number,
+    motionSpec: AiMotionSpec,
+  ): ExerciseMotionReplayClip | null {
+    if (this.motionReplaySamples.length === 0) return null
+
+    const replayDurationMs = Math.max(0, Math.round(durationMs))
+    const frameIntervalMs = 1000 / COMPACT_REPLAY_FPS
+    const frames: MotionReplayFrame[] = []
+    let previousBucket = -1
+
+    for (const sample of this.motionReplaySamples) {
+      const bucket = Math.floor(sample.frame.t / frameIntervalMs)
+      if (bucket === previousBucket) continue
+      frames.push(sample.frame)
+      previousBucket = bucket
+    }
+
+    if (frames.length === 0) return null
+
+    const firstCountMarker = this.compactReplayMarkers.find(marker => marker.kind === 'count')
+    const representativeSegment =
+      motionSpec.type === 'top'
+        ? (firstCountMarker ?? this.pickRepresentativeReplaySegment(replayDurationMs))
+        : {
+            startMs: 0,
+            endMs: replayDurationMs,
+            reason: 'daniel full session compact replay',
+          }
+    const markers = this.compactReplayMarkers.map<MotionReplaySegment>(
+      ({ startMs, endMs, reason }) => ({
+        startMs,
+        endMs: Math.min(replayDurationMs, endMs),
+        reason,
+      }),
+    )
+
+    return {
+      version: 1,
+      fps: COMPACT_REPLAY_FPS,
+      durationMs: replayDurationMs,
+      landmarks: REPLAY_LANDMARK_NAMES,
+      frames,
+      representativeSegment,
+      markers,
     }
   }
 

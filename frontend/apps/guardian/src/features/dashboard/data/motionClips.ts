@@ -43,12 +43,19 @@ export type MotionClip = {
   durationMs: number
   landmarks: readonly LandmarkName[]
   frames: readonly MotionFrame[]
-  source?: 'dummy' | 'recorded'
+  source?: 'dummy' | 'recorded' | 'compact'
   representativeSegment?: {
     startMs: number
     endMs: number
     reason?: string | null
   } | null
+  markers?:
+    | readonly {
+        startMs: number
+        endMs: number
+        reason?: string | null
+      }[]
+    | null
 }
 
 const FPS = 30

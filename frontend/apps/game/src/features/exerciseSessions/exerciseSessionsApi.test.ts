@@ -13,6 +13,7 @@ import {
   type CreateExerciseSessionRecord,
   type CreateExerciseSessionRequest,
   type ExerciseSessionDetail,
+  type ExerciseMotionReplayClip,
   type ExerciseSessionSummary,
 } from '@wish/api-client'
 
@@ -63,6 +64,52 @@ const createdSession: ExerciseSessionDetail = {
       createdAt: '2026-05-06T01:58:09.949Z',
     },
   ],
+}
+
+const replayLandmarks = [
+  'LEFT_SHOULDER',
+  'RIGHT_SHOULDER',
+  'LEFT_ELBOW',
+  'RIGHT_ELBOW',
+  'LEFT_WRIST',
+  'RIGHT_WRIST',
+  'LEFT_HIP',
+  'RIGHT_HIP',
+  'LEFT_KNEE',
+  'RIGHT_KNEE',
+  'LEFT_ANKLE',
+  'RIGHT_ANKLE',
+] as const
+
+function replayClip(fps: number): ExerciseMotionReplayClip {
+  return {
+    version: 1,
+    fps,
+    durationMs: 200,
+    landmarks: replayLandmarks,
+    frames: [
+      {
+        t: 0,
+        lm: replayLandmarks.map(() => [0.1, 0.9, 0, 0.92] as const),
+      },
+      {
+        t: 200,
+        lm: replayLandmarks.map(() => [0.2, 0.9, 0, 0.92] as const),
+      },
+    ],
+    representativeSegment: {
+      startMs: 0,
+      endMs: 200,
+      reason: 'test segment',
+    },
+    markers: [
+      {
+        startMs: 0,
+        endMs: 200,
+        reason: 'test marker',
+      },
+    ],
+  }
 }
 
 function createListClient(data: ExerciseSessionSummary[] | null = [session]) {
@@ -350,5 +397,32 @@ describe('toCreateExerciseSessionRequest', () => {
     }
 
     expect(toCreateExerciseSessionRequest(record)).toEqual(createPayload)
+  })
+
+  it('preserves raw and compact replay payloads', () => {
+    const rawReplay = replayClip(30)
+    const compactReplay = replayClip(5)
+    const record: CreateExerciseSessionRecord = {
+      patientProfileId: 1,
+      exerciseType: 'TOP',
+      durationSec: 12,
+      averageCompletionRate: 0.91,
+      motions: [
+        {
+          exerciseMotionId: 1,
+          durationSec: 12,
+          completionRate: 0.91,
+          completedCount: 8,
+          feedback: 'Good',
+          poseReplay: rawReplay,
+          compactPoseReplay: compactReplay,
+        },
+      ],
+    }
+
+    expect(toCreateExerciseSessionRequest(record).motions[0]).toMatchObject({
+      poseReplay: rawReplay,
+      compactPoseReplay: compactReplay,
+    })
   })
 })
