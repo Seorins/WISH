@@ -34,6 +34,7 @@ export {
   validateCreateExerciseSessionRequest,
 } from './exercise-sessions'
 export {
+  getChartRanking,
   getChartStats,
   getMusicResult,
   getMyBestMusicResults,
@@ -153,6 +154,9 @@ export type {
   ChartStats,
   GetMyMusicResultsParams,
   MusicBestResult,
+  MusicChartRanking,
+  MusicMyRanking,
+  MusicRankingEntry,
   MusicResult,
   MusicResultDetail,
   MusicResultPage,
