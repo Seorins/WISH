@@ -48,7 +48,7 @@ export function emitEmoteBubble(
   const bubble = scene.add
     .text(bubblePosition.x, bubblePosition.y, emoji, {
       fontSize: `${fontSize}px`,
-      fontFamily: "'Galmuri11', 'Apple SD Gothic Neo', sans-serif",
+      fontFamily: "'Jua', 'Apple SD Gothic Neo', sans-serif",
       resolution: 2,
     })
     .setOrigin(0.5, 1)
