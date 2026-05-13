@@ -19,6 +19,7 @@ import {
   type RhythmLane,
   type RhythmNote,
 } from './rhythmCharts'
+import { YouTubePlayerBridge } from '@/game/systems/youtubePlayer'
 
 type MusicRhythmSceneData = {
   chartId?: string
@@ -100,6 +101,7 @@ export class MusicRhythmScene extends Phaser.Scene {
   private isFinished = false
   private isLeaving = false
   private recorder: MusicRecorderHandle | null = null
+  private youtubePlayer: YouTubePlayerBridge | null = null
   private cameraBackground: CameraBackground | null = null
   private handTracker: HandTracker | null = null
   // 양손 손바닥 추적: handedness("Left"/"Right") 키로 손당 커서 + 필터 1개씩
@@ -140,11 +142,17 @@ export class MusicRhythmScene extends Phaser.Scene {
   preload() {
     // unique texture key per chart — otherwise Phaser caches the first-loaded image
     // and reuses it for every other chart
-    this.load.image(
-      this.getRhythmBackgroundKey(),
-      assetPath(getRhythmBackgroundPath(this.chart.id)),
-    )
-    this.load.audio(this.chart.audioKey, assetPath(this.chart.audioPath))
+    if (this.chart.youtubeVideoId) {
+      // Use the YouTube thumbnail (always available, no CORS issue) as background
+      const thumbUrl = `https://i.ytimg.com/vi/${this.chart.youtubeVideoId}/hqdefault.jpg`
+      this.load.image(this.getRhythmBackgroundKey(), thumbUrl)
+    } else {
+      this.load.image(
+        this.getRhythmBackgroundKey(),
+        assetPath(getRhythmBackgroundPath(this.chart.id)),
+      )
+      this.load.audio(this.chart.audioKey, assetPath(this.chart.audioPath))
+    }
   }
 
   private getRhythmBackgroundKey() {
@@ -199,6 +207,15 @@ export class MusicRhythmScene extends Phaser.Scene {
         this.startRound()
       }
     })
+
+    // Pre-load YouTube player in the background so it's ready when user clicks start
+    if (this.chart.youtubeVideoId) {
+      this.youtubePlayer = new YouTubePlayerBridge(this.chart.youtubeVideoId)
+      this.youtubePlayer.onEnded = () => this.finishRound()
+      this.youtubePlayer.load().catch(err => {
+        console.warn('[MusicRhythmScene] YouTube player preload failed:', err)
+      })
+    }
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.stopMusic()
@@ -386,6 +403,7 @@ export class MusicRhythmScene extends Phaser.Scene {
     this.handCursors = new Map()
     this.palmFilters = new Map()
     this.lanePalmInside = [false, false, false, false]
+    this.youtubePlayer = null
   }
 
   private createStageBackdrop(vw: number, vh: number) {
@@ -917,9 +935,24 @@ export class MusicRhythmScene extends Phaser.Scene {
     this.isStarted = true
     this.startTimeMs = this.time.now
     this.startOverlay.destroy()
-    this.music = this.sound.add(this.chart.audioKey, { volume: 0.78 }) as SeekableSound
-    this.music.once('complete', () => this.finishRound())
-    this.music.play()
+
+    if (this.youtubePlayer) {
+      // YouTube mode — play (or wait for load then play)
+      if (this.youtubePlayer.isReady) {
+        this.youtubePlayer.play()
+      } else {
+        this.youtubePlayer
+          .load()
+          .then(() => this.youtubePlayer?.play())
+          .catch(err => console.warn('[MusicRhythmScene] YouTube play failed:', err))
+      }
+    } else {
+      // Phaser audio mode
+      this.music = this.sound.add(this.chart.audioKey, { volume: 0.78 }) as SeekableSound
+      this.music.once('complete', () => this.finishRound())
+      this.music.play()
+    }
+
     this.recorder = startMusicRecording({ scene: this })
   }
 
@@ -1369,6 +1402,13 @@ export class MusicRhythmScene extends Phaser.Scene {
   }
 
   private getSongTimeMs() {
+    if (this.youtubePlayer) {
+      const ytMs = this.youtubePlayer.getCurrentTimeMs()
+      if (ytMs > 0) return ytMs
+      // Fall back to game clock while YouTube is buffering
+      return this.time.now - this.startTimeMs
+    }
+
     const seekSeconds = this.music?.seek
     if (typeof seekSeconds === 'number' && seekSeconds >= 0) {
       return seekSeconds * 1_000
@@ -1392,6 +1432,9 @@ export class MusicRhythmScene extends Phaser.Scene {
   }
 
   private async finalizeAndSubmit(playedDurationMs: number) {
+    // YouTube charts are not persisted to the backend (no server-side chart record)
+    if (this.chart.youtubeVideoId) return
+
     const baseRequest: MusicResultRequest = {
       chartId: this.chart.id,
       score: this.score,
@@ -1722,6 +1765,11 @@ export class MusicRhythmScene extends Phaser.Scene {
   }
 
   private stopMusic() {
+    if (this.youtubePlayer) {
+      this.youtubePlayer.stop()
+      this.youtubePlayer.destroy()
+      this.youtubePlayer = null
+    }
     this.music?.stop()
     this.music?.destroy()
     this.music = null
