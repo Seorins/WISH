@@ -34,7 +34,10 @@ storage:
     prefix: dev
 
 # 마을 광장 멀티플레이 활성화 (S14P31E103-755). 기본 yaml 의 enabled=false 는 운영용 안전핀.
+# room-capacity 는 dev 시연·테스트 환경에서 단일 인스턴스 + SimpleBroker 기준으로 100명 까지 상향
+# (S14P31E103-771). 기본 30 은 운영 안전 기본값으로 base yaml 에 그대로 유지.
 app:
   realtime:
     village:
       enabled: true
+      room-capacity: 100
