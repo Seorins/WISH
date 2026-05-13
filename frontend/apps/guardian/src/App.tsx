@@ -7,6 +7,7 @@ import { DashboardPage } from './pages/DashboardPage'
 import { FuelPage } from './pages/FuelPage'
 import { LiveMonitorPage } from './pages/LiveMonitorPage'
 import { LoginPage } from './pages/LoginPage'
+import { ReportPage } from './pages/ReportPage'
 import { ROMDetailPage } from './pages/ROMDetailPage'
 import { SignupPage } from './pages/SignupPage'
 import { RequireAuth } from './routes/RequireAuth'
@@ -65,6 +66,14 @@ function App() {
           element={
             <RequireAuth>
               <LiveMonitorPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/reports"
+          element={
+            <RequireAuth>
+              <ReportPage />
             </RequireAuth>
           }
         />

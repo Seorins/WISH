@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useEffect, useMemo, useState } from 'react'
 import {
   getTaekwondoPoomsaeLabel,
+  getTaekwondoSessionDetail,
   listTaekwondoMotions,
   TAEKWONDO_POOMSAE_VALUES,
   type Poomsae,
@@ -85,7 +86,33 @@ export function TaekwondoMain() {
   }, [sortedMotions])
 
   const selectedMotion = sortedMotions.find(m => m.id === selectedMotionId) ?? null
-  const selectedStats = selectedMotion ? motionStatsMap[selectedMotion.id] : undefined
+  const baseStats = selectedMotion ? motionStatsMap[selectedMotion.id] : undefined
+
+  // list 응답 motion 의 videoUrl 은 비어있으므로, 선택된 motion 이 들어있는 가장 최근 세션의
+  // detail 을 호출해 presigned URL 을 받아온다. react-query 캐시로 재선택 시엔 즉시.
+  const latestSessionId = useMemo(() => {
+    if (!selectedMotion || !sessionsPage) return null
+    const candidates = sessionsPage.content
+      .filter(s => s.motions.some(m => m.taekwondoMotionId === selectedMotion.id))
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    return candidates[0]?.id ?? null
+  }, [selectedMotion, sessionsPage])
+
+  const { data: latestSessionDetail } = useQuery({
+    queryKey: ['taekwondo-session-detail', latestSessionId],
+    queryFn: () => getTaekwondoSessionDetail(latestSessionId!),
+    enabled: latestSessionId != null,
+    staleTime: 5 * 60_000,
+  })
+
+  const selectedStats = useMemo<MotionStats | undefined>(() => {
+    if (!baseStats || !selectedMotion) return baseStats
+    const detailVideoUrl =
+      latestSessionDetail?.motions.find(m => m.taekwondoMotionId === selectedMotion.id)?.videoUrl ??
+      null
+    if (!detailVideoUrl) return baseStats
+    return { ...baseStats, latestVideoUrl: detailVideoUrl }
+  }, [baseStats, selectedMotion, latestSessionDetail])
 
   const dailyLoaded = daily !== undefined
   const noActivityToday = dailyLoaded && todayTaekwondoSeconds === 0

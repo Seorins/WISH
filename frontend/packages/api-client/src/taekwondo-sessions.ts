@@ -31,6 +31,8 @@ export type TaekwondoSessionMotionResult = {
   accuracy: number
   completedReps: number
   feedback: string
+  videoUrl?: string | null
+  thumbUrl?: string | null
   createdAt: string
 }
 
@@ -107,4 +109,18 @@ export async function getMyTaekwondoSessions({
     },
   )
   return response.data
+}
+
+// 단건 상세 — list 응답엔 motion의 videoUrl 이 빈 채로 내려와서,
+// 영상 재생용 presigned URL 을 받으려면 이걸 호출해야 한다.
+// getExerciseSessionDetail 과 동일하게 ApiResponse 를 unwrap 해서 detail 만 반환.
+export async function getTaekwondoSessionDetail(id: number): Promise<TaekwondoSessionDetail> {
+  const response = await apiClient.get<ApiResponse<TaekwondoSessionDetail | null>>(
+    `/taekwondo-sessions/${id}`,
+  )
+  const detail = response.data.data
+  if (!detail) {
+    throw new Error(response.data.message || 'Failed to load taekwondo session detail.')
+  }
+  return detail
 }
