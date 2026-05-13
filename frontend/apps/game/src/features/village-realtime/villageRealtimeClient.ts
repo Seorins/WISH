@@ -102,6 +102,13 @@ export class VillageRealtimeClient {
 }
 
 function defaultBrokerUrl(): string {
+  // dev 환경에선 FE (Vite 3001) 와 BE (8080) 가 별도 origin 이므로 REST 호출에 쓰는 base URL 을 그대로 활용.
+  // VITE_API_BASE_URL 예: "http://localhost:8080/api/v1" → "ws://localhost:8080/api/v1/ws/village".
+  // 운영처럼 같은 origin 에서 리버스 프록시가 BE 를 마운트하는 경우엔 env 미설정 → window.location 폴백.
+  const apiBase = import.meta.env.VITE_API_BASE_URL as string | undefined
+  if (apiBase) {
+    return apiBase.replace(/^http/, 'ws') + '/ws/village'
+  }
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
   return `${protocol}//${window.location.host}/api/v1/ws/village`
 }

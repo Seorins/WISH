@@ -32,3 +32,9 @@ storage:
   type: s3
   s3:
     prefix: dev
+
+# 마을 광장 멀티플레이 활성화 (S14P31E103-755). 기본 yaml 의 enabled=false 는 운영용 안전핀.
+app:
+  realtime:
+    village:
+      enabled: true
