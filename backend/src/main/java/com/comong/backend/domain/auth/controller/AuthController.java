@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.comong.backend.domain.auth.dto.LoginRequest;
+import com.comong.backend.domain.auth.dto.RefreshTokenRequest;
 import com.comong.backend.domain.auth.dto.SignupRequest;
 import com.comong.backend.domain.auth.dto.TokenResponse;
 import com.comong.backend.domain.auth.service.AuthService;
@@ -64,5 +65,24 @@ public class AuthController {
     public ResponseEntity<ApiResponse<TokenResponse>> login(
             @Valid @RequestBody LoginRequest request) {
         return ResponseEntity.ok(ApiResponse.success(authService.login(request)));
+    }
+
+    @Operation(
+            summary = "Refresh token 으로 access 토큰 재발급",
+            description =
+                    "기존 refresh token 을 회전(rotation)하여 새 access + 새 refresh 를 발급한다. 폐기/만료/위조 시 401."
+                            + " 재사용 감지 시 동일 사용자의 모든 활성 refresh 가 함께 폐기된다.")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "200",
+                description = "재발급 성공"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "401",
+                description = "Refresh token 이 만료/폐기/위조 (A-004)")
+    })
+    @PostMapping("/refresh")
+    public ResponseEntity<ApiResponse<TokenResponse>> refresh(
+            @Valid @RequestBody RefreshTokenRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(authService.refresh(request.refreshToken())));
     }
 }

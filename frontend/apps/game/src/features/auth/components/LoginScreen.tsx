@@ -19,7 +19,7 @@ type LoginScreenProps = {
 }
 
 export function LoginScreen({ onAuthSuccess }: LoginScreenProps) {
-  const setToken = useAuthStore(state => state.setToken)
+  const setTokens = useAuthStore(state => state.setTokens)
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
@@ -33,7 +33,8 @@ export function LoginScreen({ onAuthSuccess }: LoginScreenProps) {
     setSubmitting(true)
     try {
       const response = await loginApi(values)
-      setToken(response.data.accessToken)
+      // access + refresh 모두 저장. 인터셉터가 access 만료 시 자동 회전 (S14P31E103-780).
+      setTokens(response.data.accessToken, response.data.refreshToken)
       onAuthSuccess()
     } catch (err) {
       setError(extractAuthErrorMessage(err, '이메일 또는 비밀번호가 올바르지 않습니다'))
