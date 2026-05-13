@@ -4,7 +4,9 @@ import { addCoverBackground } from '@/game/world/background'
 import { fadeToScene } from '@/game/systems/sceneTransition'
 import { generateYouTubeChart, type YouTubeDifficulty } from '../play/rhythmCharts'
 
-const YT_API_KEY = import.meta.env.VITE_YOUTUBE_API_KEY as string
+// 백엔드 프록시 경유 — API 키를 프론트에 노출하지 않음 (S14P31E103-781).
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api/v1'
+const ACCESS_TOKEN_STORAGE_KEY = 'wish_access_token'
 
 type VideoItem = {
   videoId: string
@@ -12,6 +14,14 @@ type VideoItem = {
   channelTitle: string
   thumbnailUrl: string
   durationMs: number
+}
+
+type YoutubeSearchApiResponse = {
+  code: string
+  message: string
+  data: {
+    items: VideoItem[]
+  } | null
 }
 
 const DIFF_OPTIONS: { key: YouTubeDifficulty; label: string; hint: string }[] = [
@@ -123,47 +133,28 @@ export class YouTubeSearchScene extends Phaser.Scene {
     resultsEl.innerHTML = '<p class="yts-msg">검색 중...</p>'
 
     try {
-      const searchUrl =
-        `https://www.googleapis.com/youtube/v3/search` +
-        `?part=snippet&q=${encodeURIComponent(query)}&type=video` +
-        `&videoCategoryId=10&maxResults=8&key=${YT_API_KEY}`
-      const searchRes = await fetch(searchUrl)
-      const searchData = await searchRes.json()
+      const token = localStorage.getItem(ACCESS_TOKEN_STORAGE_KEY)
+      const url = `${API_BASE_URL}/music/youtube/search?q=${encodeURIComponent(query)}&limit=8`
+      const res = await fetch(url, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
 
-      if (!searchData.items?.length) {
-        resultsEl.innerHTML = '<p class="yts-msg">검색 결과가 없어요.</p>'
+      if (!res.ok) {
+        const message =
+          res.status === 503
+            ? '유튜브 검색이 현재 비활성화되어 있어요.'
+            : '검색 중 오류가 발생했어요. 잠시 후 다시 시도해주세요.'
+        resultsEl.innerHTML = `<p class="yts-msg">${message}</p>`
         return
       }
 
-      const ids: string[] = searchData.items.map((it: { id: { videoId: string } }) => it.id.videoId)
-      const durRes = await fetch(
-        `https://www.googleapis.com/youtube/v3/videos?part=contentDetails&id=${ids.join(',')}&key=${YT_API_KEY}`,
-      )
-      const durData = await durRes.json()
-      const durMap = new Map<string, number>(
-        (durData.items ?? []).map((it: { id: string; contentDetails: { duration: string } }) => [
-          it.id,
-          parseIsoDuration(it.contentDetails.duration),
-        ]),
-      )
+      const payload = (await res.json()) as YoutubeSearchApiResponse
+      const items = payload.data?.items ?? []
 
-      const items: VideoItem[] = searchData.items.map(
-        (it: {
-          id: { videoId: string }
-          snippet: {
-            title: string
-            channelTitle: string
-            thumbnails: { medium?: { url: string }; default?: { url: string } }
-          }
-        }) => ({
-          videoId: it.id.videoId,
-          title: it.snippet.title,
-          channelTitle: it.snippet.channelTitle,
-          thumbnailUrl:
-            it.snippet.thumbnails.medium?.url ?? it.snippet.thumbnails.default?.url ?? '',
-          durationMs: durMap.get(it.id.videoId) ?? 180_000,
-        }),
-      )
+      if (items.length === 0) {
+        resultsEl.innerHTML = '<p class="yts-msg">검색 결과가 없어요.</p>'
+        return
+      }
 
       this.renderResults(items)
     } catch (err) {
@@ -281,15 +272,6 @@ export class YouTubeSearchScene extends Phaser.Scene {
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────
-
-function parseIsoDuration(iso: string): number {
-  const m = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?/)
-  if (!m) return 180_000
-  const h = parseFloat(m[1] ?? '0')
-  const min = parseFloat(m[2] ?? '0')
-  const sec = parseFloat(m[3] ?? '0')
-  return Math.round((h * 3600 + min * 60 + sec) * 1000)
-}
 
 function msDuration(ms: number): string {
   const s = Math.floor(ms / 1000)
