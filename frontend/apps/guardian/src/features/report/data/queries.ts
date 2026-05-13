@@ -49,6 +49,10 @@ function inWeek(isoTs: string | null | undefined, week: WeekRange): boolean {
   return date >= week.start && date <= week.end
 }
 
+function contentSecondsOfDay(item: DailyUsageStats['items'][number]): number {
+  return (item.art ?? 0) + (item.music ?? 0) + (item.taekwondo ?? 0) + (item.gymnastics ?? 0)
+}
+
 function buildParticipationFromDaily(
   daily: DailyUsageStats | undefined,
   week: WeekRange,
@@ -57,7 +61,7 @@ function buildParticipationFromDaily(
   const map = new Map<string, number>()
   if (daily?.items) {
     for (const item of daily.items) {
-      const minutes = Math.round((item.login ?? 0) / 60)
+      const minutes = Math.round(contentSecondsOfDay(item) / 60)
       map.set(item.date, minutes)
     }
   }
@@ -68,9 +72,9 @@ function buildParticipationFromDaily(
   })
 }
 
-function sumDailyLoginMinutes(daily: DailyUsageStats | undefined): number {
+function sumDailyContentMinutes(daily: DailyUsageStats | undefined): number {
   if (!daily?.items) return 0
-  return daily.items.reduce((sum, item) => sum + Math.round((item.login ?? 0) / 60), 0)
+  return daily.items.reduce((sum, item) => sum + Math.round(contentSecondsOfDay(item) / 60), 0)
 }
 
 function countWeekResults<T>(
@@ -102,8 +106,8 @@ function buildSummary({
   exerciseWeek: ExerciseSessionDetail[]
   fuelEarned: number
 }): ReportSummary {
-  const totalMinutes = sumDailyLoginMinutes(daily)
-  const participatedDays = (daily?.items ?? []).filter(item => (item.login ?? 0) > 0).length
+  const totalMinutes = sumDailyContentMinutes(daily)
+  const participatedDays = (daily?.items ?? []).filter(item => contentSecondsOfDay(item) > 0).length
   const sessionCount = musicWeek.length + taekwondoWeek.length + exerciseWeek.length
   return {
     participatedDays,
@@ -119,7 +123,13 @@ function buildUsageCompare(
   selfMinutes: number,
   selfName: string,
 ): UsageCompare {
-  const othersAverageMinutes = averages ? Math.round((averages.login?.averageSeconds ?? 0) / 60) : 0
+  // 컨텐츠 평균(art/music/taekwondo/gymnastics)만 합산 — LOGIN 은 로비/메뉴 포함이라 의미 부풀려짐
+  const othersAverageSeconds = averages
+    ? averages.contentAverages
+        .filter(c => c.contentType !== 'LOGIN')
+        .reduce((sum, c) => sum + (c.averageSeconds ?? 0), 0)
+    : 0
+  const othersAverageMinutes = Math.round(othersAverageSeconds / 60)
   return {
     selfMinutes,
     othersAverageMinutes,
