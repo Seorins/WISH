@@ -22,6 +22,7 @@ import {
 import { useFuelStatus } from '@/features/fuel/hooks'
 import { buildMockReport, buildUsageRanking } from './mock'
 import type {
+  AchievementStat,
   GameAchievement,
   ParticipationDay,
   ReportData,
@@ -181,24 +182,6 @@ function buildTimeBucketsFromSessions({
   return { buckets, topBucketId }
 }
 
-function mostFrequent<T, K extends string | number>(items: T[], keyFn: (item: T) => K): K | null {
-  if (items.length === 0) return null
-  const counts = new Map<K, number>()
-  for (const item of items) {
-    const k = keyFn(item)
-    counts.set(k, (counts.get(k) ?? 0) + 1)
-  }
-  let top: K | null = null
-  let topCount = 0
-  for (const [k, c] of counts.entries()) {
-    if (c > topCount) {
-      top = k
-      topCount = c
-    }
-  }
-  return top
-}
-
 function sumDailyField(
   daily: DailyUsageStats | undefined,
   field: 'music' | 'taekwondo' | 'gymnastics' | 'art',
@@ -211,13 +194,11 @@ function buildMusicAchievement(results: MusicResultDetail[], minutes: number): G
   if (results.length === 0) {
     return {
       gameId: 'music',
-      label: '음악 게임',
+      label: '음악',
       emoji: '🎵',
       minutes,
       hasData: minutes > 0,
-      averageAccuracy: null,
-      bestRecord: null,
-      topContent: null,
+      stats: [],
       highlight: null,
     }
   }
@@ -225,17 +206,17 @@ function buildMusicAchievement(results: MusicResultDetail[], minutes: number): G
     (results.reduce((s, r) => s + (r.accuracy ?? 0), 0) / results.length) * 100,
   )
   const best = results.reduce<MusicResultDetail>((b, r) => (r.score > b.score ? r : b), results[0])
-  const topChart = mostFrequent(results, r => r.chartTitle ?? r.chartId) ?? '—'
   const hasNewBest = results.some(r => r.score === best.score)
   return {
     gameId: 'music',
-    label: '음악 게임',
+    label: '음악',
     emoji: '🎵',
     minutes,
     hasData: true,
-    averageAccuracy: avgAccuracy,
-    bestRecord: `최고 점수 ${best.score.toLocaleString()}`,
-    topContent: String(topChart),
+    stats: [
+      { prefix: '평균 정확도 ', value: `${avgAccuracy}%`, strong: true },
+      { value: `최고 점수 ${best.score.toLocaleString()}`, strong: true },
+    ],
     highlight: hasNewBest && results.length >= 3 ? '신기록' : null,
   }
 }
@@ -251,9 +232,7 @@ function buildTaekwondoAchievement(
       emoji: '🥋',
       minutes,
       hasData: minutes > 0,
-      averageAccuracy: null,
-      bestRecord: null,
-      topContent: null,
+      stats: [],
       highlight: null,
     }
   }
@@ -264,16 +243,19 @@ function buildTaekwondoAchievement(
     (b, s) => (s.averageAccuracy > b.averageAccuracy ? s : b),
     sessions[0],
   )
-  const topPoomsae = mostFrequent(sessions, s => s.poomsae) ?? '—'
   return {
     gameId: 'taekwondo',
     label: '태권도',
     emoji: '🥋',
     minutes,
     hasData: true,
-    averageAccuracy: avgAccuracy,
-    bestRecord: `최고 정확도 ${Math.round(bestSession.averageAccuracy * 100)}%`,
-    topContent: String(topPoomsae),
+    stats: [
+      { prefix: '평균 정확도 ', value: `${avgAccuracy}%`, strong: true },
+      {
+        value: `최고 정확도 ${Math.round(bestSession.averageAccuracy * 100)}%`,
+        strong: true,
+      },
+    ],
     highlight: null,
   }
 }
@@ -289,9 +271,7 @@ function buildExerciseAchievement(
       emoji: '🤸',
       minutes,
       hasData: minutes > 0,
-      averageAccuracy: null,
-      bestRecord: null,
-      topContent: null,
+      stats: [],
       highlight: null,
     }
   }
@@ -302,16 +282,19 @@ function buildExerciseAchievement(
     (b, s) => (s.averageAccuracy > b.averageAccuracy ? s : b),
     sessions[0],
   )
-  const topType = mostFrequent(sessions, s => s.exerciseType) ?? '—'
   return {
     gameId: 'exercise',
     label: '체조',
     emoji: '🤸',
     minutes,
     hasData: true,
-    averageAccuracy: avgAccuracy,
-    bestRecord: `최고 정확도 ${Math.round(bestSession.averageAccuracy * 100)}%`,
-    topContent: String(topType),
+    stats: [
+      { prefix: '평균 정확도 ', value: `${avgAccuracy}%`, strong: true },
+      {
+        value: `최고 정확도 ${Math.round(bestSession.averageAccuracy * 100)}%`,
+        strong: true,
+      },
+    ],
     highlight: null,
   }
 }
@@ -324,11 +307,20 @@ function buildArtAchievement(artworks: Artwork[], minutes: number): GameAchievem
       emoji: '🎨',
       minutes,
       hasData: minutes > 0,
-      averageAccuracy: null,
-      bestRecord: null,
-      topContent: null,
+      stats: [],
       highlight: null,
     }
+  }
+  const totalSeconds = artworks.reduce((s, a) => s + (a.playDurationSeconds ?? 0), 0)
+  const avgMinutes = Math.max(1, Math.round(totalSeconds / artworks.length / 60))
+  const latest = artworks.reduce((b, a) => (a.createdAt > b.createdAt ? a : b), artworks[0])
+  const latestTitle = latest.title?.trim()
+  const stats: AchievementStat[] = [
+    { value: `${artworks.length}개 작품 완성`, strong: true },
+    { prefix: '작품당 평균 ', value: `${avgMinutes}분`, strong: true },
+  ]
+  if (latestTitle) {
+    stats.push({ prefix: '최근 작품: ', value: latestTitle })
   }
   return {
     gameId: 'art',
@@ -336,9 +328,7 @@ function buildArtAchievement(artworks: Artwork[], minutes: number): GameAchievem
     emoji: '🎨',
     minutes,
     hasData: true,
-    averageAccuracy: null,
-    bestRecord: `${artworks.length}개 작품 완성`,
-    topContent: null,
+    stats,
     highlight: null,
   }
 }
