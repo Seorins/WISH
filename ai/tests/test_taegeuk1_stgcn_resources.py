@@ -84,6 +84,41 @@ def _walking_low_block_sequence(resources, *, animated: bool) -> np.ndarray:
     return sequence
 
 
+def _walking_inner_block_sequence(
+    resources,
+    *,
+    animated: bool,
+    unrelated_motion: bool = False,
+) -> np.ndarray:
+    sequence = np.zeros(TARGET_SEQUENCE_SHAPE, dtype=np.float32)
+    sequence[2, :, :] = 1.0
+
+    _set_landmark(sequence, resources, LEFT_SHOULDER, -0.2, -1.0)
+    _set_landmark(sequence, resources, RIGHT_SHOULDER, 0.2, -1.0)
+    _set_landmark(sequence, resources, LEFT_HIP, -0.2, 0.0)
+    _set_landmark(sequence, resources, RIGHT_HIP, 0.2, 0.0)
+    _set_landmark(sequence, resources, LEFT_KNEE, -0.35, 0.75)
+    _set_landmark(sequence, resources, RIGHT_KNEE, 0.35, 0.75)
+    _set_landmark(sequence, resources, LEFT_ANKLE, -0.5, 1.5)
+    _set_landmark(sequence, resources, RIGHT_ANKLE, 0.5, 1.5)
+    _set_landmark(sequence, resources, RIGHT_ELBOW, 0.25, -0.3)
+    _set_landmark(sequence, resources, RIGHT_WRIST, 0.2, 0.1)
+
+    if unrelated_motion:
+        progress = np.sin(np.linspace(0.0, np.pi, TARGET_SEQUENCE_SHAPE[1]))
+        _set_landmark(sequence, resources, LEFT_KNEE, -0.35 + (0.25 * progress), 0.75)
+
+    if animated:
+        progress = np.clip((np.linspace(0.0, 1.0, TARGET_SEQUENCE_SHAPE[1]) - 0.25) / 0.55, 0.0, 1.0)
+        _set_landmark(sequence, resources, LEFT_ELBOW, -0.65 + (0.3 * progress), -0.35)
+        _set_landmark(sequence, resources, LEFT_WRIST, -1.0 + (0.8 * progress), -0.15)
+    else:
+        _set_landmark(sequence, resources, LEFT_ELBOW, -0.35, -0.35)
+        _set_landmark(sequence, resources, LEFT_WRIST, -0.2, -0.15)
+
+    return sequence
+
+
 def test_taegeuk1_resources_load_with_expected_schema() -> None:
     resources = load_taegeuk1_resources()
 
@@ -316,6 +351,26 @@ def test_target_rule_score_accepts_animated_walking_low_block_sequence() -> None
 
     assert score is not None
     assert score >= TARGET_RULE_TEST_PASS_SCORE
+
+
+def test_target_rule_score_caps_inner_block_without_wrist_motion() -> None:
+    resources = load_taegeuk1_resources()
+    sequence = _walking_inner_block_sequence(resources, animated=False, unrelated_motion=True)
+
+    score = _target_rule_score(sequence, resources.keypoint_names, resources.class_names[5])
+
+    assert score is not None
+    assert score <= TARGET_RULE_LOW_MOTION_SCORE_CAP
+
+
+def test_target_rule_score_accepts_animated_inner_block_sequence() -> None:
+    resources = load_taegeuk1_resources()
+    sequence = _walking_inner_block_sequence(resources, animated=True)
+
+    score = _target_rule_score(sequence, resources.keypoint_names, resources.class_names[5])
+
+    assert score is not None
+    assert score > TARGET_RULE_LOW_MOTION_SCORE_CAP
 
 
 def test_target_rule_score_rejects_single_good_late_camera_frame() -> None:

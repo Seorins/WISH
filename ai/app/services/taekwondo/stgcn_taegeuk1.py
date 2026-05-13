@@ -801,6 +801,8 @@ def _target_action_motion_score_cap(
         delta = _max_wrist_vertical_delta(sequence, keypoint_names, direction="down")
     elif expected_action == ACTION_MIDDLE_PUNCH:
         delta = _max_arm_extension_delta(sequence, keypoint_names)
+    elif _movement_requires_inner_block(movement_name):
+        delta = _max_wrist_horizontal_delta(sequence, keypoint_names)
     elif _movement_requires_face_block(movement_name):
         delta = _max_wrist_vertical_delta(sequence, keypoint_names, direction="up")
     else:
@@ -825,6 +827,10 @@ def _movement_requires_face_block(movement_name: str) -> bool:
     return "얼굴막" in movement_name
 
 
+def _movement_requires_inner_block(movement_name: str) -> bool:
+    return "안막" in movement_name
+
+
 def _max_wrist_vertical_delta(
     sequence: np.ndarray,
     keypoint_names: list[str],
@@ -842,6 +848,22 @@ def _max_wrist_vertical_delta(
             delta = float(early[1] - late[1])
         else:
             delta = float(late[1] - early[1])
+        if np.isfinite(delta):
+            deltas.append(delta)
+
+    return max(deltas) if deltas else None
+
+
+def _max_wrist_horizontal_delta(sequence: np.ndarray, keypoint_names: list[str]) -> float | None:
+    indexes = _landmark_indexes(keypoint_names, (LEFT_WRIST, RIGHT_WRIST))
+    deltas: list[float] = []
+    for index in indexes.values():
+        early = _joint_phase_median(sequence, index, 0.0, 0.35)
+        late = _joint_phase_median(sequence, index, 0.65, 1.0)
+        if early is None or late is None:
+            continue
+
+        delta = float(abs(late[0] - early[0]))
         if np.isfinite(delta):
             deltas.append(delta)
 
