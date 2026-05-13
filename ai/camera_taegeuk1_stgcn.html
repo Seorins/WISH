@@ -535,7 +535,10 @@
     let isPreparingRecording = false;
     let recordTimer = null;
     let progressTimer = null;
+    let recordAnalyzeDelayTimer = null;
+    let recordAnalyzeDelayInterval = null;
     const API_TIMEOUT_MS = 20000;
+    const RECORD_ANALYZE_DELAY_SECONDS = 3;
 
     function getDefaultApiUrl() {
       const endpoint = "/api/v1/taekwondo/taegeuk1/analyze";
@@ -757,9 +760,56 @@
       });
     }
 
+    function clearRecordAnalyzeDelay() {
+      if (recordAnalyzeDelayTimer) {
+        window.clearTimeout(recordAnalyzeDelayTimer);
+      }
+      if (recordAnalyzeDelayInterval) {
+        window.clearInterval(recordAnalyzeDelayInterval);
+      }
+      recordAnalyzeDelayTimer = null;
+      recordAnalyzeDelayInterval = null;
+    }
+
+    function waitBeforeRecordAnalyze(seconds = RECORD_ANALYZE_DELAY_SECONDS) {
+      const waitSeconds = Math.max(0, Math.floor(Number(seconds) || 0));
+      if (waitSeconds === 0) {
+        return Promise.resolve();
+      }
+
+      clearRecordAnalyzeDelay();
+      recordBtn.disabled = true;
+      analyzeBtn.disabled = true;
+      recordAnalyzeBtn.disabled = true;
+      downloadBtn.disabled = true;
+      progressBar.style.width = "0%";
+
+      let remainingSeconds = waitSeconds;
+      const updateCountdownStatus = () => {
+        setStatus(`${remainingSeconds}초 후 녹화 시작`);
+      };
+      updateCountdownStatus();
+      showResultMessage("녹화 준비 중", `${waitSeconds}초 후 녹화가 시작됩니다. 준비 자세를 잡아주세요.`);
+
+      return new Promise((resolve) => {
+        recordAnalyzeDelayInterval = window.setInterval(() => {
+          remainingSeconds -= 1;
+          if (remainingSeconds > 0) {
+            updateCountdownStatus();
+          }
+        }, 1000);
+
+        recordAnalyzeDelayTimer = window.setTimeout(() => {
+          clearRecordAnalyzeDelay();
+          resolve();
+        }, waitSeconds * 1000);
+      });
+    }
+
     function stopCamera() {
       isRecording = false;
       isPreparingRecording = false;
+      clearRecordAnalyzeDelay();
       if (recordTimer) {
         window.clearTimeout(recordTimer);
       }
@@ -943,6 +993,7 @@
     recordAnalyzeBtn.addEventListener("click", async () => {
       try {
         showResultMessage("녹화 중", "바로 녹화를 시작하고, 녹화가 끝나면 자동으로 분석합니다.");
+        await waitBeforeRecordAnalyze();
         await startRecording();
         await analyze();
       } catch (error) {
