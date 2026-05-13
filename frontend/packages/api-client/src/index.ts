@@ -1,7 +1,7 @@
 export { apiClient } from './client'
 export { getAdminDashboard, getAdminPatientDashboard, notifyGuardian } from './admin-dashboard'
 export { authInterceptor } from './interceptors/auth'
-export { login, signup } from './auth'
+export { login, refreshTokens, signup } from './auth'
 export {
   createArtwork,
   deleteArtwork,
@@ -87,7 +87,14 @@ export {
 export { aiApiClient, analyzeTaegeuk1Motion } from './taekwondo-ai'
 export type { TaegeukAnalyzeRequest, TaegeukAnalyzeResponse } from './taekwondo-ai'
 export { changeUserRole, listUsers } from './users'
-export type { LoginRequest, SignupRequest, TokenResponse, UserResponse, UserRole } from './auth'
+export type {
+  LoginRequest,
+  RefreshTokenRequest,
+  SignupRequest,
+  TokenResponse,
+  UserResponse,
+  UserRole,
+} from './auth'
 export type { AdminUserResponse } from './users'
 export type {
   AdminDashboard,

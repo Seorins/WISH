@@ -386,9 +386,7 @@ export function DashboardPage() {
               <div style={styles.panelHeader}>
                 <div>
                   <h2 style={styles.panelTitle}>운영 알림</h2>
-                  <p style={styles.panelDescription}>
-                    발표에서 바로 말할 수 있는 관리 포인트입니다.
-                  </p>
+                  <p style={styles.panelDescription}>주의가 필요한 운영 지표를 확인합니다.</p>
                 </div>
               </div>
               <div style={styles.alertList}>

@@ -410,7 +410,7 @@ export class VillageScene extends Phaser.Scene {
     this.emojiHint = this.add
       .text(vw - 18, vh - 18, '[Q] 이모티콘', {
         fontSize: '14px',
-        fontFamily: "'Galmuri11', 'Apple SD Gothic Neo', sans-serif",
+        fontFamily: "'Jua', 'Apple SD Gothic Neo', sans-serif",
         color: '#ffffff',
         backgroundColor: '#00000080',
         padding: { left: 8, right: 8, top: 4, bottom: 4 },

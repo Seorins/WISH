@@ -12,6 +12,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
+import com.comong.backend.domain.auth.repository.RefreshTokenRepository;
 import com.comong.backend.domain.patient.repository.PatientProfileRepository;
 import com.comong.backend.domain.user.repository.UserRepository;
 import com.comong.backend.support.IntegrationTestSupport;
@@ -29,8 +30,11 @@ class AuthControllerIntegrationTest extends IntegrationTestSupport {
 
     @Autowired private UserRepository userRepository;
 
+    @Autowired private RefreshTokenRepository refreshTokenRepository;
+
     @BeforeEach
     void setUp() {
+        refreshTokenRepository.deleteAll();
         patientProfileRepository.deleteAll();
         userRepository.deleteAll();
     }
@@ -101,7 +105,7 @@ class AuthControllerIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
-    void loginIssuesAccessToken() throws Exception {
+    void loginIssuesAccessAndRefreshTokens() throws Exception {
         signup("guardian4@example.com", "guardian4", "P@ssw0rd!");
 
         mockMvc.perform(
@@ -114,8 +118,65 @@ class AuthControllerIntegrationTest extends IntegrationTestSupport {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("SUCCESS"))
                 .andExpect(jsonPath("$.data.accessToken").isString())
+                .andExpect(jsonPath("$.data.refreshToken").isString())
                 .andExpect(jsonPath("$.data.tokenType").value("Bearer"))
-                .andExpect(jsonPath("$.data.expiresIn").isNumber());
+                .andExpect(jsonPath("$.data.expiresIn").isNumber())
+                .andExpect(jsonPath("$.data.refreshExpiresIn").isNumber());
+    }
+
+    @Test
+    void refreshRotatesTokensAndReturnsNewPair() throws Exception {
+        signup("guardian7@example.com", "guardian7", "P@ssw0rd!");
+        TokenPair initial = loginTokens("guardian7@example.com", "P@ssw0rd!");
+
+        String response =
+                mockMvc.perform(
+                                post("/auth/refresh")
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .content(json(new RefreshPayload(initial.refreshToken()))))
+                        .andExpect(status().isOk())
+                        .andExpect(jsonPath("$.code").value("SUCCESS"))
+                        .andExpect(jsonPath("$.data.accessToken").isString())
+                        .andExpect(jsonPath("$.data.refreshToken").isString())
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString();
+
+        // 회전 결과로 받은 refresh 는 이전 것과 달라야 한다.
+        String newRefresh =
+                objectMapper.readTree(response).get("data").get("refreshToken").asString();
+        org.assertj.core.api.Assertions.assertThat(newRefresh).isNotEqualTo(initial.refreshToken());
+    }
+
+    @Test
+    void refreshRejectsRevokedTokenAfterReuseAttempt() throws Exception {
+        signup("guardian8@example.com", "guardian8", "P@ssw0rd!");
+        TokenPair initial = loginTokens("guardian8@example.com", "P@ssw0rd!");
+
+        // 첫 회전은 성공.
+        mockMvc.perform(
+                        post("/auth/refresh")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(json(new RefreshPayload(initial.refreshToken()))))
+                .andExpect(status().isOk());
+
+        // 같은 (이미 폐기된) refresh 재사용 — 401.
+        mockMvc.perform(
+                        post("/auth/refresh")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(json(new RefreshPayload(initial.refreshToken()))))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("A-004"));
+    }
+
+    @Test
+    void refreshRejectsUnknownToken() throws Exception {
+        mockMvc.perform(
+                        post("/auth/refresh")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(json(new RefreshPayload("not-a-real-token"))))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("A-004"));
     }
 
     @Test
@@ -169,6 +230,10 @@ class AuthControllerIntegrationTest extends IntegrationTestSupport {
     }
 
     private String login(String email, String password) throws Exception {
+        return loginTokens(email, password).accessToken();
+    }
+
+    private TokenPair loginTokens(String email, String password) throws Exception {
         String response =
                 mockMvc.perform(
                                 post("/auth/login")
@@ -178,7 +243,9 @@ class AuthControllerIntegrationTest extends IntegrationTestSupport {
                         .andReturn()
                         .getResponse()
                         .getContentAsString();
-        return objectMapper.readTree(response).get("data").get("accessToken").asString();
+        var data = objectMapper.readTree(response).get("data");
+        return new TokenPair(
+                data.get("accessToken").asString(), data.get("refreshToken").asString());
     }
 
     private String json(Object value) throws Exception {
@@ -188,4 +255,8 @@ class AuthControllerIntegrationTest extends IntegrationTestSupport {
     private record SignupPayload(String email, String nickname, String password) {}
 
     private record LoginPayload(String email, String password) {}
+
+    private record RefreshPayload(String refreshToken) {}
+
+    private record TokenPair(String accessToken, String refreshToken) {}
 }
