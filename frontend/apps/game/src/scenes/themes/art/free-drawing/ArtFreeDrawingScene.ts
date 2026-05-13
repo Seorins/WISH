@@ -41,11 +41,11 @@ const HAND_POINTER_REJECT_MARGIN = 0.08
 const PINCH_ENTER_RATIO = 0.15
 const PINCH_EXIT_RATIO = 0.2
 // 한 프레임에 ratio가 이만큼 이상 변하면 "손 모으는/펴는 중" → 그리기 비활성화
-const PINCH_TRANSITION_RATIO_DELTA = 0.025
+const PINCH_TRANSITION_RATIO_DELTA = 0.07
 // 핀치 들어간 직후 이 시간 동안은 그리기 차단 — 접근 모션 끝자락의 짧은 선 방지
-const PINCH_SETTLING_MS = 80
-// 손이 한 프레임에 캔버스 폭의 9% 이상 튀면 연결선 끊고 새 스트로크 시작
-const HAND_DRAW_JUMP_DISTANCE_RATIO = 0.09
+const PINCH_SETTLING_MS = 35
+// 손이 한 프레임에 캔버스 폭의 이 비율 이상 튀면 연결선 끊고 새 스트로크 시작
+const HAND_DRAW_JUMP_DISTANCE_RATIO = 0.2
 // 핀치 직전 호버 위치를 펜다운 위치로 스냅하는 최대 거리(캔버스 폭 비율) — 7% 안이면 같은 자리로 간주
 const HOVER_AIM_REJOIN_RATIO = 0.07
 // 호버 위치가 너무 오래되면 무시(500ms)
@@ -134,7 +134,7 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
   private readonly handPointerSmoother = new PointerSmoother({ alpha: 0.24 })
   private readonly handDrawingSmoother = new PointerSmoother({ alpha: 0.16 })
   private readonly handTrackingGuard = new PointerTrackingGuard<Phaser.Math.Vector2>({
-    holdDurationMs: 40,
+    holdDurationMs: 120,
   })
 
   private isDrawing = false
@@ -291,6 +291,12 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
 
     if (this.isExitConfirmOpen) {
       this.hideExitConfirm()
+      return
+    }
+
+    // 퀴즈 결과/라운드 인트로는 명시적 선택지로만 닫음 — ESC 누를 때 그 위에
+    // 종료 확인이 겹쳐 뜨던 문제 방지.
+    if (this.isQuizResultOpen || this.isRoundIntroOpen || this.isJudging) {
       return
     }
 
@@ -2174,6 +2180,11 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
   }
 
   private startNextQuizRound() {
+    // 종료 전환(returnToArtRoom) 중이거나 종료 확인이 떠있는 동안엔 새 라운드 진입 차단 —
+    // "그만하기"와 동시에 hand-tracking/중복 클릭으로 onNext 가 한 번 더 트리거돼도 안전.
+    if (this.isTransitioning || this.isExitConfirmOpen) {
+      return
+    }
     this.currentPrompt = pickRandomPrompt(this.currentPrompt?.word)
     this.refreshPromptCard()
     this.resetDrawing()
@@ -2184,7 +2195,7 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
   }
 
   private showRoundIntro(prompt: DrawingPrompt) {
-    if (this.isRoundIntroOpen) return
+    if (this.isRoundIntroOpen || this.isTransitioning) return
     this.pauseHandInputForConfirmDialog()
     this.isRoundIntroOpen = true
     this.roundIntroDialog = createQuizRoundIntroDialog({
