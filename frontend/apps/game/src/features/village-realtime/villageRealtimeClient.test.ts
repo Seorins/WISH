@@ -14,6 +14,7 @@ interface FakeClientConfig {
   brokerURL?: string
   connectHeaders?: Record<string, string>
   reconnectDelay?: number
+  beforeConnect?: () => void | Promise<void>
   onConnect?: () => void
   onStompError?: (frame: { headers: Record<string, string> }) => void
   onWebSocketError?: (e: unknown) => void
@@ -22,10 +23,12 @@ interface FakeClientConfig {
 
 /**
  * @stomp/stompjs Client mock. 실 lib 의 라이프사이클을 흉내내 client.activate() 호출 후
- * `triggerConnect()` 를 부르면 onConnect 콜백이 발화되는 식. 테스트에서 동기적으로 시퀀스를 흘릴 수 있게 한다.
+ * `triggerConnect()` 를 부르면 beforeConnect → onConnect 콜백이 발화되는 식.
+ * S14P31E103-782 부터 beforeConnect 단계에서 token fetcher 가 connectHeaders 를 결정한다.
  */
 class FakeStompClient {
   config: FakeClientConfig
+  connectHeaders: Record<string, string> = {}
   connected = false
   activated = false
   subscriptions: FakeSubscription[] = []
@@ -63,7 +66,10 @@ class FakeStompClient {
     this.published.push(frame)
   }
 
-  triggerConnect() {
+  /** beforeConnect → onConnect. 실 lib 의 CONNECT 시점 시퀀스를 재현. */
+  async triggerConnect() {
+    await this.config.beforeConnect?.()
+    if (!this.activated) return // beforeConnect 에서 deactivate 했으면 onConnect 안 침
     this.connected = true
     this.config.onConnect?.()
   }
@@ -96,7 +102,7 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-function createClient() {
+function createClient(getAccessToken: () => Promise<string | null> = async () => 'jwt-here') {
   const events: VillageEvent[] = []
   const snapshots: VillageSnapshot[] = []
   const errors: Error[] = []
@@ -105,7 +111,7 @@ function createClient() {
 
   const client = new VillageRealtimeClient({
     url: 'ws://test/api/v1/ws/village',
-    token: 'jwt-here',
+    getAccessToken,
     onEvent: e => events.push(e),
     onSnapshot: s => snapshots.push(s),
     onReady: () => {
@@ -131,12 +137,37 @@ function createClient() {
 }
 
 describe('VillageRealtimeClient', () => {
-  it('passes Bearer token and broker URL to the underlying STOMP client', () => {
+  it('configures broker URL and auto-reconnect on construction', () => {
     const { fake } = createClient()
 
     expect(fake().config.brokerURL).toBe('ws://test/api/v1/ws/village')
-    expect(fake().config.connectHeaders).toEqual({ Authorization: 'Bearer jwt-here' })
-    expect(fake().config.reconnectDelay).toBe(0)
+    // S14P31E103-782: 자동 재접속 활성화 — 0 이 아니라야 한다.
+    expect(fake().config.reconnectDelay).toBeGreaterThan(0)
+  })
+
+  it('beforeConnect resolves access token into Bearer header for each CONNECT', async () => {
+    const { client, fake } = createClient()
+
+    client.connect()
+    await fake().triggerConnect()
+
+    // 실 lib 처럼 client.connectHeaders 가 beforeConnect 단계에서 갱신된다 — config 스냅샷이 아님.
+    expect(fake().connectHeaders).toEqual({ Authorization: 'Bearer jwt-here' })
+  })
+
+  it('deactivates client + fires onError when token fetcher returns null', async () => {
+    const tokens: (string | null)[] = [null]
+    const { client, fake, errors } = createClient(async () => tokens.shift() ?? null)
+
+    client.connect()
+    await fake().triggerConnect()
+
+    // beforeConnect 가 null 받으면 client.deactivate() 호출 → activated false + onConnect 미발화.
+    expect(fake().activated).toBe(false)
+    expect(fake().connected).toBe(false)
+    expect(errors.map(e => e.message)).toContain(
+      'No access token available for village WS connect.',
+    )
   })
 
   it('connect activates the underlying client', () => {
@@ -147,11 +178,11 @@ describe('VillageRealtimeClient', () => {
     expect(fake().activated).toBe(true)
   })
 
-  it('on CONNECT, subscribes to snapshot queue and topic, then publishes ready and fires onReady', () => {
+  it('on CONNECT, subscribes to snapshot queue and topic, then publishes ready and fires onReady', async () => {
     const { client, fake, isReady } = createClient()
 
     client.connect()
-    fake().triggerConnect()
+    await fake().triggerConnect()
 
     expect(fake().subscriptionHandlers.has('/user/queue/village.snapshot')).toBe(true)
     expect(fake().subscriptionHandlers.has('/topic/village.default')).toBe(true)
@@ -159,10 +190,10 @@ describe('VillageRealtimeClient', () => {
     expect(isReady()).toBe(true)
   })
 
-  it('forwards snapshot frame to onSnapshot', () => {
+  it('forwards snapshot frame to onSnapshot', async () => {
     const { client, fake, snapshots } = createClient()
     client.connect()
-    fake().triggerConnect()
+    await fake().triggerConnect()
 
     fake().deliverTo('/user/queue/village.snapshot', {
       members: [{ userId: 1, nickname: 'a', textureKey: 'character', x: 0.5, y: 0.3, dir: 'down' }],
@@ -172,10 +203,10 @@ describe('VillageRealtimeClient', () => {
     expect(snapshots[0].members[0].userId).toBe(1)
   })
 
-  it('forwards topic frames (join/move/leave) to onEvent', () => {
+  it('forwards topic frames (join/move/leave) to onEvent', async () => {
     const { client, fake, events } = createClient()
     client.connect()
-    fake().triggerConnect()
+    await fake().triggerConnect()
 
     fake().deliverTo('/topic/village.default', {
       type: 'move',
@@ -190,10 +221,10 @@ describe('VillageRealtimeClient', () => {
     expect(events[0]).toMatchObject({ type: 'move', userId: 7, dir: 'left', moving: true })
   })
 
-  it('publishPosition serializes packet to JSON body', () => {
+  it('publishPosition serializes packet to JSON body', async () => {
     const { client, fake } = createClient()
     client.connect()
-    fake().triggerConnect()
+    await fake().triggerConnect()
 
     client.publishPosition({ x: 0.42, y: 0.78, dir: 'left', moving: true })
 
@@ -203,10 +234,10 @@ describe('VillageRealtimeClient', () => {
     })
   })
 
-  it('publishEmote serializes packet and sends to /app/village/emote, returns true', () => {
+  it('publishEmote serializes packet and sends to /app/village/emote, returns true', async () => {
     const { client, fake } = createClient()
     client.connect()
-    fake().triggerConnect()
+    await fake().triggerConnect()
 
     const sent = client.publishEmote({ emoji: '😄' })
 
@@ -226,7 +257,7 @@ describe('VillageRealtimeClient', () => {
     expect(fake().published).toEqual([])
   })
 
-  it('publishPosition returns true on success and false before connection', () => {
+  it('publishPosition returns true on success and false before connection', async () => {
     const { client, fake } = createClient()
 
     // 미연결 — false 반환 + 송신 없음
@@ -235,7 +266,7 @@ describe('VillageRealtimeClient', () => {
 
     // 연결 후 — true 반환 + 송신
     client.connect()
-    fake().triggerConnect()
+    await fake().triggerConnect()
     expect(client.publishPosition({ x: 0.2, y: 0.3, dir: 'up', moving: true })).toBe(true)
     expect(fake().published).toContainEqual({
       destination: '/app/village/position',
@@ -246,7 +277,7 @@ describe('VillageRealtimeClient', () => {
   it('disconnect unsubscribes both destinations and deactivates the client', async () => {
     const { client, fake, isDisconnected } = createClient()
     client.connect()
-    fake().triggerConnect()
+    await fake().triggerConnect()
 
     await client.disconnect()
 

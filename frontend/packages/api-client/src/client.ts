@@ -75,7 +75,43 @@ apiClient.interceptors.response.use(
   },
 )
 
+/** 만료 임박 임계 — TTL 이 30초 이하로 남았으면 미리 갱신해서 race 회피. */
+const TOKEN_EXPIRY_MARGIN_MS = 30_000
+
 let pendingRefresh: Promise<string> | null = null
+
+/**
+ * 호출 시점에 유효한 access token 을 반환한다. localStorage 에 token 이 없으면 null. 만료 임박이면 single-flight 로 refresh
+ * 시도 후 새 토큰 반환. refresh 마저 실패하면 refresh token 을 무효화한 뒤 null 반환 — 호출자가 fallback 결정.
+ *
+ * <p>WebSocket / 외부 SDK 처럼 axios 인터셉터 밖에서 토큰을 직접 써야 할 때 사용한다 (S14P31E103-782).
+ */
+export async function ensureFreshAccessToken(): Promise<string | null> {
+  const access = localStorage.getItem(ACCESS_TOKEN_STORAGE_KEY)
+  if (!access) return null
+  if (!isTokenNearExpiry(access)) return access
+  if (!localStorage.getItem(REFRESH_TOKEN_STORAGE_KEY)) return access
+  try {
+    return await refreshAccessToken()
+  } catch {
+    localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY)
+    return null
+  }
+}
+
+function isTokenNearExpiry(token: string): boolean {
+  const parts = token.split('.')
+  if (parts.length < 2) return false
+  try {
+    const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/')
+    const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, '=')
+    const payload = JSON.parse(atob(padded)) as { exp?: number }
+    if (typeof payload.exp !== 'number') return false
+    return payload.exp * 1000 < Date.now() + TOKEN_EXPIRY_MARGIN_MS
+  } catch {
+    return false
+  }
+}
 
 /**
  * 401 단일 화살 (single-flight) 갱신. 동시에 여러 요청이 401 을 맞아도 /auth/refresh 는 한 번만 호출되고 모두 같은 새 토큰을
