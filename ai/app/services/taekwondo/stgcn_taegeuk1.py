@@ -68,6 +68,10 @@ TARGET_RULE_ACTION_MOTION_FULL_DELTA = 0.22
 TARGET_RULE_MIN_TRACKED_FRAMES_FOR_MOTION = 4
 TARGET_RULE_AGGREGATION_MEDIAN_WEIGHT = 0.65
 TARGET_RULE_AGGREGATION_TOP_MEAN_WEIGHT = 0.35
+SEQUENCE_FINAL_LOW_MOTION_SCORE_CAP = 75.0
+SEQUENCE_FINAL_SINGLE_JOINT_MOTION_SCORE_CAP = 65.0
+SEQUENCE_FINAL_MIN_ACTIVE_JOINTS = 2
+SEQUENCE_FINAL_ACTIVE_JOINT_MIN_RANGE = 0.08
 SEQUENCE_CENTERED_PROTOTYPE_WEIGHT = 0.65
 SEQUENCE_CENTERED_CAMERA_WEIGHT = 0.15
 SEQUENCE_CENTERED_TARGET_RULE_WEIGHT = 0.20
@@ -334,6 +338,13 @@ def analyze_taegeuk1_sequence(
         camera_score=camera_score,
         target_rule_score=target_rule_score,
     )
+    if not input_normalized:
+        score, scoring_method = _apply_sequence_motion_final_cap(
+            score,
+            scoring_method,
+            seq,
+            resources.keypoint_names,
+        )
 
     joint_error_rows = [
         {"joint": joint_name, "error": round(float(error), 6)}
@@ -594,6 +605,19 @@ def _sequence_centered_score(
     return prototype, "prototype_distance"
 
 
+def _apply_sequence_motion_final_cap(
+    score: float,
+    scoring_method: str,
+    sequence: np.ndarray,
+    keypoint_names: list[str],
+) -> tuple[float, str]:
+    score = _safe_score(score, 0.0)
+    final_motion_cap = _sequence_final_motion_score_cap(sequence, keypoint_names)
+    if final_motion_cap < 100.0 and score > final_motion_cap:
+        return final_motion_cap, "sequence_motion_limited"
+    return score, scoring_method
+
+
 def _target_rule_score(
     sequence: np.ndarray,
     keypoint_names: list[str],
@@ -728,6 +752,31 @@ def _target_rule_candidate_frame_indexes(frame_count: int, start_frame: int) -> 
     return sorted({int(round(frame_index)) for frame_index in sampled})
 
 
+def _sequence_final_motion_score_cap(sequence: np.ndarray, keypoint_names: list[str]) -> float:
+    motion_amount = _sequence_motion_amount(sequence, keypoint_names)
+    if not np.isfinite(motion_amount) or motion_amount <= 0.0:
+        return TARGET_RULE_LOW_MOTION_SCORE_CAP
+
+    if motion_amount < TARGET_RULE_MIN_SEQUENCE_MOTION:
+        motion_cap = _safe_score(
+            _interpolate(
+                motion_amount,
+                0.0,
+                TARGET_RULE_MIN_SEQUENCE_MOTION,
+                TARGET_RULE_LOW_MOTION_SCORE_CAP,
+                SEQUENCE_FINAL_LOW_MOTION_SCORE_CAP,
+            ),
+            TARGET_RULE_LOW_MOTION_SCORE_CAP,
+        )
+    else:
+        motion_cap = 100.0
+
+    active_joint_count = _sequence_active_joint_count(sequence, keypoint_names)
+    if active_joint_count < SEQUENCE_FINAL_MIN_ACTIVE_JOINTS:
+        return min(motion_cap, SEQUENCE_FINAL_SINGLE_JOINT_MOTION_SCORE_CAP)
+    return motion_cap
+
+
 def _sequence_motion_score_cap(sequence: np.ndarray, keypoint_names: list[str]) -> float:
     motion_amount = _sequence_motion_amount(sequence, keypoint_names)
     if not np.isfinite(motion_amount) or motion_amount < 0.0:
@@ -748,6 +797,31 @@ def _sequence_motion_score_cap(sequence: np.ndarray, keypoint_names: list[str]) 
 
 
 def _sequence_motion_amount(sequence: np.ndarray, keypoint_names: list[str]) -> float:
+    joint_ranges = _sequence_joint_motion_ranges(sequence, keypoint_names)
+    if not joint_ranges:
+        return 0.0
+
+    range_values = np.asarray(joint_ranges, dtype=np.float32)
+    range_values = range_values[np.isfinite(range_values)]
+    if range_values.size == 0:
+        return 0.0
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=RuntimeWarning)
+        motion_amount = float(np.nanpercentile(range_values, 75))
+    if not np.isfinite(motion_amount):
+        return 0.0
+    return motion_amount
+
+
+def _sequence_active_joint_count(sequence: np.ndarray, keypoint_names: list[str]) -> int:
+    return sum(
+        1
+        for joint_range in _sequence_joint_motion_ranges(sequence, keypoint_names)
+        if joint_range >= SEQUENCE_FINAL_ACTIVE_JOINT_MIN_RANGE
+    )
+
+
+def _sequence_joint_motion_ranges(sequence: np.ndarray, keypoint_names: list[str]) -> list[float]:
     indexes = _landmark_indexes(
         keypoint_names,
         (
@@ -762,7 +836,7 @@ def _sequence_motion_amount(sequence: np.ndarray, keypoint_names: list[str]) -> 
         ),
     )
     if not indexes:
-        return 0.0
+        return []
 
     joint_ranges: list[float] = []
     for index in indexes.values():
@@ -777,18 +851,7 @@ def _sequence_motion_amount(sequence: np.ndarray, keypoint_names: list[str]) -> 
         if np.isfinite(ranges).all():
             joint_ranges.append(float(np.linalg.norm(ranges)))
 
-    if not joint_ranges:
-        return 0.0
-    range_values = np.asarray(joint_ranges, dtype=np.float32)
-    range_values = range_values[np.isfinite(range_values)]
-    if range_values.size == 0:
-        return 0.0
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", category=RuntimeWarning)
-        motion_amount = float(np.nanpercentile(range_values, 75))
-    if not np.isfinite(motion_amount):
-        return 0.0
-    return motion_amount
+    return joint_ranges
 
 
 def _target_action_motion_score_cap(
