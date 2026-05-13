@@ -127,6 +127,8 @@ type RawReplayLandmark = {
   confidence: number
 }
 
+type CompleteMotionReplayLandmarkTuple = readonly [number, number, number | null, number]
+
 type LandmarkPayload = {
   name: string
   x: number
@@ -437,7 +439,8 @@ const REPLAY_MIN_CONFIDENCE = 0.05
 const REPLAY_MIN_SHOULDER_WIDTH = 0.02
 const REPLAY_NORMALIZED_COORDINATE_ABS_LIMIT = 10
 const REPLAY_MAX_INTERPOLATION_GAP_FRAMES = 5
-const REPLAY_INTERPOLATED_CONFIDENCE = 0.25
+const REPLAY_INTERPOLATED_CONFIDENCE_DECAY = 0.35
+const REPLAY_MAX_INTERPOLATED_CONFIDENCE = 0.3
 const COMPACT_REPLAY_MAX_MARKERS = 32
 const COMPACT_REPLAY_MARKER_MERGE_GAP_MS = 500
 const TOP_COUNT_MARKER_WINDOW_MS = 2000
@@ -3517,7 +3520,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
 
     const frames = samples.map(sample => ({
       ...sample.frame,
-      lm: [...sample.frame.lm],
+      lm: sample.frame.lm.map(tuple => [...tuple] as MotionReplayLandmarkTuple),
     }))
 
     for (let landmarkIndex = 0; landmarkIndex < REPLAY_LANDMARK_NAMES.length; landmarkIndex += 1) {
@@ -3546,7 +3549,8 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
         const canInterpolate =
           missingFrameCount <= REPLAY_MAX_INTERPOLATION_GAP_FRAMES &&
           this.isReplayTupleComplete(previousTuple) &&
-          this.isReplayTupleComplete(nextTuple)
+          this.isReplayTupleComplete(nextTuple) &&
+          frames[nextIndex].t > frames[previousIndex].t
 
         for (let index = startIndex; index < endIndex; index += 1) {
           frames[index].lm[landmarkIndex] = canInterpolate
@@ -3570,7 +3574,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
 
   private isReplayTupleComplete(
     tuple: MotionReplayLandmarkTuple | undefined,
-  ): tuple is MotionReplayLandmarkTuple {
+  ): tuple is CompleteMotionReplayLandmarkTuple {
     if (!tuple || tuple.length !== 4) return false
     const [x, y, z, confidence] = tuple
     return (
@@ -3593,24 +3597,25 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
   }
 
   private interpolateReplayTuple(
-    previous: MotionReplayLandmarkTuple,
-    next: MotionReplayLandmarkTuple,
+    previous: CompleteMotionReplayLandmarkTuple,
+    next: CompleteMotionReplayLandmarkTuple,
     previousTimeMs: number,
     currentTimeMs: number,
     nextTimeMs: number,
   ): MotionReplayLandmarkTuple {
-    const denominator = Math.max(1, nextTimeMs - previousTimeMs)
+    if (nextTimeMs <= previousTimeMs) return this.createMissingReplayTuple()
+
+    const denominator = nextTimeMs - previousTimeMs
     const ratio = Math.min(1, Math.max(0, (currentTimeMs - previousTimeMs) / denominator))
     const interpolate = (from: number, to: number) =>
       this.roundReplayValue(from + (to - from) * ratio)
     const z = previous[2] === null || next[2] === null ? null : interpolate(previous[2], next[2])
+    const confidence = Math.min(
+      REPLAY_MAX_INTERPOLATED_CONFIDENCE,
+      this.roundReplayValue(((previous[3] + next[3]) / 2) * REPLAY_INTERPOLATED_CONFIDENCE_DECAY),
+    )
 
-    return [
-      interpolate(previous[0]!, next[0]!),
-      interpolate(previous[1]!, next[1]!),
-      z,
-      REPLAY_INTERPOLATED_CONFIDENCE,
-    ]
+    return [interpolate(previous[0], next[0]), interpolate(previous[1], next[1]), z, confidence]
   }
 
   private createMissingReplayTuple(): MotionReplayLandmarkTuple {
