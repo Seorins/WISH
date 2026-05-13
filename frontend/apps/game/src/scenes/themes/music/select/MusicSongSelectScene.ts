@@ -506,39 +506,55 @@ export class MusicSongSelectScene extends Phaser.Scene {
     const panel = this.add.graphics()
     container.add([glow, panel])
 
-    // Dark gradient background
-    const bgCanvas = document.createElement('canvas')
-    bgCanvas.width = 2
-    bgCanvas.height = h
-    const bgCtx = bgCanvas.getContext('2d')
-    if (bgCtx) {
-      const grad = bgCtx.createLinearGradient(0, 0, 0, h)
-      grad.addColorStop(0, '#1a0a0a')
-      grad.addColorStop(1, '#0a0505')
-      bgCtx.fillStyle = grad
-      bgCtx.fillRect(0, 0, 2, h)
+    // ── full-card dark gradient background with rounded mask ──
+    const bgMask = this.make.graphics({ x: 0, y: 0 }, false)
+    bgMask.fillStyle(0xffffff)
+    bgMask.fillRoundedRect(x - w / 2, y - h / 2, w, h, 16)
+    const maskGeom = bgMask.createGeometryMask()
+
+    const bg = this.add.graphics()
+    const bgSteps = 24
+    for (let i = 0; i < bgSteps; i++) {
+      const t = i / (bgSteps - 1)
+      const r = Math.round(0x22 + (0x08 - 0x22) * t)
+      const g = Math.round(0x06 + (0x02 - 0x06) * t)
+      const b = Math.round(0x06 + (0x02 - 0x06) * t)
+      bg.fillStyle((r << 16) | (g << 8) | b, 1)
+      const stripH = h / bgSteps + 1
+      bg.fillRect(-w / 2, -h / 2 + (h / bgSteps) * i, w, stripH)
     }
+    bg.setMask(maskGeom)
+    container.add(bg)
 
-    // YouTube logo area (red rect + ▶)
-    const logoH = Math.round(h * 0.38)
+    // ── YouTube play button — centered in upper portion ──
+    const logoCenterY = -h * 0.05
+    const redW = Math.round(w * 0.6)
+    const redH = Math.round(redW * 0.7)
     const logoBg = this.add.graphics()
-    logoBg.fillStyle(0x1a0808, 1)
-    logoBg.fillRoundedRect(-w / 2, -h / 2, w, logoH, { tl: 16, tr: 16, bl: 0, br: 0 })
-
-    const redW = Math.round(w * 0.55)
-    const redH = Math.round(logoH * 0.52)
     logoBg.fillStyle(0xff0000, 1)
-    logoBg.fillRoundedRect(-redW / 2, -h / 2 + (logoH - redH) / 2, redW, redH, 8)
+    logoBg.fillRoundedRect(-redW / 2, logoCenterY - redH / 2, redW, redH, 14)
     container.add(logoBg)
 
     const playIcon = this.add
-      .text(0, -h / 2 + logoH / 2, '▶', {
+      .text(0, logoCenterY, '▶', {
         fontFamily: FONT_FAMILY,
-        fontSize: `${Math.round(logoH * 0.36)}px`,
+        fontSize: `${Math.round(redH * 0.55)}px`,
         color: '#ffffff',
       })
       .setOrigin(0.5)
     container.add(playIcon)
+
+    // ── dark fade at bottom for text legibility ──
+    const fade = this.add.graphics()
+    const fadeH = Math.round(h * 0.45)
+    for (let i = 0; i < 12; i++) {
+      const t = i / 11
+      fade.fillStyle(0x000000, 0.06)
+      const stripH = fadeH * (1 - t * 0.85)
+      fade.fillRect(-w / 2, h / 2 - stripH, w, stripH)
+    }
+    fade.setMask(maskGeom)
+    container.add(fade)
 
     // Tag pill
     const tagText = this.add
