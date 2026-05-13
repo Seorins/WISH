@@ -431,9 +431,12 @@ const REPLAY_FPS = 30
 const COMPACT_REPLAY_FPS = 5
 const REPLAY_SAMPLE_INTERVAL_MS = 1000 / REPLAY_FPS
 const REPLAY_MAX_FRAMES = REPLAY_FPS * 180
+// Child webcam captures often report low landmark visibility. Keep weak points
+// for replay continuity, then rely on normalization checks to drop unusable frames.
 const REPLAY_MIN_CONFIDENCE = 0.05
 const REPLAY_MIN_SHOULDER_WIDTH = 0.02
 const COMPACT_REPLAY_MAX_MARKERS = 32
+const COMPACT_REPLAY_MARKER_MERGE_GAP_MS = 500
 const TOP_COUNT_MARKER_WINDOW_MS = 2000
 const COACHING_MARKER_WINDOW_MS = 1200
 const REPLAY_LANDMARK_NAMES: readonly ReplayLandmarkName[] = [
@@ -3385,7 +3388,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
       previous &&
       previous.kind === marker.kind &&
       previous.reason === marker.reason &&
-      marker.startMs <= previous.endMs + 500
+      marker.startMs <= previous.endMs + COMPACT_REPLAY_MARKER_MERGE_GAP_MS
     ) {
       previous.endMs = Math.max(previous.endMs, marker.endMs)
       return

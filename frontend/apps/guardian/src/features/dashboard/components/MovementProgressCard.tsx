@@ -114,6 +114,17 @@ export function MovementProgressCard() {
         : null,
     [activeMovement, replayResult],
   )
+
+  useEffect(() => {
+    setReplayMode('raw')
+  }, [activeMovement?.motionResultId])
+
+  useEffect(() => {
+    if (replayMode === 'compact' && !compactReplayClip) {
+      setReplayMode('raw')
+    }
+  }, [compactReplayClip, replayMode])
+
   const selectedReplayMode: ReplayMode =
     replayMode === 'compact' && compactReplayClip ? 'compact' : 'raw'
   const selectedReplayClip = selectedReplayMode === 'compact' ? compactReplayClip : rawReplayClip
