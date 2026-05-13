@@ -3525,7 +3525,6 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
   ): ExerciseMotionReplayClip | null {
     if (this.motionReplaySamples.length === 0) return null
 
-    const replayDurationMs = Math.max(0, Math.round(durationMs))
     const frameIntervalMs = 1000 / COMPACT_REPLAY_FPS
     const frames: MotionReplayFrame[] = []
     let previousBucket = -1
@@ -3539,6 +3538,8 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
 
     if (frames.length === 0) return null
 
+    const lastFrameMs = frames[frames.length - 1]?.t ?? 0
+    const replayDurationMs = Math.max(0, Math.round(Math.max(durationMs, lastFrameMs)))
     const firstCountMarker = this.compactReplayMarkers.find(marker => marker.kind === 'count')
     if (motionSpec.type === 'top') {
       const segment = firstCountMarker ?? this.pickRepresentativeReplaySegment(replayDurationMs)
@@ -3586,11 +3587,15 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
       reason: 'daniel full session compact replay',
     }
     const markers = this.compactReplayMarkers.map<MotionReplaySegment>(
-      ({ startMs, endMs, reason }) => ({
-        startMs,
-        endMs: Math.min(replayDurationMs, endMs),
-        reason,
-      }),
+      ({ startMs, endMs, reason }) => {
+        const clippedStartMs = Math.max(0, Math.min(replayDurationMs, startMs))
+        const clippedEndMs = Math.max(clippedStartMs, Math.min(replayDurationMs, endMs))
+        return {
+          startMs: clippedStartMs,
+          endMs: clippedEndMs,
+          reason,
+        }
+      },
     )
 
     return {
