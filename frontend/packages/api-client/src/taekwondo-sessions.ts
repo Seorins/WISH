@@ -56,7 +56,7 @@ export type TaekwondoSessionDetail = TaekwondoSessionSummary & {
   beltPromotion?: unknown
 }
 
-function calculateTaekwondoAverageAccuracy(motions: CreateTaekwondoSessionMotionRequest[]) {
+export function calculateTaekwondoAverageAccuracy(motions: CreateTaekwondoSessionMotionRequest[]) {
   if (motions.length === 0) {
     return 0
   }
@@ -82,6 +82,18 @@ export function calculateTaekwondoMonstersDefeated(motions: CreateTaekwondoSessi
 }
 
 const MAX_TAEKWONDO_FEEDBACK_LENGTH = 255
+const TAEKWONDO_FEEDBACK_ELLIPSIS = '...'
+
+function truncateTaekwondoFeedback(feedback: string) {
+  const feedbackChars = Array.from(feedback)
+  if (feedbackChars.length <= MAX_TAEKWONDO_FEEDBACK_LENGTH) {
+    return feedback
+  }
+
+  return `${feedbackChars
+    .slice(0, MAX_TAEKWONDO_FEEDBACK_LENGTH - TAEKWONDO_FEEDBACK_ELLIPSIS.length)
+    .join('')}${TAEKWONDO_FEEDBACK_ELLIPSIS}`
+}
 
 export function formatTaekwondoAiFeedback(
   analysis: Pick<TaegeukAnalyzeResponse, 'weakest_body_part' | 'worst_joint' | 'feedback_summary'>,
@@ -94,11 +106,7 @@ export function formatTaekwondoAiFeedback(
   const prefix = detailParts.length > 0 ? `[${detailParts.join('/')}] ` : ''
   const feedback = `${prefix}${summary}`.trim()
 
-  if (feedback.length <= MAX_TAEKWONDO_FEEDBACK_LENGTH) {
-    return feedback
-  }
-
-  return `${feedback.slice(0, MAX_TAEKWONDO_FEEDBACK_LENGTH - 3)}...`
+  return truncateTaekwondoFeedback(feedback)
 }
 
 export type ToCreateTaekwondoSessionMotionRequestParams = {
@@ -126,8 +134,6 @@ export function toCreateTaekwondoSessionMotionRequest({
       : feedbackFallback || 'Taekwondo motion analysis was not completed.',
   }
 }
-
-export { calculateTaekwondoAverageAccuracy }
 
 export async function createTaekwondoSession(
   payload: CreateTaekwondoSessionRequest,
