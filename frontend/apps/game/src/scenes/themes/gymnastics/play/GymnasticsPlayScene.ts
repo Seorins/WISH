@@ -483,7 +483,6 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
   private statusBadgeBounds!: PanelBounds
   private statusDot!: Phaser.GameObjects.Arc
   private statusText!: Phaser.GameObjects.Text
-  private motionCounterText!: Phaser.GameObjects.Text
   private motionTitleText!: Phaser.GameObjects.Text
   private timerText!: Phaser.GameObjects.Text
   private feedbackLabelText?: Phaser.GameObjects.Text
@@ -506,7 +505,6 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
   private motionTitleMaxWidth = 0
   private motionTitleCenterX = 0
   private motionTitleCenterY = 0
-  private timerMaxWidth = 0
   private headerFontSize = 0
   private feedbackTitleMaxWidth = 0
   private feedbackTitleCenterX = 0
@@ -548,6 +546,8 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
   private guideOverlay?: Phaser.GameObjects.Container
   private guideVideoElement?: HTMLVideoElement
   private guideVideoResizeHandler?: () => void
+  private sideGuideVideoBounds?: PanelBounds
+  private sideGuideStatusText?: Phaser.GameObjects.Text
   private adminMotionsById = new Map<number, ExerciseMotion>()
   private exerciseMotionsLoaded = false
   private countdownOverlay?: Phaser.GameObjects.Container
@@ -556,7 +556,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
   constructor(
     sceneKey: string,
     private readonly motions: GymnasticsMotion[],
-    private readonly modeLabel: string,
+    _modeLabel: string,
     private readonly exerciseType: ExerciseType,
     private readonly aiSequence: AiMotionSpec[],
   ) {
@@ -642,8 +642,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
       callback: () => {
         if (this.phase !== 'TRACKING') return
         this.remainingSeconds = Math.max(0, this.remainingSeconds - 1)
-        this.timerText.setText(this.formatTime(this.remainingSeconds))
-        this.fitTextToWidth(this.timerText, this.timerMaxWidth, this.headerFontSize, 14)
+        this.updateHeaderStats()
         this.refreshMotionProgressDisplay()
       },
     })
@@ -710,7 +709,8 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     const margin = Phaser.Math.Clamp(Math.min(vw, vh) * 0.028, 18, 32)
     const sideW = Phaser.Math.Clamp(vw * 0.23, 300, 380)
     const gap = Phaser.Math.Clamp(vw * 0.018, 20, 28)
-    const contentTop = margin
+    const headerH = Phaser.Math.Clamp(vh * 0.074, 58, 78)
+    const contentTop = margin + headerH + gap
     const availableH = vh - contentTop - margin
     const maxGroupW = vw - margin * 2
     const maxCameraW = maxGroupW - sideW - gap
@@ -731,6 +731,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
 
     this.createCameraPanel(this.cameraBounds)
     this.createSidePanels(sideX, contentY, sideW, contentH)
+    this.createHeader(margin, headerH, groupX, cameraW, sideX, sideW)
   }
 
   createHeader(
@@ -743,10 +744,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
   ) {
     const y = headerTop + headerH / 2
     const headerGap = Math.max(8, headerH * 0.28)
-    const timerLikeW = Phaser.Math.Clamp(headerW * 0.18, 96, 132)
-    const modePanelW = headerH + headerGap + timerLikeW
-    const motionPanelW = headerW - modePanelW - headerGap
-    const motionPanelX = headerX + modePanelW + headerGap
+    const motionPanelW = headerW
     const headerFontSize = Math.round(headerH * 0.38)
     const headerTextStyle: Phaser.Types.GameObjects.Text.TextStyle = {
       fontFamily: 'sans-serif',
@@ -765,53 +763,41 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
       },
     }
 
-    this.createHeaderFrame(headerX, headerTop, modePanelW, headerH)
-    this.createHeaderFrame(motionPanelX, headerTop, motionPanelW, headerH)
+    this.createHeaderFrame(headerX, headerTop, motionPanelW, headerH)
 
-    const headerTextInset = Math.max(18, headerH * 0.9)
-    const modeTextCenterX = headerX + headerTextInset + (modePanelW - headerTextInset * 2) / 2
-    this.motionCounterMaxWidth = modePanelW - headerTextInset * 2
     this.motionTitleMaxWidth = motionPanelW - headerH * 2.4
-    this.timerMaxWidth = Math.max(64, rightHeaderW - headerH - headerGap - 28)
+    this.motionTitleCenterX = headerX + motionPanelW / 2
+    this.motionTitleCenterY = y
+    this.motionCounterMaxWidth = Math.max(64, rightHeaderW - headerH - headerGap - 28)
     this.headerFontSize = headerFontSize
 
-    this.motionCounterText = this.add
-      .text(modeTextCenterX, y, this.modeLabel, headerTextStyle)
-      .setOrigin(0.5)
-      .setDepth(12)
-
     this.motionTitleText = this.add
-      .text(motionPanelX + motionPanelW / 2, y, '', headerTextStyle)
+      .text(this.motionTitleCenterX, this.motionTitleCenterY, '', {
+        ...headerTextStyle,
+        fontSize: `${Math.round(headerFontSize * 0.78)}px`,
+      })
       .setOrigin(0.5)
       .setDepth(12)
 
-    this.createArrowButton(motionPanelX + headerH * 0.54, y, headerH * 0.86, '<', () =>
+    this.createArrowButton(headerX + headerH * 0.54, y, headerH * 0.78, '<', () =>
       this.returnToPreviousMotion(),
     )
-    this.createArrowButton(
-      motionPanelX + motionPanelW - headerH * 0.54,
-      y,
-      headerH * 0.86,
-      '>',
-      () => this.advanceToNextMotion(true),
+    this.createArrowButton(headerX + motionPanelW - headerH * 0.54, y, headerH * 0.78, '>', () =>
+      this.advanceToNextMotion(true),
     )
 
     const timerPanelX = rightHeaderX
     const timerPanelW = Math.max(0, rightHeaderW - headerH - headerGap)
     this.createHeaderFrame(timerPanelX, headerTop, timerPanelW, headerH)
     this.timerText = this.add
-      .text(
-        timerPanelX + timerPanelW / 2,
-        y,
-        this.formatTime(this.remainingSeconds),
-        headerTextStyle,
-      )
+      .text(timerPanelX + timerPanelW / 2, y, '', headerTextStyle)
       .setOrigin(0.5)
       .setDepth(12)
 
     this.createDeleteButton(rightHeaderX + rightHeaderW - headerH / 2, y, headerH, () =>
       fadeToScene(this, 'GymnasticsSelectScene'),
     )
+    this.updateHeaderStats()
   }
 
   private createCameraPanel(bounds: PanelBounds) {
@@ -874,18 +860,6 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     this.headerFontSize = Math.round(Phaser.Math.Clamp(bounds.height * 0.028, 16, 22))
     this.motionCounterMaxWidth = progressPillW - 28
     this.motionTitleMaxWidth = 1
-    this.timerMaxWidth = 1
-    this.motionCounterText = this.add
-      .text(progressPillX + 14, progressPillY + progressPillH / 2, '', {
-        fontFamily: 'sans-serif',
-        fontSize: `${this.headerFontSize}px`,
-        color: '#fff7dc',
-        fontStyle: 'bold',
-      })
-      .setOrigin(0, 0.5)
-      .setDepth(10)
-      .setMaxLines(1)
-      .setVisible(false)
     this.motionTitleText = this.add
       .text(0, 0, '', { fontFamily: 'sans-serif', fontSize: '1px' })
       .setVisible(false)
@@ -907,7 +881,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
 
   private createSidePanels(x: number, y: number, width: number, height: number) {
     const gap = Math.round(Phaser.Math.Clamp(height * 0.018, 10, 16))
-    const weights = [1.25, 1.45, 1.15, 0.9]
+    const weights = [1.95, 1]
     const totalWeight = weights.reduce((sum, weight) => sum + weight, 0)
     const availableH = height - gap * (weights.length - 1)
     const cardHeights = weights.map(weight => (availableH * weight) / totalWeight)
@@ -938,30 +912,35 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
       return graphics
     }
 
-    cardBounds.slice(0, 3).forEach(drawCard)
+    cardBounds.slice(0, 2).forEach(drawCard)
 
     const centerX = x + width / 2
-    const [motionCard, feedbackCard, progressCard, replayCard] = cardBounds
-    const motionTextMaxWidth = width * 0.84
-    this.motionTitleCenterX = centerX
-    this.motionTitleCenterY = motionCard.y + motionCard.height / 2
+    const [guideCard, feedbackCard] = cardBounds
 
-    this.motionTitleText = this.add
-      .text(this.motionTitleCenterX, this.motionTitleCenterY, '', {
-        fontFamily: 'sans-serif',
-        fontSize: `${Math.round(Phaser.Math.Clamp(motionCard.height * 0.26, 30, 44))}px`,
-        color: '#2f2118',
-        fontStyle: 'bold',
-        align: 'center',
-        letterSpacing: 1,
-        lineSpacing: 0,
-        wordWrap: { width: motionTextMaxWidth, useAdvancedWrap: true },
-      })
-      .setOrigin(0.5, 0.46)
+    const videoInsetX = 12
+    const videoInsetY = 12
+    this.sideGuideVideoBounds = {
+      x: guideCard.x + videoInsetX,
+      y: guideCard.y + videoInsetY,
+      width: guideCard.width - videoInsetX * 2,
+      height: guideCard.height - videoInsetY * 2,
+    }
+    this.sideGuideStatusText = this.add
+      .text(
+        centerX,
+        this.sideGuideVideoBounds.y + this.sideGuideVideoBounds.height / 2,
+        '\uC601\uC0C1\uC744 \uC900\uBE44 \uC911\uC785\uB2C8\uB2E4',
+        {
+          fontFamily: 'sans-serif',
+          fontSize: `${Math.round(Phaser.Math.Clamp(guideCard.height * 0.08, 18, 24))}px`,
+          color: '#2f2118',
+          fontStyle: 'bold',
+          align: 'center',
+          wordWrap: { width: width * 0.76, useAdvancedWrap: true },
+        },
+      )
+      .setOrigin(0.5)
       .setDepth(13)
-      .setMaxLines(2)
-      .setPadding(0, 0, 0, 0)
-    this.motionTitleMaxWidth = motionTextMaxWidth
 
     this.feedbackLabelText = this.add
       .text(
@@ -1010,21 +989,13 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
       .image(centerX, feedbackCard.y + feedbackCard.height * 0.22, 'gymnastics-feedback-star')
       .setVisible(false)
 
-    this.progressLabelText = this.add
-      .text(centerX, progressCard.y + progressCard.height * 0.24, '\uC9C4\uD589\uB3C4', {
-        fontFamily: 'sans-serif',
-        fontSize: `${Math.round(Phaser.Math.Clamp(progressCard.height * 0.13, 17, 23))}px`,
-        color: '#6b4a2f',
-        fontStyle: 'bold',
-      })
-      .setOrigin(0.5)
-      .setDepth(13)
-
-    this.progressTextFontSize = Math.round(Phaser.Math.Clamp(progressCard.height * 0.22, 30, 44))
-    this.progressCompleteFontSize = Math.round(Phaser.Math.Clamp(progressCard.height * 0.3, 42, 64))
+    this.progressTextFontSize = Math.round(Phaser.Math.Clamp(feedbackCard.height * 0.13, 20, 30))
+    this.progressCompleteFontSize = Math.round(
+      Phaser.Math.Clamp(feedbackCard.height * 0.24, 34, 48),
+    )
     this.progressTextCenterX = centerX
-    this.progressTextCenterY = progressCard.y + progressCard.height * 0.54
-    this.progressCompleteCenterY = progressCard.y + progressCard.height / 2
+    this.progressTextCenterY = feedbackCard.y + feedbackCard.height * 0.78
+    this.progressCompleteCenterY = feedbackCard.y + feedbackCard.height / 2
     this.feedbackTipTexts = [
       this.add
         .text(this.progressTextCenterX, this.progressTextCenterY, '', {
@@ -1040,15 +1011,16 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
         .setMaxLines(1),
     ]
     this.holdStatusMaxWidth = width * 0.82
-    this.feedbackTipTexts[0]?.setFixedSize(this.holdStatusMaxWidth, progressCard.height * 0.32)
+    this.feedbackTipTexts[0]?.setFixedSize(this.holdStatusMaxWidth, feedbackCard.height * 0.2)
+    this.feedbackTipTexts[0]?.setVisible(false)
 
     this.holdProgressWidth = width * 0.82
-    const holdProgressY = progressCard.y + progressCard.height * 0.78
+    const holdProgressY = feedbackCard.y + feedbackCard.height * 0.91
     this.holdProgressTrack = this.add
       .rectangle(centerX, holdProgressY, this.holdProgressWidth, 16, 0x62482a, 0.16)
       .setOrigin(0.5)
       .setDepth(13)
-      .setVisible(true)
+      .setVisible(false)
     this.holdProgressBar = this.add
       .rectangle(
         centerX - this.holdProgressWidth / 2,
@@ -1061,47 +1033,11 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
       .setOrigin(0, 0.5)
       .setScale(0, 1)
       .setDepth(14)
-      .setVisible(true)
+      .setVisible(false)
     this.holdProgressText = this.add
       .text(centerX, holdProgressY, '', { fontFamily: 'sans-serif', fontSize: '1px' })
       .setVisible(false)
 
-    const actionGap = Math.round(Phaser.Math.Clamp(replayCard.height * 0.09, 8, 12))
-    const actionH = Math.round(Phaser.Math.Clamp((replayCard.height - actionGap) / 2, 44, 54))
-    const exitSize = actionH * 2 + actionGap
-    const actionGroupW = Math.min(width * 0.94, width - 4)
-    const actionLeftW = Math.max(136, actionGroupW - exitSize - actionGap)
-    const actionLeftX = centerX - actionGroupW / 2 + actionLeftW / 2
-    const exitX = centerX - actionGroupW / 2 + actionLeftW + actionGap + exitSize / 2
-    const firstActionY = replayCard.y + replayCard.height / 2 - actionH / 2 - actionGap / 2
-    const secondActionY = replayCard.y + replayCard.height / 2 + actionH / 2 + actionGap / 2
-    this.createGuideActionButton(
-      actionLeftX,
-      firstActionY,
-      actionLeftW,
-      actionH,
-      '\uC601\uC0C1 \uB2E4\uC2DC\uBCF4\uAE30',
-      0x67b86b,
-      () => this.handleReplayGuideVideo(),
-    )
-    this.createGuideActionButton(
-      actionLeftX,
-      secondActionY,
-      actionLeftW,
-      actionH,
-      '\uB3D9\uC791 \uB2E4\uC2DC\uD558\uAE30',
-      0x8e83d8,
-      () => this.handleRestartCurrentMotion(),
-    )
-    this.createGuideActionButton(
-      exitX,
-      replayCard.y + replayCard.height / 2,
-      exitSize,
-      exitSize,
-      '\uB098\uAC00\uAE30',
-      0xe89a72,
-      () => fadeToScene(this, 'GymnasticsSelectScene'),
-    )
     this.saveRetryButton = this.add
       .text(centerX, feedbackCard.y + feedbackCard.height * 0.82, '\uB2E4\uC2DC \uC800\uC7A5', {
         fontFamily: 'sans-serif',
@@ -1325,39 +1261,6 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
   }
 
     */
-  }
-
-  private createGuideActionButton(
-    x: number,
-    y: number,
-    width: number,
-    height: number,
-    label: string,
-    fill: number,
-    onClick: () => void,
-  ) {
-    const bg = this.add.graphics().setDepth(13)
-    bg.fillStyle(0x533a23, 0.22)
-    bg.fillRoundedRect(x - width / 2, y - height / 2 + 4, width, height, 18)
-    bg.fillStyle(fill, 1)
-    bg.fillRoundedRect(x - width / 2, y - height / 2, width, height, 18)
-    bg.lineStyle(2, 0xffffff, 0.42)
-    bg.strokeRoundedRect(x - width / 2, y - height / 2, width, height, 18)
-    this.add
-      .text(x, y, label, {
-        fontFamily: 'sans-serif',
-        fontSize: `${Math.round(Phaser.Math.Clamp(height * 0.42, 21, 28))}px`,
-        color: '#fffaf0',
-        fontStyle: 'bold',
-      })
-      .setOrigin(0.5)
-      .setDepth(14)
-
-    return this.add
-      .rectangle(x, y, width, height, 0xffffff, 0)
-      .setDepth(15)
-      .setInteractive({ useHandCursor: true })
-      .on('pointerup', onClick)
   }
 
   private createPanel(x: number, y: number, width: number, height: number, radius: number) {
@@ -1667,6 +1570,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
       if (this.phase === 'GUIDE_PREVIEW' && this.scene.isActive()) {
         this.showGuidePreview()
       }
+      this.renderMotion()
     }
   }
 
@@ -1915,41 +1819,6 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     this.showCountdown()
   }
 
-  private handleReplayGuideVideo() {
-    if (this.phase !== 'TRACKING') return
-
-    if (this.motionStartedAtMs > 0) {
-      this.motionAccumulatedDurationMs += Math.max(0, Date.now() - this.motionStartedAtMs)
-      this.motionStartedAtMs = 0
-    }
-    this.cancelCurrentMotionRecording()
-    this.aiRequestsEnabled = false
-    this.requestInFlight = false
-    this.resetFeedbackTts()
-    this.showGuidePreview()
-  }
-
-  private handleRestartCurrentMotion() {
-    if (this.phase !== 'TRACKING') return
-
-    this.aiRequestsEnabled = false
-    this.requestInFlight = false
-    this.isMotionAdvancing = false
-    this.motionStartedAtMs = 0
-    this.motionAccumulatedDurationMs = 0
-    this.resetCurrentMotionReplay()
-    this.cancelCurrentMotionRecording()
-    this.aiState = createInitialAiState()
-    this.aiError = null
-    this.displayedFeedbackTitle = ''
-    this.feedbackTitleChangedAtMs = 0
-    this.displayedFeedbackDetail = ''
-    this.feedbackDetailChangedAtMs = 0
-    this.resetFeedbackTts()
-    this.renderMotion()
-    this.showCountdown()
-  }
-
   private showCountdown() {
     this.clearGuideOverlay()
     this.clearCountdownOverlay()
@@ -2017,6 +1886,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
       this.sessionStartedAtMs = this.motionStartedAtMs
     }
     this.renderMotion()
+    this.showSideGuideVideo()
   }
 
   private clearGuideOverlay() {
@@ -2029,22 +1899,28 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     bounds: PanelBounds,
     videoUrl: string,
     loadingText?: Phaser.GameObjects.Text,
+    options: {
+      loop?: boolean
+      zIndex?: number
+      autoStartOnEnded?: boolean
+      objectFit?: 'cover' | 'contain' | 'fill'
+    } = {},
   ) {
     this.destroyGuideVideoElement()
 
     const video = document.createElement('video')
     video.src = videoUrl
     video.muted = true
-    video.loop = false
+    video.loop = options.loop ?? false
     video.autoplay = true
     video.playsInline = true
     video.preload = 'auto'
     video.style.position = 'fixed'
-    video.style.objectFit = 'fill'
+    video.style.objectFit = options.objectFit ?? 'fill'
     video.style.pointerEvents = 'none'
     video.style.borderRadius = '18px'
     video.style.backgroundColor = '#fff8df'
-    video.style.zIndex = '20'
+    video.style.zIndex = String(options.zIndex ?? 20)
 
     const positionVideo = () => {
       const canvasRect = this.game.canvas.getBoundingClientRect()
@@ -2075,7 +1951,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     video.addEventListener(
       'ended',
       () => {
-        if (this.phase === 'GUIDE_PREVIEW') {
+        if ((options.autoStartOnEnded ?? true) && this.phase === 'GUIDE_PREVIEW') {
           this.handleGuideStart()
         }
       },
@@ -2107,6 +1983,34 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     this.guideVideoElement.load()
     this.guideVideoElement.remove()
     this.guideVideoElement = undefined
+  }
+
+  private showSideGuideVideo() {
+    if (!this.sideGuideVideoBounds || this.phase !== 'TRACKING') return
+
+    const guideVideoUrl = this.getCurrentGuideVideoUrl()
+    if (!guideVideoUrl) {
+      this.destroyGuideVideoElement()
+      this.sideGuideStatusText
+        ?.setText('\uB4F1\uB85D\uB41C \uAC00\uC774\uB4DC \uC601\uC0C1\uC774 \uC5C6\uC5B4\uC694')
+        .setVisible(true)
+      return
+    }
+
+    this.sideGuideStatusText
+      ?.setText('\uC601\uC0C1\uC744 \uC900\uBE44 \uC911\uC785\uB2C8\uB2E4')
+      .setVisible(true)
+    this.createGuideVideoElement(
+      this.sideGuideVideoBounds,
+      guideVideoUrl,
+      this.sideGuideStatusText,
+      {
+        loop: true,
+        zIndex: 15,
+        autoStartOnEnded: false,
+        objectFit: 'cover',
+      },
+    )
   }
 
   private clearCountdownOverlay() {
@@ -2811,13 +2715,10 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     this.didTopCountIncrease = false
     this.didDanielComplete = false
     this.updateHoldProgressUi(motionSpec)
-    this.motionCounterText?.setText(
-      `${this.motionIndex + 1}/${this.motions.length} ${this.getMotionDisplayTitle()}`,
-    )
     this.motionTitleText?.setText(this.getMotionDisplayTitle())
 
-    this.fitTextToWidth(this.motionCounterText, this.motionCounterMaxWidth, this.headerFontSize, 14)
-    this.fitTextToWidth(this.motionTitleText, this.motionTitleMaxWidth, 44, 28)
+    this.fitTextToWidth(this.motionTitleText, this.motionTitleMaxWidth, 34, 22)
+    this.updateHeaderStats()
     this.centerMotionTitleText()
     this.fitFeedbackTitleToOneLine()
     this.fitTextToWidth(
@@ -3059,11 +2960,13 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
   }
 
   private updateHoldProgressUi(motionSpec: AiMotionSpec) {
-    const shouldShow = this.saveState === 'idle'
+    const shouldShow = false
     this.progressLabelText?.setVisible(shouldShow)
     this.holdProgressTrack?.setVisible(shouldShow)
     this.holdProgressBar?.setVisible(shouldShow)
     this.holdProgressText?.setVisible(false)
+
+    this.updateHeaderStats()
 
     if (!shouldShow) return
 
@@ -3086,7 +2989,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
       .setText('\uCCB4\uC870 \uC644\uB8CC')
       .setFontSize(this.progressCompleteFontSize)
       .setColor('#2f2118')
-      .setVisible(true)
+      .setVisible(false)
       .setPosition(this.progressTextCenterX, this.progressCompleteCenterY)
     progressText.setFixedSize(this.holdStatusMaxWidth, 0)
     progressText.setOrigin(0.5)
@@ -3099,7 +3002,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     progressText
       .setFontSize(this.progressTextFontSize)
       .setColor('#a84a3f')
-      .setVisible(true)
+      .setVisible(false)
       .setPosition(this.progressTextCenterX, this.progressTextCenterY)
     progressText.setFixedSize(this.holdStatusMaxWidth, 0)
   }
@@ -3353,6 +3256,18 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     this.resetCurrentMotionReplay()
     this.cancelCurrentMotionRecording()
     this.renderMotion()
+    this.showSideGuideVideo()
+  }
+
+  private updateHeaderStats() {
+    const motionSpec = this.getCurrentAiMotionSpec()
+    const progressLabel =
+      motionSpec.type === 'daniel'
+        ? `\uC720\uC9C0 ${this.getDanielHoldDetail(motionSpec)}`
+        : `\uD69F\uC218 ${this.getProgressDetailText(motionSpec)}`
+
+    this.timerText?.setText(progressLabel)
+    this.fitTextToWidth(this.timerText, this.motionCounterMaxWidth, this.headerFontSize, 14)
   }
 
   private getCurrentAiMotionSpec() {
@@ -3564,12 +3479,8 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
   }
 
   private renderMotion() {
-    const motionTitle = this.getMotionDisplayTitle()
-    this.motionCounterText?.setText(`${this.motionIndex + 1}/${this.motions.length} ${motionTitle}`)
-    this.motionTitleText?.setText(motionTitle)
-    this.timerText?.setText(this.formatTime(this.remainingSeconds))
-    this.fitTextToWidth(this.motionCounterText, this.motionCounterMaxWidth, this.headerFontSize, 14)
-    this.fitTextToWidth(this.motionTitleText, this.motionTitleMaxWidth, 44, 28)
+    this.motionTitleText?.setText(this.getMotionDisplayTitle())
+    this.fitTextToWidth(this.motionTitleText, this.motionTitleMaxWidth, 34, 22)
     this.centerMotionTitleText()
     if (this.isCameraRecognized) {
       this.clearFeedbackTitle()
@@ -3577,7 +3488,6 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
       this.setFeedbackTitle('전신이 보이게 서요', { force: true })
     }
     this.updateHoldProgressUi(this.getCurrentAiMotionSpec())
-    this.fitTextToWidth(this.timerText, this.timerMaxWidth, this.headerFontSize, 14)
     this.fitFeedbackTitleToOneLine()
     this.positionFeedbackStar()
     const motionSpec = this.getCurrentAiMotionSpec()
@@ -3654,12 +3564,6 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
       fontSize -= 1
       text.setFontSize(fontSize)
     }
-  }
-
-  private formatTime(totalSeconds: number) {
-    const minutes = Math.floor(totalSeconds / 60)
-    const seconds = totalSeconds % 60
-    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
   }
 
   private cancelCurrentMotionRecording() {
