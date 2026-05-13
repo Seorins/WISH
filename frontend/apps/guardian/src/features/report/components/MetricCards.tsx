@@ -79,7 +79,7 @@ export function MetricCards({ summary }: Props) {
         tone="pink"
       />
       <MetricCard
-        label="받은 연료"
+        label="받은 에너지"
         value={summary.fuelEarned.toLocaleString()}
         unit="%"
         diff={summary.diff.fuelEarned}

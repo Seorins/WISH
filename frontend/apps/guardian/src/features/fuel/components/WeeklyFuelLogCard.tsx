@@ -29,11 +29,11 @@ export function WeeklyFuelLogCard({ events }: Props) {
   return (
     <section className={styles.card}>
       <header className={styles.header}>
-        <span className={styles.title}>이번 주 연료 기록</span>
+        <span className={styles.title}>이번 주 에너지 기록</span>
       </header>
 
       {weekly.length === 0 ? (
-        <div className={styles.empty}>이번 주에 보낸 연료가 없어요</div>
+        <div className={styles.empty}>이번 주에 보낸 에너지가 없어요</div>
       ) : (
         <ul className={styles.list}>
           {weekly.map(event => {
