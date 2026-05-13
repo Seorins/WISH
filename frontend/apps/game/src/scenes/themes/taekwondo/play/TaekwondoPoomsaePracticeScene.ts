@@ -167,6 +167,7 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
   private motionStartedAtMs = 0
   private isWaitingMotionStart = false
   private isAiJudgementPaused = false
+  private shouldRestartCaptureAfterGuideOverlay = false
   private hasSubmittedSession = false
   private isSavingSession = false
   private isSceneShuttingDown = false
@@ -220,6 +221,7 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     this.motionStartedAtMs = 0
     this.isWaitingMotionStart = false
     this.isAiJudgementPaused = false
+    this.shouldRestartCaptureAfterGuideOverlay = false
     this.hasSubmittedSession = false
     this.isSavingSession = false
     this.isSceneShuttingDown = false
@@ -925,7 +927,7 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
         pass_threshold: AI_PASS_THRESHOLD,
       })
 
-      if (this.isSceneShuttingDown) {
+      if (this.isSceneShuttingDown || this.isAiJudgementPaused || this.guideVideoExpandOverlay) {
         return
       }
 
@@ -954,7 +956,12 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
   }
 
   private handleCaptureTimeout() {
-    if (this.hasTriggeredSuccess || this.isSceneShuttingDown) {
+    if (
+      this.hasTriggeredSuccess ||
+      this.isSceneShuttingDown ||
+      this.isAiJudgementPaused ||
+      this.guideVideoExpandOverlay
+    ) {
       return
     }
     this.isCapturing = false
@@ -973,7 +980,7 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
       return
     }
     this.time.delayedCall(CAPTURE_RESULT_TO_ADVANCE_DELAY_MS, () => {
-      if (this.isSceneShuttingDown) {
+      if (this.isSceneShuttingDown || this.isAiJudgementPaused || this.guideVideoExpandOverlay) {
         return
       }
       this.advanceToNextMotion()
@@ -1444,6 +1451,7 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
       return
     }
 
+    this.shouldRestartCaptureAfterGuideOverlay = this.isCapturing
     this.pauseAiJudgement()
     this.destroyGuideVideoElement()
     this.setSideGuideMagnifierVisible(false)
@@ -1595,7 +1603,8 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     }
 
     this.destroyGuideVideoElement()
-    const wasPausedDuringCapture = this.isCapturing && this.isAiJudgementPaused
+    const shouldRestartCapture = this.shouldRestartCaptureAfterGuideOverlay
+    this.shouldRestartCaptureAfterGuideOverlay = false
     this.tweens.add({
       targets: overlay,
       alpha: 0,
@@ -1603,8 +1612,11 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
       ease: 'Sine.easeIn',
       onComplete: () => {
         overlay.destroy(true)
-        if (wasPausedDuringCapture) {
-          this.startMotionCountdown(() => this.resumeAiJudgement())
+        if (shouldRestartCapture) {
+          this.startMotionCountdown(() => {
+            this.resumeAiJudgement()
+            this.beginMotionCapture()
+          })
         } else {
           this.setSideGuideMagnifierVisible(true)
           this.showSideGuideVideo()
@@ -1617,7 +1629,8 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
   private pauseAiJudgement() {
     this.isAiJudgementPaused = true
     if (this.captureTimer) {
-      this.captureTimer.paused = true
+      this.captureTimer.remove(false)
+      this.captureTimer = null
     }
   }
 
@@ -1998,6 +2011,7 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     this.beltPromotionOverlay = undefined
     this.isWaitingMotionStart = false
     this.isAiJudgementPaused = false
+    this.shouldRestartCaptureAfterGuideOverlay = false
     this.isCapturing = false
     this.analysisInFlight = false
     this.hasTriggeredSuccess = false
