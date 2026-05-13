@@ -66,6 +66,8 @@ TARGET_RULE_MIN_SEQUENCE_MOTION = 0.12
 TARGET_RULE_ACTION_MOTION_MIN_DELTA = 0.06
 TARGET_RULE_ACTION_MOTION_FULL_DELTA = 0.22
 TARGET_RULE_MIN_TRACKED_FRAMES_FOR_MOTION = 4
+TARGET_RULE_AGGREGATION_MEDIAN_WEIGHT = 0.65
+TARGET_RULE_AGGREGATION_TOP_MEAN_WEIGHT = 0.35
 CORE_SCORING_JOINT_NAMES = (
     "코",
     "목",
@@ -623,7 +625,10 @@ def _aggregate_target_rule_frame_scores(frame_scores: list[float]) -> float:
     sorted_scores = np.sort(scores)
     top_count = max(1, min(scores.size, scores.size // 2))
     top_scores = sorted_scores[-top_count:]
-    return float((0.65 * np.median(scores)) + (0.35 * np.mean(top_scores)))
+    return float(
+        (TARGET_RULE_AGGREGATION_MEDIAN_WEIGHT * np.median(scores))
+        + (TARGET_RULE_AGGREGATION_TOP_MEAN_WEIGHT * np.mean(top_scores))
+    )
 
 
 def _score_target_rule_frame(
