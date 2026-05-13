@@ -60,10 +60,10 @@ const GAME_FONT = '"Arial Black", "Pretendard", "Noto Sans KR", "Malgun Gothic",
 const LANE_COUNT = 4
 const LANE_COLORS = [0x4fd8ff, 0x8b7cff, 0xffcf5d, 0xff6fbd] as const
 const NOTE_LEAD_MS = 1_800
-const PERFECT_WINDOW_MS = 130
-const GREAT_WINDOW_MS = 250
-const GOOD_WINDOW_MS = 400
-const MISS_WINDOW_MS = 520
+const PERFECT_WINDOW_MS = 70
+const GREAT_WINDOW_MS = 140
+const GOOD_WINDOW_MS = 230
+const MISS_WINDOW_MS = 350
 const HIT_LINE_RATIO = 0.78
 const SPAWN_LINE_RATIO = 0.16
 
@@ -733,10 +733,16 @@ export class MusicRhythmScene extends Phaser.Scene {
 
     // ── title — generous breathing room from tag ──
     const titleY = tagY + 80
+    const rawTitle = this.chart.title
+    const displayTitle = rawTitle.length > 20 ? rawTitle.substring(0, 19) + '…' : rawTitle
+    const titleFontSize =
+      displayTitle.length > 14
+        ? Phaser.Math.Clamp(vh * 0.038, 22, 30)
+        : Phaser.Math.Clamp(vh * 0.06, 38, 54)
     const title = this.add
-      .text(0, titleY, this.chart.title, {
+      .text(0, titleY, displayTitle, {
         fontFamily: FONT_FAMILY,
-        fontSize: `${Phaser.Math.Clamp(vh * 0.06, 38, 54)}px`,
+        fontSize: `${titleFontSize}px`,
         fontStyle: 'bold',
         color: '#fff8f0',
       })

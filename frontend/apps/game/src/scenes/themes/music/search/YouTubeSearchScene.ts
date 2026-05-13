@@ -363,9 +363,11 @@ function injectStyles() {
     }
     .yts-header-inner {
       max-width: 960px; margin: 0 auto;
-      display: flex; align-items: center; gap: 16px;
+      position: relative;
+      display: flex; align-items: center; justify-content: center;
     }
     .yts-back {
+      position: absolute; left: 0;
       background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.14);
       color: #c9ced8; padding: 7px 15px; border-radius: 20px;
       cursor: pointer; font-size: 13px; font-family: inherit;
