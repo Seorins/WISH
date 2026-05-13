@@ -2180,6 +2180,11 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
   }
 
   private startNextQuizRound() {
+    // 종료 전환(returnToArtRoom) 중이거나 종료 확인이 떠있는 동안엔 새 라운드 진입 차단 —
+    // "그만하기"와 동시에 hand-tracking/중복 클릭으로 onNext 가 한 번 더 트리거돼도 안전.
+    if (this.isTransitioning || this.isExitConfirmOpen) {
+      return
+    }
     this.currentPrompt = pickRandomPrompt(this.currentPrompt?.word)
     this.refreshPromptCard()
     this.resetDrawing()
@@ -2190,7 +2195,7 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
   }
 
   private showRoundIntro(prompt: DrawingPrompt) {
-    if (this.isRoundIntroOpen) return
+    if (this.isRoundIntroOpen || this.isTransitioning) return
     this.pauseHandInputForConfirmDialog()
     this.isRoundIntroOpen = true
     this.roundIntroDialog = createQuizRoundIntroDialog({
