@@ -172,6 +172,8 @@ export class VillageScene extends Phaser.Scene {
   private emojiPalette: VillageEmojiPaletteHandle | null = null
   /** Q 키로 사용자가 의도적으로 팔레트를 켰는지. 다이얼로그/설정 패널 자동 숨김과 분리. */
   private emojiPaletteManuallyShown = false
+  /** 팔레트 숨겨져 있을 때 우하단에 "[Q] 이모티콘" 으로 토글 단축키 안내 (S14P31E103-769). */
+  private emojiHint: Phaser.GameObjects.Text | null = null
 
   constructor() {
     super({ key: 'VillageScene' })
@@ -404,6 +406,19 @@ export class VillageScene extends Phaser.Scene {
       },
     })
     this.emojiPaletteManuallyShown = false
+    // 팔레트는 기본 숨김 → 단축키를 모른 사용자가 발견할 수 있도록 우하단 고정 힌트. 팔레트가 열리면 같은 자리이므로 숨겨서 겹침 회피.
+    this.emojiHint = this.add
+      .text(vw - 18, vh - 18, '[Q] 이모티콘', {
+        fontSize: '14px',
+        fontFamily: 'sans-serif',
+        color: '#ffffff',
+        backgroundColor: '#00000080',
+        padding: { left: 8, right: 8, top: 4, bottom: 4 },
+        resolution: 2,
+      })
+      .setOrigin(1, 1)
+      .setScrollFactor(0)
+      .setDepth(100)
     // 1\~9 + 0 단축키. 인덱스 0\~9 매핑. 팔레트가 숨겨져 있어도 발사 가능 (학습용 토글 vs 즉시 발사 분리).
     const emojiKeyNames = [
       'ONE',
@@ -444,6 +459,8 @@ export class VillageScene extends Phaser.Scene {
       this.villageRealtime = null
       this.emojiPalette?.destroy()
       this.emojiPalette = null
+      this.emojiHint?.destroy()
+      this.emojiHint = null
     })
   }
 
@@ -462,9 +479,10 @@ export class VillageScene extends Phaser.Scene {
     this.resolvePolygonObstacleCollision()
 
     this.villageRealtime?.publishLocal(this.player, this.lastDirection, movement.moving)
-    this.emojiPalette?.setVisible(
-      this.emojiPaletteManuallyShown && !this.isVillagerDialogueOpen && !this.settingsMenu.isOpen(),
-    )
+    const overlaysOpen = this.isVillagerDialogueOpen || this.settingsMenu.isOpen()
+    const paletteVisible = this.emojiPaletteManuallyShown && !overlaysOpen
+    this.emojiPalette?.setVisible(paletteVisible)
+    this.emojiHint?.setVisible(!paletteVisible && !overlaysOpen)
 
     const nearestNpc = this.getNearestNpcInTalkDistance()
     this.nearestNpcId = nearestNpc?.id ?? null

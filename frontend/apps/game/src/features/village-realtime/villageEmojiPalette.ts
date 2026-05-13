@@ -79,13 +79,9 @@ export function createVillageEmojiPalette(
       })
       .setOrigin(0, 0)
 
-    const hitArea = new Phaser.Geom.Rectangle(
-      buttonX - BUTTON_SIZE / 2,
-      buttonY - BUTTON_SIZE / 2,
-      BUTTON_SIZE,
-      BUTTON_SIZE,
-    )
-    bg.setInteractive(hitArea, Phaser.Geom.Rectangle.Contains)
+    // Rectangle 자체 geometry 를 hit area 로 자동 사용 (이전엔 container 좌표를 직접 hit area 에 박아 클릭 영역이
+    // 어긋나 있었음). useHandCursor 로 클릭 가능 affordance 도 함께.
+    bg.setInteractive({ useHandCursor: true })
     bg.on('pointerdown', (event: Phaser.Types.Input.EventData) => {
       ;(event as unknown as { stopPropagation?: () => void }).stopPropagation?.()
       triggerByIndex(index)
