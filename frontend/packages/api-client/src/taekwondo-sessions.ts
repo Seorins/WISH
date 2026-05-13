@@ -73,6 +73,14 @@ function clampTaekwondoAccuracy(value: number) {
   return Math.max(0, Math.min(1, value))
 }
 
+function normalizeTaekwondoTargetReps(value: number) {
+  if (!Number.isFinite(value)) {
+    return 1
+  }
+
+  return Math.max(1, Math.trunc(value))
+}
+
 export function toTaekwondoAccuracy(score: number) {
   return clampTaekwondoAccuracy(score / 100)
 }
@@ -128,7 +136,7 @@ export function toCreateTaekwondoSessionMotionRequest({
     taekwondoMotionId,
     durationSec,
     accuracy: analysis ? toTaekwondoAccuracy(analysis.score) : 0,
-    completedReps: analysis?.passed ? Math.max(1, targetReps) : 0,
+    completedReps: analysis?.passed ? normalizeTaekwondoTargetReps(targetReps) : 0,
     feedback: analysis
       ? formatTaekwondoAiFeedback(analysis, feedbackFallback)
       : feedbackFallback || 'Taekwondo motion analysis was not completed.',
