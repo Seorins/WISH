@@ -170,6 +170,8 @@ export class VillageScene extends Phaser.Scene {
   private interactionHint!: NpcInteractionHintUi
   private villageRealtime: VillageRealtimeIntegration | null = null
   private emojiPalette: VillageEmojiPaletteHandle | null = null
+  /** Q 키로 사용자가 의도적으로 팔레트를 켰는지. 다이얼로그/설정 패널 자동 숨김과 분리. */
+  private emojiPaletteManuallyShown = false
 
   constructor() {
     super({ key: 'VillageScene' })
@@ -401,13 +403,31 @@ export class VillageScene extends Phaser.Scene {
         emitEmoteBubble(this, this.player, emoji, 100)
       },
     })
-    const emojiKeyNames = ['ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX'] as const
+    this.emojiPaletteManuallyShown = false
+    // 1\~9 + 0 단축키. 인덱스 0\~9 매핑. 팔레트가 숨겨져 있어도 발사 가능 (학습용 토글 vs 즉시 발사 분리).
+    const emojiKeyNames = [
+      'ONE',
+      'TWO',
+      'THREE',
+      'FOUR',
+      'FIVE',
+      'SIX',
+      'SEVEN',
+      'EIGHT',
+      'NINE',
+      'ZERO',
+    ] as const
     emojiKeyNames.forEach((name, index) => {
       if (index >= VILLAGE_EMOJIS.length) return
       this.input.keyboard?.on(`keydown-${name}`, () => {
         if (this.isVillagerDialogueOpen || this.settingsMenu.isOpen()) return
         this.emojiPalette?.triggerByIndex(index)
       })
+    })
+    // Q 키 — 팔레트 토글. 다이얼로그/설정 패널 열려있으면 무시.
+    this.input.keyboard?.on('keydown-Q', () => {
+      if (this.isVillagerDialogueOpen || this.settingsMenu.isOpen()) return
+      this.emojiPaletteManuallyShown = !this.emojiPaletteManuallyShown
     })
     this.game.events.on('villager-dialogue:closed', this.handleVillagerDialogueClosed, this)
     this.game.events.on('villager-dialogue:text', this.handleVillagerDialogueText, this)
@@ -442,7 +462,9 @@ export class VillageScene extends Phaser.Scene {
     this.resolvePolygonObstacleCollision()
 
     this.villageRealtime?.publishLocal(this.player, this.lastDirection, movement.moving)
-    this.emojiPalette?.setVisible(!this.isVillagerDialogueOpen && !this.settingsMenu.isOpen())
+    this.emojiPalette?.setVisible(
+      this.emojiPaletteManuallyShown && !this.isVillagerDialogueOpen && !this.settingsMenu.isOpen(),
+    )
 
     const nearestNpc = this.getNearestNpcInTalkDistance()
     this.nearestNpcId = nearestNpc?.id ?? null
