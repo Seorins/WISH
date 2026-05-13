@@ -301,7 +301,7 @@ export function useReportData({ patientId, patientName, week }: UseReportDataOpt
   const dailyQuery = useDailyUsageStats(patientId, { from: week.start, to: week.end })
   const averagesQuery = useUsageAverages({ from: week.start, to: week.end })
   const musicQuery = useMyMusicResults({ size: 100 })
-  const taekwondoQuery = useMyTaekwondoSessions({ size: 100 })
+  const taekwondoQuery = useMyTaekwondoSessions(patientId, { size: 100 })
   const exerciseQuery = usePatientExerciseSessions(patientId, { size: 100 })
   const artworksQuery = useMyArtworks({ size: 100 })
   const fuelQuery = useFuelStatus()
