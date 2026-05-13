@@ -24,10 +24,12 @@ from app.services.taekwondo.stgcn_taegeuk1 import (
     STGCN_CHECKPOINT_PATH,
     TARGET_RULE_LOW_MOTION_SCORE_CAP,
     TARGET_SEQUENCE_SHAPE,
+    _apply_sequence_motion_final_cap,
     _camera_adjusted_score,
     _normalize_camera_sequence,
     _prediction_probabilities,
     _sequence_centered_score,
+    _sequence_final_motion_score_cap,
     _target_rule_candidate_frames,
     _target_rule_score,
     analyze_taegeuk1_sequence,
@@ -291,6 +293,42 @@ def test_sequence_centered_score_uses_prototype_for_missing_supplementary_signal
     assert method == "sequence_weighted"
     assert score == pytest.approx(59.0)
     assert score < TARGET_RULE_TEST_PASS_SCORE
+
+
+def test_sequence_motion_final_cap_limits_static_camera_sequence() -> None:
+    resources = load_taegeuk1_resources()
+    sequence = _walking_low_block_sequence(resources, animated=False)
+
+    capped_score, method = _apply_sequence_motion_final_cap(
+        95.0,
+        "sequence_weighted",
+        sequence,
+        resources.keypoint_names,
+    )
+
+    assert method == "sequence_motion_limited"
+    assert capped_score <= TARGET_RULE_LOW_MOTION_SCORE_CAP
+    assert capped_score < TARGET_RULE_TEST_PASS_SCORE
+
+
+def test_sequence_motion_final_cap_rejects_single_joint_motion() -> None:
+    resources = load_taegeuk1_resources()
+    sequence = _walking_low_block_sequence(resources, animated=False)
+    progress = np.sin(np.linspace(0.0, np.pi, TARGET_SEQUENCE_SHAPE[1]))
+    _set_landmark(sequence, resources, LEFT_KNEE, -0.35 + (0.35 * progress), 0.75)
+
+    cap = _sequence_final_motion_score_cap(sequence, resources.keypoint_names)
+
+    assert cap < TARGET_RULE_TEST_PASS_SCORE
+
+
+def test_sequence_motion_final_cap_allows_animated_camera_sequence() -> None:
+    resources = load_taegeuk1_resources()
+    sequence = _walking_low_block_sequence(resources, animated=True)
+
+    cap = _sequence_final_motion_score_cap(sequence, resources.keypoint_names)
+
+    assert cap == pytest.approx(100.0)
 
 
 def test_camera_prediction_probabilities_ignore_overconfident_softmax(monkeypatch: pytest.MonkeyPatch) -> None:
