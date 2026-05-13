@@ -27,8 +27,9 @@ const MODEL_OFFSET_Y = -0.95
 
 const KP_SCALE = 0.43
 const HIP_LOCAL_Y = 0.85
-// Dampens normalized pose z so depth noise does not over-rotate the avatar.
-const RETARGET_DEPTH_SCALE = KP_SCALE * 0.35
+// Front-facing replay should be driven mostly by x/y; z is noisy and can twist limbs backward.
+const RETARGET_DEPTH_DAMPING_RATIO = 0.15
+const RETARGET_DEPTH_SCALE = KP_SCALE * RETARGET_DEPTH_DAMPING_RATIO
 // Smooths replay bone rotation across render frames.
 const RETARGET_SLERP_FACTOR = 0.45
 const RETARGET_MIN_DIRECTION_LENGTH = 0.001
@@ -134,6 +135,17 @@ const FALLBACK_JOINTS: Joint[] = [
 const FALLBACK_JOINT_BY_ID = new Map(FALLBACK_JOINTS.map(joint => [joint.id, joint]))
 const DEFAULT_JOINT_POSITION: [number, number, number] = [0, 0, 0]
 
+function isFiniteVector3(v: Vector3): boolean {
+  return Number.isFinite(v.x) && Number.isFinite(v.y) && Number.isFinite(v.z)
+}
+
+function normalizeDirection(v: Vector3): boolean {
+  const lengthSq = v.lengthSq()
+  if (!Number.isFinite(lengthSq) || lengthSq <= RETARGET_MIN_DIRECTION_LENGTH) return false
+  v.normalize()
+  return isFiniteVector3(v)
+}
+
 function classifyBone(rawName: string): string | null {
   const n = rawName.toLowerCase()
   const isLeft = /^left|(^|[._\-:])l(?=$|[._\-:])|\.l\b|_l\b/.test(n)
@@ -215,8 +227,9 @@ function CharacterModel({
   const lastFrameIdx = useRef<number>(-1)
   const bonesRef = useRef<Map<string, Bone>>(new Map())
   const restQuatsRef = useRef<Map<string, Quaternion>>(new Map())
-  const restWorldDirsRef = useRef<Map<string, Vector3>>(new Map())
+  const restParentDirsRef = useRef<Map<string, Vector3>>(new Map())
   const markerRefs = useRef<Map<string, Group>>(new Map())
+  const updatedParentIdsRef = useRef<Set<string>>(new Set())
 
   // 매 프레임 재사용할 임시 객체들
   const tmpKpP = useRef(new Vector3())
@@ -244,22 +257,32 @@ function CharacterModel({
     bonesRef.current = bones
 
     const restQuats = new Map<string, Quaternion>()
-    const restWorldDirs = new Map<string, Vector3>()
+    const restParentDirs = new Map<string, Vector3>()
     for (const c of BONE_CHAINS) {
       const bone = bones.get(c.bone)
       const childBone = bones.get(c.childBone)
       if (bone) restQuats.set(c.bone, bone.quaternion.clone())
-      if (bone && childBone) {
+      if (bone && childBone && bone.parent) {
         bone.getWorldPosition(tmpBonePos.current)
         childBone.getWorldPosition(tmpChildPos.current)
-        const restDir = tmpChildPos.current.clone().sub(tmpBonePos.current)
-        if (restDir.lengthSq() > RETARGET_MIN_DIRECTION_LENGTH) {
-          restWorldDirs.set(c.bone, restDir.normalize())
+        tmpRestDir.current.copy(tmpChildPos.current).sub(tmpBonePos.current)
+        if (normalizeDirection(tmpRestDir.current)) {
+          bone.parent.updateWorldMatrix(true, false)
+          bone.parent.matrixWorld.decompose(
+            tmpBonePos.current,
+            tmpParentRot.current,
+            tmpChildPos.current,
+          )
+          tmpParentInvRot.current.copy(tmpParentRot.current).invert()
+          tmpRestDir.current.applyQuaternion(tmpParentInvRot.current)
+          if (normalizeDirection(tmpRestDir.current)) {
+            restParentDirs.set(c.bone, tmpRestDir.current.clone())
+          }
         }
       }
     }
     restQuatsRef.current = restQuats
-    restWorldDirsRef.current = restWorldDirs
+    restParentDirsRef.current = restParentDirs
 
     // 정적 마커 위치 (GLB 본 추출 결과)
     const found = new Map<string, [number, number, number]>()
@@ -361,11 +384,13 @@ function CharacterModel({
     g.updateWorldMatrix(false, false)
     const groupMatrix = g.matrixWorld
     let didRetarget = false
+    const updatedParentIds = updatedParentIdsRef.current
+    updatedParentIds.clear()
     for (const c of BONE_CHAINS) {
       const bone = bonesRef.current.get(c.bone)
       const restQuat = restQuatsRef.current.get(c.bone)
-      const restDir = restWorldDirsRef.current.get(c.bone)
-      if (!bone || !restQuat || !restDir || !bone.parent) continue
+      const restParentDir = restParentDirsRef.current.get(c.bone)
+      if (!bone || !restQuat || !restParentDir || !bone.parent) continue
 
       // 1. rest quaternion으로 일단 복원 후 matrixWorld 갱신 → rest world direction 측정
       if (
@@ -381,33 +406,33 @@ function CharacterModel({
       tmpKpPWorld.current.copy(kpP).applyMatrix4(groupMatrix)
       tmpKpCWorld.current.copy(kpC).applyMatrix4(groupMatrix)
       tmpDesiredDir.current.copy(tmpKpCWorld.current).sub(tmpKpPWorld.current)
-      if (tmpDesiredDir.current.lengthSq() <= RETARGET_MIN_DIRECTION_LENGTH) continue
-      tmpDesiredDir.current.normalize()
+      if (!normalizeDirection(tmpDesiredDir.current)) continue
+
+      const parentId = bone.parent.uuid
+      if (!updatedParentIds.has(parentId)) {
+        bone.parent.updateWorldMatrix(true, false)
+        updatedParentIds.add(parentId)
+      }
+      bone.parent.matrixWorld.decompose(
+        tmpBonePos.current,
+        tmpParentRot.current,
+        tmpChildPos.current,
+      )
+      tmpParentInvRot.current.copy(tmpParentRot.current).invert()
+      tmpDesiredDir.current.applyQuaternion(tmpParentInvRot.current)
+      if (!normalizeDirection(tmpDesiredDir.current)) continue
 
       // 3. world space에서의 회전 변화량
-      tmpRestDir.current.copy(restDir)
+      tmpRestDir.current.copy(restParentDir)
       const restDirLengthSq = tmpRestDir.current.lengthSq()
       if (!Number.isFinite(restDirLengthSq) || restDirLengthSq <= RETARGET_MIN_DIRECTION_LENGTH) {
         continue
       }
-      tmpRestDir.current.normalize()
+      if (!normalizeDirection(tmpRestDir.current)) continue
       tmpDelta.current.setFromUnitVectors(tmpRestDir.current, tmpDesiredDir.current)
 
-      // 4. 부모 본의 현재 world 회전
-      bone.parent.updateWorldMatrix(true, false)
-      bone.parent.matrixWorld.decompose(
-        tmpBonePos.current, // pos (재활용, 사용 안 함)
-        tmpParentRot.current,
-        tmpChildPos.current, // scale (재활용, 사용 안 함)
-      )
-      tmpParentInvRot.current.copy(tmpParentRot.current).invert()
-
-      // 5. bone.quaternion = parentInv × deltaWorld × parent × restQuat
-      tmpTargetRot.current
-        .copy(tmpParentInvRot.current)
-        .multiply(tmpDelta.current)
-        .multiply(tmpParentRot.current)
-        .multiply(restQuat)
+      // 4. bone.quaternion = parent-local delta * restQuat
+      tmpTargetRot.current.copy(tmpDelta.current).multiply(restQuat)
       bone.quaternion.slerp(tmpTargetRot.current, RETARGET_SLERP_FACTOR)
       didRetarget = true
     }
