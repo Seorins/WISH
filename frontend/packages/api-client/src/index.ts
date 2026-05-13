@@ -74,10 +74,14 @@ export {
 } from './taekwondo-belt-history'
 export {
   calculateTaekwondoAverageAccuracy,
+  calculateTaekwondoMonstersDefeated,
   createTaekwondoSession,
+  formatTaekwondoAiFeedback,
   getMyTaekwondoSessions,
   getTaekwondoSessions,
   getTaekwondoSessionDetail,
+  toCreateTaekwondoSessionMotionRequest,
+  toTaekwondoAccuracy,
 } from './taekwondo-sessions'
 export { aiApiClient, analyzeTaegeuk1Motion } from './taekwondo-ai'
 export type { TaegeukAnalyzeRequest, TaegeukAnalyzeResponse } from './taekwondo-ai'
@@ -213,5 +217,6 @@ export type {
   TaekwondoSessionDetail,
   TaekwondoSessionMotionResult,
   TaekwondoSessionPage,
+  ToCreateTaekwondoSessionMotionRequestParams,
   TaekwondoSessionSummary,
 } from './taekwondo-sessions'

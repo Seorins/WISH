@@ -57,11 +57,17 @@ MIN_CAMERA_SCALE = 0.05
 FINAL_FRAME_WINDOW = 10
 RULE_SCORE_START_RATIO = 0.35
 RULE_SCORE_CANDIDATE_FRAME_COUNT = 12
-TARGET_RULE_EARLY_EXIT_SCORE = 95.0
 TARGET_RULE_STANCE_WEIGHT = 0.55
 TARGET_RULE_ACTION_WEIGHT = 0.45
 TARGET_RULE_STANCE_FLOOR = 0.9
 TARGET_RULE_ACTION_FLOOR = 0.85
+TARGET_RULE_LOW_MOTION_SCORE_CAP = 40.0
+TARGET_RULE_MIN_SEQUENCE_MOTION = 0.12
+TARGET_RULE_ACTION_MOTION_MIN_DELTA = 0.06
+TARGET_RULE_ACTION_MOTION_FULL_DELTA = 0.22
+TARGET_RULE_MIN_TRACKED_FRAMES_FOR_MOTION = 4
+TARGET_RULE_AGGREGATION_MEDIAN_WEIGHT = 0.65
+TARGET_RULE_AGGREGATION_TOP_MEAN_WEIGHT = 0.35
 CORE_SCORING_JOINT_NAMES = (
     "코",
     "목",
@@ -574,10 +580,55 @@ def _target_rule_score(
             continue
         if frame_score is not None:
             candidate_scores.append(frame_score)
-            if frame_score >= TARGET_RULE_EARLY_EXIT_SCORE:
-                return frame_score
 
-    return max(candidate_scores) if candidate_scores else None
+    if not candidate_scores:
+        return None
+
+    score = _safe_score(_aggregate_target_rule_frame_scores(candidate_scores), 0.0)
+    motion_score_cap = _safe_score(
+        _sequence_motion_score_cap(sequence, keypoint_names),
+        TARGET_RULE_LOW_MOTION_SCORE_CAP,
+    )
+    score = min(score, motion_score_cap)
+
+    action_motion_cap = _target_action_motion_score_cap(
+        sequence,
+        keypoint_names,
+        movement_name,
+        expected_action,
+    )
+    if action_motion_cap is not None:
+        score = min(score, _safe_score(action_motion_cap, TARGET_RULE_LOW_MOTION_SCORE_CAP))
+
+    return _safe_score(score, 0.0)
+
+
+def _safe_score(value: float | None, default: float) -> float:
+    if value is None:
+        return default
+    try:
+        score = float(value)
+    except (TypeError, ValueError):
+        return default
+    if not np.isfinite(score):
+        return default
+    return score
+
+
+def _aggregate_target_rule_frame_scores(frame_scores: list[float]) -> float:
+    scores = np.asarray([score for score in frame_scores if np.isfinite(score)], dtype=np.float32)
+    if scores.size == 0:
+        return 0.0
+    if scores.size == 1:
+        return float(scores[0])
+
+    sorted_scores = np.sort(scores)
+    top_count = max(1, min(scores.size, scores.size // 2))
+    top_scores = sorted_scores[-top_count:]
+    return float(
+        (TARGET_RULE_AGGREGATION_MEDIAN_WEIGHT * np.median(scores))
+        + (TARGET_RULE_AGGREGATION_TOP_MEAN_WEIGHT * np.mean(top_scores))
+    )
 
 
 def _score_target_rule_frame(
@@ -643,6 +694,217 @@ def _target_rule_candidate_frame_indexes(frame_count: int, start_frame: int) -> 
 
     sampled = np.linspace(start_frame, end_frame, RULE_SCORE_CANDIDATE_FRAME_COUNT)
     return sorted({int(round(frame_index)) for frame_index in sampled})
+
+
+def _sequence_motion_score_cap(sequence: np.ndarray, keypoint_names: list[str]) -> float:
+    motion_amount = _sequence_motion_amount(sequence, keypoint_names)
+    if not np.isfinite(motion_amount) or motion_amount < 0.0:
+        return TARGET_RULE_LOW_MOTION_SCORE_CAP
+    if motion_amount >= TARGET_RULE_MIN_SEQUENCE_MOTION:
+        return 100.0
+
+    return _safe_score(
+        _interpolate(
+            motion_amount,
+            0.0,
+            TARGET_RULE_MIN_SEQUENCE_MOTION,
+            TARGET_RULE_LOW_MOTION_SCORE_CAP,
+            100.0,
+        ),
+        TARGET_RULE_LOW_MOTION_SCORE_CAP,
+    )
+
+
+def _sequence_motion_amount(sequence: np.ndarray, keypoint_names: list[str]) -> float:
+    indexes = _landmark_indexes(
+        keypoint_names,
+        (
+            LEFT_WRIST,
+            RIGHT_WRIST,
+            LEFT_ELBOW,
+            RIGHT_ELBOW,
+            LEFT_KNEE,
+            RIGHT_KNEE,
+            LEFT_ANKLE,
+            RIGHT_ANKLE,
+        ),
+    )
+    if not indexes:
+        return 0.0
+
+    joint_ranges: list[float] = []
+    for index in indexes.values():
+        points = _tracked_joint_points(sequence, index)
+        if points is None or points.size == 0 or not np.isfinite(points).all():
+            continue
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=RuntimeWarning)
+            lower = np.nanpercentile(points, 10, axis=0)
+            upper = np.nanpercentile(points, 90, axis=0)
+        ranges = upper - lower
+        if np.isfinite(ranges).all():
+            joint_ranges.append(float(np.linalg.norm(ranges)))
+
+    if not joint_ranges:
+        return 0.0
+    range_values = np.asarray(joint_ranges, dtype=np.float32)
+    range_values = range_values[np.isfinite(range_values)]
+    if range_values.size == 0:
+        return 0.0
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=RuntimeWarning)
+        motion_amount = float(np.nanpercentile(range_values, 75))
+    if not np.isfinite(motion_amount):
+        return 0.0
+    return motion_amount
+
+
+def _target_action_motion_score_cap(
+    sequence: np.ndarray,
+    keypoint_names: list[str],
+    movement_name: str,
+    expected_action: str | None,
+) -> float | None:
+    if expected_action == ACTION_LOW_BLOCK:
+        delta = _max_wrist_vertical_delta(sequence, keypoint_names, direction="down")
+    elif expected_action == ACTION_MIDDLE_PUNCH:
+        delta = _max_arm_extension_delta(sequence, keypoint_names)
+    elif _movement_requires_face_block(movement_name):
+        delta = _max_wrist_vertical_delta(sequence, keypoint_names, direction="up")
+    else:
+        return None
+
+    if delta is None or not np.isfinite(delta):
+        return TARGET_RULE_LOW_MOTION_SCORE_CAP
+
+    return _safe_score(
+        _interpolate(
+            delta,
+            TARGET_RULE_ACTION_MOTION_MIN_DELTA,
+            TARGET_RULE_ACTION_MOTION_FULL_DELTA,
+            TARGET_RULE_LOW_MOTION_SCORE_CAP,
+            100.0,
+        ),
+        TARGET_RULE_LOW_MOTION_SCORE_CAP,
+    )
+
+
+def _movement_requires_face_block(movement_name: str) -> bool:
+    return "얼굴막" in movement_name
+
+
+def _max_wrist_vertical_delta(
+    sequence: np.ndarray,
+    keypoint_names: list[str],
+    *,
+    direction: str,
+) -> float | None:
+    indexes = _landmark_indexes(keypoint_names, (LEFT_WRIST, RIGHT_WRIST))
+    deltas: list[float] = []
+    for index in indexes.values():
+        early = _joint_phase_median(sequence, index, 0.0, 0.35)
+        late = _joint_phase_median(sequence, index, 0.65, 1.0)
+        if early is None or late is None:
+            continue
+        if direction == "up":
+            delta = float(early[1] - late[1])
+        else:
+            delta = float(late[1] - early[1])
+        if np.isfinite(delta):
+            deltas.append(delta)
+
+    return max(deltas) if deltas else None
+
+
+def _max_arm_extension_delta(sequence: np.ndarray, keypoint_names: list[str]) -> float | None:
+    indexes = _landmark_indexes(
+        keypoint_names,
+        (LEFT_SHOULDER, RIGHT_SHOULDER, LEFT_WRIST, RIGHT_WRIST),
+    )
+    side_pairs = (
+        (LEFT_SHOULDER, LEFT_WRIST),
+        (RIGHT_SHOULDER, RIGHT_WRIST),
+    )
+    deltas: list[float] = []
+
+    for shoulder_name, wrist_name in side_pairs:
+        shoulder_index = indexes.get(shoulder_name)
+        wrist_index = indexes.get(wrist_name)
+        if shoulder_index is None or wrist_index is None:
+            continue
+
+        early_shoulder = _joint_phase_median(sequence, shoulder_index, 0.0, 0.35)
+        early_wrist = _joint_phase_median(sequence, wrist_index, 0.0, 0.35)
+        late_shoulder = _joint_phase_median(sequence, shoulder_index, 0.65, 1.0)
+        late_wrist = _joint_phase_median(sequence, wrist_index, 0.65, 1.0)
+        if (
+            early_shoulder is None
+            or early_wrist is None
+            or late_shoulder is None
+            or late_wrist is None
+        ):
+            continue
+
+        early_extension = float(np.linalg.norm(early_wrist - early_shoulder))
+        late_extension = float(np.linalg.norm(late_wrist - late_shoulder))
+        delta = late_extension - early_extension
+        if np.isfinite(delta):
+            deltas.append(delta)
+
+    return max(deltas) if deltas else None
+
+
+def _landmark_indexes(keypoint_names: list[str], landmark_names: tuple[str, ...]) -> dict[str, int]:
+    requested = set(landmark_names)
+    indexes: dict[str, int] = {}
+    for index, korean_name in enumerate(keypoint_names):
+        landmark_name = KOREAN_TO_TAEKWONDO_LANDMARK.get(korean_name)
+        if landmark_name in requested:
+            indexes[landmark_name] = index
+    return indexes
+
+
+def _tracked_joint_points(sequence: np.ndarray, joint_index: int) -> np.ndarray | None:
+    if sequence.ndim != 3 or sequence.shape[0] < 2 or joint_index >= sequence.shape[2]:
+        return None
+
+    points = sequence[:2, :, joint_index].T
+    valid = np.isfinite(points).all(axis=1)
+    if sequence.shape[0] > 2:
+        confidence = sequence[2, :, joint_index]
+        valid &= np.isfinite(confidence) & (confidence > 0.0)
+
+    if int(np.count_nonzero(valid)) < TARGET_RULE_MIN_TRACKED_FRAMES_FOR_MOTION:
+        return None
+    return points[valid]
+
+
+def _joint_phase_median(
+    sequence: np.ndarray,
+    joint_index: int,
+    start_ratio: float,
+    end_ratio: float,
+) -> np.ndarray | None:
+    if sequence.ndim != 3 or sequence.shape[1] <= 0:
+        return None
+
+    frame_count = sequence.shape[1]
+    start = max(0, min(frame_count - 1, int(round(frame_count * start_ratio))))
+    end = max(start + 1, min(frame_count, int(round(frame_count * end_ratio))))
+    if end <= start:
+        return None
+
+    phase = sequence[:, start:end, :]
+    points = _tracked_joint_points(phase, joint_index)
+    if points is None:
+        return None
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=RuntimeWarning)
+        median = np.nanmedian(points, axis=0)
+    if not np.isfinite(median).all():
+        return None
+    return median.astype(np.float32)
 
 
 def _expected_stance_label(movement_name: str) -> str | None:

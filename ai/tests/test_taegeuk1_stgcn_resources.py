@@ -3,11 +3,27 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+from app.services.taekwondo.constants import (
+    LEFT_ANKLE,
+    LEFT_ELBOW,
+    LEFT_HIP,
+    LEFT_KNEE,
+    LEFT_SHOULDER,
+    LEFT_WRIST,
+    RIGHT_ANKLE,
+    RIGHT_ELBOW,
+    RIGHT_HIP,
+    RIGHT_KNEE,
+    RIGHT_SHOULDER,
+    RIGHT_WRIST,
+)
 from app.services.taekwondo import stgcn_taegeuk1
 from app.services.taekwondo.stgcn_taegeuk1 import (
-    TARGET_SEQUENCE_SHAPE,
     CORE_SCORING_JOINT_NAMES,
+    KOREAN_TO_TAEKWONDO_LANDMARK,
     STGCN_CHECKPOINT_PATH,
+    TARGET_RULE_LOW_MOTION_SCORE_CAP,
+    TARGET_SEQUENCE_SHAPE,
     _camera_adjusted_score,
     _normalize_camera_sequence,
     _prediction_probabilities,
@@ -17,6 +33,54 @@ from app.services.taekwondo.stgcn_taegeuk1 import (
     load_taegeuk1_resources,
     load_stgcn_model,
 )
+
+
+TARGET_RULE_TEST_PASS_SCORE = 80.0
+
+
+def _keypoint_index(resources, landmark_name: str) -> int:
+    for index, keypoint_name in enumerate(resources.keypoint_names):
+        if KOREAN_TO_TAEKWONDO_LANDMARK.get(keypoint_name) == landmark_name:
+            return index
+    raise AssertionError(f"missing keypoint for {landmark_name}")
+
+
+def _set_landmark(
+    sequence: np.ndarray,
+    resources,
+    landmark_name: str,
+    x: float | np.ndarray,
+    y: float | np.ndarray,
+) -> None:
+    index = _keypoint_index(resources, landmark_name)
+    sequence[0, :, index] = x
+    sequence[1, :, index] = y
+
+
+def _walking_low_block_sequence(resources, *, animated: bool) -> np.ndarray:
+    sequence = np.zeros(TARGET_SEQUENCE_SHAPE, dtype=np.float32)
+    sequence[2, :, :] = 1.0
+
+    _set_landmark(sequence, resources, LEFT_SHOULDER, -0.2, -1.0)
+    _set_landmark(sequence, resources, RIGHT_SHOULDER, 0.2, -1.0)
+    _set_landmark(sequence, resources, LEFT_HIP, -0.2, 0.0)
+    _set_landmark(sequence, resources, RIGHT_HIP, 0.2, 0.0)
+    _set_landmark(sequence, resources, LEFT_KNEE, -0.35, 0.75)
+    _set_landmark(sequence, resources, RIGHT_KNEE, 0.35, 0.75)
+    _set_landmark(sequence, resources, LEFT_ANKLE, -0.5, 1.5)
+    _set_landmark(sequence, resources, RIGHT_ANKLE, 0.5, 1.5)
+    _set_landmark(sequence, resources, RIGHT_ELBOW, 0.25, -0.3)
+    _set_landmark(sequence, resources, RIGHT_WRIST, 0.2, 0.1)
+
+    if animated:
+        progress = np.clip((np.linspace(0.0, 1.0, TARGET_SEQUENCE_SHAPE[1]) - 0.25) / 0.55, 0.0, 1.0)
+        _set_landmark(sequence, resources, LEFT_ELBOW, -0.6, -0.75 + (0.55 * progress))
+        _set_landmark(sequence, resources, LEFT_WRIST, -1.0, -0.65 + (1.25 * progress))
+    else:
+        _set_landmark(sequence, resources, LEFT_ELBOW, -0.6, -0.2)
+        _set_landmark(sequence, resources, LEFT_WRIST, -1.0, 0.6)
+
+    return sequence
 
 
 def test_taegeuk1_resources_load_with_expected_schema() -> None:
@@ -95,9 +159,9 @@ def test_taegeuk1_success_decision_uses_pass_threshold() -> None:
     matched_result = analyze_taegeuk1_sequence(
         resources.prototypes[0].tolist(),
         movement_name,
-        pass_threshold=80.0,
+        pass_threshold=TARGET_RULE_TEST_PASS_SCORE,
     )
-    assert matched_result.pass_threshold == 80.0
+    assert matched_result.pass_threshold == TARGET_RULE_TEST_PASS_SCORE
     assert matched_result.passed is True
     assert matched_result.passed == (matched_result.score >= matched_result.pass_threshold)
 
@@ -127,10 +191,10 @@ def test_taegeuk1_scoring_ignores_small_unstable_joints() -> None:
         sequence.tolist(),
         movement_name,
         input_normalized=True,
-        pass_threshold=80.0,
+        pass_threshold=TARGET_RULE_TEST_PASS_SCORE,
     )
 
-    assert result.score >= 80.0
+    assert result.score >= TARGET_RULE_TEST_PASS_SCORE
     assert result.worst_joint in core_joint_names
     assert {str(row["joint"]) for row in result.joint_errors_top5}.issubset(core_joint_names)
 
@@ -143,7 +207,7 @@ def test_camera_adjusted_score_recovers_when_target_is_nearest() -> None:
         probabilities=np.array([0.02, 0.84, 0.1, 0.04], dtype=np.float32),
     )
 
-    assert score >= 80.0
+    assert score >= TARGET_RULE_TEST_PASS_SCORE
 
 
 def test_camera_adjusted_score_stays_low_when_target_is_not_close() -> None:
@@ -154,7 +218,7 @@ def test_camera_adjusted_score_stays_low_when_target_is_not_close() -> None:
         probabilities=np.array([0.64, 0.2, 0.12, 0.04], dtype=np.float32),
     )
 
-    assert score < 80.0
+    assert score < TARGET_RULE_TEST_PASS_SCORE
 
 
 def test_camera_prediction_probabilities_ignore_overconfident_softmax(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -176,7 +240,7 @@ def test_camera_prediction_probabilities_ignore_overconfident_softmax(monkeypatc
     assert float(probabilities[8]) < 0.01
 
 
-def test_target_rule_score_detects_walking_low_block_pose() -> None:
+def test_target_rule_score_caps_static_walking_low_block_pose() -> None:
     resources = load_taegeuk1_resources()
     sequence = np.zeros(TARGET_SEQUENCE_SHAPE, dtype=np.float32)
     sequence[2, :, :] = 1.0
@@ -204,10 +268,20 @@ def test_target_rule_score_detects_walking_low_block_pose() -> None:
     score = _target_rule_score(sequence, resources.keypoint_names, "앞서고 아래막기")
 
     assert score is not None
-    assert score >= 80.0
+    assert score <= TARGET_RULE_LOW_MOTION_SCORE_CAP
 
 
-def test_target_rule_score_uses_best_late_camera_frame() -> None:
+def test_target_rule_score_accepts_animated_walking_low_block_sequence() -> None:
+    resources = load_taegeuk1_resources()
+    sequence = _walking_low_block_sequence(resources, animated=True)
+
+    score = _target_rule_score(sequence, resources.keypoint_names, resources.class_names[4])
+
+    assert score is not None
+    assert score >= TARGET_RULE_TEST_PASS_SCORE
+
+
+def test_target_rule_score_rejects_single_good_late_camera_frame() -> None:
     resources = load_taegeuk1_resources()
     sequence = np.zeros(TARGET_SEQUENCE_SHAPE, dtype=np.float32)
     sequence[2, :, :] = 1.0
@@ -235,7 +309,7 @@ def test_target_rule_score_uses_best_late_camera_frame() -> None:
     score = _target_rule_score(sequence, resources.keypoint_names, "앞서고 아래막기")
 
     assert score is not None
-    assert score >= 80.0
+    assert score < TARGET_RULE_TEST_PASS_SCORE
 
 
 def test_camera_sequence_normalization_handles_all_nan_input() -> None:
