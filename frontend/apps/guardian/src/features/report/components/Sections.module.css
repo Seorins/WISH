@@ -1,3 +1,58 @@
+/* ===== Top action bar (PDF export 등) ===== */
+.reportActionBar {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--dash-space-2);
+}
+
+.reportExportBtn {
+  appearance: none;
+  border: 1px solid var(--dash-color-primary-100);
+  background: var(--dash-color-surface);
+  color: var(--dash-color-primary);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 8px 16px;
+  border-radius: var(--dash-radius-pill);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: var(--dash-shadow-soft);
+  transition:
+    background 0.15s,
+    color 0.15s,
+    transform 0.1s;
+}
+
+.reportExportBtn:hover:not(:disabled) {
+  background: var(--dash-color-primary-50);
+}
+
+.reportExportBtn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.reportExportBtn:disabled {
+  opacity: 0.55;
+  cursor: progress;
+}
+
+.reportCapture {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dash-space-4);
+  min-width: 0;
+  width: 100%;
+}
+
+@media (max-width: 1024px) {
+  .reportCapture {
+    gap: var(--dash-space-3);
+  }
+}
+
 /* ===== Layout helpers ===== */
 .cardRow {
   display: grid;
