@@ -1,7 +1,10 @@
 import type { AxiosInstance } from 'axios'
 import { apiClient } from './client'
 import type { ApiResponse, PageResponse } from './artworks'
+import { listPatientProfiles } from './patient-profiles'
 import type { Poomsae } from './taekwondo-motions'
+
+const TAEKWONDO_SESSION_DETAIL_CONCURRENCY = 6
 
 export type CreateTaekwondoSessionMotionRequest = {
   taekwondoMotionId: number
@@ -22,6 +25,17 @@ export type CreateTaekwondoSessionRequest = {
   motions: CreateTaekwondoSessionMotionRequest[]
 }
 
+export type TaekwondoSessionSummary = {
+  id: number
+  patientProfileId: number
+  poomsae: Poomsae
+  durationSec: number
+  averageAccuracy: number
+  completedMotionCount: number
+  monstersDefeated: number
+  createdAt: string
+}
+
 export type TaekwondoSessionMotionResult = {
   id: number
   taekwondoMotionId: number
@@ -36,15 +50,7 @@ export type TaekwondoSessionMotionResult = {
   createdAt: string
 }
 
-export type TaekwondoSessionDetail = {
-  id: number
-  patientProfileId: number
-  poomsae: Poomsae
-  durationSec: number
-  averageAccuracy: number
-  completedMotionCount: number
-  monstersDefeated: number
-  createdAt: string
+export type TaekwondoSessionDetail = TaekwondoSessionSummary & {
   motions: TaekwondoSessionMotionResult[]
   beltPromotion?: unknown
 }
@@ -90,25 +96,150 @@ export type GetMyTaekwondoSessionsParams = {
   size?: number
   sort?: string
   poomsae?: Poomsae
+  patientProfileId?: number
 }
 
-// 본인 환자 프로필의 태권도 세션 목록 — 음악(`/music/results/me`)과 동일 패턴.
-// 페이지 응답에 motions[] 가 embedding 되어 있어야 우측 동작 리스트의 motion-별
-// 통계 집계가 가능. BE 엔드포인트가 추가되기 전엔 404 → react-query 가 error
-// 상태로 처리하고 UI 는 placeholder('—') 그대로 유지.
+function assertValidPatientProfileId(patientProfileId: number) {
+  if (!Number.isInteger(patientProfileId) || patientProfileId <= 0) {
+    throw new Error('patientProfileId가 올바르지 않습니다.')
+  }
+}
+
+function normalizeTaekwondoSessionPage(page: number | undefined): number {
+  return Number.isInteger(page) && page != null && page >= 0 ? page : 0
+}
+
+function normalizeTaekwondoSessionPageSize(size: number | undefined): number {
+  return Number.isInteger(size) && size != null && size > 0 ? size : 50
+}
+
+function sortTaekwondoSessionSummaries(
+  sessions: TaekwondoSessionSummary[],
+  sort = 'createdAt,desc',
+): TaekwondoSessionSummary[] {
+  const [field, rawDirection] = sort.split(',')
+  if (field !== 'createdAt') return [...sessions]
+
+  const direction = rawDirection?.toLowerCase() === 'asc' ? 1 : -1
+  return [...sessions].sort((a, b) => {
+    const left = new Date(a.createdAt).getTime()
+    const right = new Date(b.createdAt).getTime()
+    return (left - right) * direction
+  })
+}
+
+function toTaekwondoSessionPage(
+  content: TaekwondoSessionDetail[],
+  totalElements: number,
+  page: number,
+  size: number,
+): TaekwondoSessionPage {
+  const totalPages = totalElements === 0 ? 0 : Math.ceil(totalElements / size)
+
+  return {
+    totalElements,
+    totalPages,
+    pageable: {
+      unpaged: false,
+      pageNumber: page,
+      paged: true,
+      pageSize: size,
+      offset: page * size,
+      sort: {
+        unsorted: false,
+        sorted: true,
+        empty: false,
+      },
+    },
+    numberOfElements: content.length,
+    first: page === 0,
+    last: totalPages === 0 || page >= totalPages - 1,
+    size,
+    content,
+    number: page,
+    sort: {
+      unsorted: false,
+      sorted: true,
+      empty: false,
+    },
+    empty: content.length === 0,
+  }
+}
+
+async function resolveMyTaekwondoSessionPatientProfileId(patientProfileId?: number) {
+  if (patientProfileId !== undefined) {
+    assertValidPatientProfileId(patientProfileId)
+    return patientProfileId
+  }
+
+  const profiles = await listPatientProfiles()
+  return profiles.data[0]?.id
+}
+
+async function fetchTaekwondoSessionDetails(
+  sessions: TaekwondoSessionSummary[],
+): Promise<TaekwondoSessionDetail[]> {
+  const details: TaekwondoSessionDetail[] = []
+
+  for (let index = 0; index < sessions.length; index += TAEKWONDO_SESSION_DETAIL_CONCURRENCY) {
+    const chunk = sessions.slice(index, index + TAEKWONDO_SESSION_DETAIL_CONCURRENCY)
+    details.push(
+      ...(await Promise.all(chunk.map(session => getTaekwondoSessionDetail(session.id)))),
+    )
+  }
+
+  return details
+}
+
+export async function getTaekwondoSessions(
+  patientProfileId: number,
+  client: AxiosInstance = apiClient,
+): Promise<TaekwondoSessionSummary[]> {
+  assertValidPatientProfileId(patientProfileId)
+
+  const response = await client.get<ApiResponse<TaekwondoSessionSummary[] | null>>(
+    '/taekwondo-sessions',
+    {
+      params: { patientProfileId },
+      headers: { Accept: 'application/json' },
+    },
+  )
+  return response.data.data ?? []
+}
+
 export async function getMyTaekwondoSessions({
   page = 0,
   size = 50,
   sort = 'createdAt,desc',
   poomsae,
+  patientProfileId,
 }: GetMyTaekwondoSessionsParams = {}) {
-  const response = await apiClient.get<ApiResponse<TaekwondoSessionPage>>(
-    '/taekwondo-sessions/me',
-    {
-      params: { page, size, sort, ...(poomsae ? { poomsae } : {}) },
-    },
+  const normalizedPage = normalizeTaekwondoSessionPage(page)
+  const normalizedSize = normalizeTaekwondoSessionPageSize(size)
+  const resolvedPatientProfileId = await resolveMyTaekwondoSessionPatientProfileId(patientProfileId)
+
+  if (!resolvedPatientProfileId) {
+    return {
+      code: 'OK',
+      message: 'ok',
+      data: toTaekwondoSessionPage([], 0, normalizedPage, normalizedSize),
+    } satisfies ApiResponse<TaekwondoSessionPage>
+  }
+
+  const sessions = await getTaekwondoSessions(resolvedPatientProfileId)
+  const filtered = poomsae ? sessions.filter(session => session.poomsae === poomsae) : sessions
+  const start = normalizedPage * normalizedSize
+  const selected = sortTaekwondoSessionSummaries(filtered, sort).slice(
+    start,
+    start + normalizedSize,
   )
-  return response.data
+  const details = await fetchTaekwondoSessionDetails(selected)
+
+  return {
+    code: 'OK',
+    message: 'ok',
+    data: toTaekwondoSessionPage(details, filtered.length, normalizedPage, normalizedSize),
+  } satisfies ApiResponse<TaekwondoSessionPage>
 }
 
 // 단건 상세 — list 응답엔 motion의 videoUrl 이 빈 채로 내려와서,
