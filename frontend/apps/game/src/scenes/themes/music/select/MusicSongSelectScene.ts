@@ -4,6 +4,7 @@ import { assetPath } from '@/game/assets/assetPath'
 import { fadeToScene } from '@/game/systems/sceneTransition'
 import { addCoverBackground } from '@/game/world/background'
 import { ALL_RHYTHM_CHARTS, type RhythmChart } from '../play/rhythmCharts'
+import { MusicRankingOverlay } from './MusicRankingOverlay'
 
 const FONT_FAMILY = '"Pretendard", "Inter", "Noto Sans KR", "Malgun Gothic", sans-serif'
 
@@ -21,8 +22,8 @@ type SongCardView = {
   container: Phaser.GameObjects.Container
   panel: Phaser.GameObjects.Graphics
   glow: Phaser.GameObjects.Graphics
-  playBtn: Phaser.GameObjects.Graphics
-  playLabel: Phaser.GameObjects.Text
+  rankBtn: Phaser.GameObjects.Graphics
+  rankLabel: Phaser.GameObjects.Text
   index: number
   width: number
   height: number
@@ -310,25 +311,30 @@ export class MusicSongSelectScene extends Phaser.Scene {
 
     container.add([title, meta1])
 
-    // ── play indicator (top-right circle, lights up on hover) ──
-    const playR = 18
-    const playX = w / 2 - playR - 18
-    const playY = -h / 2 + playR + 18
-    const playBtn = this.add.graphics()
-    const playLabel = this.add
-      .text(playX + 1, playY, '▶', {
+    // ── ranking pill (top-right "🏆 랭킹보기", lights up on hover) ──
+    const rankPadX = 11
+    const rankH = 28
+    const rankBtn = this.add.graphics()
+    const rankLabel = this.add
+      .text(0, 0, '랭킹보기', {
         fontFamily: FONT_FAMILY,
-        fontSize: '13px',
+        fontSize: '12px',
+        fontStyle: 'bold',
         color: '#ffffff',
       })
       .setOrigin(0.5)
-    container.add([playBtn, playLabel])
+    const rankW = Math.ceil(rankLabel.width) + rankPadX * 2
+    const rankX = w / 2 - rankW / 2 - 16
+    const rankY = -h / 2 + rankH / 2 + 16
+    rankLabel.setPosition(rankX, rankY)
+    container.add([rankBtn, rankLabel])
 
-    container.setData('playX', playX)
-    container.setData('playY', playY)
-    container.setData('playR', playR)
+    container.setData('rankX', rankX)
+    container.setData('rankY', rankY)
+    container.setData('rankW', rankW)
+    container.setData('rankH', rankH)
 
-    // click zone
+    // ── card-wide click zone (play) ──
     const zone = this.add.zone(0, 0, w, h).setInteractive({ cursor: 'pointer' })
     zone.on('pointerover', () => {
       this.hoveredIndex = index
@@ -347,7 +353,29 @@ export class MusicSongSelectScene extends Phaser.Scene {
     })
     container.add(zone)
 
-    return { meta, container, panel, glow, playBtn, playLabel, index, width: w, height: h }
+    // ── ranking button click zone (stop propagation so card play doesn't fire) ──
+    const rankZone = this.add
+      .zone(rankX, rankY, rankW + 12, rankH + 12)
+      .setInteractive({ cursor: 'pointer' })
+    rankZone.on(
+      'pointerdown',
+      (
+        _pointer: Phaser.Input.Pointer,
+        _localX: number,
+        _localY: number,
+        event: Phaser.Types.Input.EventData,
+      ) => {
+        event.stopPropagation()
+        this.openRanking(meta.chart.id, meta.chart.title, meta.accent)
+      },
+    )
+    container.add(rankZone)
+
+    return { meta, container, panel, glow, rankBtn, rankLabel, index, width: w, height: h }
+  }
+
+  private openRanking(chartId: string, chartTitle: string, accent: number) {
+    new MusicRankingOverlay(this, chartId, chartTitle, accent).open()
   }
 
   private refreshCardStates() {
@@ -359,12 +387,12 @@ export class MusicSongSelectScene extends Phaser.Scene {
   }
 
   private drawPanel(card: SongCardView, isSelected: boolean, isHovered: boolean) {
-    const { panel, glow, playBtn, playLabel, width: w, height: h, meta } = card
+    const { panel, glow, rankBtn, rankLabel, width: w, height: h, meta } = card
     const active = isSelected || isHovered
 
     glow.clear()
     panel.clear()
-    playBtn.clear()
+    rankBtn.clear()
 
     // soft drop shadow under card
     panel.fillStyle(0x000000, 0.45)
@@ -397,26 +425,23 @@ export class MusicSongSelectScene extends Phaser.Scene {
       panel.strokeRoundedRect(-w / 2, -h / 2, w, h, 16)
     }
 
-    // ── play indicator circle ──
-    const pX = card.container.getData('playX') as number
-    const pY = card.container.getData('playY') as number
-    const pR = card.container.getData('playR') as number
+    // ── ranking pill ──
+    const pX = card.container.getData('rankX') as number
+    const pY = card.container.getData('rankY') as number
+    const pW = card.container.getData('rankW') as number
+    const pH = card.container.getData('rankH') as number
+    const radius = pH / 2
 
     if (active) {
-      // soft glow ring
-      for (let g = 0; g < 5; g++) {
-        playBtn.fillStyle(meta.accent, 0.04)
-        playBtn.fillCircle(pX, pY, pR + 4 - g * 0.8)
-      }
-      playBtn.fillStyle(meta.accent, 0.95)
-      playBtn.fillCircle(pX, pY, pR)
-      playLabel.setColor('#0a0a0c')
+      rankBtn.fillStyle(meta.accent, 0.95)
+      rankBtn.fillRoundedRect(pX - pW / 2, pY - pH / 2, pW, pH, radius)
+      rankLabel.setColor('#0a0a0c').setAlpha(1)
     } else {
-      playBtn.fillStyle(0x000000, 0.55)
-      playBtn.fillCircle(pX, pY, pR)
-      playBtn.lineStyle(1, 0xffffff, 0.25)
-      playBtn.strokeCircle(pX, pY, pR)
-      playLabel.setColor('#ffffff')
+      rankBtn.fillStyle(0x000000, 0.6)
+      rankBtn.fillRoundedRect(pX - pW / 2, pY - pH / 2, pW, pH, radius)
+      rankBtn.lineStyle(1, 0xffffff, 0.22)
+      rankBtn.strokeRoundedRect(pX - pW / 2, pY - pH / 2, pW, pH, radius)
+      rankLabel.setColor('#ffffff').setAlpha(0.95)
     }
   }
 
