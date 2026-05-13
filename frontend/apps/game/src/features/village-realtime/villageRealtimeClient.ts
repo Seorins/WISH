@@ -64,22 +64,27 @@ export class VillageRealtimeClient {
     await this.client.deactivate()
   }
 
-  /** 위치 발행. 연결 전이면 no-op (호출자가 5Hz tick 으로 안전하게 쏘도록). */
-  publishPosition(packet: PositionPacket): void {
-    if (!this.client.connected) return
+  /**
+   * 위치 발행. 실제 전송 여부를 boolean 으로 반환 — 호출자가 throttle/state 갱신을 송신 성공 시에만 적용할 수 있게
+   * (S14P31E103-763).
+   */
+  publishPosition(packet: PositionPacket): boolean {
+    if (!this.client.connected) return false
     this.client.publish({
       destination: APP_POSITION,
       body: JSON.stringify(packet),
     })
+    return true
   }
 
-  /** 이모티콘 발신. 연결 전이면 no-op. 서버측 throttle / 화이트리스트 검증은 BE 가 담당. */
-  publishEmote(packet: EmotePacket): void {
-    if (!this.client.connected) return
+  /** 이모티콘 발신. 실제 전송 여부를 boolean 으로 반환. 서버측 throttle / 화이트리스트 검증은 BE 가 담당. */
+  publishEmote(packet: EmotePacket): boolean {
+    if (!this.client.connected) return false
     this.client.publish({
       destination: APP_EMOTE,
       body: JSON.stringify(packet),
     })
+    return true
   }
 
   private handleConnect(): void {

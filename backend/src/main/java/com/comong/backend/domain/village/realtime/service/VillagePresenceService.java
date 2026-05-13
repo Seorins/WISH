@@ -152,15 +152,16 @@ public class VillagePresenceService {
     }
 
     /**
-     * 이모티콘 발신 시도. throttle 통과 + 멤버 존재 시 멤버 반환 (호출자가 broadcast). throttle 또는 미존재 시 빈 Optional.
+     * 이모티콘 발신 시도. throttle 통과 + 멤버 존재 + sessionId 일치 시 멤버 반환 (호출자가 broadcast).
      *
-     * <p>"미존재" 는 latest-wins 로 evict 된 옛 세션의 늦은 emote 패킷 케이스 — 조용히 drop.
+     * <p>"sessionId 불일치" 는 latest-wins 로 evict 된 옛 세션이 보낸 emote — 새 세션의 throttle/상태를 침범하지 않도록 조용히
+     * drop (S14P31E103-763).
      */
-    public Optional<PlayerState> registerEmote(long userId, Instant now) {
+    public Optional<PlayerState> registerEmote(long userId, String sessionId, Instant now) {
         lock.lock();
         try {
             PlayerState member = members.get(userId);
-            if (member == null) {
+            if (member == null || !sessionId.equals(member.sessionId())) {
                 return Optional.empty();
             }
             Instant last = lastEmoteByUserId.get(userId);
@@ -175,16 +176,18 @@ public class VillagePresenceService {
     }
 
     /**
-     * 위치 패킷 수신 시 호출. 멤버가 있으면 위치/방향/lastSeen 을 갱신해 반환, 없으면 빈 Optional.
+     * 위치 패킷 수신 시 호출. 멤버가 있고 sessionId 가 현재 점유 세션과 일치하면 위치/방향/lastSeen 갱신해 반환, 아니면 빈 Optional.
      *
-     * <p>"없음" 은 latest-wins 로 evict 된 옛 세션이 늦은 position 패킷을 보내는 경우 — 이 경우 갱신/브로드캐스트하지 않는다.
+     * <p>"sessionId 불일치" 는 latest-wins 로 evict 된 옛 세션이 늦은 position 패킷을 보내는 경우 — 새 세션의 좌표가 옛 세션 입력으로
+     * 덮어쓰이지 않도록 조용히 drop (S14P31E103-763).
      */
-    public Optional<PlayerState> updatePosition(long userId, double x, double y, String dir) {
+    public Optional<PlayerState> updatePosition(
+            long userId, String sessionId, double x, double y, String dir) {
         Instant now = Instant.now();
         lock.lock();
         try {
             PlayerState existing = members.get(userId);
-            if (existing == null) {
+            if (existing == null || !sessionId.equals(existing.sessionId())) {
                 return Optional.empty();
             }
             PlayerState updated = existing.withPosition(x, y, dir, now);

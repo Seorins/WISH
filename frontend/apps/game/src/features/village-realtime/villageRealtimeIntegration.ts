@@ -87,7 +87,9 @@ export function attachVillageRealtime(opts: AttachOptions): VillageRealtimeInteg
 
       if (!positionChanged && !stateChanged) return
 
-      client.publishPosition({ x: xRatio, y: yRatio, dir, moving })
+      // 연결 전이면 publishPosition 이 false 반환 → throttle state 유지해야 onReady 후 첫 publish 가
+      // skip 되지 않는다 (S14P31E103-763).
+      if (!client.publishPosition({ x: xRatio, y: yRatio, dir, moving })) return
       lastPublishMs = now
       lastX = xRatio
       lastY = yRatio
@@ -98,8 +100,9 @@ export function attachVillageRealtime(opts: AttachOptions): VillageRealtimeInteg
     publishEmote(emoji) {
       const now = opts.scene.time.now
       if (now - lastEmoteMs < EMOTE_INTERVAL_MS) return false
+      // client.publishEmote 가 미연결이면 false — 로컬 버블 안 띄우게 그대로 전파 (S14P31E103-763).
+      if (!client.publishEmote({ emoji })) return false
       lastEmoteMs = now
-      client.publishEmote({ emoji })
       return true
     },
 
