@@ -78,6 +78,8 @@ SEQUENCE_CENTERED_TARGET_RULE_WEIGHT = 0.20
 SEQUENCE_CENTERED_LIVE_PROTOTYPE_WEIGHT = 0.25
 SEQUENCE_CENTERED_LIVE_CAMERA_WEIGHT = 0.10
 SEQUENCE_CENTERED_LIVE_TARGET_RULE_WEIGHT = 0.65
+# Live camera input can be farther from the stored prototype because of camera angle and user scale.
+# If target-rule scoring already passes, keep most of that rule score while motion caps still guard static poses.
 SEQUENCE_CENTERED_LIVE_TARGET_RULE_RECOVERY_RATIO = 0.90
 SEQUENCE_CENTERED_WEIGHT_TOTAL = (
     SEQUENCE_CENTERED_PROTOTYPE_WEIGHT
@@ -605,6 +607,8 @@ def _sequence_centered_score(
     camera = _safe_score(camera_score, prototype) if camera_score is not None else prototype
     target_rule = _safe_score(target_rule_score, prototype) if target_rule_score is not None else prototype
 
+    # Live camera weights depend on target-rule evidence. If that signal is absent,
+    # use the default prototype-centered weights instead of overweighting a fallback value.
     if live_camera and target_rule_score is not None:
         prototype_weight = SEQUENCE_CENTERED_LIVE_PROTOTYPE_WEIGHT
         camera_weight = SEQUENCE_CENTERED_LIVE_CAMERA_WEIGHT

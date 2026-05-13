@@ -317,7 +317,20 @@ def test_sequence_centered_score_keeps_low_live_camera_target_rule_below_pass() 
     )
 
     assert method == "sequence_weighted"
-    assert score == pytest.approx(50.0)
+    assert score == pytest.approx(52.5)
+    assert score < TARGET_RULE_TEST_PASS_SCORE
+
+
+def test_sequence_centered_score_uses_default_weights_when_live_target_rule_missing() -> None:
+    score, method = _sequence_centered_score(
+        prototype_score=50.0,
+        camera_score=95.0,
+        target_rule_score=None,
+        live_camera=True,
+    )
+
+    assert method == "sequence_weighted"
+    assert score == pytest.approx(56.75)
     assert score < TARGET_RULE_TEST_PASS_SCORE
 
 
