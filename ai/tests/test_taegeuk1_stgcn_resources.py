@@ -295,6 +295,32 @@ def test_sequence_centered_score_uses_prototype_for_missing_supplementary_signal
     assert score < TARGET_RULE_TEST_PASS_SCORE
 
 
+def test_sequence_centered_score_recovers_live_camera_target_rule_score() -> None:
+    score, method = _sequence_centered_score(
+        prototype_score=20.0,
+        camera_score=20.0,
+        target_rule_score=90.0,
+        live_camera=True,
+    )
+
+    assert method == "sequence_weighted"
+    assert score == pytest.approx(81.0)
+    assert score >= TARGET_RULE_TEST_PASS_SCORE
+
+
+def test_sequence_centered_score_keeps_low_live_camera_target_rule_below_pass() -> None:
+    score, method = _sequence_centered_score(
+        prototype_score=20.0,
+        camera_score=20.0,
+        target_rule_score=70.0,
+        live_camera=True,
+    )
+
+    assert method == "sequence_weighted"
+    assert score == pytest.approx(50.0)
+    assert score < TARGET_RULE_TEST_PASS_SCORE
+
+
 def test_sequence_motion_final_cap_limits_static_camera_sequence() -> None:
     resources = load_taegeuk1_resources()
     sequence = _walking_low_block_sequence(resources, animated=False)
