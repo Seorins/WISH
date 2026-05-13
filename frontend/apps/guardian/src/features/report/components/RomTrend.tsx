@@ -43,17 +43,22 @@ export function RomTrend({ trends }: Props) {
       </header>
 
       <div className={styles.romList}>
-        {trends.map(t => {
+        {trends.map((t, idx) => {
           const colors = TONE_COLORS[t.tone]
-          const gradId = `rom-area-${t.joint}`
-          const lineId = `rom-line-${t.joint}`
+          const gradId = `rom-area-${idx}`
+          const lineId = `rom-line-${idx}`
           return (
             <div key={t.joint} className={styles.romRow}>
-              <div className={styles.romJoint}>
-                <span className={styles.romJointName}>{t.joint}</span>
-                <span className={styles.romJointValue}>
-                  {t.current}
-                  <span className={styles.romJointUnit}>{t.unit}</span>
+              <div className={styles.romRowHead}>
+                <div className={styles.romJoint}>
+                  <span className={styles.romJointName}>{t.joint}</span>
+                  <span className={styles.romJointValue}>
+                    {t.current}
+                    <span className={styles.romJointUnit}>{t.unit}</span>
+                  </span>
+                </div>
+                <span className={`${styles.romDelta} ${deltaClass(t.delta)}`}>
+                  {deltaLabel(t.delta, t.unit)}
                 </span>
               </div>
               <div className={styles.romChart}>
@@ -81,9 +86,6 @@ export function RomTrend({ trends }: Props) {
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
-              <span className={`${styles.romDelta} ${deltaClass(t.delta)}`}>
-                {deltaLabel(t.delta, t.unit)}
-              </span>
             </div>
           )
         })}

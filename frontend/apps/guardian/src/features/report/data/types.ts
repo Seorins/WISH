@@ -40,11 +40,16 @@ export type RomJointTrend = {
   tone: 'mint' | 'lavender' | 'pink' | 'cyan'
 }
 
+export type UsageRankEntry = {
+  name: string
+  minutes: number
+  isMe: boolean
+}
+
 export type UsageCompare = {
   selfMinutes: number
   othersAverageMinutes: number
-  sampleSize: number
-  minSample: number
+  ranking: UsageRankEntry[]
 }
 
 export type TimeBucketId = 'morning' | 'day' | 'evening' | 'night'
@@ -56,13 +61,17 @@ export type TimeBucket = {
   minutes: number
 }
 
+export type GameId = 'music' | 'taekwondo' | 'exercise' | 'art'
+
 export type GameAchievement = {
-  gameId: 'music' | 'taekwondo' | 'exercise'
+  gameId: GameId
   label: string
   emoji: string
-  averageAccuracy: number
-  bestRecord: string
-  topContent: string
+  minutes: number
+  hasData: boolean
+  averageAccuracy: number | null
+  bestRecord: string | null
+  topContent: string | null
   highlight: string | null
 }
 

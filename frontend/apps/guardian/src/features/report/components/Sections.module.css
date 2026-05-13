@@ -1,3 +1,22 @@
+/* ===== Layout helpers ===== */
+.cardRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--dash-space-4);
+}
+
+.cardRow > * {
+  min-width: 0;
+  height: 100%;
+}
+
+@media (max-width: 1024px) {
+  .cardRow {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--dash-space-3);
+  }
+}
+
 /* ===== Shared card ===== */
 .card {
   background: var(--dash-color-surface);
@@ -292,19 +311,26 @@
 
 /* ===== ROM trend ===== */
 .romList {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--dash-space-3);
 }
 
 .romRow {
-  display: grid;
-  grid-template-columns: 96px 1fr auto;
-  align-items: center;
-  gap: var(--dash-space-3);
-  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
   background: var(--dash-color-surface-muted);
   border-radius: var(--dash-radius-md);
+  min-width: 0;
+}
+
+.romRowHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .romJoint {
@@ -335,8 +361,8 @@
 }
 
 .romChart {
-  min-width: 0;
-  height: 44px;
+  width: 100%;
+  height: 56px;
 }
 
 .romDelta {
@@ -379,17 +405,27 @@
 }
 
 /* ===== Usage compare ===== */
-.usageHead {
+.usageTopRow {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
   gap: var(--dash-space-3);
 }
 
-.usageBig {
+.usageStatRow {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--dash-space-4);
+  flex-wrap: wrap;
+  margin-top: var(--dash-space-1);
+}
+
+.usageHeadline {
+  display: flex;
+  align-items: baseline;
+  gap: var(--dash-space-3);
+  flex-wrap: wrap;
 }
 
 .usageBigValue {
@@ -400,84 +436,13 @@
   line-height: 1;
 }
 
-.usageBigUnit {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--dash-color-text-muted);
-  margin-left: 2px;
-}
-
 .usageBigSub {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--dash-color-text-muted);
-}
-
-.usageDiff {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--dash-color-success);
-}
-
-.usageBars {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  margin-top: var(--dash-space-2);
-}
-
-.usageBarRow {
-  display: grid;
-  grid-template-columns: 110px 1fr 64px;
-  align-items: center;
-  gap: 10px;
-}
-
-.usageBarLabel {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--dash-color-text);
-}
-
-.usageBarLabelMuted {
-  color: var(--dash-color-text-muted);
-  font-weight: 500;
-}
-
-.usageBarTrack {
-  position: relative;
-  height: 12px;
-  background: var(--report-color-bar-bg);
-  border-radius: var(--dash-radius-pill);
-  overflow: hidden;
-}
-
-.usageBarFill {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  border-radius: var(--dash-radius-pill);
-  transition: width 0.3s ease;
-}
-
-.usageBarFillSelf {
-  background: var(--dash-gradient-primary);
-}
-
-.usageBarFillOther {
-  background: var(--report-color-bar-other);
-}
-
-.usageBarValue {
   font-size: 12.5px;
-  font-weight: 700;
-  color: var(--dash-color-text-strong);
-  text-align: right;
+  font-weight: 500;
+  color: var(--dash-color-text-muted);
 }
 
 .usageFrame {
-  margin-top: var(--dash-space-3);
   padding: 10px 14px;
   border-radius: var(--dash-radius-md);
   background: var(--report-gradient-compare);
@@ -485,25 +450,189 @@
   font-weight: 600;
   color: var(--dash-color-text);
   line-height: 1.5;
+  flex-shrink: 0;
 }
 
-.usageGuard {
+.usageDivider {
   margin-top: var(--dash-space-3);
-  padding: 14px;
-  border-radius: var(--dash-radius-md);
-  background: var(--dash-color-surface-muted);
-  text-align: center;
-  font-size: 12.5px;
-  font-weight: 500;
+  font-size: 12px;
+  font-weight: 700;
   color: var(--dash-color-text-muted);
-  line-height: 1.5;
+  letter-spacing: 0.05em;
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
+
+.usageDivider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--dash-color-border);
+}
+
+/* ===== Ranking ===== */
+.rankBadge {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 5px 12px;
+  border-radius: var(--dash-radius-pill);
+  background: var(--dash-color-primary-50);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--dash-color-text-muted);
+}
+
+.rankBadge strong {
+  color: var(--dash-color-primary);
+  font-weight: 800;
+}
+
+.rankList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+}
+
+.rankRow {
+  position: relative;
+  display: grid;
+  grid-template-columns: 28px minmax(80px, 140px) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 14px;
+  background: var(--dash-color-surface-muted);
+  border-radius: var(--dash-radius-md);
+  border: 1px solid transparent;
+}
+
+.rankRowMe {
+  background: var(--dash-color-primary-50);
+  border-color: var(--dash-color-primary-100);
+}
+
+.rankRowGap {
+  margin-top: 10px;
+  position: relative;
+}
+
+.rankRowGap::before {
+  content: '⋯';
+  position: absolute;
+  top: -14px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: var(--dash-color-text-subtle);
+  font-size: 14px;
+  letter-spacing: 2px;
+  pointer-events: none;
+}
+
+.rankRowAverage {
+  margin-top: 8px;
+  background: transparent;
+  border: 1px dashed var(--dash-color-border-strong);
+}
+
+.rankRowAverage .rankNumber {
+  color: var(--dash-color-text-subtle);
+  font-weight: 600;
+}
+
+.rankRowAverage .rankName {
+  color: var(--dash-color-text-muted);
+  font-weight: 500;
+}
+
+.rankRowAverage .rankValue {
+  color: var(--dash-color-text-muted);
+}
+
+.rankNumber {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--dash-color-text-muted);
+  text-align: center;
+}
+
+.rankRowMe .rankNumber {
+  color: var(--dash-color-primary);
+}
+
+.rankName {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--dash-color-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rankMeTag {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: var(--dash-radius-pill);
+  background: var(--dash-gradient-primary);
+  color: #fff;
+  letter-spacing: 0.01em;
+}
+
+.rankBarTrack {
+  position: relative;
+  height: 8px;
+  background: var(--report-color-bar-bg);
+  border-radius: var(--dash-radius-pill);
+  overflow: hidden;
+}
+
+.rankBarFill {
+  position: absolute;
+  inset: 0;
+  width: 0;
+  background: var(--report-color-bar-other);
+  border-radius: var(--dash-radius-pill);
+}
+
+.rankBarFillMe {
+  background: var(--dash-gradient-primary);
+}
+
+.rankBarFillAverage {
+  background: repeating-linear-gradient(
+    90deg,
+    var(--report-color-bar-other) 0,
+    var(--report-color-bar-other) 6px,
+    transparent 6px,
+    transparent 10px
+  );
+}
+
+.rankValue {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--dash-color-text);
+  text-align: right;
+  white-space: nowrap;
+}
+
 
 /* ===== Time-of-day ===== */
 .bucketList {
   display: flex;
   flex-direction: column;
+  justify-content: space-around;
   gap: 10px;
+  max-width: 720px;
+  flex: 1;
 }
 
 .bucketRow {
@@ -569,7 +698,6 @@
 }
 
 .bucketInsight {
-  margin-top: var(--dash-space-2);
   padding: 10px 14px;
   border-radius: var(--dash-radius-md);
   background: var(--dash-color-lavender-soft);
@@ -577,12 +705,13 @@
   font-weight: 600;
   color: var(--dash-color-primary);
   line-height: 1.45;
+  max-width: 720px;
 }
 
 /* ===== Achievements ===== */
 .achievementList {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--dash-space-3);
 }
 
@@ -614,6 +743,15 @@
   color: var(--dash-color-text-strong);
 }
 
+.achievementMinutes {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--dash-color-text-strong);
+  letter-spacing: -0.015em;
+  line-height: 1.1;
+  margin-top: 2px;
+}
+
 .achievementStat {
   font-size: 11.5px;
   font-weight: 500;
@@ -623,6 +761,22 @@
 .achievementStatStrong {
   color: var(--dash-color-text);
   font-weight: 700;
+}
+
+.achievementCardEmpty {
+  opacity: 0.65;
+}
+
+.achievementCardEmpty .achievementMinutes {
+  color: var(--dash-color-text-muted);
+  font-weight: 700;
+}
+
+.achievementEmptyText {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--dash-color-text-subtle);
+  margin-top: 2px;
 }
 
 .achievementHighlight {
@@ -678,7 +832,7 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .achievementList {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -698,10 +852,19 @@
   .achievementList {
     grid-template-columns: minmax(0, 1fr);
   }
-  .usageBarRow {
-    grid-template-columns: 84px 1fr 56px;
+  .usageHeadline {
+    flex-wrap: wrap;
+    gap: var(--dash-space-2);
   }
-  .romRow {
-    grid-template-columns: 80px 1fr auto;
+  .usageBigValue {
+    font-size: 26px;
+  }
+  .rankRow {
+    grid-template-columns: 22px minmax(60px, 100px) minmax(0, 1fr) auto;
+    gap: 10px;
+    padding: 8px 12px;
+  }
+  .romList {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

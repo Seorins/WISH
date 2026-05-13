@@ -22,7 +22,6 @@ function bucketInsight(top: TimeBucket | undefined, buckets: TimeBucket[]): stri
 }
 
 export function TimeOfDay({ buckets, topBucketId }: Props) {
-  const total = buckets.reduce((s, b) => s + b.minutes, 0)
   const top = buckets.find(b => b.id === topBucketId) ?? buckets[0]
   const maxValue = Math.max(...buckets.map(b => b.minutes), 1)
 
@@ -30,13 +29,10 @@ export function TimeOfDay({ buckets, topBucketId }: Props) {
     <article className={styles.card} aria-label="시간대 분포">
       <header className={styles.cardHead}>
         <h3 className={styles.cardTitle}>언제 함께했나요</h3>
-        <span style={{ fontSize: 11.5, color: 'var(--dash-color-text-muted)', fontWeight: 600 }}>
-          총 {total}분
-        </span>
       </header>
       <div className={styles.bucketList}>
         {buckets.map(b => {
-          const pct = total > 0 ? (b.minutes / maxValue) * 100 : 0
+          const pct = (b.minutes / maxValue) * 100
           return (
             <div key={b.id} className={styles.bucketRow}>
               <div className={styles.bucketLabel}>
