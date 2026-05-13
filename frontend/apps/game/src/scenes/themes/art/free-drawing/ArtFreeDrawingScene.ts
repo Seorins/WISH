@@ -294,6 +294,12 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
       return
     }
 
+    // 퀴즈 결과/라운드 인트로는 명시적 선택지로만 닫음 — ESC 누를 때 그 위에
+    // 종료 확인이 겹쳐 뜨던 문제 방지.
+    if (this.isQuizResultOpen || this.isRoundIntroOpen || this.isJudging) {
+      return
+    }
+
     this.requestReturnToArtRoom()
   }
 
