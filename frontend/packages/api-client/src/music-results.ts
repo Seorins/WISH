@@ -111,3 +111,40 @@ export async function getChartStats(chartId: string) {
   )
   return response.data
 }
+
+export type MusicRankingEntry = {
+  rank: number
+  patientProfileId: number
+  nickname: string
+  score: number
+  accuracy: number
+  maxCombo: number
+  rankGrade: string
+  playedAt: string
+  isMe: boolean
+}
+
+export type MusicMyRanking = {
+  rank: number | null
+  bestScore: number | null
+  bestAccuracy: number | null
+  bestMaxCombo: number | null
+  bestRankGrade: string | null
+  bestPlayedAt: string | null
+}
+
+export type MusicChartRanking = {
+  chartId: string
+  chartTitle: string
+  totalPlayers: number
+  entries: MusicRankingEntry[]
+  me: MusicMyRanking
+}
+
+export async function getChartRanking(chartId: string, limit = 10) {
+  const response = await apiClient.get<ApiResponse<MusicChartRanking>>(
+    `/music/charts/${encodeURIComponent(chartId)}/ranking`,
+    { params: { limit } },
+  )
+  return response.data
+}
