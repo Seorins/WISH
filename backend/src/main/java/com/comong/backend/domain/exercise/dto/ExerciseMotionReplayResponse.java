@@ -8,16 +8,20 @@ public record ExerciseMotionReplayResponse(
         String motionName,
         int routineOrder,
         boolean replayAvailable,
-        ExerciseMotionReplayData replay) {
+        ExerciseMotionReplayData replay,
+        ExerciseMotionReplayData compactReplay) {
 
     public static ExerciseMotionReplayResponse from(
-            ExerciseSessionMotion sessionMotion, ExerciseMotionReplayData replay) {
+            ExerciseSessionMotion sessionMotion,
+            ExerciseMotionReplayData replay,
+            ExerciseMotionReplayData compactReplay) {
         return new ExerciseMotionReplayResponse(
                 sessionMotion.getId(),
                 sessionMotion.getExerciseMotion().getId(),
                 sessionMotion.getExerciseMotion().getName(),
                 sessionMotion.getExerciseMotion().getRoutineOrder(),
-                replay != null,
-                replay);
+                replay != null || compactReplay != null,
+                replay,
+                compactReplay);
     }
 }

@@ -58,6 +58,9 @@ public class ExerciseSessionMotion {
     @Column(name = "pose_replay", columnDefinition = "TEXT")
     private String poseReplay;
 
+    @Column(name = "compact_pose_replay", columnDefinition = "TEXT")
+    private String compactPoseReplay;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -70,7 +73,8 @@ public class ExerciseSessionMotion {
             int completedReps,
             String feedback,
             PerformanceVideo performanceVideo,
-            String poseReplay) {
+            String poseReplay,
+            String compactPoseReplay) {
         this.session = Objects.requireNonNull(session, "session must not be null");
         this.exerciseMotion =
                 Objects.requireNonNull(exerciseMotion, "exerciseMotion must not be null");
@@ -84,10 +88,12 @@ public class ExerciseSessionMotion {
         this.feedback = Objects.requireNonNull(feedback, "feedback must not be null");
         this.performanceVideo = performanceVideo;
         this.poseReplay = normalizeNullableText(poseReplay);
+        this.compactPoseReplay = normalizeNullableText(compactPoseReplay);
     }
 
     public boolean hasPoseReplay() {
-        return poseReplay != null && !poseReplay.isBlank();
+        return (poseReplay != null && !poseReplay.isBlank())
+                || (compactPoseReplay != null && !compactPoseReplay.isBlank());
     }
 
     @PrePersist
