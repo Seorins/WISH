@@ -435,6 +435,9 @@ const REPLAY_MAX_FRAMES = REPLAY_FPS * 180
 // for replay continuity, then rely on normalization checks to drop unusable frames.
 const REPLAY_MIN_CONFIDENCE = 0.05
 const REPLAY_MIN_SHOULDER_WIDTH = 0.02
+const REPLAY_NORMALIZED_COORDINATE_ABS_LIMIT = 10
+const REPLAY_MAX_INTERPOLATION_GAP_FRAMES = 5
+const REPLAY_INTERPOLATED_CONFIDENCE = 0.25
 const COMPACT_REPLAY_MAX_MARKERS = 32
 const COMPACT_REPLAY_MARKER_MERGE_GAP_MS = 500
 const TOP_COUNT_MARKER_WINDOW_MS = 2000
@@ -3118,8 +3121,13 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
         this.aiState.displayedFeedbackText ??
         this.aiState.feedback,
     )
-    const poseReplay = this.buildCurrentMotionReplayClip(durationSec * 1000)
-    const compactPoseReplay = this.buildCompactMotionReplayClip(durationSec * 1000, motionSpec)
+    const replaySamples = this.sanitizeMotionReplaySamples(this.motionReplaySamples)
+    const poseReplay = this.buildCurrentMotionReplayClip(replaySamples, durationSec * 1000)
+    const compactPoseReplay = this.buildCompactMotionReplayClip(
+      replaySamples,
+      durationSec * 1000,
+      motionSpec,
+    )
 
     const motionRecord: LocalExerciseMotionRecord = {
       exerciseMotionId: motionSpec.exerciseMotionId,
@@ -3502,10 +3510,120 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     return Math.round(value * 10_000) / 10_000
   }
 
-  private buildCurrentMotionReplayClip(durationMs: number): ExerciseMotionReplayClip | null {
-    if (this.motionReplaySamples.length === 0) return null
+  private sanitizeMotionReplaySamples(
+    samples: readonly LocalMotionReplaySample[],
+  ): LocalMotionReplaySample[] {
+    if (samples.length === 0) return []
 
-    const frames = this.motionReplaySamples.map(sample => sample.frame)
+    const frames = samples.map(sample => ({
+      ...sample.frame,
+      lm: [...sample.frame.lm],
+    }))
+
+    for (let landmarkIndex = 0; landmarkIndex < REPLAY_LANDMARK_NAMES.length; landmarkIndex += 1) {
+      let frameIndex = 0
+
+      while (frameIndex < frames.length) {
+        if (this.isReplayTupleComplete(frames[frameIndex].lm[landmarkIndex])) {
+          frameIndex += 1
+          continue
+        }
+
+        const startIndex = frameIndex
+        while (
+          frameIndex < frames.length &&
+          !this.isReplayTupleComplete(frames[frameIndex].lm[landmarkIndex])
+        ) {
+          frameIndex += 1
+        }
+
+        const endIndex = frameIndex
+        const missingFrameCount = endIndex - startIndex
+        const previousIndex = startIndex - 1
+        const nextIndex = endIndex
+        const previousTuple = frames[previousIndex]?.lm[landmarkIndex]
+        const nextTuple = frames[nextIndex]?.lm[landmarkIndex]
+        const canInterpolate =
+          missingFrameCount <= REPLAY_MAX_INTERPOLATION_GAP_FRAMES &&
+          this.isReplayTupleComplete(previousTuple) &&
+          this.isReplayTupleComplete(nextTuple)
+
+        for (let index = startIndex; index < endIndex; index += 1) {
+          frames[index].lm[landmarkIndex] = canInterpolate
+            ? this.interpolateReplayTuple(
+                previousTuple,
+                nextTuple,
+                frames[previousIndex].t,
+                frames[index].t,
+                frames[nextIndex].t,
+              )
+            : this.createMissingReplayTuple()
+        }
+      }
+    }
+
+    return samples.map((sample, index) => ({
+      ...sample,
+      frame: frames[index],
+    }))
+  }
+
+  private isReplayTupleComplete(
+    tuple: MotionReplayLandmarkTuple | undefined,
+  ): tuple is MotionReplayLandmarkTuple {
+    if (!tuple || tuple.length !== 4) return false
+    const [x, y, z, confidence] = tuple
+    return (
+      this.isReplayCoordinatePersistable(x) &&
+      this.isReplayCoordinatePersistable(y) &&
+      this.isReplayCoordinatePersistable(z) &&
+      x !== null &&
+      y !== null &&
+      Number.isFinite(confidence) &&
+      confidence >= 0 &&
+      confidence <= 1
+    )
+  }
+
+  private isReplayCoordinatePersistable(value: number | null) {
+    return (
+      value === null ||
+      (Number.isFinite(value) && Math.abs(value) <= REPLAY_NORMALIZED_COORDINATE_ABS_LIMIT)
+    )
+  }
+
+  private interpolateReplayTuple(
+    previous: MotionReplayLandmarkTuple,
+    next: MotionReplayLandmarkTuple,
+    previousTimeMs: number,
+    currentTimeMs: number,
+    nextTimeMs: number,
+  ): MotionReplayLandmarkTuple {
+    const denominator = Math.max(1, nextTimeMs - previousTimeMs)
+    const ratio = Math.min(1, Math.max(0, (currentTimeMs - previousTimeMs) / denominator))
+    const interpolate = (from: number, to: number) =>
+      this.roundReplayValue(from + (to - from) * ratio)
+    const z = previous[2] === null || next[2] === null ? null : interpolate(previous[2], next[2])
+
+    return [
+      interpolate(previous[0]!, next[0]!),
+      interpolate(previous[1]!, next[1]!),
+      z,
+      REPLAY_INTERPOLATED_CONFIDENCE,
+    ]
+  }
+
+  private createMissingReplayTuple(): MotionReplayLandmarkTuple {
+    return [null, null, null, 0]
+  }
+
+  private buildCurrentMotionReplayClip(
+    samples: readonly LocalMotionReplaySample[],
+    durationMs: number,
+  ): ExerciseMotionReplayClip | null {
+    if (samples.length === 0) return null
+
+    const frames = samples.map(sample => sample.frame)
     const lastFrameMs = frames[frames.length - 1]?.t ?? 0
     const replayDurationMs = Math.max(0, Math.round(Math.max(durationMs, lastFrameMs)))
 
@@ -3515,21 +3633,22 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
       durationMs: replayDurationMs,
       landmarks: REPLAY_LANDMARK_NAMES,
       frames,
-      representativeSegment: this.pickRepresentativeReplaySegment(replayDurationMs),
+      representativeSegment: this.pickRepresentativeReplaySegment(samples, replayDurationMs),
     }
   }
 
   private buildCompactMotionReplayClip(
+    samples: readonly LocalMotionReplaySample[],
     durationMs: number,
     motionSpec: AiMotionSpec,
   ): ExerciseMotionReplayClip | null {
-    if (this.motionReplaySamples.length === 0) return null
+    if (samples.length === 0) return null
 
     const frameIntervalMs = 1000 / COMPACT_REPLAY_FPS
     const frames: MotionReplayFrame[] = []
     let previousBucket = -1
 
-    for (const sample of this.motionReplaySamples) {
+    for (const sample of samples) {
       const bucket = Math.floor(sample.frame.t / frameIntervalMs)
       if (bucket === previousBucket) continue
       frames.push(sample.frame)
@@ -3542,7 +3661,8 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     const replayDurationMs = Math.max(0, Math.round(Math.max(durationMs, lastFrameMs)))
     const firstCountMarker = this.compactReplayMarkers.find(marker => marker.kind === 'count')
     if (motionSpec.type === 'top') {
-      const segment = firstCountMarker ?? this.pickRepresentativeReplaySegment(replayDurationMs)
+      const segment =
+        firstCountMarker ?? this.pickRepresentativeReplaySegment(samples, replayDurationMs)
       if (segment) {
         const startMs = Math.max(0, Math.min(replayDurationMs, segment.startMs))
         const endMs = Math.max(startMs, Math.min(replayDurationMs, segment.endMs))
@@ -3609,8 +3729,10 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     }
   }
 
-  private pickRepresentativeReplaySegment(durationMs: number): MotionReplaySegment | null {
-    const samples = this.motionReplaySamples
+  private pickRepresentativeReplaySegment(
+    samples: readonly LocalMotionReplaySample[],
+    durationMs: number,
+  ): MotionReplaySegment | null {
     if (samples.length === 0) return null
 
     const windowMs = Math.min(5000, Math.max(3000, durationMs))
