@@ -68,6 +68,9 @@ TARGET_RULE_ACTION_MOTION_FULL_DELTA = 0.22
 TARGET_RULE_MIN_TRACKED_FRAMES_FOR_MOTION = 4
 TARGET_RULE_AGGREGATION_MEDIAN_WEIGHT = 0.65
 TARGET_RULE_AGGREGATION_TOP_MEAN_WEIGHT = 0.35
+SEQUENCE_CENTERED_PROTOTYPE_WEIGHT = 0.65
+SEQUENCE_CENTERED_CAMERA_WEIGHT = 0.15
+SEQUENCE_CENTERED_TARGET_RULE_WEIGHT = 0.20
 CORE_SCORING_JOINT_NAMES = (
     "코",
     "목",
@@ -309,23 +312,21 @@ def analyze_taegeuk1_sequence(
         distance,
         resources.similarity_report["per_class"][movement_name]["distance"],
     )
-    score = prototype_score
+    camera_score: float | None = None
     target_rule_score: float | None = None
-    scoring_method = "prototype_distance"
     if not input_normalized:
         camera_score = _camera_adjusted_score(
-            absolute_score=score,
+            absolute_score=prototype_score,
             target_index=target_index,
             distances=distances,
             probabilities=probabilities,
         )
-        if camera_score > score:
-            score = camera_score
-            scoring_method = "camera_similarity"
         target_rule_score = _target_rule_score(seq, resources.keypoint_names, movement_name)
-        if target_rule_score is not None and target_rule_score > score:
-            score = target_rule_score
-            scoring_method = "target_rule"
+    score, scoring_method = _sequence_centered_score(
+        prototype_score=prototype_score,
+        camera_score=camera_score,
+        target_rule_score=target_rule_score,
+    )
 
     joint_error_rows = [
         {"joint": joint_name, "error": round(float(error), 6)}
@@ -560,6 +561,29 @@ def _camera_adjusted_score(
         rank_score = _interpolate(distance_ratio, 1.0, 3.0, 50.0, 20.0)
 
     return max(float(absolute_score), probability_score, rank_score)
+
+
+def _sequence_centered_score(
+    *,
+    prototype_score: float,
+    camera_score: float | None,
+    target_rule_score: float | None,
+) -> tuple[float, str]:
+    prototype = _safe_score(prototype_score, 0.0)
+    camera = _safe_score(camera_score, prototype) if camera_score is not None else prototype
+    target_rule = _safe_score(target_rule_score, prototype) if target_rule_score is not None else prototype
+    weighted_score = _safe_score(
+        (SEQUENCE_CENTERED_PROTOTYPE_WEIGHT * prototype)
+        + (SEQUENCE_CENTERED_CAMERA_WEIGHT * camera)
+        + (SEQUENCE_CENTERED_TARGET_RULE_WEIGHT * target_rule),
+        prototype,
+    )
+    weighted_score = max(0.0, min(100.0, weighted_score))
+    if camera_score is None and target_rule_score is None:
+        return prototype, "prototype_distance"
+    if weighted_score > prototype:
+        return weighted_score, "sequence_weighted"
+    return prototype, "prototype_distance"
 
 
 def _target_rule_score(

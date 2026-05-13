@@ -27,6 +27,7 @@ from app.services.taekwondo.stgcn_taegeuk1 import (
     _camera_adjusted_score,
     _normalize_camera_sequence,
     _prediction_probabilities,
+    _sequence_centered_score,
     _target_rule_candidate_frames,
     _target_rule_score,
     analyze_taegeuk1_sequence,
@@ -219,6 +220,28 @@ def test_camera_adjusted_score_stays_low_when_target_is_not_close() -> None:
     )
 
     assert score < TARGET_RULE_TEST_PASS_SCORE
+
+
+def test_sequence_centered_score_keeps_prototype_score_dominant() -> None:
+    score, method = _sequence_centered_score(
+        prototype_score=20.0,
+        camera_score=95.0,
+        target_rule_score=95.0,
+    )
+
+    assert method == "sequence_weighted"
+    assert score < TARGET_RULE_TEST_PASS_SCORE
+
+
+def test_sequence_centered_score_can_pass_when_whole_sequence_is_close() -> None:
+    score, method = _sequence_centered_score(
+        prototype_score=86.0,
+        camera_score=70.0,
+        target_rule_score=80.0,
+    )
+
+    assert method == "prototype_distance"
+    assert score >= TARGET_RULE_TEST_PASS_SCORE
 
 
 def test_camera_prediction_probabilities_ignore_overconfident_softmax(monkeypatch: pytest.MonkeyPatch) -> None:
