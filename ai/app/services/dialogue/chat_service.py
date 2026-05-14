@@ -1,6 +1,6 @@
 import logging
 import os
-from typing import List, Optional
+from typing import List
 
 import httpx
 
@@ -57,17 +57,24 @@ def _build_messages(
     return messages
 
 
+def _search_memories(patient_profile_id: int, user_message: str) -> List[dict]:
+    try:
+        return dialogue_vector_store.search(
+            patient_profile_id=patient_profile_id,
+            query=user_message,
+            top_k=3,
+        )
+    except Exception as e:
+        logger.warning("[ChatService] RAG 검색 실패, 기억 없이 진행 (patient=%d): %s", patient_profile_id, e)
+        return []
+
+
 def generate_response(
     patient_profile_id: int,
     user_message: str,
     conversation_history: List[ConversationTurn],
 ) -> tuple[str, bool]:
-    memories = dialogue_vector_store.search(
-        patient_profile_id=patient_profile_id,
-        query=user_message,
-        top_k=3,
-    )
-
+    memories = _search_memories(patient_profile_id, user_message)
     system_prompt = _build_system_prompt(memories)
     messages = _build_messages(conversation_history, user_message)
 
@@ -90,6 +97,12 @@ def generate_response(
             data = response.json()
             npc_message = data["content"][0]["text"].strip()
             return npc_message, False
+    except httpx.TimeoutException:
+        logger.warning("[ChatService] Claude 타임아웃 (patient=%d)", patient_profile_id)
+        return FALLBACK_RESPONSE, True
+    except httpx.HTTPStatusError as e:
+        logger.error("[ChatService] Claude HTTP 오류 %d (patient=%d)", e.response.status_code, patient_profile_id)
+        return FALLBACK_RESPONSE, True
     except Exception as e:
         logger.error("[ChatService] Claude 호출 실패 (patient=%d): %s", patient_profile_id, e)
         return FALLBACK_RESPONSE, True
