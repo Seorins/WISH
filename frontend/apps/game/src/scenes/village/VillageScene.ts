@@ -396,6 +396,7 @@ export class VillageScene extends Phaser.Scene {
       scene: this,
       worldWidth: W,
       worldHeight: H,
+      roomId: 'village.default',
     })
     this.emojiPalette = createVillageEmojiPalette(this, {
       onSelect: emoji => {

@@ -110,6 +110,7 @@ function createClient(getAccessToken: () => Promise<string | null> = async () =>
   let disconnected = false
 
   const client = new VillageRealtimeClient({
+    roomId: 'village.default',
     url: 'ws://test/api/v1/ws/village',
     getAccessToken,
     onEvent: e => events.push(e),
@@ -152,7 +153,11 @@ describe('VillageRealtimeClient', () => {
     await fake().triggerConnect()
 
     // 실 lib 처럼 client.connectHeaders 가 beforeConnect 단계에서 갱신된다 — config 스냅샷이 아님.
-    expect(fake().connectHeaders).toEqual({ Authorization: 'Bearer jwt-here' })
+    // Room 헤더로 BE 에 룸 ID 전달 (S14P31E103-793).
+    expect(fake().connectHeaders).toEqual({
+      Authorization: 'Bearer jwt-here',
+      Room: 'village.default',
+    })
   })
 
   it('deactivates client + fires onError when token fetcher returns null', async () => {
@@ -186,7 +191,7 @@ describe('VillageRealtimeClient', () => {
 
     expect(fake().subscriptionHandlers.has('/user/queue/village.snapshot')).toBe(true)
     expect(fake().subscriptionHandlers.has('/topic/village.default')).toBe(true)
-    expect(fake().published).toContainEqual({ destination: '/app/village/ready', body: '' })
+    expect(fake().published).toContainEqual({ destination: '/app/village.default/ready', body: '' })
     expect(isReady()).toBe(true)
   })
 
@@ -229,7 +234,7 @@ describe('VillageRealtimeClient', () => {
     client.publishPosition({ x: 0.42, y: 0.78, dir: 'left', moving: true })
 
     expect(fake().published).toContainEqual({
-      destination: '/app/village/position',
+      destination: '/app/village.default/position',
       body: JSON.stringify({ x: 0.42, y: 0.78, dir: 'left', moving: true }),
     })
   })
@@ -243,7 +248,7 @@ describe('VillageRealtimeClient', () => {
 
     expect(sent).toBe(true)
     expect(fake().published).toContainEqual({
-      destination: '/app/village/emote',
+      destination: '/app/village.default/emote',
       body: JSON.stringify({ emoji: '😄' }),
     })
   })
@@ -269,7 +274,7 @@ describe('VillageRealtimeClient', () => {
     await fake().triggerConnect()
     expect(client.publishPosition({ x: 0.2, y: 0.3, dir: 'up', moving: true })).toBe(true)
     expect(fake().published).toContainEqual({
-      destination: '/app/village/position',
+      destination: '/app/village.default/position',
       body: JSON.stringify({ x: 0.2, y: 0.3, dir: 'up', moving: true }),
     })
   })
