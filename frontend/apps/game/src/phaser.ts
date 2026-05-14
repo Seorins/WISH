@@ -22,6 +22,9 @@ import { YouTubeSearchScene } from './scenes/themes/music/search/YouTubeSearchSc
 import { VillageScene } from './scenes/village/VillageScene'
 import { PhotoBoothFrameSelectScene } from './scenes/photo-booth/PhotoBoothFrameSelectScene'
 import { PhotoBoothCameraScene } from './scenes/photo-booth/PhotoBoothCameraScene'
+import { PhotoBoothPickScene } from './scenes/photo-booth/PhotoBoothPickScene'
+import { PhotoBoothResultScene } from './scenes/photo-booth/PhotoBoothResultScene'
+import { PhotoBoothSaveScene } from './scenes/photo-booth/PhotoBoothSaveScene'
 
 function configureTouchSurface(element: HTMLElement) {
   element.style.setProperty('overscroll-behavior', 'none')
@@ -84,6 +87,9 @@ export function createGame(parent: HTMLElement): Phaser.Game {
       MusicRhythmScene,
       PhotoBoothFrameSelectScene,
       PhotoBoothCameraScene,
+      PhotoBoothPickScene,
+      PhotoBoothResultScene,
+      PhotoBoothSaveScene,
     ],
     scale: {
       mode: Phaser.Scale.RESIZE,
