@@ -69,7 +69,18 @@ def _search_memories(patient_profile_id: int, user_message: str) -> List[dict]:
         return []
 
 
-def generate_response(
+def _extract_npc_message(data: dict) -> str | None:
+    content = data.get("content")
+    if not content or not isinstance(content, list):
+        return None
+    first = content[0]
+    if not isinstance(first, dict) or first.get("type") != "text":
+        return None
+    text = first.get("text", "").strip()
+    return text if text else None
+
+
+async def generate_response(
     patient_profile_id: int,
     user_message: str,
     conversation_history: List[ConversationTurn],
@@ -91,11 +102,14 @@ def generate_response(
     }
 
     try:
-        with httpx.Client(timeout=GMS_TIMEOUT) as client:
-            response = client.post(f"{GMS_BASE_URL}/messages", headers=headers, json=body)
+        async with httpx.AsyncClient(timeout=GMS_TIMEOUT) as client:
+            response = await client.post(f"{GMS_BASE_URL}/messages", headers=headers, json=body)
             response.raise_for_status()
             data = response.json()
-            npc_message = data["content"][0]["text"].strip()
+            npc_message = _extract_npc_message(data)
+            if npc_message is None:
+                logger.warning("[ChatService] Claude 응답 구조 이상 (patient=%d)", patient_profile_id)
+                return FALLBACK_RESPONSE, True
             return npc_message, False
     except httpx.TimeoutException:
         logger.warning("[ChatService] Claude 타임아웃 (patient=%d)", patient_profile_id)
