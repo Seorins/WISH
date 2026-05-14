@@ -73,6 +73,13 @@ app:
       tick-rate-hz: 5
       room-capacity: 30
       idle-disconnect-seconds: 60
+    # 그림 퀴즈 멀티플레이 (S14P31E103-820). 운영 안전 기본은 비활성, dev/local 에서 활성화.
+    quiz:
+      enabled: false
+      min-players: 2
+      max-players: 4
+      round-duration-seconds: 90
+      empty-room-grace-seconds: 60
 
 firebase:
   push:
