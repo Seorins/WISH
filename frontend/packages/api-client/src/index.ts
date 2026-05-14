@@ -51,6 +51,7 @@ export {
   requestGameLivekitToken,
   requestGuardianLivekitToken,
   startContent,
+  subscribeGamePresence,
   subscribeRealtimeEvents,
 } from './realtime'
 export { getCumulativeUsageStats, getDailyUsageStats, getUsageAverages } from './usage-stats'
@@ -195,6 +196,7 @@ export type {
 export type { Gender, PatientProfile, PatientProfileCreateRequest } from './patient-profiles'
 export type { LoginSession, LoginSessionStartRequest } from './login-sessions'
 export type {
+  GamePresenceEvent,
   LiveKitTokenResponse,
   RealtimeContentType,
   RealtimeEvent,
