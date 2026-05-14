@@ -54,6 +54,12 @@ export class YouTubeSearchScene extends Phaser.Scene {
     this.selected = null
     this.difficulty = 'normal'
 
+    // Phaser 키보드 플러그인이 window keydown 을 가로채면 input 에 글자가 안 들어감.
+    // 검색 화면이 떠 있는 동안은 게임 키 입력을 꺼둔다.
+    if (this.input.keyboard) {
+      this.input.keyboard.enabled = false
+    }
+
     addCoverBackground(this, 'music-background')
     this.add
       .rectangle(
@@ -69,7 +75,12 @@ export class YouTubeSearchScene extends Phaser.Scene {
     this.cameras.main.fadeIn(220, 0, 0, 0)
     this.mountOverlay()
 
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.unmountOverlay())
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.unmountOverlay()
+      if (this.input.keyboard) {
+        this.input.keyboard.enabled = true
+      }
+    })
   }
 
   // ── DOM overlay ──────────────────────────────────────────────────────────
@@ -119,9 +130,14 @@ export class YouTubeSearchScene extends Phaser.Scene {
       if (q) void this.search(q)
     }
     btn.addEventListener('click', run)
-    input.addEventListener('keydown', e => {
+    // 게임 키 바인딩으로 새지 않도록 입력 이벤트를 input 안에서 막는다.
+    const stop = (e: KeyboardEvent) => {
+      e.stopPropagation()
       if (e.key === 'Enter') run()
-    })
+    }
+    input.addEventListener('keydown', stop)
+    input.addEventListener('keyup', e => e.stopPropagation())
+    input.addEventListener('keypress', e => e.stopPropagation())
     input.focus()
   }
 
