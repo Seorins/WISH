@@ -17,7 +17,10 @@ public record QuizRoomSnapshot(
         int minPlayers,
         int maxPlayers,
         List<QuizMemberDto> members,
-        String stompRoomKey) {
+        String stompRoomKey,
+        // 라운드 진행 상태 — WAITING/FINISHED 일 땐 0/0. PLAYING 일 때만 의미 있음 (M2-2).
+        int roundNumber,
+        long currentDrawerUserId) {
 
     public static QuizRoomSnapshot of(QuizRoom room) {
         long host = room.hostUserId();
@@ -33,6 +36,8 @@ public record QuizRoomSnapshot(
                 room.minPlayers(),
                 room.maxPlayers(),
                 members,
-                room.stompRoomKey());
+                room.stompRoomKey(),
+                room.roundNumber(),
+                room.currentDrawerUserId());
     }
 }
