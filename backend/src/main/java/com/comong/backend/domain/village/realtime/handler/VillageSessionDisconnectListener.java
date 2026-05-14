@@ -33,6 +33,9 @@ public class VillageSessionDisconnectListener {
         }
         presenceService
                 .leaveBySession(sessionId)
-                .ifPresent(member -> broadcastService.broadcastLeave(member.userId()));
+                .ifPresent(
+                        outcome ->
+                                broadcastService.broadcastLeave(
+                                        outcome.roomId(), outcome.member().userId()));
     }
 }

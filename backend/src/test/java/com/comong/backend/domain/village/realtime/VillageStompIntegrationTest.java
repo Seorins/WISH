@@ -119,7 +119,7 @@ class VillageStompIntegrationTest extends IntegrationTestSupport {
         headers.add("Authorization", "Bearer " + tokenFor(userA));
 
         assertThatThrownBy(() -> connect(headers)).isInstanceOf(ExecutionException.class);
-        assertThat(presenceService.size()).isZero();
+        assertThat(presenceService.size("village.default")).isZero();
     }
 
     @Test
@@ -140,7 +140,7 @@ class VillageStompIntegrationTest extends IntegrationTestSupport {
         LinkedBlockingQueue<Map<String, Object>> snapshots = subscribeSnapshot(session);
         Thread.sleep(SUBSCRIBE_GRACE_MS);
 
-        session.send("/app/village/ready", new byte[0]);
+        session.send("/app/village.default/ready", new byte[0]);
 
         Map<String, Object> snapshot = snapshots.poll(RECEIVE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
         assertThat(snapshot).isNotNull();
@@ -170,7 +170,7 @@ class VillageStompIntegrationTest extends IntegrationTestSupport {
 
         // A 가 위치 발행
         sessionA.send(
-                "/app/village/position",
+                "/app/village.default/position",
                 Map.of("x", 0.42, "y", 0.78, "dir", "left", "moving", true));
 
         Map<String, Object> moveEvent = pollUntilType(eventsForB, "move", RECEIVE_TIMEOUT_SECONDS);
@@ -196,7 +196,7 @@ class VillageStompIntegrationTest extends IntegrationTestSupport {
         // 위 sleep 만으로 SimpleBroker 의 구독 등록 완료가 보장되지 않아 느린 CI 에선 leave broadcast 가
         // 미등록 구독으로 빠지면 유실된다. A 가 먼저 position 을 쏴 B 가 move 를 받으면 구독이 결정적으로 활성.
         sessionA.send(
-                "/app/village/position",
+                "/app/village.default/position",
                 Map.of("x", 0.5, "y", 0.5, "dir", "down", "moving", false));
         Map<String, Object> subscriptionWarmup =
                 pollUntilType(eventsForB, "move", RECEIVE_TIMEOUT_SECONDS);
@@ -218,14 +218,14 @@ class VillageStompIntegrationTest extends IntegrationTestSupport {
         StompSession sessionA = connectAsUser(userA);
         LinkedBlockingQueue<Map<String, Object>> eventsForA = subscribeTopic(sessionA);
         Thread.sleep(SUBSCRIBE_GRACE_MS);
-        sessionA.send("/app/village/ready", new byte[0]);
+        sessionA.send("/app/village.default/ready", new byte[0]);
         // A 자신의 join 이벤트를 한 번 소비
         pollUntilType(eventsForA, "join", RECEIVE_TIMEOUT_SECONDS);
 
         StompSession sessionB = connectAsUser(userB);
         subscribeSnapshot(sessionB); // 받지 않더라도 클라가 구독해야 서버가 보낼 destination 생긴다
         Thread.sleep(SUBSCRIBE_GRACE_MS);
-        sessionB.send("/app/village/ready", new byte[0]);
+        sessionB.send("/app/village.default/ready", new byte[0]);
 
         Map<String, Object> bJoin =
                 pollUntilUserId(eventsForA, "join", userB.getId(), RECEIVE_TIMEOUT_SECONDS);
@@ -244,7 +244,7 @@ class VillageStompIntegrationTest extends IntegrationTestSupport {
         LinkedBlockingQueue<Map<String, Object>> eventsForB = subscribeTopic(sessionB);
         Thread.sleep(SUBSCRIBE_GRACE_MS);
 
-        sessionA.send("/app/village/emote", Map.of("emoji", "😄"));
+        sessionA.send("/app/village.default/emote", Map.of("emoji", "😄"));
 
         Map<String, Object> emoteEvent =
                 pollUntilType(eventsForB, "emote", RECEIVE_TIMEOUT_SECONDS);
@@ -264,7 +264,7 @@ class VillageStompIntegrationTest extends IntegrationTestSupport {
         LinkedBlockingQueue<Map<String, Object>> eventsForB = subscribeTopic(sessionB);
         Thread.sleep(SUBSCRIBE_GRACE_MS);
 
-        sessionA.send("/app/village/emote", Map.of("emoji", "💀"));
+        sessionA.send("/app/village.default/emote", Map.of("emoji", "💀"));
 
         // 짧은 시간 안에 emote 이벤트가 도착하지 않아야 한다.
         Map<String, Object> emoteEvent = pollUntilType(eventsForB, "emote", 1);
@@ -394,9 +394,10 @@ class VillageStompIntegrationTest extends IntegrationTestSupport {
 
     private void waitUntilPresenceSizeEquals(int expected) throws InterruptedException {
         long deadline = System.currentTimeMillis() + 3_000L;
-        while (presenceService.size() != expected && System.currentTimeMillis() < deadline) {
+        while (presenceService.size("village.default") != expected
+                && System.currentTimeMillis() < deadline) {
             Thread.sleep(50);
         }
-        assertThat(presenceService.size()).isEqualTo(expected);
+        assertThat(presenceService.size("village.default")).isEqualTo(expected);
     }
 }

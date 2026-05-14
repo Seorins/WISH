@@ -28,6 +28,9 @@ public class VillageIdleCleanupScheduler {
     public void evictIdle() {
         presenceService
                 .evictIdle(Instant.now())
-                .forEach(evicted -> broadcastService.broadcastLeave(evicted.userId()));
+                .forEach(
+                        outcome ->
+                                broadcastService.broadcastLeave(
+                                        outcome.roomId(), outcome.member().userId()));
     }
 }
