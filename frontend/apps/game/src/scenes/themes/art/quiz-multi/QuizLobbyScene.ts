@@ -526,8 +526,16 @@ export class QuizLobbyScene extends Phaser.Scene {
   }
 
   private handleStartGame() {
-    // M2 에서 BE 시작 API + 플레이 씬 전이 구현. 일단 안내.
-    this.setStatus('게임 시작은 다음 마일스톤에서 연결돼요')
+    if (!this.snapshot) return
+    // M2-1: 우선 플레이 씬 레이아웃 확인용으로 직접 전이.
+    // M2-2 에서 BE 라운드 시작 API + status_changed broadcast 수신 흐름으로 교체.
+    fadeToScene(this, 'QuizPlayScene', {
+      duration: 220,
+      data: {
+        snapshot: this.snapshot,
+        currentUserId: this.currentUserId,
+      },
+    })
   }
 
   private async handleLeave() {
