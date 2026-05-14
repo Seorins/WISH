@@ -59,6 +59,13 @@ public class DialogueSession {
     @Column(name = "max_steps", nullable = false)
     private int maxSteps;
 
+    /**
+     * 마을 NPC 의 경우 세션 시작 시 BE 가 선택한 dialogue 카탈로그 scriptId. 같은 NPC 를 재방문할 때 "안 본 script 우선" 정책의 기준이
+     * 된다. 등대지기는 카탈로그 미사용이라 null.
+     */
+    @Column(name = "script_id", length = 64)
+    private String scriptId;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "finish_reason", length = 32)
     private DialogueFinishReason finishReason;
@@ -70,7 +77,8 @@ public class DialogueSession {
     private LocalDateTime endedAt;
 
     @Builder
-    private DialogueSession(PatientProfile patientProfile, NpcName npcName, Integer maxSteps) {
+    private DialogueSession(
+            PatientProfile patientProfile, NpcName npcName, Integer maxSteps, String scriptId) {
         this.patientProfile =
                 Objects.requireNonNull(patientProfile, "patientProfile must not be null");
         this.npcName = Objects.requireNonNull(npcName, "npcName must not be null");
@@ -79,6 +87,7 @@ public class DialogueSession {
             throw new IllegalArgumentException("maxSteps must be positive");
         }
         this.maxSteps = resolvedMaxSteps;
+        this.scriptId = scriptId;
         this.status = DialogueStatus.IN_PROGRESS;
         this.stepCount = 0;
     }

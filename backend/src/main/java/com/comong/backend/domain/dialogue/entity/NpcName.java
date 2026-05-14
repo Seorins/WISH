@@ -1,22 +1,25 @@
 package com.comong.backend.domain.dialogue.entity;
 
+import java.util.Map;
+import java.util.Optional;
+
 /**
  * 대화 상대 NPC 의 고유 이름.
  *
- * <p>{@link #YEONGCHEOL} (등대지기) 만 Claude (GMS) 를 사용해 BE 가 다음 질문/선택지를 생성한다. 마을 주민 6인은 FE 가 정적
- * 스크립트(질문 / 선택지 / 다음 scene 라우팅 / closingLines)를 모두 보유한다. BE 는 마을 주민에 대해선 세션 lifecycle 관리와 turn raw
- * 데이터 적재만 담당한다.
+ * <p>{@link #YEONGCHEOL} (등대지기) 는 Claude (GMS) 로 BE 가 scene 을 생성한다. 마을 주민 6인은 BE 의 dialogue
+ * 카탈로그(JSON 리소스)에서 정적 스크립트로 진행된다 (B2 부터). 카탈로그의 npcId 는 FE/디자인 친화적 이름이라 본 enum 과 직접 일치하지 않아 {@link
+ * #catalogId()} 로 매핑한다.
  *
  * <p>한글 캐릭터 매핑:
  *
  * <ul>
- *   <li>{@link #YEONGCHEOL} — 등대지기 영철 (LLM, BE 가 scene/closing 생성)
- *   <li>{@link #JOEUN} — 간호사 토끼 (FE 정적)
- *   <li>{@link #DAIN} — 사슴 친구 (FE 정적)
- *   <li>{@link #GEONBIN} — 잠자는 양 (FE 정적)
- *   <li>{@link #SEORIN} — 원숭이 친구 (FE 정적)
- *   <li>{@link #JEONGHO} — 정원사 곰 (FE 정적)
- *   <li>{@link #SEHYEON} — 다람쥐 주민 (FE 정적)
+ *   <li>{@link #YEONGCHEOL} — 등대지기 영철 (LLM)
+ *   <li>{@link #JOEUN} — 간호사 토끼 → catalog: {@code nurse_bunny}
+ *   <li>{@link #DAIN} — 사슴 친구 → catalog: {@code dain}
+ *   <li>{@link #GEONBIN} — 잠자는 양 → catalog: {@code sleepy_sheep}
+ *   <li>{@link #SEORIN} — 원숭이 친구 (코몽) → catalog: {@code monkey_friend}
+ *   <li>{@link #JEONGHO} — 정원사 곰 → catalog: {@code gardener_bear}
+ *   <li>{@link #SEHYEON} — 다람쥐 주민 → catalog: {@code squirrel_friend}
  * </ul>
  */
 public enum NpcName {
@@ -28,8 +31,27 @@ public enum NpcName {
     JEONGHO,
     SEHYEON;
 
-    /** BE 가 scene 생성/라우팅을 책임지는 NPC 인지. 마을 주민(FE 정적)은 false. */
+    private static final Map<NpcName, String> CATALOG_IDS =
+            Map.of(
+                    JOEUN, "nurse_bunny",
+                    DAIN, "dain",
+                    GEONBIN, "sleepy_sheep",
+                    SEORIN, "monkey_friend",
+                    JEONGHO, "gardener_bear",
+                    SEHYEON, "squirrel_friend");
+
+    /** BE 가 scene 생성/라우팅을 책임지는 NPC 인지. 모든 NPC 가 BE-driven (B2 부터). */
     public boolean isBackendDriven() {
+        return true;
+    }
+
+    /** Claude (LLM) 로 scene 을 생성하는 NPC 인지. 등대지기만. 마을 주민은 카탈로그(정적) 기반. */
+    public boolean isLlmDriven() {
         return this == YEONGCHEOL;
+    }
+
+    /** 카탈로그 JSON 의 npcId. 등대지기는 카탈로그에 없으므로 {@link Optional#empty()}. */
+    public Optional<String> catalogId() {
+        return Optional.ofNullable(CATALOG_IDS.get(this));
     }
 }
