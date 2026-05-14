@@ -25,6 +25,12 @@ import {
 } from '@/game/ui/simpleDialog'
 import { addCoverBackground } from '@/game/world/background'
 import { createRatioRectangle, getRectangleEntryState } from '@/game/world/portal'
+import {
+  attachEmojiPalette,
+  attachVillageRealtime,
+  type AttachedEmojiPalette,
+  type VillageRealtimeIntegration,
+} from '@/features/village-realtime'
 import { gisungChoiceDialogs, gisungSelectDialogs } from '../dialog/gisungDialogs'
 
 // gisung_sprite.png is 2400x600 with four dogs in 600-wide cells, but the
@@ -130,7 +136,12 @@ const MUSIC_ROOM_OBSTACLES: ObstacleRect[] = [
 ]
 
 export class MusicSelectScene extends Phaser.Scene {
+  /** 룸 ID — 같은 테마 select 에 들어온 환자끼리만 보이도록 (S14P31E103-794). */
+  private static readonly REALTIME_ROOM_ID = 'music.select'
+
   private player!: PlayerSprite
+  private villageRealtime: VillageRealtimeIntegration | null = null
+  private emojiPalette: AttachedEmojiPalette | null = null
   private gisungNpc!: Phaser.GameObjects.Sprite
   private obstacles!: Phaser.Physics.Arcade.StaticGroup
   private obstacleInstances: ObstacleInstance[] = []
@@ -255,6 +266,19 @@ export class MusicSelectScene extends Phaser.Scene {
     this.input.keyboard!.on('keydown-E', this.exportObstacleRects)
     this.input.keyboard!.on('keydown-R', this.clearEditedObstacleRects)
     this.input.mouse?.disableContextMenu()
+
+    this.villageRealtime = attachVillageRealtime({
+      scene: this,
+      worldWidth: vw,
+      worldHeight: vh,
+      roomId: MusicSelectScene.REALTIME_ROOM_ID,
+    })
+    this.emojiPalette = attachEmojiPalette(this, {
+      realtime: this.villageRealtime,
+      getPlayer: () => this.player,
+      isOverlayOpen: () => this.isDialogVisible,
+    })
+
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.clearContentStartTimer()
       this.input.off('pointerdown', this.handlePointerDown)
@@ -264,6 +288,10 @@ export class MusicSelectScene extends Phaser.Scene {
       this.input.keyboard?.off('keydown-ESC', this.handleEscDown)
       this.input.keyboard?.off('keydown-E', this.exportObstacleRects)
       this.input.keyboard?.off('keydown-R', this.clearEditedObstacleRects)
+      this.emojiPalette?.destroy()
+      this.emojiPalette = null
+      this.villageRealtime?.destroy()
+      this.villageRealtime = null
     })
 
     this.cameras.main.fadeIn(250, 0, 0, 0)
@@ -281,6 +309,8 @@ export class MusicSelectScene extends Phaser.Scene {
     this.target = movement.target
     this.lastDirection = movement.lastDirection
 
+    this.villageRealtime?.publishLocal(this.player, this.lastDirection, movement.moving)
+    this.emojiPalette?.update()
     this.updateGisungConversation()
 
     if (this.isDialogVisible) {

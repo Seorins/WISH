@@ -31,7 +31,12 @@ import {
   type CuteCardPalette,
 } from '@/game/ui/cuteCard'
 import { createRatioRectangle, getRectangleEntryState } from '@/game/world/portal'
-import { attachVillageRealtime, type VillageRealtimeIntegration } from '@/features/village-realtime'
+import {
+  attachEmojiPalette,
+  attachVillageRealtime,
+  type AttachedEmojiPalette,
+  type VillageRealtimeIntegration,
+} from '@/features/village-realtime'
 import { seongsuDialogs } from './dialog/seongsuDialogs'
 
 const TALK_DISTANCE = 82
@@ -185,6 +190,7 @@ export class GymnasticsSelectScene extends Phaser.Scene {
   private player!: PlayerSprite
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys
   private villageRealtime: VillageRealtimeIntegration | null = null
+  private emojiPalette: AttachedEmojiPalette | null = null
   private obstacles!: Phaser.Physics.Arcade.StaticGroup
   private obstacleInstances: ObstacleInstance[] = []
   private obstacleEditorDraft?: Phaser.GameObjects.Rectangle
@@ -323,6 +329,11 @@ export class GymnasticsSelectScene extends Phaser.Scene {
       worldHeight: vh,
       roomId: GymnasticsSelectScene.REALTIME_ROOM_ID,
     })
+    this.emojiPalette = attachEmojiPalette(this, {
+      realtime: this.villageRealtime,
+      getPlayer: () => this.player,
+      isOverlayOpen: () => this.isDialogVisible,
+    })
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.clearContentStartTimer()
@@ -331,6 +342,8 @@ export class GymnasticsSelectScene extends Phaser.Scene {
       this.input.off('pointerup', this.handleObstacleEditorPointerUp)
       this.input.keyboard?.off('keydown-E', this.exportObstacleRects)
       this.input.keyboard?.off('keydown-R', this.clearEditedObstacleRects)
+      this.emojiPalette?.destroy()
+      this.emojiPalette = null
       this.villageRealtime?.destroy()
       this.villageRealtime = null
     })
@@ -352,6 +365,7 @@ export class GymnasticsSelectScene extends Phaser.Scene {
     this.lastDirection = movement.lastDirection
 
     this.villageRealtime?.publishLocal(this.player, this.lastDirection, movement.moving)
+    this.emojiPalette?.update()
     this.updateSeongsuConversation()
 
     if (this.isDialogVisible) return

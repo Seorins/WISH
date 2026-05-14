@@ -31,7 +31,12 @@ import {
 } from '@/game/ui/cuteCard'
 import { addCoverBackground } from '@/game/world/background'
 import { createRatioRectangle, isPointInRectangle } from '@/game/world/portal'
-import { attachVillageRealtime, type VillageRealtimeIntegration } from '@/features/village-realtime'
+import {
+  attachEmojiPalette,
+  attachVillageRealtime,
+  type AttachedEmojiPalette,
+  type VillageRealtimeIntegration,
+} from '@/features/village-realtime'
 import {
   artChoiceOptions,
   rumiContentDialogs,
@@ -160,6 +165,7 @@ export class ArtSelectScene extends Phaser.Scene {
   private player!: PlayerSprite
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys
   private villageRealtime: VillageRealtimeIntegration | null = null
+  private emojiPalette: AttachedEmojiPalette | null = null
   private obstacles!: Phaser.Physics.Arcade.StaticGroup
   private obstacleInstances: ObstacleInstance[] = []
   private obstacleEditorDraft?: Phaser.GameObjects.Rectangle
@@ -347,6 +353,11 @@ export class ArtSelectScene extends Phaser.Scene {
       worldHeight: vh,
       roomId: ArtSelectScene.REALTIME_ROOM_ID,
     })
+    this.emojiPalette = attachEmojiPalette(this, {
+      realtime: this.villageRealtime,
+      getPlayer: () => this.player,
+      isOverlayOpen: () => this.isDialogVisible || this.isAlbumVisible,
+    })
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.clearContentStartTimer()
@@ -358,6 +369,8 @@ export class ArtSelectScene extends Phaser.Scene {
       this.input.keyboard?.off('keydown-E', this.exportObstacleRects)
       this.input.keyboard?.off('keydown-R', this.clearEditedObstacleRects)
       this.closeAlbum()
+      this.emojiPalette?.destroy()
+      this.emojiPalette = null
       this.villageRealtime?.destroy()
       this.villageRealtime = null
     })
@@ -378,6 +391,7 @@ export class ArtSelectScene extends Phaser.Scene {
     this.lastDirection = movement.lastDirection
 
     this.villageRealtime?.publishLocal(this.player, this.lastDirection, movement.moving)
+    this.emojiPalette?.update()
     this.updateRumiConversation()
 
     if (this.isDialogVisible || this.isAlbumVisible) {

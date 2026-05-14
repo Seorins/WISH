@@ -29,6 +29,12 @@ import { NpcInteractionHintUi } from '@/game/ui/npcInteractionHint'
 import { addCoverBackground } from '@/game/world/background'
 import { createRatioRectangle, isPointInRectangle } from '@/game/world/portal'
 import {
+  attachEmojiPalette,
+  attachVillageRealtime,
+  type AttachedEmojiPalette,
+  type VillageRealtimeIntegration,
+} from '@/features/village-realtime'
+import {
   createEmotionCheckinAnalysis,
   type EmotionCheckinAnalysis,
   type SelectedChoiceEvent,
@@ -218,8 +224,13 @@ function isLighthouseCloudyWeather(condition: WeatherCondition) {
 }
 
 export class LighthouseSelectScene extends Phaser.Scene {
+  /** 룸 ID — 같은 테마 select 에 들어온 환자끼리만 보이도록 (S14P31E103-794). */
+  private static readonly REALTIME_ROOM_ID = 'lighthouse.select'
+
   private player!: PlayerSprite
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys
+  private villageRealtime: VillageRealtimeIntegration | null = null
+  private emojiPalette: AttachedEmojiPalette | null = null
   private obstacles!: Phaser.Physics.Arcade.StaticGroup
   private obstacleInstances: ObstacleInstance[] = []
   private obstacleEditorDraft?: Phaser.GameObjects.Rectangle
@@ -381,6 +392,18 @@ export class LighthouseSelectScene extends Phaser.Scene {
     this.game.events.on('lighthouse-emotion:closed', this.handleLighthouseEmotionClosed, this)
     this.game.events.on('lighthouse-emotion:text', this.handleLighthouseEmotionText, this)
 
+    this.villageRealtime = attachVillageRealtime({
+      scene: this,
+      worldWidth: vw,
+      worldHeight: vh,
+      roomId: LighthouseSelectScene.REALTIME_ROOM_ID,
+    })
+    this.emojiPalette = attachEmojiPalette(this, {
+      realtime: this.villageRealtime,
+      getPlayer: () => this.player,
+      isOverlayOpen: () => this.isDialogVisible,
+    })
+
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.clearReplyTimer()
       this.input.off('pointerdown', this.handlePointerDown)
@@ -397,6 +420,10 @@ export class LighthouseSelectScene extends Phaser.Scene {
       this.game.events.off('lighthouse-emotion:closed', this.handleLighthouseEmotionClosed, this)
       this.game.events.off('lighthouse-emotion:text', this.handleLighthouseEmotionText, this)
       this.clearEngagementTimers()
+      this.emojiPalette?.destroy()
+      this.emojiPalette = null
+      this.villageRealtime?.destroy()
+      this.villageRealtime = null
     })
 
     this.cameras.main.fadeIn(250, 0, 0, 0)
@@ -427,6 +454,8 @@ export class LighthouseSelectScene extends Phaser.Scene {
     this.target = movement.target
     this.lastDirection = movement.lastDirection
 
+    this.villageRealtime?.publishLocal(this.player, this.lastDirection, movement.moving)
+    this.emojiPalette?.update()
     this.updateYoungcheolConversation()
     this.updateGamepadChoiceInput()
 
