@@ -193,8 +193,11 @@ export class QuizLobbyScene extends Phaser.Scene {
   // multi method (Step 2: 방 만들기 / 코드 입장)
 
   private showMultiMethod() {
-    if (this.state !== 'modeSelect') return
+    // 진입 경로: 멀티 버튼 클릭 / 코드 입력 취소 / 방 생성·입장 실패 복구.
+    // 가드는 lobby 진입 후 역행만 막으면 충분 — modeSelect-only 가드는 cancel/error 복구를 깨뜨려서 제거.
+    if (this.state === 'lobby' || this.state === 'leaving') return
     this.state = 'multiMethod'
+    this.tearDownLobby()
     this.drawMultiMethod()
     this.setStatus('')
   }
