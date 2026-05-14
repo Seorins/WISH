@@ -117,19 +117,28 @@ public class SecurityConfig {
                                         .requestMatchers(
                                                 HttpMethod.GET,
                                                 "/artworks/public",
-                                                "/artworks/public/**")
+                                                "/artworks/public/**",
+                                                "/photo-booths/public",
+                                                "/photo-booths/public/**")
                                         .permitAll()
-                                        // 3. /artworks/me 는 본인 작품만이라 인증 필수 (밑의 catch 보다 먼저 매칭)
-                                        .requestMatchers(HttpMethod.GET, "/artworks/me")
+                                        // 3. /me 는 본인 컨텐츠만이라 인증 필수 (밑의 catch 보다 먼저 매칭)
+                                        .requestMatchers(
+                                                HttpMethod.GET,
+                                                "/artworks/me",
+                                                "/photo-booths/me")
                                         .authenticated()
-                                        // 4. GET /artworks/{id} — 비공개 작품 보호는 service 의
-                                        //    ArtworkAccessChecker.verifyReadable 가 담당.
-                                        //    비로그인 (anonymous) 접근 허용해서 공개 작품 상세를 외부 공유 가능.
+                                        // 4. GET /artworks/{id}, /photo-booths/{id} — 비공개는 service
+                                        //    레이어 AccessChecker.verifyReadable 가 담당.
+                                        //    비로그인 (anonymous) 접근 허용해서 공개 컨텐츠 상세를 외부 공유 가능.
                                         //    숫자 ID 만 매칭하도록 정규식으로 제한 — 미래에 /artworks/something
                                         //    같은 임의 segment 가 추가돼도 의도치 않게 permitAll 에 포함되지 않음.
                                         .requestMatchers(
                                                 RegexRequestMatcher.regexMatcher(
                                                         HttpMethod.GET, "/artworks/\\d+"))
+                                        .permitAll()
+                                        .requestMatchers(
+                                                RegexRequestMatcher.regexMatcher(
+                                                        HttpMethod.GET, "/photo-booths/\\d+"))
                                         .permitAll()
                                         // 5. 마을 광장 WebSocket 핸드셰이크 — HTTP 단계는 permit.
                                         //    실제 인증은 STOMP CONNECT 프레임의 ChannelInterceptor 가 수행
