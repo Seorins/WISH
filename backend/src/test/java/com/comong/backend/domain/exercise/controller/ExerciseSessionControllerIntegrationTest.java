@@ -213,7 +213,8 @@ class ExerciseSessionControllerIntegrationTest extends IntegrationTestSupport {
                                                                 user.patientProfileId(),
                                                                 march.getId(),
                                                                 replayJsonV2(30, 67, "raw v2"),
-                                                                replayJsonV2(5, 400, "compact v2"))))
+                                                                replayJsonV2(
+                                                                        5, 400, "compact v2"))))
                         .andExpect(status().isCreated())
                         .andExpect(jsonPath("$.data.motions[0].replayAvailable").value(true))
                         .andReturn()
