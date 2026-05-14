@@ -104,9 +104,17 @@ export class NpcInteractionHintUi {
     scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.destroy())
   }
 
-  show(worldX: number, worldY: number, displayName: string) {
+  show(
+    worldX: number,
+    worldY: number,
+    displayName: string,
+    options: { badgeLabel?: string; helpMessage?: string } = {},
+  ) {
+    const badgeLabel = options.badgeLabel ?? '대화'
+    const helpMessage = options.helpMessage ?? `E 또는 Enter로 ${displayName}와 대화하기`
+    this.labelText.setText(badgeLabel)
     this.badge.setPosition(worldX, worldY - 26).setVisible(true)
-    this.helpText.setText(`E 또는 Enter로 ${displayName}와 대화하기`)
+    this.helpText.setText(helpMessage)
     this.drawHelpBar()
     this.helpBar.setVisible(true)
     this.showTutorialOnce()
