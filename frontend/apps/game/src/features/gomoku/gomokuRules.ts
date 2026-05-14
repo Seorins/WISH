@@ -4,8 +4,8 @@ export type Stone = 'black' | 'white'
 export type Cell = Stone | null
 export type Board = Cell[][]
 export type RuleSet = 'freestyle' | 'renju-lite'
-export type AiLevel = 'beginner' | 'intermediate' | 'advanced'
-export type PlayerSource = 'human' | 'ai'
+export type ComputerLevel = 'beginner' | 'intermediate' | 'advanced'
+export type PlayerSource = 'human' | 'computer'
 
 export type Position = {
   row: number
@@ -43,7 +43,7 @@ export type ForbiddenMove = {
   message: string
 }
 
-export type AiChoiceOptions = {
+export type ComputerChoiceOptions = {
   random?: () => number
 }
 
@@ -195,12 +195,12 @@ export function getAvailableMoves(board: Board): Position[] {
   return moves
 }
 
-export function chooseAiMove(
+export function chooseComputerMove(
   board: Board,
-  level: AiLevel,
-  aiStone: Stone,
+  level: ComputerLevel,
+  computerStone: Stone,
   ruleSet: RuleSet,
-  options: AiChoiceOptions = {},
+  options: ComputerChoiceOptions = {},
 ): Position | null {
   const random = options.random ?? Math.random
   const candidates = getCandidateMoves(board)
@@ -216,8 +216,8 @@ export function chooseAiMove(
     return pool[Math.floor(random() * pool.length)]
   }
 
-  const opponent = opponentOf(aiStone)
-  const immediateWin = findImmediateWinningMove(board, candidates, aiStone, ruleSet)
+  const opponent = opponentOf(computerStone)
+  const immediateWin = findImmediateWinningMove(board, candidates, computerStone, ruleSet)
   if (immediateWin) return immediateWin
 
   const immediateBlock = findImmediateWinningMove(board, candidates, opponent, ruleSet)
@@ -228,8 +228,8 @@ export function chooseAiMove(
       position,
       score:
         level === 'advanced'
-          ? scoreAdvancedMove(board, position, aiStone, ruleSet)
-          : scoreIntermediateMove(board, position, aiStone, ruleSet),
+          ? scoreAdvancedMove(board, position, computerStone, ruleSet)
+          : scoreIntermediateMove(board, position, computerStone, ruleSet),
     }))
     .sort(
       (a, b) =>
@@ -358,11 +358,16 @@ function findImmediateWinningMove(
   })
 }
 
-function scoreIntermediateMove(board: Board, position: Position, aiStone: Stone, ruleSet: RuleSet) {
-  if (detectForbiddenMove(board, position, aiStone, ruleSet)) return Number.NEGATIVE_INFINITY
+function scoreIntermediateMove(
+  board: Board,
+  position: Position,
+  computerStone: Stone,
+  ruleSet: RuleSet,
+) {
+  if (detectForbiddenMove(board, position, computerStone, ruleSet)) return Number.NEGATIVE_INFINITY
 
-  const opponent = opponentOf(aiStone)
-  const offense = scoreMoveShape(board, position, aiStone)
+  const opponent = opponentOf(computerStone)
+  const offense = scoreMoveShape(board, position, computerStone)
   const defense = board[position.row][position.col]
     ? 0
     : scoreMoveShape(board, position, opponent) * 0.86
@@ -370,20 +375,25 @@ function scoreIntermediateMove(board: Board, position: Position, aiStone: Stone,
   return offense + defense + centerBias(board, position)
 }
 
-function scoreAdvancedMove(board: Board, position: Position, aiStone: Stone, ruleSet: RuleSet) {
-  if (detectForbiddenMove(board, position, aiStone, ruleSet)) return Number.NEGATIVE_INFINITY
+function scoreAdvancedMove(
+  board: Board,
+  position: Position,
+  computerStone: Stone,
+  ruleSet: RuleSet,
+) {
+  if (detectForbiddenMove(board, position, computerStone, ruleSet)) return Number.NEGATIVE_INFINITY
 
-  const opponent = opponentOf(aiStone)
-  const nextBoard = applyMove(board, position, aiStone)
+  const opponent = opponentOf(computerStone)
+  const nextBoard = applyMove(board, position, computerStone)
   const opponentCandidates = getCandidateMoves(nextBoard)
   const opponentBestReply = Math.max(
     0,
     ...opponentCandidates.map(candidate => scoreMoveShape(nextBoard, candidate, opponent)),
   )
-  const forkBonus = countPromisingLines(nextBoard, position, aiStone) >= 2 ? 26_000 : 0
+  const forkBonus = countPromisingLines(nextBoard, position, computerStone) >= 2 ? 26_000 : 0
 
   return (
-    scoreMoveShape(board, position, aiStone) * 1.08 +
+    scoreMoveShape(board, position, computerStone) * 1.08 +
     scoreMoveShape(board, position, opponent) * 0.96 +
     forkBonus +
     centerBias(board, position) -

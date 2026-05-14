@@ -2,12 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   GOMOKU_BOARD_SIZE,
   applyMove,
-  chooseAiMove,
+  chooseComputerMove,
   deriveStatusFromMoves,
   detectForbiddenMove,
   isSamePosition,
   opponentOf,
-  type AiLevel,
+  type ComputerLevel,
   type GameStatus,
   type GomokuMove,
   type Position,
@@ -21,12 +21,12 @@ type GomokuOverlayProps = {
   onClose: () => void
 }
 
-type GameMode = 'local' | 'ai'
+type GameMode = 'local' | 'computer'
 
 const HUMAN_STONE: Stone = 'black'
-const AI_STONE: Stone = 'white'
+const COMPUTER_STONE: Stone = 'white'
 const DEFAULT_TIMER_SECONDS = 300
-const AI_THINK_DELAY_MS = 420
+const COMPUTER_THINK_DELAY_MS = 420
 
 const text = {
   title: '\uAD11\uC7A5 \uC624\uBAA9',
@@ -34,8 +34,8 @@ const text = {
   close: '\uB2EB\uAE30',
   mode: '\uB300\uC804',
   local: '2\uC778',
-  ai: 'AI',
-  aiLevel: 'AI \uB09C\uC774\uB3C4',
+  computer: '\uCEF4\uD4E8\uD130',
+  computerLevel: '\uCEF4\uD4E8\uD130 \uB09C\uC774\uB3C4',
   beginner: '\uCD08\uAE09',
   intermediate: '\uC911\uAE09',
   advanced: '\uACE0\uAE09',
@@ -54,7 +54,7 @@ const text = {
   current: '\uCC28\uB840',
   wins: '\uC2B9',
   draws: '\uBB34',
-  aiThinking: 'AI\uAC00 \uC218\uB97C \uC77D\uB294 \uC911',
+  computerThinking: '\uCEF4\uD4E8\uD130\uAC00 \uC218\uB97C \uACC4\uC0B0\uD558\uB294 \uC911',
   forbidden: '\uAE08\uC218\uC785\uB2C8\uB2E4.',
   emptyHistory: '\uC544\uC9C1 \uB450\uC5B4\uC9C4 \uC218\uAC00 \uC5C6\uC5B4\uC694.',
   blackWins: '\uD751\uC758 \uC2B9\uB9AC',
@@ -74,8 +74,8 @@ const timerOptions = [
 const starPoints = new Set(['3:3', '3:11', '7:7', '11:3', '11:11'])
 
 export function GomokuOverlay({ open, onClose }: GomokuOverlayProps) {
-  const [mode, setMode] = useState<GameMode>('ai')
-  const [aiLevel, setAiLevel] = useState<AiLevel>('intermediate')
+  const [mode, setMode] = useState<GameMode>('computer')
+  const [computerLevel, setComputerLevel] = useState<ComputerLevel>('intermediate')
   const [ruleSet, setRuleSet] = useState<RuleSet>('renju-lite')
   const [timerEnabled, setTimerEnabled] = useState(true)
   const [timerSeconds, setTimerSeconds] = useState(DEFAULT_TIMER_SECONDS)
@@ -86,7 +86,7 @@ export function GomokuOverlay({ open, onClose }: GomokuOverlayProps) {
   })
   const [statusMessage, setStatusMessage] = useState('')
   const [timeoutWinner, setTimeoutWinner] = useState<Stone | null>(null)
-  const [isAiThinking, setIsAiThinking] = useState(false)
+  const [isComputerThinking, setIsComputerThinking] = useState(false)
   const [hintMove, setHintMove] = useState<Position | null>(null)
   const [scoreboard, setScoreboard] = useState({ black: 0, white: 0, draw: 0 })
   const recordedResultRef = useRef<string | null>(null)
@@ -110,7 +110,7 @@ export function GomokuOverlay({ open, onClose }: GomokuOverlayProps) {
     setStatusMessage('')
     setTimeoutWinner(null)
     setHintMove(null)
-    setIsAiThinking(false)
+    setIsComputerThinking(false)
     recordedResultRef.current = null
   }, [timerSeconds])
 
@@ -130,7 +130,7 @@ export function GomokuOverlay({ open, onClose }: GomokuOverlayProps) {
   }, [onClose, open])
 
   useEffect(() => {
-    if (!open || !timerEnabled || effectiveStatus.phase !== 'playing' || isAiThinking) return
+    if (!open || !timerEnabled || effectiveStatus.phase !== 'playing' || isComputerThinking) return
 
     const intervalId = window.setInterval(() => {
       setTimers(previous => {
@@ -144,28 +144,33 @@ export function GomokuOverlay({ open, onClose }: GomokuOverlayProps) {
     }, 1000)
 
     return () => window.clearInterval(intervalId)
-  }, [currentTurn, effectiveStatus.phase, isAiThinking, open, timerEnabled])
+  }, [currentTurn, effectiveStatus.phase, isComputerThinking, open, timerEnabled])
 
   useEffect(() => {
-    if (!open || mode !== 'ai' || currentTurn !== AI_STONE || effectiveStatus.phase !== 'playing') {
-      setIsAiThinking(false)
+    if (
+      !open ||
+      mode !== 'computer' ||
+      currentTurn !== COMPUTER_STONE ||
+      effectiveStatus.phase !== 'playing'
+    ) {
+      setIsComputerThinking(false)
       return
     }
 
-    setIsAiThinking(true)
+    setIsComputerThinking(true)
     const timeoutId = window.setTimeout(() => {
-      const nextMove = chooseAiMove(board, aiLevel, AI_STONE, ruleSet)
+      const nextMove = chooseComputerMove(board, computerLevel, COMPUTER_STONE, ruleSet)
       setMoves(previousMoves => {
         if (!nextMove || previousMoves.length !== moves.length) return previousMoves
-        return [...previousMoves, { position: nextMove, stone: AI_STONE, source: 'ai' }]
+        return [...previousMoves, { position: nextMove, stone: COMPUTER_STONE, source: 'computer' }]
       })
       setStatusMessage('')
       setHintMove(null)
-      setIsAiThinking(false)
-    }, AI_THINK_DELAY_MS)
+      setIsComputerThinking(false)
+    }, COMPUTER_THINK_DELAY_MS)
 
     return () => window.clearTimeout(timeoutId)
-  }, [aiLevel, board, currentTurn, effectiveStatus.phase, mode, moves.length, open, ruleSet])
+  }, [board, computerLevel, currentTurn, effectiveStatus.phase, mode, moves.length, open, ruleSet])
 
   useEffect(() => {
     if (effectiveStatus.phase === 'playing') {
@@ -216,7 +221,9 @@ export function GomokuOverlay({ open, onClose }: GomokuOverlayProps) {
   }
 
   const handleUndo = () => {
-    setMoves(previous => previous.slice(0, Math.max(0, previous.length - (mode === 'ai' ? 2 : 1))))
+    setMoves(previous =>
+      previous.slice(0, Math.max(0, previous.length - (mode === 'computer' ? 2 : 1))),
+    )
     setStatusMessage('')
     setHintMove(null)
     setTimeoutWinner(null)
@@ -225,7 +232,7 @@ export function GomokuOverlay({ open, onClose }: GomokuOverlayProps) {
 
   const handleHint = () => {
     if (effectiveStatus.phase !== 'playing') return
-    const move = chooseAiMove(board, 'advanced', currentTurn, ruleSet)
+    const move = chooseComputerMove(board, 'advanced', currentTurn, ruleSet)
     setHintMove(move)
     setStatusMessage(
       move
@@ -252,7 +259,7 @@ export function GomokuOverlay({ open, onClose }: GomokuOverlayProps) {
             <StatusBanner
               status={effectiveStatus}
               currentTurn={currentTurn}
-              isAiThinking={isAiThinking}
+              isComputerThinking={isComputerThinking}
               message={statusMessage}
             />
             <div className="gomoku-board-wrap">
@@ -298,12 +305,12 @@ export function GomokuOverlay({ open, onClose }: GomokuOverlayProps) {
           <aside className="gomoku-side">
             <ControlPanel
               mode={mode}
-              aiLevel={aiLevel}
+              computerLevel={computerLevel}
               ruleSet={ruleSet}
               timerEnabled={timerEnabled}
               timerSeconds={timerSeconds}
               onModeChange={setMode}
-              onAiLevelChange={setAiLevel}
+              onComputerLevelChange={setComputerLevel}
               onRuleSetChange={setRuleSet}
               onTimerEnabledChange={setTimerEnabled}
               onTimerSecondsChange={setTimerSeconds}
@@ -339,23 +346,23 @@ export function GomokuOverlay({ open, onClose }: GomokuOverlayProps) {
 
 function ControlPanel({
   mode,
-  aiLevel,
+  computerLevel,
   ruleSet,
   timerEnabled,
   timerSeconds,
   onModeChange,
-  onAiLevelChange,
+  onComputerLevelChange,
   onRuleSetChange,
   onTimerEnabledChange,
   onTimerSecondsChange,
 }: {
   mode: GameMode
-  aiLevel: AiLevel
+  computerLevel: ComputerLevel
   ruleSet: RuleSet
   timerEnabled: boolean
   timerSeconds: number
   onModeChange: (mode: GameMode) => void
-  onAiLevelChange: (level: AiLevel) => void
+  onComputerLevelChange: (level: ComputerLevel) => void
   onRuleSetChange: (ruleSet: RuleSet) => void
   onTimerEnabledChange: (enabled: boolean) => void
   onTimerSecondsChange: (seconds: number) => void
@@ -367,10 +374,10 @@ function ControlPanel({
         <div className="gomoku-segmented">
           <button
             type="button"
-            className={mode === 'ai' ? 'active' : ''}
-            onClick={() => onModeChange('ai')}
+            className={mode === 'computer' ? 'active' : ''}
+            onClick={() => onModeChange('computer')}
           >
-            {text.ai}
+            {text.computer}
           </button>
           <button
             type="button"
@@ -383,15 +390,15 @@ function ControlPanel({
       </div>
 
       <div className="gomoku-control-group">
-        <span>{text.aiLevel}</span>
+        <span>{text.computerLevel}</span>
         <div className="gomoku-segmented">
           {(['beginner', 'intermediate', 'advanced'] as const).map(level => (
             <button
               key={level}
               type="button"
-              className={aiLevel === level ? 'active' : ''}
-              disabled={mode !== 'ai'}
-              onClick={() => onAiLevelChange(level)}
+              className={computerLevel === level ? 'active' : ''}
+              disabled={mode !== 'computer'}
+              onClick={() => onComputerLevelChange(level)}
             >
               {level === 'beginner'
                 ? text.beginner
@@ -505,19 +512,19 @@ function MatchPanel({
 function StatusBanner({
   status,
   currentTurn,
-  isAiThinking,
+  isComputerThinking,
   message,
 }: {
   status: GameStatus
   currentTurn: Stone
-  isAiThinking: boolean
+  isComputerThinking: boolean
   message: string
 }) {
   let headline: string = text.playing
   let detail: string = currentTurn === 'black' ? text.black : text.white
 
-  if (isAiThinking) {
-    detail = text.aiThinking
+  if (isComputerThinking) {
+    detail = text.computerThinking
   }
 
   if (status.phase === 'won') {

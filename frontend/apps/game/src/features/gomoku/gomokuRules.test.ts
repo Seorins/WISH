@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   applyMove,
-  chooseAiMove,
+  chooseComputerMove,
   createEmptyBoard,
   deriveStatusFromMoves,
   detectForbiddenMove,
@@ -81,7 +81,7 @@ describe('gomoku rules', () => {
   })
 })
 
-describe('gomoku AI', () => {
+describe('gomoku computer opponent', () => {
   it('chooses an immediate winning move', () => {
     const board = withStones(createEmptyBoard(), 'white', [
       { row: 5, col: 4 },
@@ -90,7 +90,7 @@ describe('gomoku AI', () => {
       { row: 5, col: 7 },
     ])
 
-    expect(chooseAiMove(board, 'advanced', 'white', 'freestyle')).toEqual({ row: 5, col: 3 })
+    expect(chooseComputerMove(board, 'advanced', 'white', 'freestyle')).toEqual({ row: 5, col: 3 })
   })
 
   it('blocks the opponent immediate win before building its own shape', () => {
@@ -101,12 +101,15 @@ describe('gomoku AI', () => {
       { row: 9, col: 7 },
     ])
 
-    expect(chooseAiMove(board, 'intermediate', 'white', 'freestyle')).toEqual({ row: 9, col: 3 })
+    expect(chooseComputerMove(board, 'intermediate', 'white', 'freestyle')).toEqual({
+      row: 9,
+      col: 3,
+    })
   })
 
   it('keeps beginner moves near the center on an empty board', () => {
     expect(
-      chooseAiMove(createEmptyBoard(), 'beginner', 'white', 'freestyle', { random: () => 0 }),
+      chooseComputerMove(createEmptyBoard(), 'beginner', 'white', 'freestyle', { random: () => 0 }),
     ).toEqual({
       row: 7,
       col: 7,
