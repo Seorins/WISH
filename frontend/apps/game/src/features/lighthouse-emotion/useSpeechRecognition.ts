@@ -112,11 +112,11 @@ export function useSpeechRecognition({
       }
       if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
         setStatus('denied')
-        setErrorMessage('마이크 권한이 필요해요.')
+        setErrorMessage('마이크를 쓸 수 있게 허락해 주세요.')
         return
       }
       setStatus('error')
-      setErrorMessage(event.message || event.error || '음성 인식 오류가 발생했어요.')
+      setErrorMessage(event.message || event.error || '말을 잘 듣지 못했어요. 다시 말해 주세요.')
     }
 
     recognition.onend = () => {

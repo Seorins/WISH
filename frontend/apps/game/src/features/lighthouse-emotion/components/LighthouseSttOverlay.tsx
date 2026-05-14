@@ -113,12 +113,12 @@ export function LighthouseSttOverlay({ visible, disabled, onSubmit }: Lighthouse
   const buttonDisabled = disabled || !supported || status === 'denied'
 
   const statusLine = !supported
-    ? '이 브라우저는 음성 인식을 지원하지 않아요.'
+    ? '여기서는 마이크로 말하기를 쓸 수 없어요.'
     : status === 'denied'
-      ? '마이크 권한을 허용한 뒤 다시 시도해줘.'
+      ? '마이크를 쓸 수 있게 허락해 주세요.'
       : isListening
-        ? '듣고 있어요... 천천히 말해도 돼.'
-        : '마이크 버튼을 누르고 한 마디 들려줘.'
+        ? '듣고 있어요. 하고 싶은 말을 말해봐!'
+        : '마이크 그림을 누르고 말해봐!'
 
   const handleClick = () => {
     if (buttonDisabled) return
@@ -130,13 +130,13 @@ export function LighthouseSttOverlay({ visible, disabled, onSubmit }: Lighthouse
   }
 
   return (
-    <div style={overlayStyle} role="group" aria-label="등대지기 음성 입력">
+    <div style={overlayStyle} role="group" aria-label="말하기">
       <div style={panelStyle}>
         <button
           type="button"
           disabled={buttonDisabled}
           aria-pressed={isListening}
-          aria-label={isListening ? '음성 입력 멈추기' : '음성 입력 시작하기'}
+          aria-label={isListening ? '말하기 멈추기' : '말하기 시작하기'}
           style={{
             ...micButtonBase,
             ...(isListening ? micButtonListening : null),
@@ -151,7 +151,7 @@ export function LighthouseSttOverlay({ visible, disabled, onSubmit }: Lighthouse
           {statusLine}
         </div>
         <div style={transcriptBoxStyle} aria-live="polite">
-          {liveText || '여기에 너의 말이 보일 거야.'}
+          {liveText || '말하면 여기에 글자로 보여요.'}
         </div>
         {errorMessage ? <div style={errorTextStyle}>{errorMessage}</div> : null}
       </div>
