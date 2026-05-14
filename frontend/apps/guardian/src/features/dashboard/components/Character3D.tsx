@@ -1,7 +1,7 @@
 import { Suspense, useCallback, useEffect, useRef, useState, type ComponentRef } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
 import { Html, OrbitControls, useAnimations, useGLTF } from '@react-three/drei'
-import { Quaternion, Vector3, type Bone, type Group } from 'three'
+import { Matrix4, MathUtils, Quaternion, Vector3, type Bone, type Group } from 'three'
 import squatGlbUrl from '@/assets/squat.glb?url'
 import walkingGlbUrl from '@/assets/walking.glb?url'
 import wishGlbUrl from '@/assets/wish.glb?url'
@@ -36,13 +36,29 @@ const RETARGET_MIN_DIRECTION_LENGTH = 0.001
 const RETARGET_UPPER_LIMB_MAX_ROTATION_RAD = Math.PI * 0.68
 const RETARGET_LOWER_LIMB_MAX_ROTATION_RAD = Math.PI * 0.78
 const TORSO_GUARD_VERTICAL_PADDING = 0.04
-const TORSO_GUARD_SIDE_MARGIN_RATIO = 0.16
-const TORSO_GUARD_FORWARD_Z = 0.14
-const ARM_IK_MAX_REACH_RATIO = 0.94
+const TORSO_GUARD_SIDE_MARGIN_RATIO = 0.1
+const TORSO_GUARD_FORWARD_Z = 0.08
+const TORSO_MIN_SHOULDER_SPAN = 0.08
+// Keep a small reach margin because replay landmarks and GLB arm length are not identical.
+const ARM_IK_MAX_REACH_RATIO = 1.15
 const ARM_IK_MIN_REACH_RATIO = 0.18
-const ARM_IK_OBSERVED_POLE_WEIGHT = 0.35
+const ARM_IK_OBSERVED_POLE_WEIGHT = 0.72
+const ARM_IK_CROSS_BODY_OBSERVED_POLE_WEIGHT = 0.45
 const ARM_IK_ELBOW_SIDE_BIAS = 0.7
-const ARM_IK_ELBOW_FORWARD_BIAS = 0.45
+const ARM_IK_ELBOW_FORWARD_BIAS = 0.18
+const UPPER_BODY_SLERP_FACTOR = 0.28
+const HEAD_RETARGET_SLERP_FACTOR = 0.24
+const SHOULDER_RETARGET_SLERP_FACTOR = 0.32
+const TORSO_MAX_YAW_RAD = Math.PI * 0.08
+const TORSO_MAX_ROLL_RAD = Math.PI * 0.06
+const TORSO_YAW_SCALE = 0.32
+const TORSO_ROLL_SCALE = 0.4
+const SHOULDER_MAX_ROTATION_RAD = Math.PI * 0.18
+const NECK_MAX_ROTATION_RAD = Math.PI * 0.14
+const HEAD_MAX_ROTATION_RAD = Math.PI * 0.12
+const LOCAL_X_AXIS = new Vector3(1, 0, 0)
+const LOCAL_Y_AXIS = new Vector3(0, 1, 0)
+const LOCAL_Z_AXIS = new Vector3(0, 0, 1)
 
 /** UpLeg 본 위치(허리 라인)를 시각적 hip(엉덩이) 라인으로 내리는 오프셋 */
 const HIP_Y_OFFSET = -0.18
@@ -177,6 +193,36 @@ const BONE_CHAINS: ReadonlyArray<{
   },
 ]
 
+const UPPER_BODY_DIRECTION_CHAINS = [
+  {
+    bone: 'LeftShoulder',
+    childBone: 'LeftArm',
+    maxRotationRad: SHOULDER_MAX_ROTATION_RAD,
+    slerpFactor: SHOULDER_RETARGET_SLERP_FACTOR,
+  },
+  {
+    bone: 'RightShoulder',
+    childBone: 'RightArm',
+    maxRotationRad: SHOULDER_MAX_ROTATION_RAD,
+    slerpFactor: SHOULDER_RETARGET_SLERP_FACTOR,
+  },
+  {
+    bone: 'neck',
+    childBone: 'Head',
+    maxRotationRad: NECK_MAX_ROTATION_RAD,
+    slerpFactor: HEAD_RETARGET_SLERP_FACTOR,
+  },
+  {
+    bone: 'Head',
+    childBone: 'headfront',
+    maxRotationRad: HEAD_MAX_ROTATION_RAD,
+    slerpFactor: HEAD_RETARGET_SLERP_FACTOR,
+  },
+] as const
+
+const UPPER_BODY_LOCAL_BONES = ['Spine', 'Spine01', 'Spine02'] as const
+const DIRECTION_REST_CHAINS = [...BONE_CHAINS, ...UPPER_BODY_DIRECTION_CHAINS]
+
 type Joint = { id: string; position: [number, number, number] }
 
 const FALLBACK_JOINTS: Joint[] = [
@@ -248,6 +294,38 @@ type ArmIkScratch = {
   rightShoulder: Vector3
   leftHip: Vector3
   rightHip: Vector3
+}
+
+type DirectionRetargetScratch = {
+  startWorld: Vector3
+  endWorld: Vector3
+  desiredDir: Vector3
+  restDir: Vector3
+  parentPosition: Vector3
+  parentRotation: Quaternion
+  parentScale: Vector3
+  parentInvRotation: Quaternion
+  delta: Quaternion
+  targetRotation: Quaternion
+}
+
+type UpperBodyScratch = {
+  leftShoulder: Vector3
+  rightShoulder: Vector3
+  leftHip: Vector3
+  rightHip: Vector3
+  nose: Vector3
+  leftEar: Vector3
+  rightEar: Vector3
+  shoulderCenter: Vector3
+  hipCenter: Vector3
+  headCenter: Vector3
+  targetStart: Vector3
+  targetEnd: Vector3
+  yawRotation: Quaternion
+  rollRotation: Quaternion
+  pitchRotation: Quaternion
+  targetRotation: Quaternion
 }
 
 function isFiniteVector3(v: Vector3): boolean {
@@ -330,7 +408,7 @@ function mutateTorsoGuardedArmPoint(
   }
 
   const shoulderSpan = Math.abs(rightShoulder.x - leftShoulder.x)
-  if (!Number.isFinite(shoulderSpan) || shoulderSpan <= RETARGET_MIN_DIRECTION_LENGTH) return
+  if (!Number.isFinite(shoulderSpan) || shoulderSpan <= TORSO_MIN_SHOULDER_SPAN) return
 
   const topY = Math.max(leftShoulder.y, rightShoulder.y) + TORSO_GUARD_VERTICAL_PADDING
   const bottomY = Math.min(leftHip.y, rightHip.y) - TORSO_GUARD_VERTICAL_PADDING
@@ -444,6 +522,9 @@ function applyArmIkTargets(
   if (observedPoleValid && scratch.observedPole.x * sideSign > 0) {
     scratch.pole.lerp(scratch.observedPole, ARM_IK_OBSERVED_POLE_WEIGHT)
     normalizeDirection(scratch.pole)
+  } else if (observedPoleValid) {
+    scratch.pole.lerp(scratch.observedPole, ARM_IK_CROSS_BODY_OBSERVED_POLE_WEIGHT)
+    normalizeDirection(scratch.pole)
   }
 
   scratch.targetElbow.copy(scratch.projectedBase).addScaledVector(scratch.pole, bendHeight)
@@ -465,6 +546,211 @@ function applyArmIkTargets(
     parentPoint.copy(scratch.targetElbow)
     childPoint.copy(scratch.targetWrist)
   }
+}
+
+function retargetBoneFromPoints(
+  bone: Bone | undefined,
+  restQuat: Quaternion | undefined,
+  restParentDir: Vector3 | undefined,
+  groupMatrix: Matrix4,
+  startPoint: Vector3,
+  endPoint: Vector3,
+  maxRotationRad: number,
+  slerpFactor: number,
+  scratch: DirectionRetargetScratch,
+): boolean {
+  if (!bone || !restQuat || !restParentDir || !bone.parent) return false
+  const parent = bone.parent
+
+  scratch.startWorld.copy(startPoint).applyMatrix4(groupMatrix)
+  scratch.endWorld.copy(endPoint).applyMatrix4(groupMatrix)
+  scratch.desiredDir.copy(scratch.endWorld).sub(scratch.startWorld)
+  if (!normalizeDirection(scratch.desiredDir)) return false
+
+  parent.updateWorldMatrix(true, false)
+  parent.matrixWorld.decompose(scratch.parentPosition, scratch.parentRotation, scratch.parentScale)
+  scratch.parentInvRotation.copy(scratch.parentRotation).invert()
+  scratch.desiredDir.applyQuaternion(scratch.parentInvRotation)
+  if (!normalizeDirection(scratch.desiredDir)) return false
+
+  scratch.restDir.copy(restParentDir)
+  if (!normalizeDirection(scratch.restDir)) return false
+  limitDirectionFromRest(scratch.restDir, scratch.desiredDir, maxRotationRad)
+  scratch.delta.setFromUnitVectors(scratch.restDir, scratch.desiredDir)
+  scratch.targetRotation.copy(scratch.delta).multiply(restQuat)
+  bone.quaternion.slerp(scratch.targetRotation, slerpFactor)
+  return true
+}
+
+function slerpBoneLocalRotation(
+  bone: Bone | undefined,
+  restQuat: Quaternion | undefined,
+  yawRad: number,
+  rollRad: number,
+  pitchRad: number,
+  slerpFactor: number,
+  scratch: UpperBodyScratch,
+): boolean {
+  if (!bone || !restQuat) return false
+
+  scratch.yawRotation.setFromAxisAngle(LOCAL_Y_AXIS, yawRad)
+  scratch.rollRotation.setFromAxisAngle(LOCAL_Z_AXIS, rollRad)
+  scratch.pitchRotation.setFromAxisAngle(LOCAL_X_AXIS, pitchRad)
+  scratch.targetRotation
+    .copy(restQuat)
+    .multiply(scratch.yawRotation)
+    .multiply(scratch.rollRotation)
+    .multiply(scratch.pitchRotation)
+  bone.quaternion.slerp(scratch.targetRotation, slerpFactor)
+  return true
+}
+
+function applyUpperBodyRetargeting(
+  frame: MotionFrame,
+  clip: MotionClip,
+  bones: Map<string, Bone>,
+  restQuats: Map<string, Quaternion>,
+  restParentDirs: Map<string, Vector3>,
+  groupMatrix: Matrix4,
+  upperScratch: UpperBodyScratch,
+  directionScratch: DirectionRetargetScratch,
+): boolean {
+  if (
+    !tryReadRetargetKp(frame, clip, 'LEFT_SHOULDER', upperScratch.leftShoulder) ||
+    !tryReadRetargetKp(frame, clip, 'RIGHT_SHOULDER', upperScratch.rightShoulder) ||
+    !tryReadRetargetKp(frame, clip, 'LEFT_HIP', upperScratch.leftHip) ||
+    !tryReadRetargetKp(frame, clip, 'RIGHT_HIP', upperScratch.rightHip)
+  ) {
+    return false
+  }
+
+  const shoulderSpan = upperScratch.leftShoulder.distanceTo(upperScratch.rightShoulder)
+  if (!Number.isFinite(shoulderSpan) || shoulderSpan <= TORSO_MIN_SHOULDER_SPAN) {
+    return false
+  }
+
+  upperScratch.shoulderCenter
+    .copy(upperScratch.leftShoulder)
+    .add(upperScratch.rightShoulder)
+    .multiplyScalar(0.5)
+  upperScratch.hipCenter.copy(upperScratch.leftHip).add(upperScratch.rightHip).multiplyScalar(0.5)
+
+  const yaw = MathUtils.clamp(
+    ((upperScratch.rightShoulder.z - upperScratch.leftShoulder.z) / shoulderSpan) * TORSO_YAW_SCALE,
+    -TORSO_MAX_YAW_RAD,
+    TORSO_MAX_YAW_RAD,
+  )
+  const roll = MathUtils.clamp(
+    Math.atan2(upperScratch.rightShoulder.y - upperScratch.leftShoulder.y, shoulderSpan) *
+      TORSO_ROLL_SCALE,
+    -TORSO_MAX_ROLL_RAD,
+    TORSO_MAX_ROLL_RAD,
+  )
+
+  let didRetarget = false
+  didRetarget =
+    slerpBoneLocalRotation(
+      bones.get('Spine'),
+      restQuats.get('Spine'),
+      yaw * 0.2,
+      roll * 0.2,
+      0,
+      UPPER_BODY_SLERP_FACTOR,
+      upperScratch,
+    ) || didRetarget
+  didRetarget =
+    slerpBoneLocalRotation(
+      bones.get('Spine01'),
+      restQuats.get('Spine01'),
+      yaw * 0.35,
+      roll * 0.3,
+      0,
+      UPPER_BODY_SLERP_FACTOR,
+      upperScratch,
+    ) || didRetarget
+  didRetarget =
+    slerpBoneLocalRotation(
+      bones.get('Spine02'),
+      restQuats.get('Spine02'),
+      yaw * 0.45,
+      roll * 0.4,
+      0,
+      UPPER_BODY_SLERP_FACTOR,
+      upperScratch,
+    ) || didRetarget
+
+  upperScratch.targetStart.copy(upperScratch.shoulderCenter)
+  upperScratch.targetEnd.copy(upperScratch.leftShoulder)
+  didRetarget =
+    retargetBoneFromPoints(
+      bones.get('LeftShoulder'),
+      restQuats.get('LeftShoulder'),
+      restParentDirs.get('LeftShoulder'),
+      groupMatrix,
+      upperScratch.targetStart,
+      upperScratch.targetEnd,
+      SHOULDER_MAX_ROTATION_RAD,
+      SHOULDER_RETARGET_SLERP_FACTOR,
+      directionScratch,
+    ) || didRetarget
+
+  upperScratch.targetEnd.copy(upperScratch.rightShoulder)
+  didRetarget =
+    retargetBoneFromPoints(
+      bones.get('RightShoulder'),
+      restQuats.get('RightShoulder'),
+      restParentDirs.get('RightShoulder'),
+      groupMatrix,
+      upperScratch.targetStart,
+      upperScratch.targetEnd,
+      SHOULDER_MAX_ROTATION_RAD,
+      SHOULDER_RETARGET_SLERP_FACTOR,
+      directionScratch,
+    ) || didRetarget
+
+  const hasNose = tryReadRetargetKp(frame, clip, 'NOSE', upperScratch.nose)
+  const hasLeftEar = tryReadRetargetKp(frame, clip, 'LEFT_EAR', upperScratch.leftEar)
+  const hasRightEar = tryReadRetargetKp(frame, clip, 'RIGHT_EAR', upperScratch.rightEar)
+  if (hasLeftEar && hasRightEar) {
+    upperScratch.headCenter
+      .copy(upperScratch.leftEar)
+      .add(upperScratch.rightEar)
+      .multiplyScalar(0.5)
+  } else if (hasNose) {
+    upperScratch.headCenter.copy(upperScratch.nose)
+  } else {
+    return didRetarget
+  }
+
+  didRetarget =
+    retargetBoneFromPoints(
+      bones.get('neck'),
+      restQuats.get('neck'),
+      restParentDirs.get('neck'),
+      groupMatrix,
+      upperScratch.shoulderCenter,
+      upperScratch.headCenter,
+      NECK_MAX_ROTATION_RAD,
+      HEAD_RETARGET_SLERP_FACTOR,
+      directionScratch,
+    ) || didRetarget
+
+  if (hasNose && hasLeftEar && hasRightEar) {
+    didRetarget =
+      retargetBoneFromPoints(
+        bones.get('Head'),
+        restQuats.get('Head'),
+        restParentDirs.get('Head'),
+        groupMatrix,
+        upperScratch.headCenter,
+        upperScratch.nose,
+        HEAD_MAX_ROTATION_RAD,
+        HEAD_RETARGET_SLERP_FACTOR,
+        directionScratch,
+      ) || didRetarget
+  }
+
+  return didRetarget
 }
 
 function classifyBone(rawName: string): string | null {
@@ -569,6 +855,36 @@ function CharacterModel({
   const tmpParentRot = useRef(new Quaternion())
   const tmpParentInvRot = useRef(new Quaternion())
   const tmpTargetRot = useRef(new Quaternion())
+  const upperBodyScratch = useRef<UpperBodyScratch>({
+    leftShoulder: new Vector3(),
+    rightShoulder: new Vector3(),
+    leftHip: new Vector3(),
+    rightHip: new Vector3(),
+    nose: new Vector3(),
+    leftEar: new Vector3(),
+    rightEar: new Vector3(),
+    shoulderCenter: new Vector3(),
+    hipCenter: new Vector3(),
+    headCenter: new Vector3(),
+    targetStart: new Vector3(),
+    targetEnd: new Vector3(),
+    yawRotation: new Quaternion(),
+    rollRotation: new Quaternion(),
+    pitchRotation: new Quaternion(),
+    targetRotation: new Quaternion(),
+  })
+  const directionRetargetScratch = useRef<DirectionRetargetScratch>({
+    startWorld: new Vector3(),
+    endWorld: new Vector3(),
+    desiredDir: new Vector3(),
+    restDir: new Vector3(),
+    parentPosition: new Vector3(),
+    parentRotation: new Quaternion(),
+    parentScale: new Vector3(),
+    parentInvRotation: new Quaternion(),
+    delta: new Quaternion(),
+    targetRotation: new Quaternion(),
+  })
   const armIkScratch = useRef<ArmIkScratch>({
     shoulder: new Vector3(),
     elbow: new Vector3(),
@@ -599,7 +915,11 @@ function CharacterModel({
 
     const restQuats = new Map<string, Quaternion>()
     const restParentDirs = new Map<string, Vector3>()
-    for (const c of BONE_CHAINS) {
+    for (const boneName of UPPER_BODY_LOCAL_BONES) {
+      const bone = bones.get(boneName)
+      if (bone) restQuats.set(boneName, bone.quaternion.clone())
+    }
+    for (const c of DIRECTION_REST_CHAINS) {
       const bone = bones.get(c.bone)
       const childBone = bones.get(c.childBone)
       if (bone) restQuats.set(c.bone, bone.quaternion.clone())
@@ -727,11 +1047,27 @@ function CharacterModel({
     let didRetarget = false
     const updatedParentIds = updatedParentIdsRef.current
     updatedParentIds.clear()
+    if (
+      applyUpperBodyRetargeting(
+        frame,
+        activeMotion,
+        bonesRef.current,
+        restQuatsRef.current,
+        restParentDirsRef.current,
+        groupMatrix,
+        upperBodyScratch.current,
+        directionRetargetScratch.current,
+      )
+    ) {
+      g.updateWorldMatrix(false, true)
+      didRetarget = true
+    }
     for (const c of BONE_CHAINS) {
       const bone = bonesRef.current.get(c.bone)
       const restQuat = restQuatsRef.current.get(c.bone)
       const restParentDir = restParentDirsRef.current.get(c.bone)
       if (!bone || !restQuat || !restParentDir || !bone.parent) continue
+      const parent = bone.parent
 
       // 1. rest quaternion으로 일단 복원 후 matrixWorld 갱신 → rest world direction 측정
       if (
@@ -769,16 +1105,12 @@ function CharacterModel({
       tmpDesiredDir.current.copy(tmpKpCWorld.current).sub(tmpKpPWorld.current)
       if (!normalizeDirection(tmpDesiredDir.current)) continue
 
-      const parentId = bone.parent.uuid
+      const parentId = parent.uuid
       if (!updatedParentIds.has(parentId)) {
-        bone.parent.updateWorldMatrix(true, false)
+        parent.updateWorldMatrix(true, false)
         updatedParentIds.add(parentId)
       }
-      bone.parent.matrixWorld.decompose(
-        tmpBonePos.current,
-        tmpParentRot.current,
-        tmpChildPos.current,
-      )
+      parent.matrixWorld.decompose(tmpBonePos.current, tmpParentRot.current, tmpChildPos.current)
       tmpParentInvRot.current.copy(tmpParentRot.current).invert()
       tmpDesiredDir.current.applyQuaternion(tmpParentInvRot.current)
       if (!normalizeDirection(tmpDesiredDir.current)) continue
