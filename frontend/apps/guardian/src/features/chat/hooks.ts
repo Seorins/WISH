@@ -1,6 +1,8 @@
 import { useQueries, useQuery } from '@tanstack/react-query'
 import {
+  getGuardianDialogueDailySummary,
   getGuardianDialogueSession,
+  getGuardianDialogueWeeklyTrend,
   listGuardianDialogueSessions,
   type GuardianDialogueNpc,
   type GuardianDialogueSessionMeta,
@@ -9,6 +11,8 @@ import { deriveDominantTone, type EmotionTone } from './adapters'
 
 export const GUARDIAN_DIALOGUE_SESSIONS_QUERY_KEY = 'guardian-dialogue-sessions'
 export const GUARDIAN_DIALOGUE_SESSION_QUERY_KEY = 'guardian-dialogue-session'
+export const GUARDIAN_DIALOGUE_DAILY_SUMMARY_QUERY_KEY = 'guardian-dialogue-daily-summary'
+export const GUARDIAN_DIALOGUE_WEEKLY_TREND_QUERY_KEY = 'guardian-dialogue-weekly-trend'
 
 type SessionsParams = {
   patientProfileId: number | null | undefined
@@ -130,4 +134,32 @@ export function useGuardianDialogueNpcTones(
     out[npc] = detail ? deriveDominantTone(detail.turns) : null
   })
   return out
+}
+
+/**
+ * 보호자 화면의 *오늘 종합 요약*. B4 API.
+ *
+ * 점수가 아니라 valence 분포 + 정성 요약 + 시그널 + 만난 NPC.
+ */
+export function useGuardianDialogueDailySummary(
+  patientProfileId: number | null | undefined,
+  date?: string,
+) {
+  return useQuery({
+    queryKey: [GUARDIAN_DIALOGUE_DAILY_SUMMARY_QUERY_KEY, patientProfileId, date ?? null],
+    queryFn: () => getGuardianDialogueDailySummary(patientProfileId!, date),
+    enabled: typeof patientProfileId === 'number' && patientProfileId > 0,
+  })
+}
+
+/** 보호자 화면의 *주간 응답 톤 변화*. {@code endDate} 포함 7일치 긍정+보통 비율 %. */
+export function useGuardianDialogueWeeklyTrend(
+  patientProfileId: number | null | undefined,
+  endDate?: string,
+) {
+  return useQuery({
+    queryKey: [GUARDIAN_DIALOGUE_WEEKLY_TREND_QUERY_KEY, patientProfileId, endDate ?? null],
+    queryFn: () => getGuardianDialogueWeeklyTrend(patientProfileId!, endDate),
+    enabled: typeof patientProfileId === 'number' && patientProfileId > 0,
+  })
 }

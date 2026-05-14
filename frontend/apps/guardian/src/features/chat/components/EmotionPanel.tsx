@@ -85,6 +85,8 @@ type Props = {
   shares: EmotionShare[]
   trend: EmotionTrendPoint[]
   signals: EmotionSignal[]
+  /** BE daily summary 의 정성 요약 문단. 있으면 최상단 카드로 표시. */
+  summaryText?: string | null
   summarySample?: boolean
   trendSample?: boolean
   signalsSample?: boolean
@@ -99,12 +101,29 @@ export function EmotionPanel({
   shares,
   trend,
   signals,
+  summaryText,
   summarySample = false,
   trendSample = false,
   signalsSample = false,
 }: Props) {
   return (
     <div className={styles.stack}>
+      {summaryText ? (
+        <div className={styles.card}>
+          <h3 className={styles.cardTitle}>오늘의 관찰</h3>
+          <p
+            style={{
+              margin: 0,
+              fontSize: 13,
+              lineHeight: 1.6,
+              color: '#445064',
+              whiteSpace: 'pre-line',
+            }}
+          >
+            {summaryText}
+          </p>
+        </div>
+      ) : null}
       <div className={styles.card}>
         <h3 className={styles.cardTitle}>오늘의 응답 톤 {summarySample && <SampleBadge />}</h3>
         <div className={styles.summaryRow}>

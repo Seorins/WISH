@@ -85,3 +85,79 @@ export async function getGuardianDialogueSession(patientProfileId: number, sessi
   )
   return response.data
 }
+
+// ===== Daily / Weekly summary (S14P31E103-813 / B4) =====
+
+export type GuardianDialogueValenceDistribution = {
+  positive: number
+  neutral: number
+  negative: number
+}
+
+export type GuardianDialogueSignalKind = 'CONCERN' | 'PROTECTIVE'
+
+export type GuardianDialogueSignal = {
+  kind: GuardianDialogueSignalKind
+  flag: string
+  label: string
+  npc: string
+}
+
+export type GuardianNpcVisited = {
+  npcName: string
+  displayName: string
+  scriptTitle: string | null
+  sessionCount: number
+}
+
+export type GuardianDialogueDailySummary = {
+  date: string
+  summaryText: string
+  valenceDistribution: GuardianDialogueValenceDistribution
+  signals: GuardianDialogueSignal[]
+  topics: string[]
+  npcsVisited: GuardianNpcVisited[]
+  sessionCount: number
+}
+
+export type GuardianDialogueWeeklyTrendPoint = {
+  date: string
+  positiveNeutralPercent: number | null
+  sessionCount: number
+}
+
+export type GuardianDialogueWeeklyTrend = {
+  points: GuardianDialogueWeeklyTrendPoint[]
+}
+
+/**
+ * 보호자 페이지의 "오늘 종합" 요약. 점수 미제공 — 응답 톤 분포(긍정/보통/부정 카운트) + 정성 요약 + 시그널 + 만난 NPC.
+ *
+ * @param date 조회 일자 (YYYY-MM-DD, KST). 미지정 시 오늘.
+ */
+export async function getGuardianDialogueDailySummary(
+  patientProfileId: number,
+  date?: string,
+): Promise<GuardianDialogueDailySummary> {
+  const response = await apiClient.get<ApiResponse<GuardianDialogueDailySummary>>(
+    `/guardian/patients/${patientProfileId}/dialogue/summary/daily`,
+    { params: date ? { date } : {} },
+  )
+  return response.data.data
+}
+
+/**
+ * 보호자 페이지의 주간 응답 톤 변화. {@code endDate} 포함 직전 7일치 *긍정+보통 비율 %* — 점수가 아님.
+ *
+ * @param endDate 마지막 일자 (YYYY-MM-DD, KST). 미지정 시 오늘.
+ */
+export async function getGuardianDialogueWeeklyTrend(
+  patientProfileId: number,
+  endDate?: string,
+): Promise<GuardianDialogueWeeklyTrend> {
+  const response = await apiClient.get<ApiResponse<GuardianDialogueWeeklyTrend>>(
+    `/guardian/patients/${patientProfileId}/dialogue/summary/weekly`,
+    { params: endDate ? { endDate } : {} },
+  )
+  return response.data.data
+}

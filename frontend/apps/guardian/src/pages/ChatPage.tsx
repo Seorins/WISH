@@ -23,12 +23,23 @@ import {
 } from '@/features/chat/adapters'
 import {
   pickFirstFinished,
+  useGuardianDialogueDailySummary,
   useGuardianDialogueNpcTones,
   useGuardianDialogueSession,
   useGuardianDialogueSessions,
+  useGuardianDialogueWeeklyTrend,
 } from '@/features/chat/hooks'
-import type { GuardianDialogueNpc } from '@wish/api-client'
-import type { EmotionTone } from '@/features/chat/data/mock'
+import type {
+  GuardianDialogueNpc,
+  GuardianDialogueSignal,
+  GuardianDialogueWeeklyTrendPoint,
+} from '@wish/api-client'
+import type {
+  EmotionShare,
+  EmotionSignal,
+  EmotionTone,
+  EmotionTrendPoint,
+} from '@/features/chat/data/mock'
 import { useMyPatient } from '@/features/auth/hooks/useMyPatient'
 import '@/features/dashboard/tokens.css'
 
@@ -75,19 +86,81 @@ export function ChatPage() {
     [detailQuery.data],
   )
 
+  // B4: 오른쪽 패널의 데이터 소스를 *오늘 종합* daily summary + weekly trend 로.
+  // 왼쪽 (채팅 미리보기·주제) 은 세션별 상세 그대로.
+  const dailySummaryQuery = useGuardianDialogueDailySummary(patientProfileId)
+  const weeklyTrendQuery = useGuardianDialogueWeeklyTrend(patientProfileId)
+
   const hasRealSession = !!derived && derived.messages.length > 0
   const isEmptyForLoggedIn =
     !!patientProfileId && sessionsQuery.isSuccess && !latestFinishedMeta && !pickedSessionId
 
   const messages = hasRealSession ? derived!.messages : isEmptyForLoggedIn ? [] : MESSAGES
-  const trend = hasRealSession ? derived!.trend : EMOTION_TREND
-  const signals = hasRealSession ? derived!.signals : EMOTION_SIGNALS
   const topics = hasRealSession ? derived!.topics : SUMMARY.topics
-  const shares = hasRealSession ? derived!.shares : EMOTION_SHARES
-  // 점수 = 안정 비율 (보호적 신호 / 전체 감정 신호). 신호가 없으면 mock 점수로 fallback.
-  const todayScore = hasRealSession
-    ? (shares.find(s => s.tone === 'calm')?.percent ?? 0)
-    : TODAY_SCORE
+
+  const hasDailySummary = !!dailySummaryQuery.data && dailySummaryQuery.data.sessionCount > 0
+  const dailySummary = dailySummaryQuery.data
+  const weeklyTrend = weeklyTrendQuery.data
+
+  // 오른쪽 패널 props 를 daily/weekly 응답에서 derive
+  const shares: EmotionShare[] =
+    hasDailySummary && dailySummary
+      ? (() => {
+          const v = dailySummary.valenceDistribution
+          const total = v.positive + v.neutral + v.negative
+          if (total === 0) {
+            return [
+              { tone: 'calm', label: '긍정', percent: 0 },
+              { tone: 'tired', label: '보통', percent: 0 },
+              { tone: 'worried', label: '부정', percent: 0 },
+            ]
+          }
+          const pos = Math.round((v.positive / total) * 100)
+          const neg = Math.round((v.negative / total) * 100)
+          const neu = 100 - pos - neg
+          return [
+            { tone: 'calm', label: '긍정', percent: pos },
+            { tone: 'tired', label: '보통', percent: neu },
+            { tone: 'worried', label: '부정', percent: neg },
+          ]
+        })()
+      : hasRealSession
+        ? derived!.shares
+        : EMOTION_SHARES
+
+  const signals: EmotionSignal[] =
+    hasDailySummary && dailySummary
+      ? dailySummary.signals.map((s: GuardianDialogueSignal, idx: number) => ({
+          id: `${s.kind}:${s.flag}:${idx}`,
+          tone: s.kind === 'CONCERN' ? 'worried' : 'calm',
+          title: s.label,
+          description: `${s.npc}와의 대화에서`,
+        }))
+      : hasRealSession
+        ? derived!.signals
+        : EMOTION_SIGNALS
+
+  const trend: EmotionTrendPoint[] =
+    hasDailySummary && weeklyTrend
+      ? weeklyTrend.points.map((p: GuardianDialogueWeeklyTrendPoint) => ({
+          label: p.date.slice(5), // MM-DD
+          score: p.positiveNeutralPercent ?? 0,
+        }))
+      : hasRealSession
+        ? derived!.trend
+        : EMOTION_TREND
+
+  // 큰 숫자 = 긍정+보통 비율 (%) — 점수가 아닌 분포.
+  const todayScore =
+    hasDailySummary && dailySummary
+      ? (() => {
+          const v = dailySummary.valenceDistribution
+          const total = v.positive + v.neutral + v.negative
+          return total === 0 ? 0 : Math.round(((v.positive + v.neutral) / total) * 100)
+        })()
+      : hasRealSession
+        ? (shares.find(s => s.tone === 'calm')?.percent ?? 0)
+        : TODAY_SCORE
 
   const whenLabel = activeMeta
     ? formatWhenLabel(activeMeta.startedAt)
@@ -100,10 +173,10 @@ export function ChatPage() {
       ? undefined
       : SESSION_META.durationLabel
 
-  const trendSample = !hasRealSession
-  const signalsSample = !hasRealSession
+  const trendSample = !hasDailySummary && !hasRealSession
+  const signalsSample = !hasDailySummary && !hasRealSession
   const topicsSample = !hasRealSession
-  const summarySample = !hasRealSession
+  const summarySample = !hasDailySummary && !hasRealSession
 
   const handleSelectCharacter = (id: string) => {
     setSelectedId(id)
@@ -147,6 +220,7 @@ export function ChatPage() {
             shares={shares}
             trend={trend}
             signals={signals}
+            summaryText={hasDailySummary ? (dailySummary?.summaryText ?? null) : null}
             summarySample={summarySample}
             trendSample={trendSample}
             signalsSample={signalsSample}
