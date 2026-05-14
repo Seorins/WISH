@@ -15,10 +15,12 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.comong.backend.domain.exercise.dto.ExerciseMotionMovementAnalysisResponse;
 import com.comong.backend.domain.exercise.dto.ExerciseMotionReplayResponse;
 import com.comong.backend.domain.exercise.dto.ExerciseSessionResponse;
 import com.comong.backend.domain.exercise.dto.ExerciseSessionSaveRequest;
 import com.comong.backend.domain.exercise.dto.ExerciseSessionSummaryResponse;
+import com.comong.backend.domain.exercise.service.ExerciseMotionAnalysisService;
 import com.comong.backend.domain.exercise.service.ExerciseSessionService;
 import com.comong.backend.global.common.response.ApiResponse;
 import com.comong.backend.global.security.JwtTokenProvider.AuthenticatedUser;
@@ -36,6 +38,7 @@ import lombok.RequiredArgsConstructor;
 public class ExerciseSessionController {
 
     private final ExerciseSessionService exerciseSessionService;
+    private final ExerciseMotionAnalysisService exerciseMotionAnalysisService;
 
     @Operation(
             summary = "체조 세션 기록 목록 조회",
@@ -122,6 +125,22 @@ public class ExerciseSessionController {
         return ResponseEntity.ok(
                 ApiResponse.success(
                         exerciseSessionService.findMotionReplay(
+                                currentUser.userId(), motionResultId)));
+    }
+
+    @Operation(
+            summary = "Exercise motion movement analysis",
+            description =
+                    "Returns confidence-filtered joint movement range analysis from stored pose replay data.")
+    @GetMapping("/motions/{motionResultId}/movement-analysis")
+    public ResponseEntity<ApiResponse<ExerciseMotionMovementAnalysisResponse>> movementAnalysis(
+            @AuthenticationPrincipal AuthenticatedUser currentUser,
+            @Parameter(description = "Saved exercise session motion result ID", required = true)
+                    @PathVariable
+                    Long motionResultId) {
+        return ResponseEntity.ok(
+                ApiResponse.success(
+                        exerciseMotionAnalysisService.findMovementAnalysis(
                                 currentUser.userId(), motionResultId)));
     }
 }
