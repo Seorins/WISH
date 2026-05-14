@@ -42,6 +42,18 @@ export {
   validateCreateExerciseSessionRequest,
 } from './exercise-sessions'
 export {
+  createGomokuRoom,
+  getGomokuRanking,
+  getGomokuRoom,
+  getMyGomokuMatches,
+  getMyGomokuStats,
+  getWaitingGomokuRooms,
+  joinGomokuRoom,
+  leaveGomokuRoom,
+  playGomokuMove,
+  resignGomokuRoom,
+} from './gomoku'
+export {
   getChartRanking,
   getChartStats,
   getMusicResult,
@@ -183,6 +195,25 @@ export type {
   MotionReplayLandmarkTuple,
   MotionReplaySegment,
 } from './exercise-sessions'
+export type {
+  GomokuEndReason,
+  GomokuMatchPage,
+  GomokuMatchResult,
+  GomokuMatchStatus,
+  GomokuMatchSummary,
+  GomokuMoveRecord,
+  GomokuMoveRequest,
+  GomokuPageParams,
+  GomokuPlayer,
+  GomokuRanking,
+  GomokuRankingEntry,
+  GomokuRoom,
+  GomokuRoomCreateRequest,
+  GomokuRoomPage,
+  GomokuRuleSet,
+  GomokuStats,
+  GomokuStone,
+} from './gomoku'
 export type {
   ChartStats,
   GetMyMusicResultsParams,
