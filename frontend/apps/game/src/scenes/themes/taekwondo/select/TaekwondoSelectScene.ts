@@ -32,7 +32,12 @@ import {
 } from '@/game/ui/simpleDialog'
 import { addCoverBackground } from '@/game/world/background'
 import { createRatioRectangle, isPointInRectangle } from '@/game/world/portal'
-import { attachVillageRealtime, type VillageRealtimeIntegration } from '@/features/village-realtime'
+import {
+  attachEmojiPalette,
+  attachVillageRealtime,
+  type AttachedEmojiPalette,
+  type VillageRealtimeIntegration,
+} from '@/features/village-realtime'
 import { seokjaeSelectDialogs } from '../dialog/seokjaeDialogs'
 
 const TAEKWONDO_SPRITE_FRAME = { width: 384, height: 512 }
@@ -98,6 +103,7 @@ export class TaekwondoSelectScene extends Phaser.Scene {
 
   private player!: PlayerSprite
   private villageRealtime: VillageRealtimeIntegration | null = null
+  private emojiPalette: AttachedEmojiPalette | null = null
   private seokjaeNpc!: Phaser.GameObjects.Sprite
   private obstacles!: Phaser.Physics.Arcade.StaticGroup
   private obstacleInstances: ObstacleInstance[] = []
@@ -233,6 +239,11 @@ export class TaekwondoSelectScene extends Phaser.Scene {
       worldHeight: vh,
       roomId: TaekwondoSelectScene.REALTIME_ROOM_ID,
     })
+    this.emojiPalette = attachEmojiPalette(this, {
+      realtime: this.villageRealtime,
+      getPlayer: () => this.player,
+      isOverlayOpen: () => this.isDialogVisible,
+    })
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.isSceneShuttingDown = true
@@ -245,6 +256,8 @@ export class TaekwondoSelectScene extends Phaser.Scene {
       this.input.keyboard?.off('keydown-R', this.clearEditedObstacleRects)
       this.randomPoseTimer?.remove(false)
       this.randomPoseTimer = undefined
+      this.emojiPalette?.destroy()
+      this.emojiPalette = null
       this.villageRealtime?.destroy()
       this.villageRealtime = null
     })
@@ -457,6 +470,7 @@ export class TaekwondoSelectScene extends Phaser.Scene {
     this.lastDirection = movement.lastDirection
 
     this.villageRealtime?.publishLocal(this.player, this.lastDirection, movement.moving)
+    this.emojiPalette?.update()
     this.updateSeokjaeTalkIcon()
     this.updateSeokjaeConversation()
 

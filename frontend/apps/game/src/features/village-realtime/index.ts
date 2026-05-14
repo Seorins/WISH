@@ -9,6 +9,8 @@ export { emitEmoteBubble } from './emoteBubble'
 export type { EmoteBubbleTarget } from './emoteBubble'
 export { createVillageEmojiPalette } from './villageEmojiPalette'
 export type { VillageEmojiPaletteHandle } from './villageEmojiPalette'
+export { attachEmojiPalette } from './attachEmojiPalette'
+export type { AttachedEmojiPalette } from './attachEmojiPalette'
 export type {
   EmotePacket,
   PlayerDirection,
