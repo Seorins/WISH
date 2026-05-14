@@ -8,7 +8,8 @@ import {
   LIGHTHOUSE_OPENING_WELCOME_LINES,
   useLighthouseEmotionSession,
 } from '../useLighthouseEmotionSession'
-import type { EmotionChoiceViewModel, LighthouseDialogueStatus } from '../types'
+import type { LighthouseDialogueStatus } from '../types'
+import { LighthouseSttOverlay } from './LighthouseSttOverlay'
 
 type LighthouseEmotionControllerProps = {
   patientProfileId: number
@@ -59,22 +60,6 @@ function getVisibleLines({
   return currentSceneQuestion ? [currentSceneQuestion] : []
 }
 
-function getVisibleChoices(
-  sceneChoices: EmotionChoiceViewModel[],
-  secondaryAction: EmotionChoiceViewModel | null,
-) {
-  const visibleChoices = sceneChoices.slice(0, 3)
-
-  if (
-    secondaryAction &&
-    !visibleChoices.some(choice => choice.choiceIntentId === secondaryAction.choiceIntentId)
-  ) {
-    visibleChoices.push(secondaryAction)
-  }
-
-  return visibleChoices
-}
-
 export function LighthouseEmotionController({
   patientProfileId,
   isOpen,
@@ -88,12 +73,10 @@ export function LighthouseEmotionController({
       : resolvedPatientProfileId
   const hasValidPatientProfileId =
     Number.isInteger(effectivePatientProfileId) && (effectivePatientProfileId ?? 0) > 0
-  const { state, start, advance, selectChoice, cancel, close, reset } = useLighthouseEmotionSession(
-    {
-      patientProfileId: effectivePatientProfileId ?? 0,
-      onFinished: onClose,
-    },
-  )
+  const { state, start, advance, cancel, close, reset } = useLighthouseEmotionSession({
+    patientProfileId: effectivePatientProfileId ?? 0,
+    onFinished: onClose,
+  })
 
   useEffect(() => {
     if (!isOpen) {
@@ -144,36 +127,42 @@ export function LighthouseEmotionController({
 
   if (!isOpen) return null
 
-  const showChoices =
+  const isAwaitingUserInput =
     (state.status === 'entry_question' || state.status === 'waiting_choice') &&
     state.currentScene !== null
-  const visibleChoices = showChoices
-    ? getVisibleChoices(
-        state.currentScene?.choices ?? [],
-        state.currentScene?.secondaryAction ?? null,
-      )
-    : []
   const canAdvance =
     state.status === 'opening_welcome' ||
     state.status === 'opening_safe_line' ||
     state.status === 'waiting_final_close'
 
+  const handleSttSubmit = (transcript: string) => {
+    if (import.meta.env.DEV) {
+      console.info('[lighthouse-stt] transcript captured', transcript)
+    }
+  }
+
   return (
-    <DialogueLayer
-      isOpen={isOpen}
-      displayName={LIGHTHOUSE_IDENTITY.displayName}
-      visibleLines={visibleLines}
-      choices={visibleChoices}
-      showChoices={showChoices && !loading}
-      selectedChoiceId={state.selectedChoiceIntentId}
-      loading={loading}
-      loadingText={LIGHTHOUSE_LOADING_LINE}
-      footerAction={null}
-      showFrame={false}
-      onSelectChoice={choice => void selectChoice(choice)}
-      onAdvance={canAdvance ? advance : undefined}
-      onClose={close}
-      onCancel={cancel}
-    />
+    <>
+      <DialogueLayer
+        isOpen={isOpen}
+        displayName={LIGHTHOUSE_IDENTITY.displayName}
+        visibleLines={visibleLines}
+        choices={[]}
+        showChoices={false}
+        selectedChoiceId={state.selectedChoiceIntentId}
+        loading={loading}
+        loadingText={LIGHTHOUSE_LOADING_LINE}
+        footerAction={null}
+        showFrame={false}
+        onAdvance={canAdvance ? advance : undefined}
+        onClose={close}
+        onCancel={cancel}
+      />
+      <LighthouseSttOverlay
+        visible={isAwaitingUserInput && !loading}
+        disabled={loading}
+        onSubmit={handleSttSubmit}
+      />
+    </>
   )
 }
