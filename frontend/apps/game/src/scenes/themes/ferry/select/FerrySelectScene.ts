@@ -17,6 +17,12 @@ import { getGameWeather } from '@/features/weather/weatherStore'
 import type { WeatherCondition } from '@/features/weather/types'
 import { addCoverBackground } from '@/game/world/background'
 import { createRatioRectangle, getRectangleEntryState } from '@/game/world/portal'
+import {
+  attachEmojiPalette,
+  attachVillageRealtime,
+  type AttachedEmojiPalette,
+  type VillageRealtimeIntegration,
+} from '@/features/village-realtime'
 
 const FERRY_BACKGROUND_KEY = 'ferry-background'
 const FERRY_CLOUDY_BACKGROUND_KEY = 'ferry-background-cloudy'
@@ -115,8 +121,13 @@ function isFerryCloudyWeather(condition: WeatherCondition) {
 }
 
 export class FerrySelectScene extends Phaser.Scene {
+  /** 룸 ID — 같은 테마 select 에 들어온 환자끼리만 보이도록 (S14P31E103-794). */
+  private static readonly REALTIME_ROOM_ID = 'ferry.select'
+
   private player!: PlayerSprite
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys
+  private villageRealtime: VillageRealtimeIntegration | null = null
+  private emojiPalette: AttachedEmojiPalette | null = null
   private target: Phaser.Math.Vector2 | null = null
   private lastDirection: PlayerDirection = 'down'
   private exitPortal!: Phaser.Geom.Rectangle
@@ -186,6 +197,19 @@ export class FerrySelectScene extends Phaser.Scene {
     this.input.keyboard!.on('keydown-E', this.exportObstacleRects)
     this.input.keyboard!.on('keydown-R', this.clearEditedObstacleRects)
     this.input.mouse?.disableContextMenu()
+
+    this.villageRealtime = attachVillageRealtime({
+      scene: this,
+      worldWidth: vw,
+      worldHeight: vh,
+      roomId: FerrySelectScene.REALTIME_ROOM_ID,
+    })
+    this.emojiPalette = attachEmojiPalette(this, {
+      realtime: this.villageRealtime,
+      getPlayer: () => this.player,
+      isOverlayOpen: () => this.isTransitioning,
+    })
+
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.input.off('pointerdown', this.handlePointerDown)
       this.input.off('pointermove', this.handleObstacleEditorPointerMove)
@@ -193,6 +217,10 @@ export class FerrySelectScene extends Phaser.Scene {
       this.input.keyboard?.off('keydown-E', this.exportObstacleRects)
       this.input.keyboard?.off('keydown-R', this.clearEditedObstacleRects)
       this.fuelPanel = undefined
+      this.emojiPalette?.destroy()
+      this.emojiPalette = null
+      this.villageRealtime?.destroy()
+      this.villageRealtime = null
     })
 
     this.createFuelPanel(vw, vh)
@@ -225,6 +253,9 @@ export class FerrySelectScene extends Phaser.Scene {
     })
     this.target = movement.target
     this.lastDirection = movement.lastDirection
+
+    this.villageRealtime?.publishLocal(this.player, this.lastDirection, movement.moving)
+    this.emojiPalette?.update()
 
     const exitState = getRectangleEntryState(
       this.exitPortal,
