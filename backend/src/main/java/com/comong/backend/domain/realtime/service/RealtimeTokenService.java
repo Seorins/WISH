@@ -11,7 +11,6 @@ import com.comong.backend.domain.realtime.dto.LiveKitTokenResponse;
 import com.comong.backend.domain.realtime.exception.RealtimeErrorCode;
 import com.comong.backend.domain.realtime.service.RealtimeContentStateService.ContentState;
 import com.comong.backend.domain.usage.entity.LoginSession;
-import com.comong.backend.domain.usage.service.LoginSessionService;
 import com.comong.backend.global.exception.BusinessException;
 
 import io.livekit.server.AccessToken;
@@ -34,26 +33,18 @@ public class RealtimeTokenService {
     private static final long TOKEN_TTL_MILLIS = TOKEN_TTL_SECONDS * 1000;
     private static final List<String> GUARDIAN_PUBLISH_SOURCES = List.of("microphone");
 
-    private final LoginSessionService loginSessionService;
+    private final RealtimeLoginSessionAccessService sessionAccessService;
     private final LiveKitProperties liveKitProperties;
     private final RealtimeContentStateService realtimeContentStateService;
 
     public LiveKitTokenResponse issueGameToken(Long userId, Long loginSessionId) {
-        LoginSession session = findActiveOwnedSession(userId, loginSessionId);
+        LoginSession session = sessionAccessService.findActiveOwnedSession(userId, loginSessionId);
         return issueToken(gameTokenCommand(session));
     }
 
     public LiveKitTokenResponse issueGuardianToken(Long userId, Long loginSessionId) {
-        LoginSession session = findActiveOwnedSession(userId, loginSessionId);
+        LoginSession session = sessionAccessService.findActiveOwnedSession(userId, loginSessionId);
         return issueToken(guardianTokenCommand(userId, session));
-    }
-
-    private LoginSession findActiveOwnedSession(Long userId, Long loginSessionId) {
-        LoginSession session = loginSessionService.findOwnedOrThrow(userId, loginSessionId);
-        if (session.isEnded()) {
-            throw new BusinessException(RealtimeErrorCode.LOGIN_SESSION_ALREADY_ENDED);
-        }
-        return session;
     }
 
     private LiveKitTokenResponse issueToken(TokenIssueCommand command) {
