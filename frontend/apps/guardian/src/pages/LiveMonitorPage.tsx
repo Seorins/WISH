@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { subscribeWatching } from '@wish/api-client'
+import { getActiveLiveSession, subscribeWatching } from '@wish/api-client'
 import { HeaderBar } from '@/features/dashboard/components/HeaderBar'
 import { LiveKitViewer } from '@/features/realtime'
 import { useRealtimeStore } from '@/stores/realtimeStore'
@@ -7,15 +7,18 @@ import '@/features/dashboard/tokens.css'
 import styles from './LiveMonitorPage.module.css'
 
 type WatchingStatus = 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'hidden' | 'error'
+type SnapshotStatus = 'checking' | 'ready' | 'error'
 
 const WATCHING_RETRY_DELAY_MS = 1_000
 
 export function LiveMonitorPage() {
   const activeSession = useRealtimeStore(state => state.activeSession)
+  const hydrateActiveSession = useRealtimeStore(state => state.hydrateActiveSession)
   const activeSessionId = activeSession?.loginSessionId ?? null
   const [connectionRequested, setConnectionRequested] = useState(false)
   const [watchingOpened, setWatchingOpened] = useState(false)
   const [watchingStatus, setWatchingStatus] = useState<WatchingStatus>('idle')
+  const [snapshotStatus, setSnapshotStatus] = useState<SnapshotStatus>('checking')
   const [pageVisible, setPageVisible] = useState(() => document.visibilityState === 'visible')
 
   useEffect(() => {
@@ -37,6 +40,38 @@ export function LiveMonitorPage() {
       document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
   }, [])
+
+  useEffect(() => {
+    if (!pageVisible) {
+      setSnapshotStatus('ready')
+      return
+    }
+
+    const controller = new AbortController()
+    let cancelled = false
+    const expectedSessionVersion = useRealtimeStore.getState().sessionVersion
+    setSnapshotStatus('checking')
+
+    const hydrateSnapshot = async () => {
+      try {
+        const snapshot = await getActiveLiveSession({ signal: controller.signal })
+        if (cancelled) return
+        hydrateActiveSession(snapshot, expectedSessionVersion)
+        setSnapshotStatus('ready')
+      } catch (error) {
+        if (cancelled || controller.signal.aborted) return
+        console.warn('Active live session snapshot failed', error)
+        setSnapshotStatus('error')
+      }
+    }
+
+    void hydrateSnapshot()
+
+    return () => {
+      cancelled = true
+      controller.abort()
+    }
+  }, [hydrateActiveSession, pageVisible])
 
   useEffect(() => {
     setConnectionRequested(false)
@@ -178,6 +213,11 @@ export function LiveMonitorPage() {
               </section>
             )}
           </div>
+        ) : snapshotStatus === 'checking' ? (
+          <section className={styles.placeholder}>
+            <h1 className={styles.title}>진행 중인 게임을 확인하고 있습니다.</h1>
+            <p className={styles.subtitle}>잠시 후 실시간 연결 상태가 표시됩니다.</p>
+          </section>
         ) : (
           <section className={styles.placeholder}>
             <h1 className={styles.title}>진행 중인 게임이 없습니다.</h1>

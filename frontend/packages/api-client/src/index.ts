@@ -70,6 +70,7 @@ export { createPatientProfile, listPatientProfiles } from './patient-profiles'
 export { endLoginSession, heartbeatLoginSession, startLoginSession } from './login-sessions'
 export {
   endContent,
+  getActiveLiveSession,
   requestGameLivekitToken,
   requestGuardianLivekitToken,
   startContent,
@@ -241,6 +242,7 @@ export type {
 export type { Gender, PatientProfile, PatientProfileCreateRequest } from './patient-profiles'
 export type { LoginSession, LoginSessionStartRequest } from './login-sessions'
 export type {
+  ActiveLiveSessionResponse,
   GamePresenceEvent,
   LiveKitTokenResponse,
   RealtimeContentType,
