@@ -221,6 +221,7 @@ export function ChatPage() {
             trend={trend}
             signals={signals}
             summaryText={hasDailySummary ? (dailySummary?.summaryText ?? null) : null}
+            npcsVisited={hasDailySummary ? (dailySummary?.npcsVisited ?? null) : null}
             summarySample={summarySample}
             trendSample={trendSample}
             signalsSample={signalsSample}
