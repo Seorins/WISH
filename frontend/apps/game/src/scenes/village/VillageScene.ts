@@ -45,6 +45,7 @@ import {
 import { VillageObstacleManager } from './villageObstacles'
 
 const NPC_DIALOG_DISTANCE = 28
+const PHOTO_BOOTH_INTERACT_DISTANCE = 40
 const DIALOG_TEXT_BOX = { x: 585, y: 260, width: 1230, height: 250 }
 const DIALOG_NAME_BOX = { x: 490, y: 130, width: 350, height: 72 }
 const DIALOG_PORTRAIT_BOX = { x: 120, y: 100, width: 320, height: 400 }
@@ -58,6 +59,13 @@ const VILLAGE_SHIP = {
   xRatio: 0.5,
   yRatio: 0.92,
   scale: 0.22,
+} as const
+const VILLAGE_PHOTO_BOOTH_KEY = 'village-photo-booth'
+const VILLAGE_PHOTO_BOOTH_PATH = 'images/village/objects/photo.png'
+const VILLAGE_PHOTO_BOOTH = {
+  xRatio: 0.515,
+  yRatio: 0.31,
+  scale: 0.145,
 } as const
 const DEFAULT_PLAYER_SPAWN = { xRatio: 0.5, yRatio: 0.3 }
 const MAP_TILE_ROWS = 3
@@ -153,6 +161,8 @@ export class VillageScene extends Phaser.Scene {
   private obstacles!: Phaser.Physics.Arcade.StaticGroup
   private obstacleManager?: VillageObstacleManager
   private sehyunNpc!: Phaser.GameObjects.Sprite
+  private photoBooth?: Phaser.GameObjects.Image
+  private isPhotoBoothInRange = false
   private dialogs = new Map<VillagerNpcId, SimpleDialogUi>()
   private villageNpcs: VillageNpcInstance[] = []
   private portalCooldownUntil = 0
@@ -189,6 +199,7 @@ export class VillageScene extends Phaser.Scene {
     this.load.image(SEHYUN_NPC.portraitKey, assetPath(SEHYUN_NPC.portraitPath))
     this.load.image(VILLAGE_DIALOG_FRAME_KEY, assetPath(VILLAGE_DIALOG_FRAME_PATH))
     this.load.image(VILLAGE_SHIP_KEY, assetPath(VILLAGE_SHIP_PATH))
+    this.load.image(VILLAGE_PHOTO_BOOTH_KEY, assetPath(VILLAGE_PHOTO_BOOTH_PATH))
     this.load.image('profile', assetPath('images/common/profile.png'))
     this.load.image('menu-frame', assetPath('images/ui/buttons/meunframe.png'))
     this.load.image('setting-frame', assetPath('images/ui/buttons/settingframe.png'))
@@ -280,6 +291,30 @@ export class VillageScene extends Phaser.Scene {
       .setOrigin(0.5, 1)
       .setScale(VILLAGE_SHIP.scale)
       .setDepth(3)
+
+    this.photoBooth = this.add
+      .image(
+        VILLAGE_PHOTO_BOOTH.xRatio * W,
+        VILLAGE_PHOTO_BOOTH.yRatio * H,
+        VILLAGE_PHOTO_BOOTH_KEY,
+      )
+      .setOrigin(0.5, 1)
+      .setScale(VILLAGE_PHOTO_BOOTH.scale)
+      .setDepth(3)
+      .setInteractive({ useHandCursor: true })
+    this.photoBooth.on(
+      'pointerdown',
+      (
+        _pointer: Phaser.Input.Pointer,
+        _localX: number,
+        _localY: number,
+        event: Phaser.Types.Input.EventData,
+      ) => {
+        event.stopPropagation()
+        this.enterPhotoBoothScene()
+      },
+    )
+    this.isPhotoBoothInRange = false
 
     ensurePlayerWalkAnimations(this)
 
@@ -486,8 +521,21 @@ export class VillageScene extends Phaser.Scene {
     this.emojiHint?.setVisible(!paletteVisible && !overlaysOpen)
 
     const nearestNpc = this.getNearestNpcInTalkDistance()
-    this.nearestNpcId = nearestNpc?.id ?? null
-    this.updateInteractionHint(nearestNpc)
+    const photoBoothDistance = this.getPhotoBoothDistance()
+    const npcDistance = nearestNpc
+      ? Phaser.Math.Distance.Between(
+          this.player.x,
+          this.player.y,
+          nearestNpc.object.x,
+          nearestNpc.object.y,
+        )
+      : Number.POSITIVE_INFINITY
+    const photoBoothInRange = photoBoothDistance < PHOTO_BOOTH_INTERACT_DISTANCE
+    const photoBoothCloser = photoBoothInRange && photoBoothDistance < npcDistance
+
+    this.nearestNpcId = photoBoothCloser ? null : (nearestNpc?.id ?? null)
+    this.isPhotoBoothInRange = photoBoothCloser
+    this.updateInteractionHint(photoBoothCloser ? null : nearestNpc)
 
     if (!nearestNpc) {
       this.dialogDismissed = false
@@ -517,6 +565,11 @@ export class VillageScene extends Phaser.Scene {
 
   private readonly handleNpcInteract = (event?: KeyboardEvent) => {
     if (!this.isVillagerDialogueOpen && !this.settingsMenu.isOpen() && !this.dialogDismissed) {
+      if (this.isPhotoBoothInRange) {
+        event?.preventDefault()
+        this.enterPhotoBoothScene()
+        return
+      }
       if (this.nearestNpcId) {
         event?.preventDefault()
         this.tryOpenNpcDialogue(this.nearestNpcId)
@@ -702,7 +755,22 @@ export class VillageScene extends Phaser.Scene {
   }
 
   private updateInteractionHint(nearestNpc: VillageNpcInstance | null) {
-    if (!nearestNpc || this.isVillagerDialogueOpen || this.settingsMenu.isOpen()) {
+    if (this.isVillagerDialogueOpen || this.settingsMenu.isOpen()) {
+      this.interactionHint.hide()
+      return
+    }
+
+    if (this.isPhotoBoothInRange && this.photoBooth) {
+      this.interactionHint.show(
+        this.photoBooth.x,
+        this.photoBooth.y - this.photoBooth.displayHeight,
+        '포토부스',
+        { badgeLabel: '사진', helpMessage: 'E 또는 Enter로 사진 찍기' },
+      )
+      return
+    }
+
+    if (!nearestNpc) {
       this.interactionHint.hide()
       return
     }
@@ -712,6 +780,29 @@ export class VillageScene extends Phaser.Scene {
       nearestNpc.object.y - nearestNpc.object.displayHeight,
       villageDialogues[nearestNpc.id].displayName,
     )
+  }
+
+  private getPhotoBoothDistance() {
+    if (!this.photoBooth) {
+      return Number.POSITIVE_INFINITY
+    }
+    return Phaser.Math.Distance.Between(
+      this.player.x,
+      this.player.y,
+      this.photoBooth.x,
+      this.photoBooth.y,
+    )
+  }
+
+  private enterPhotoBoothScene() {
+    if (this.isTransitioning) return
+    this.isTransitioning = true
+    this.target = null
+    this.player.setVelocity(0, 0)
+    if (this.isVillagerDialogueOpen) {
+      this.hideDialog(false)
+    }
+    fadeToScene(this, 'PhotoBoothFrameSelectScene', { duration: 250 })
   }
 
   private getActiveDialog() {
