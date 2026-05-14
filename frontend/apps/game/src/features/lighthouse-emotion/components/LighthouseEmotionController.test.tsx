@@ -75,7 +75,7 @@ describe('LighthouseEmotionController', () => {
     expect(onTextChange).toHaveBeenCalledWith(
       '어서 와, 기다리고 있었단다.\n우리만의 작은 등대에 온 걸 환영해.',
     )
-    expect(screen.queryByRole('group', { name: '등대지기 음성 입력' })).toBeNull()
+    expect(screen.queryByRole('group', { name: '말하기' })).toBeNull()
   })
 
   it('renders the STT overlay once the entry question is shown', async () => {
@@ -107,7 +107,7 @@ describe('LighthouseEmotionController', () => {
     await advanceOpeningToEntry()
 
     expect(onTextChange).toHaveBeenCalledWith('오늘은 어떻게 지내고 싶니?')
-    expect(screen.getByRole('group', { name: '등대지기 음성 입력' })).toBeTruthy()
+    expect(screen.getByRole('group', { name: '말하기' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: '쉬고 싶어요' })).toBeNull()
   })
 
@@ -129,6 +129,6 @@ describe('LighthouseEmotionController', () => {
     await flushPromises()
 
     expect(onTextChange).toHaveBeenCalled()
-    expect(screen.queryByRole('group', { name: '등대지기 음성 입력' })).toBeNull()
+    expect(screen.queryByRole('group', { name: '말하기' })).toBeNull()
   })
 })
