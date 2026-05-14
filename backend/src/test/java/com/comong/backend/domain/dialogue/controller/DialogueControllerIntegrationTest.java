@@ -91,48 +91,53 @@ class DialogueControllerIntegrationTest extends IntegrationTestSupport {
     // ===== 마을 주민 (FE-driven) — 세션 lifecycle =====
 
     @Test
-    @DisplayName("마을 주민 세션 시작 — scene 필드 null (FE 가 자체 스크립트로 진행)")
-    void createSession_villager_returnsNullScene() throws Exception {
+    @DisplayName("마을 주민(SEORIN) 세션 시작 — BE catalog 의 first scene 반환")
+    void createSession_villager_returnsCatalogScene() throws Exception {
         TestUser user = setupUserWithProfile("villager-create@example.com", "villager-create");
 
         mockMvc.perform(
                         post("/dialogue/sessions")
                                 .header("Authorization", "Bearer " + user.token())
                                 .contentType(MediaType.APPLICATION_JSON)
-                                .content(startBody(user.patientProfileId(), "JOEUN")))
+                                .content(startBody(user.patientProfileId(), "SEORIN")))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.code").value("SUCCESS"))
                 .andExpect(jsonPath("$.data.sessionId").isNumber())
                 .andExpect(jsonPath("$.data.status").value("IN_PROGRESS"))
-                // scene 은 null → @JsonInclude(NON_NULL) 로 응답에서 omit
-                .andExpect(jsonPath("$.data.scene").doesNotExist());
+                // 카탈로그 첫 화면이 내려간다 (questionText + 3 choices)
+                .andExpect(jsonPath("$.data.scene.questionText").exists())
+                .andExpect(jsonPath("$.data.scene.choices.length()").value(3))
+                .andExpect(jsonPath("$.data.scene.generatedBy").value("NPC_SCRIPT"))
+                .andExpect(jsonPath("$.data.scene.shouldEndSession").value(false));
 
         assertThat(dialogueSessionRepository.count()).isEqualTo(1);
     }
 
     @Test
-    @DisplayName("마을 주민 turn 제출 — raw 데이터 적재 + nextScene null (FE 자체 라우팅)")
-    void submitTurn_villager_persistsTurnAndReturnsNullNextScene() throws Exception {
+    @DisplayName("마을 주민 turn 제출 — catalog 룩업 + nextScene 반환")
+    void submitTurn_villager_persistsAndReturnsCatalogNextScene() throws Exception {
         TestUser user = setupUserWithProfile("villager-turn@example.com", "villager-turn");
-        long sessionId = startSession(user, "JOEUN");
+        long sessionId = startSession(user, "SEORIN");
 
+        // catalog 의 코몽-1 entry → "mky_inj_fear" → "주사" 분기 next node 로 진행
         mockMvc.perform(
                         post("/dialogue/sessions/{id}/turns", sessionId)
                                 .header("Authorization", "Bearer " + user.token())
                                 .contentType(MediaType.APPLICATION_JSON)
-                                .content(turnBody("오늘 몸은 어떠니?", "hard_body", "몸이 힘들어요", 3)))
+                                .content(turnBody("오늘 좀 무서운 거 있어?", "mky_inj_fear", "주사가 무서워요", 0)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.nextScene").doesNotExist());
+                .andExpect(jsonPath("$.data.nextScene").exists())
+                .andExpect(jsonPath("$.data.nextScene.shouldEndSession").value(false))
+                .andExpect(jsonPath("$.data.nextScene.generatedBy").value("NPC_SCRIPT"));
 
         assertThat(dialogueTurnRepository.count()).isEqualTo(1);
-        // FE 가 보낸 raw 데이터가 그대로 적재되었는지 generatedBy 로 확인 (NPC_SCRIPT)
     }
 
     @Test
-    @DisplayName("마을 주민 finish — closingLines null (FE 가 자체 마무리 대사)")
+    @DisplayName("마을 주민 finish — closingLines null (ending scene 에서 이미 전달됨)")
     void finish_villager_returnsNullClosingLines() throws Exception {
         TestUser user = setupUserWithProfile("villager-finish@example.com", "villager-finish");
-        long sessionId = startSession(user, "DAIN");
+        long sessionId = startSession(user, "SEORIN");
 
         mockMvc.perform(
                         post("/dialogue/sessions/{id}/finish", sessionId)
@@ -336,11 +341,13 @@ class DialogueControllerIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
-    @DisplayName("마을 주민: FE 값 그대로 저장 (BE catalog 미적용)")
-    void submitTurn_villager_keepsFeProvidedMetadata() throws Exception {
+    @DisplayName("마을 주민: BE catalog 메타가 적재 (FE 가 보낸 임의 값은 무시)")
+    void submitTurn_villager_appliesCatalogMetadata() throws Exception {
         TestUser user = setupUserWithProfile("villager-meta@example.com", "villager-meta");
-        long sessionId = startSession(user, "JOEUN");
+        long sessionId = startSession(user, "SEORIN");
 
+        // FE 가 의도적으로 다른 값을 보내도 BE catalog 의 값으로 적재되어야 함
+        // catalog 의 mky_inj_fear: intensity=3, concernFlags=[procedure_fear, pain_concern]
         mockMvc.perform(
                         post("/dialogue/sessions/{id}/turns", sessionId)
                                 .header("Authorization", "Bearer " + user.token())
@@ -348,13 +355,13 @@ class DialogueControllerIntegrationTest extends IntegrationTestSupport {
                                 .content(
                                         """
                                         {
-                                          "questionText": "오늘 몸은 어때?",
+                                          "questionText": "오늘 좀 무서운 거 있어?",
                                           "selectedChoice": {
-                                            "choiceIntentId": "nurse_body_tired",
-                                            "text": "조금 피곤해요",
-                                            "intensity": 2,
-                                            "concernFlags": ["fatigue_present"],
-                                            "protectiveFactors": ["body_state_named"]
+                                            "choiceIntentId": "mky_inj_fear",
+                                            "text": "FE 가 보낸 거짓 텍스트",
+                                            "intensity": 0,
+                                            "concernFlags": ["fe_fake_flag"],
+                                            "protectiveFactors": ["fe_fake_protective"]
                                           }
                                         }
                                         """))
@@ -367,11 +374,11 @@ class DialogueControllerIntegrationTest extends IntegrationTestSupport {
                                         sessionId)
                                 .header("Authorization", "Bearer " + user.token()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.turns[0].choiceIntentId").value("nurse_body_tired"))
-                .andExpect(jsonPath("$.data.turns[0].intensity").value(2))
-                .andExpect(jsonPath("$.data.turns[0].concernFlags[0]").value("fatigue_present"))
-                .andExpect(
-                        jsonPath("$.data.turns[0].protectiveFactors[0]").value("body_state_named"));
+                .andExpect(jsonPath("$.data.turns[0].choiceIntentId").value("mky_inj_fear"))
+                // catalog 값으로 override
+                .andExpect(jsonPath("$.data.turns[0].intensity").value(3))
+                .andExpect(jsonPath("$.data.turns[0].concernFlags[0]").value("procedure_fear"))
+                .andExpect(jsonPath("$.data.turns[0].concernFlags[1]").value("pain_concern"));
     }
 
     @Test

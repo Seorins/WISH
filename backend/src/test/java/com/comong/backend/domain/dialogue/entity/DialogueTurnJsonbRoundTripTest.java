@@ -14,6 +14,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.comong.backend.domain.dialogue.catalog.model.ChoiceTone;
+import com.comong.backend.domain.dialogue.catalog.model.ChoiceValence;
+import com.comong.backend.domain.dialogue.catalog.model.SentimentTone;
+import com.comong.backend.domain.dialogue.catalog.model.SentimentWord;
 import com.comong.backend.domain.dialogue.repository.DialogueSessionRepository;
 import com.comong.backend.domain.dialogue.repository.DialogueTurnRepository;
 import com.comong.backend.domain.patient.entity.Gender;
@@ -124,6 +128,43 @@ class DialogueTurnJsonbRoundTripTest extends IntegrationTestSupport {
         assertThat(loaded.getProtectiveFactors()).containsExactly("z", "y", "x");
     }
 
+    @Test
+    @DisplayName(
+            "V31 catalog 메타 — valence/tone enum + topicKeywords/sentimentWords JSONB round-trip")
+    void v31CatalogMetadataRoundTrip() {
+        Long turnId =
+                saveTurnWithCatalogMetadata(
+                        ChoiceValence.NEGATIVE,
+                        ChoiceTone.WORRIED,
+                        List.of("주사", "손잡기"),
+                        List.of(
+                                new SentimentWord("무서워요", SentimentTone.NEGATIVE),
+                                new SentimentWord("든든해요", SentimentTone.POSITIVE)));
+
+        DialogueTurn loaded = reloadFromDb(turnId);
+
+        assertThat(loaded.getValence()).isEqualTo(ChoiceValence.NEGATIVE);
+        assertThat(loaded.getTone()).isEqualTo(ChoiceTone.WORRIED);
+        assertThat(loaded.getTopicKeywords()).containsExactly("주사", "손잡기");
+        assertThat(loaded.getSentimentWords()).hasSize(2);
+        assertThat(loaded.getSentimentWords().get(0).phrase()).isEqualTo("무서워요");
+        assertThat(loaded.getSentimentWords().get(0).tone()).isEqualTo(SentimentTone.NEGATIVE);
+    }
+
+    @Test
+    @DisplayName("V31 catalog 메타 — valence/tone null 허용 (legacy turn 호환)")
+    void v31CatalogMetadataNullableForLegacy() {
+        Long turnId = saveTurn(List.of(), List.of());
+
+        DialogueTurn loaded = reloadFromDb(turnId);
+
+        assertThat(loaded.getValence()).isNull();
+        assertThat(loaded.getTone()).isNull();
+        // 빈 JSONB 가 빈 List 로 회복
+        assertThat(loaded.getTopicKeywords()).isEmpty();
+        assertThat(loaded.getSentimentWords()).isEmpty();
+    }
+
     private Long saveTurn(List<String> concernFlags, List<String> protectiveFactors) {
         DialogueTurn turn =
                 DialogueTurn.builder()
@@ -135,6 +176,31 @@ class DialogueTurnJsonbRoundTripTest extends IntegrationTestSupport {
                         .intensity((short) 0)
                         .concernFlags(concernFlags)
                         .protectiveFactors(protectiveFactors)
+                        .generatedBy(DialogueTurnGeneratedBy.NPC_SCRIPT)
+                        .build();
+        DialogueTurn saved = dialogueTurnRepository.save(turn);
+        return saved.getId();
+    }
+
+    private Long saveTurnWithCatalogMetadata(
+            ChoiceValence valence,
+            ChoiceTone tone,
+            List<String> topicKeywords,
+            List<SentimentWord> sentimentWords) {
+        DialogueTurn turn =
+                DialogueTurn.builder()
+                        .session(session)
+                        .stepIndex(0)
+                        .questionText("오늘 좀 무서운 거 있어?")
+                        .choiceIntentId("mky_inj_fear")
+                        .choiceText("주사가 무서워요")
+                        .intensity((short) 3)
+                        .concernFlags(List.of("procedure_fear", "pain_concern"))
+                        .protectiveFactors(List.of("can_name_fear", "emotion_named"))
+                        .valence(valence)
+                        .tone(tone)
+                        .topicKeywords(topicKeywords)
+                        .sentimentWords(sentimentWords)
                         .generatedBy(DialogueTurnGeneratedBy.NPC_SCRIPT)
                         .build();
         DialogueTurn saved = dialogueTurnRepository.save(turn);

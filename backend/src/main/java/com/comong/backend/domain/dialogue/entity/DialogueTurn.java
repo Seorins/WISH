@@ -21,6 +21,10 @@ import jakarta.persistence.UniqueConstraint;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
+import com.comong.backend.domain.dialogue.catalog.model.ChoiceTone;
+import com.comong.backend.domain.dialogue.catalog.model.ChoiceValence;
+import com.comong.backend.domain.dialogue.catalog.model.SentimentWord;
+
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -29,8 +33,9 @@ import lombok.NoArgsConstructor;
 /**
  * 대화 세션 내 한 턴(질문 + 아이의 선택).
  *
- * <p>FE 가 choice 정의에 박은 {@code intensity} / {@code concernFlags} / {@code protectiveFactors} 를 그대로
- * 받아 적재한다. 태그의 의미 해석은 BE 가 하지 않으며, 향후 LLM 보고서 시점에 turns 의 raw 데이터를 read 하여 처리한다.
+ * <p>BE 카탈로그(JSON) 기반으로 채워지는 메타 ({@code valence}, {@code tone}, {@code topicKeywords}, {@code
+ * sentimentWords}) 는 V31 이후 신규 turn 에 적재된다. V21 시점의 기존 turn 은 valence/tone 이 null 일 수 있다 (마이그레이션
+ * backfill 안 함 — 카탈로그가 갖춰지지 않은 시점의 데이터라).
  */
 @Entity
 @Getter
@@ -75,6 +80,22 @@ public class DialogueTurn {
     private List<String> protectiveFactors;
 
     @Enumerated(EnumType.STRING)
+    @Column(name = "valence", length = 16)
+    private ChoiceValence valence;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "tone", length = 16)
+    private ChoiceTone tone;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "topic_keywords", nullable = false, columnDefinition = "jsonb")
+    private List<String> topicKeywords;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "sentiment_words", nullable = false, columnDefinition = "jsonb")
+    private List<SentimentWord> sentimentWords;
+
+    @Enumerated(EnumType.STRING)
     @Column(name = "generated_by", nullable = false, length = 16)
     private DialogueTurnGeneratedBy generatedBy;
 
@@ -91,6 +112,10 @@ public class DialogueTurn {
             short intensity,
             List<String> concernFlags,
             List<String> protectiveFactors,
+            ChoiceValence valence,
+            ChoiceTone tone,
+            List<String> topicKeywords,
+            List<SentimentWord> sentimentWords,
             DialogueTurnGeneratedBy generatedBy) {
         this.session = Objects.requireNonNull(session, "session must not be null");
         if (stepIndex < 0) {
@@ -106,6 +131,10 @@ public class DialogueTurn {
         this.concernFlags = Objects.requireNonNull(concernFlags, "concernFlags must not be null");
         this.protectiveFactors =
                 Objects.requireNonNull(protectiveFactors, "protectiveFactors must not be null");
+        this.topicKeywords = topicKeywords == null ? List.of() : List.copyOf(topicKeywords);
+        this.sentimentWords = sentimentWords == null ? List.of() : List.copyOf(sentimentWords);
+        this.valence = valence;
+        this.tone = tone;
         this.generatedBy = Objects.requireNonNull(generatedBy, "generatedBy must not be null");
         this.stepIndex = stepIndex;
         this.intensity = intensity;
