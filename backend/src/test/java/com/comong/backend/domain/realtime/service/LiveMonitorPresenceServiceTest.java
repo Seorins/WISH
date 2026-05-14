@@ -33,6 +33,17 @@ class LiveMonitorPresenceServiceTest {
     }
 
     @Test
+    void watchingSubscribe_sendsInitialOpenSignal() {
+        ManualDelayScheduler scheduler = new ManualDelayScheduler();
+        TestLiveMonitorPresenceService service = new TestLiveMonitorPresenceService(scheduler);
+
+        service.subscribeWatching(1L, 10L);
+
+        TestSseEmitter watchingEmitter = service.createdEmitters().get(0);
+        assertThat(watchingEmitter.openSignalCount()).isEqualTo(1);
+    }
+
+    @Test
     void firstWatcherJoin_pushesWatcherCountImmediately() {
         ManualDelayScheduler scheduler = new ManualDelayScheduler();
         TestLiveMonitorPresenceService service = new TestLiveMonitorPresenceService(scheduler);
@@ -131,6 +142,11 @@ class LiveMonitorPresenceServiceTest {
             ((TestSseEmitter) emitter).record(event);
         }
 
+        @Override
+        void sendWatchingOpenEvent(SseEmitter emitter) {
+            ((TestSseEmitter) emitter).recordOpenSignal();
+        }
+
         private List<TestSseEmitter> createdEmitters() {
             return createdEmitters;
         }
@@ -139,6 +155,7 @@ class LiveMonitorPresenceServiceTest {
     private static final class TestSseEmitter extends SseEmitter {
 
         private final List<GamePresenceEventResponse> events = new ArrayList<>();
+        private int openSignalCount;
         private Runnable completionCallback;
         private Runnable timeoutCallback;
         private Consumer<Throwable> errorCallback;
@@ -168,6 +185,14 @@ class LiveMonitorPresenceServiceTest {
 
         private List<GamePresenceEventResponse> events() {
             return events;
+        }
+
+        private void recordOpenSignal() {
+            openSignalCount++;
+        }
+
+        private int openSignalCount() {
+            return openSignalCount;
         }
 
         private void completeFromClient() {

@@ -29,6 +29,9 @@ public interface LoginSessionRepository extends JpaRepository<LoginSession, Long
     @Query("select s from LoginSession s where s.id = :id")
     Optional<LoginSession> findByIdForUpdate(Long id);
 
+    Optional<LoginSession> findFirstByPatientProfile_User_IdAndEndedAtIsNullOrderByStartedAtDesc(
+            Long userId);
+
     /**
      * 환자별 요일×시간대 사용시간 히트맵. {@code started_at} 기준으로 그룹핑하기 때문에 자정을 가로지르는 세션은 시작 시각 hour 에 누적된다 — MVP
      * 단계에서는 운영 화면에서 "주로 언제 사용하는지" 만 가시화하는 용도라 이 근사로 충분하다.
