@@ -83,6 +83,7 @@ function resolveTargetCount(exerciseType: string, motion: ExerciseSessionMotionR
 function resolveRangeRate(exerciseType: string, motion: ExerciseSessionMotionResult): number {
   const targetCount = resolveTargetCount(exerciseType, motion)
   if (targetCount > 0) {
+    // Guardian summary avoids noisy accuracy scores and uses completed reps for TOP motions.
     return clampRate(normalizeCompletedCount(motion.completedReps) / targetCount)
   }
 

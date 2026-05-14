@@ -55,21 +55,29 @@ function buildMinuteDomain(values: number[]): { domain: [number, number]; ticks:
 
 export function OverallScoreCard() {
   const { data: patientId } = useMyPatientId()
-  const { data: summary, isLoading } = useGymnasticsDashboardSummary(patientId, 7)
+  const { data: summary, isError, isLoading } = useGymnasticsDashboardSummary(patientId, 7)
   const todaySeconds = summary?.todayGymSeconds ?? 0
   const completedMotionCount = summary?.todayCompletedMotionCount ?? 0
   const latestSession = summary?.latestSession ?? null
+  const usageUnavailable = isError || summary?.usageStatsAvailable === false
+  const sessionsUnavailable = isError || summary?.sessionStatsAvailable === false
 
-  const title = latestSession
-    ? `${latestSession.exerciseTypeLabel} ${latestSession.completedMotionCount}개 동작 완료`
-    : todaySeconds > 0
-      ? '오늘 체조 활동이 기록됐어요'
-      : '오늘 체조 기록이 없어요'
-  const subtitle = latestSession
-    ? `최근 세션 ${formatDurationSec(latestSession.durationSec)} · ${latestSession.shortDate}`
-    : isLoading
-      ? '기록을 확인하는 중입니다.'
-      : '체조방에서 활동하면 이 영역에 실제 기록이 표시됩니다.'
+  const title = isError
+    ? '체조 기록을 불러오지 못했어요'
+    : latestSession
+      ? `${latestSession.exerciseTypeLabel} ${latestSession.completedMotionCount}개 동작 완료`
+      : todaySeconds > 0
+        ? '오늘 체조 활동이 기록됐어요'
+        : '오늘 체조 기록이 없어요'
+  const subtitle = isError
+    ? '네트워크 상태를 확인한 뒤 다시 시도해 주세요.'
+    : sessionsUnavailable
+      ? '세션 기록을 불러오지 못해 사용 시간만 표시합니다.'
+      : latestSession
+        ? `최근 세션 ${formatDurationSec(latestSession.durationSec)} · ${latestSession.shortDate}`
+        : isLoading
+          ? '기록을 확인하는 중입니다.'
+          : '체조방에서 활동하면 이 영역에 실제 기록이 표시됩니다.'
 
   return (
     <article className={styles.card}>
@@ -80,7 +88,9 @@ export function OverallScoreCard() {
       </header>
       <div className={styles.scoreBody}>
         <div className={styles.timeMetric}>
-          <strong>{isLoading ? '...' : formatDurationSec(todaySeconds)}</strong>
+          <strong>
+            {isLoading ? '...' : usageUnavailable ? '--' : formatDurationSec(todaySeconds)}
+          </strong>
           <span>오늘 사용 시간</span>
         </div>
         <div className={styles.scoreCopy}>
@@ -89,11 +99,11 @@ export function OverallScoreCard() {
         </div>
         <div className={styles.scoreStats} aria-label="오늘 체조 요약">
           <span>
-            <strong>{completedMotionCount}</strong>
+            <strong>{sessionsUnavailable ? '-' : completedMotionCount}</strong>
             완료 동작
           </span>
           <span>
-            <strong>{summary?.todaySessionCount ?? 0}</strong>
+            <strong>{sessionsUnavailable ? '-' : (summary?.todaySessionCount ?? 0)}</strong>
             세션
           </span>
         </div>
@@ -107,7 +117,7 @@ export function TrendChartCard() {
   const [rangeId, setRangeId] = useState<TrendRangeId>(7)
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
-  const { data: summary, isLoading } = useGymnasticsDashboardSummary(patientId, rangeId)
+  const { data: summary, isError, isLoading } = useGymnasticsDashboardSummary(patientId, rangeId)
 
   useEffect(() => {
     if (!menuOpen) return
@@ -130,6 +140,7 @@ export function TrendChartCard() {
   const currentRange = TREND_RANGE_OPTIONS.find(option => option.id === rangeId)
   const data = summary?.trend ?? []
   const { domain, ticks } = buildMinuteDomain(data.map(point => point.minutes))
+  const usageUnavailable = isError || summary?.usageStatsAvailable === false
 
   return (
     <article className={`${styles.card} ${styles.cardFlex}`}>
@@ -171,7 +182,9 @@ export function TrendChartCard() {
         </div>
       </header>
       <div className={styles.trendBody}>
-        {data.length === 0 ? (
+        {usageUnavailable ? (
+          <div className={styles.trendEmpty}>체조 시간 기록을 불러오지 못했습니다.</div>
+        ) : data.length === 0 ? (
           <div className={styles.trendEmpty}>
             {isLoading ? '기록을 불러오는 중입니다.' : '표시할 체조 기록이 없습니다.'}
           </div>
@@ -244,8 +257,12 @@ export function TrendChartCard() {
         )}
       </div>
       <div className={styles.trendSummary}>
-        <span>총 {formatDurationSec(summary?.periodGymSeconds ?? 0)}</span>
-        <span>{summary?.activeDays ?? 0}일 참여</span>
+        <span>
+          {usageUnavailable
+            ? '사용 시간 확인 필요'
+            : `총 ${formatDurationSec(summary?.periodGymSeconds ?? 0)}`}
+        </span>
+        <span>{usageUnavailable ? '-' : (summary?.activeDays ?? 0)}일 참여</span>
       </div>
     </article>
   )

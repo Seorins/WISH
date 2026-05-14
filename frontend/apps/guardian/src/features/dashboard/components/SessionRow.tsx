@@ -15,8 +15,9 @@ function formatDurationSec(seconds: number): string {
 
 export function SessionRow() {
   const { data: patientId } = useMyPatientId()
-  const { data: summary, isLoading } = useGymnasticsDashboardSummary(patientId, 7)
+  const { data: summary, isError, isLoading } = useGymnasticsDashboardSummary(patientId, 7)
   const sessions = summary?.recentSessions ?? []
+  const sessionsUnavailable = isError || summary?.sessionStatsAvailable === false
 
   return (
     <div className={styles.row}>
@@ -26,7 +27,9 @@ export function SessionRow() {
           <ChevronLeftIcon className={styles.recentArrowIcon} />
         </button>
         <div className={styles.recentList}>
-          {sessions.length === 0 ? (
+          {sessionsUnavailable ? (
+            <div className={styles.recentEmpty}>최근 체조 세션을 불러오지 못했습니다.</div>
+          ) : sessions.length === 0 ? (
             <div className={styles.recentEmpty}>
               {isLoading ? '기록을 불러오는 중입니다.' : '최근 체조 세션이 없습니다.'}
             </div>
