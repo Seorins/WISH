@@ -41,3 +41,6 @@ app:
     village:
       enabled: true
       room-capacity: 100
+    # 그림 퀴즈 멀티플레이 (S14P31E103-820) — dev 에서 활성.
+    quiz:
+      enabled: true

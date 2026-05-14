@@ -143,6 +143,10 @@ public class SecurityConfig {
                                         //    (VillageStompAuthInterceptor). S14P31E103-714.
                                         .requestMatchers("/ws/village", "/ws/village/**")
                                         .permitAll()
+                                        // 5-1. 그림 퀴즈 멀티플레이 WebSocket 핸드셰이크 — 마을과 동일 정책.
+                                        //      JWT 검증은 STOMP CONNECT 단계 (S14P31E103-820).
+                                        .requestMatchers("/ws/quiz", "/ws/quiz/**")
+                                        .permitAll()
                                         // 6. 그 외 모든 요청 (POST/PATCH/DELETE on artworks 포함) — 인증 필수
                                         .anyRequest()
                                         .authenticated())
