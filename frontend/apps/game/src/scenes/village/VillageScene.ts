@@ -46,7 +46,7 @@ import { VillageObstacleManager } from './villageObstacles'
 
 const NPC_DIALOG_DISTANCE = 28
 const PHOTO_BOOTH_INTERACT_DISTANCE = 40
-const GOMOKU_BOARD_INTERACT_DISTANCE = 46
+const GOMOKU_BOARD_INTERACT_DISTANCE = 56
 const DIALOG_TEXT_BOX = { x: 585, y: 260, width: 1230, height: 250 }
 const DIALOG_NAME_BOX = { x: 490, y: 130, width: 350, height: 72 }
 const DIALOG_PORTRAIT_BOX = { x: 120, y: 100, width: 320, height: 400 }
@@ -71,9 +71,9 @@ const VILLAGE_PHOTO_BOOTH = {
 const VILLAGE_GOMOKU_BOARD_KEY = 'village-gomoku-board'
 const VILLAGE_GOMOKU_BOARD_PATH = 'images/village/objects/gomoku-board.png'
 const VILLAGE_GOMOKU_BOARD = {
-  xRatio: 0.62,
-  yRatio: 0.49,
-  scale: 0.15,
+  xRatio: VILLAGE_PHOTO_BOOTH.xRatio,
+  yRatio: 0.398,
+  scale: 0.17,
 } as const
 const DEFAULT_PLAYER_SPAWN = { xRatio: 0.5, yRatio: 0.3 }
 const MAP_TILE_ROWS = 3
@@ -606,7 +606,7 @@ export class VillageScene extends Phaser.Scene {
       },
     )
 
-    const box = this.add.rectangle(x, y - 18, 72, 34, 0xff0000, 0).setDepth(1)
+    const box = this.add.rectangle(x, y - 20, 82, 40, 0xff0000, 0).setDepth(1)
     this.physics.add.existing(box, true)
     this.obstacles.add(box)
 
