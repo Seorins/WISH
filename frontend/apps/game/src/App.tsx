@@ -16,6 +16,7 @@ import SideStepDebugPage from './debug/SideStepDebugPage'
 import SquatDebugPage from './debug/SquatDebugPage'
 import { AuthOverlay } from './features/auth'
 import { ExerciseSessionListOverlay } from './features/exerciseSessions'
+import { GomokuOverlay } from './features/gomoku'
 import { LighthouseEmotionController } from './features/lighthouse-emotion/components/LighthouseEmotionController'
 import { VillagerDialogueController } from './features/village-dialogue/components/VillagerDialogueController'
 import type { VillagerDialogueOpenPayload, VillagerNpcId } from './features/village-dialogue/types'
@@ -39,6 +40,7 @@ const DEBUG_DANIEL_LEFT_SIDE_BEND_MODE = 'daniel-left-side-bend'
 const DEBUG_DANIEL_RIGHT_SIDE_BEND_MODE = 'daniel-right-side-bend'
 const DEBUG_DANIEL_STRETCH_MODE = 'daniel-stretch'
 const DEBUG_CANVAS_RECORDER_MODE = 'canvas-recorder'
+const DEBUG_GOMOKU_MODE = 'gomoku'
 
 function App() {
   const params = new URLSearchParams(window.location.search)
@@ -47,6 +49,7 @@ function App() {
   const gameRef = useRef<Phaser.Game | null>(null)
   const [showAuth, setShowAuth] = useState(false)
   const [showExerciseSessions, setShowExerciseSessions] = useState(false)
+  const [showGomoku, setShowGomoku] = useState(false)
   const [villagerNpcId, setVillagerNpcId] = useState<VillagerNpcId | null>(null)
   const [isLighthouseEmotionOpen, setIsLighthouseEmotionOpen] = useState(false)
   const [patientProfileId, setPatientProfileId] = useState<number | undefined>(undefined)
@@ -70,7 +73,8 @@ function App() {
       debugMode === DEBUG_DANIEL_LEFT_SIDE_BEND_MODE ||
       debugMode === DEBUG_DANIEL_RIGHT_SIDE_BEND_MODE ||
       debugMode === DEBUG_DANIEL_STRETCH_MODE ||
-      debugMode === DEBUG_CANVAS_RECORDER_MODE
+      debugMode === DEBUG_CANVAS_RECORDER_MODE ||
+      debugMode === DEBUG_GOMOKU_MODE
     ) {
       return
     }
@@ -93,6 +97,7 @@ function App() {
       setPatientProfileId(id)
     })
     game.events.on('exercise-sessions:open', () => setShowExerciseSessions(true))
+    game.events.on('gomoku:open', () => setShowGomoku(true))
     game.events.on('villager-dialogue:open', ({ npcId }: VillagerDialogueOpenPayload) => {
       setVillagerNpcId(npcId)
     })
@@ -156,6 +161,11 @@ function App() {
     gameRef.current?.events.emit('lighthouse-emotion:text', { text })
   }, [])
 
+  const handleGomokuClose = useCallback(() => {
+    setShowGomoku(false)
+    gameRef.current?.events.emit('gomoku:closed')
+  }, [])
+
   if (debugMode === DEBUG_MARCH_MODE) {
     return <MarchDebugPage />
   }
@@ -204,6 +214,10 @@ function App() {
     return <CanvasRecorderDebugPage />
   }
 
+  if (debugMode === DEBUG_GOMOKU_MODE) {
+    return <GomokuOverlay open onClose={() => undefined} />
+  }
+
   return (
     <>
       <div
@@ -233,6 +247,7 @@ function App() {
         onClose={handleLighthouseEmotionClose}
         onTextChange={handleLighthouseEmotionTextChange}
       />
+      <GomokuOverlay open={showGomoku} onClose={handleGomokuClose} />
       <QueryClientProvider client={queryClient}>
         <ExerciseSessionListOverlay
           open={showExerciseSessions}

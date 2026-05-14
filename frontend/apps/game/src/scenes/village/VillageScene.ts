@@ -46,6 +46,7 @@ import { VillageObstacleManager } from './villageObstacles'
 
 const NPC_DIALOG_DISTANCE = 28
 const PHOTO_BOOTH_INTERACT_DISTANCE = 40
+const GOMOKU_BOARD_INTERACT_DISTANCE = 46
 const DIALOG_TEXT_BOX = { x: 585, y: 260, width: 1230, height: 250 }
 const DIALOG_NAME_BOX = { x: 490, y: 130, width: 350, height: 72 }
 const DIALOG_PORTRAIT_BOX = { x: 120, y: 100, width: 320, height: 400 }
@@ -66,6 +67,13 @@ const VILLAGE_PHOTO_BOOTH = {
   xRatio: 0.515,
   yRatio: 0.31,
   scale: 0.145,
+} as const
+const VILLAGE_GOMOKU_BOARD_KEY = 'village-gomoku-board'
+const VILLAGE_GOMOKU_BOARD_PATH = 'images/village/objects/gomoku-board.png'
+const VILLAGE_GOMOKU_BOARD = {
+  xRatio: 0.62,
+  yRatio: 0.49,
+  scale: 0.15,
 } as const
 const DEFAULT_PLAYER_SPAWN = { xRatio: 0.5, yRatio: 0.3 }
 const MAP_TILE_ROWS = 3
@@ -162,7 +170,9 @@ export class VillageScene extends Phaser.Scene {
   private obstacleManager?: VillageObstacleManager
   private sehyunNpc!: Phaser.GameObjects.Sprite
   private photoBooth?: Phaser.GameObjects.Image
+  private gomokuBoard?: Phaser.GameObjects.Image
   private isPhotoBoothInRange = false
+  private isGomokuBoardInRange = false
   private dialogs = new Map<VillagerNpcId, SimpleDialogUi>()
   private villageNpcs: VillageNpcInstance[] = []
   private portalCooldownUntil = 0
@@ -173,6 +183,7 @@ export class VillageScene extends Phaser.Scene {
   private lastDirection: PlayerDirection = 'down'
   private lastSafePlayerPosition?: Phaser.Math.Vector2
   private isVillagerDialogueOpen = false
+  private isGomokuOpen = false
   private dialogDismissed = false
   private nearestNpcId: VillagerNpcId | null = null
   private activeDialogNpcId: VillagerNpcId | null = null
@@ -200,6 +211,7 @@ export class VillageScene extends Phaser.Scene {
     this.load.image(VILLAGE_DIALOG_FRAME_KEY, assetPath(VILLAGE_DIALOG_FRAME_PATH))
     this.load.image(VILLAGE_SHIP_KEY, assetPath(VILLAGE_SHIP_PATH))
     this.load.image(VILLAGE_PHOTO_BOOTH_KEY, assetPath(VILLAGE_PHOTO_BOOTH_PATH))
+    this.load.image(VILLAGE_GOMOKU_BOARD_KEY, assetPath(VILLAGE_GOMOKU_BOARD_PATH))
     this.load.image('profile', assetPath('images/common/profile.png'))
     this.load.image('menu-frame', assetPath('images/ui/buttons/meunframe.png'))
     this.load.image('setting-frame', assetPath('images/ui/buttons/settingframe.png'))
@@ -223,6 +235,7 @@ export class VillageScene extends Phaser.Scene {
     this.obstacleManager = undefined
     this.dialogs.clear()
     this.isVillagerDialogueOpen = false
+    this.isGomokuOpen = false
     this.activeDialogNpcId = null
     this.nearestNpcId = null
     this.portalCooldownUntil = this.time.now + (data.portalCooldownMs ?? 0)
@@ -315,6 +328,8 @@ export class VillageScene extends Phaser.Scene {
       },
     )
     this.isPhotoBoothInRange = false
+    this.gomokuBoard = this.createGomokuBoard(W, H)
+    this.isGomokuBoardInRange = false
 
     ensurePlayerWalkAnimations(this)
 
@@ -482,6 +497,7 @@ export class VillageScene extends Phaser.Scene {
     })
     this.game.events.on('villager-dialogue:closed', this.handleVillagerDialogueClosed, this)
     this.game.events.on('villager-dialogue:text', this.handleVillagerDialogueText, this)
+    this.game.events.on('gomoku:closed', this.handleGomokuClosed, this)
     // photo-booth FrameSelect 가 pause 해뒀던 마을을 resume 시켜 돌아올 때 isTransitioning 해제.
     // 안 풀면 update 의 transitioning 가드에 걸려 입력이 죽음.
     this.events.on(Phaser.Scenes.Events.RESUME, () => {
@@ -491,6 +507,7 @@ export class VillageScene extends Phaser.Scene {
       this.events.off(Phaser.Scenes.Events.RESUME)
       this.game.events.off('villager-dialogue:closed', this.handleVillagerDialogueClosed, this)
       this.game.events.off('villager-dialogue:text', this.handleVillagerDialogueText, this)
+      this.game.events.off('gomoku:closed', this.handleGomokuClosed, this)
       this.input.off('pointermove', this.handleObstacleEditorPointerMove, this)
       this.input.off('pointerup', this.handleObstacleEditorPointerUp, this)
       this.input.keyboard?.off('keydown-E', this.handleNpcInteract, this)
@@ -513,7 +530,7 @@ export class VillageScene extends Phaser.Scene {
       target: this.target,
       lastDirection: this.lastDirection,
       speed: getPlayerMoveSpeed(),
-      blocked: this.isVillagerDialogueOpen || this.settingsMenu.isOpen(),
+      blocked: this.isVillagerDialogueOpen || this.settingsMenu.isOpen() || this.isGomokuOpen,
     })
     this.target = movement.target
     this.lastDirection = movement.lastDirection
@@ -521,13 +538,15 @@ export class VillageScene extends Phaser.Scene {
     this.resolvePolygonObstacleCollision()
 
     this.villageRealtime?.publishLocal(this.player, this.lastDirection, movement.moving)
-    const overlaysOpen = this.isVillagerDialogueOpen || this.settingsMenu.isOpen()
+    const overlaysOpen =
+      this.isVillagerDialogueOpen || this.settingsMenu.isOpen() || this.isGomokuOpen
     const paletteVisible = this.emojiPaletteManuallyShown && !overlaysOpen
     this.emojiPalette?.setVisible(paletteVisible)
     this.emojiHint?.setVisible(!paletteVisible && !overlaysOpen)
 
     const nearestNpc = this.getNearestNpcInTalkDistance()
     const photoBoothDistance = this.getPhotoBoothDistance()
+    const gomokuBoardDistance = this.getGomokuBoardDistance()
     const npcDistance = nearestNpc
       ? Phaser.Math.Distance.Between(
           this.player.x,
@@ -537,11 +556,23 @@ export class VillageScene extends Phaser.Scene {
         )
       : Number.POSITIVE_INFINITY
     const photoBoothInRange = photoBoothDistance < PHOTO_BOOTH_INTERACT_DISTANCE
-    const photoBoothCloser = photoBoothInRange && photoBoothDistance < npcDistance
+    const gomokuBoardInRange = gomokuBoardDistance < GOMOKU_BOARD_INTERACT_DISTANCE
+    let nearestAction: 'npc' | 'photo' | 'gomoku' | null = nearestNpc ? 'npc' : null
+    let nearestActionDistance = npcDistance
 
-    this.nearestNpcId = photoBoothCloser ? null : (nearestNpc?.id ?? null)
-    this.isPhotoBoothInRange = photoBoothCloser
-    this.updateInteractionHint(photoBoothCloser ? null : nearestNpc)
+    if (photoBoothInRange && photoBoothDistance < nearestActionDistance) {
+      nearestAction = 'photo'
+      nearestActionDistance = photoBoothDistance
+    }
+
+    if (gomokuBoardInRange && gomokuBoardDistance < nearestActionDistance) {
+      nearestAction = 'gomoku'
+    }
+
+    this.nearestNpcId = nearestAction === 'npc' ? (nearestNpc?.id ?? null) : null
+    this.isPhotoBoothInRange = nearestAction === 'photo'
+    this.isGomokuBoardInRange = nearestAction === 'gomoku'
+    this.updateInteractionHint(nearestAction === 'npc' ? nearestNpc : null)
 
     if (!nearestNpc) {
       this.dialogDismissed = false
@@ -551,6 +582,35 @@ export class VillageScene extends Phaser.Scene {
     }
 
     this.updateThemePortalTransitions()
+  }
+
+  private createGomokuBoard(worldWidth: number, worldHeight: number) {
+    const x = VILLAGE_GOMOKU_BOARD.xRatio * worldWidth
+    const y = VILLAGE_GOMOKU_BOARD.yRatio * worldHeight
+    const board = this.add
+      .image(x, y, VILLAGE_GOMOKU_BOARD_KEY)
+      .setOrigin(0.5, 1)
+      .setScale(VILLAGE_GOMOKU_BOARD.scale)
+      .setDepth(3)
+      .setInteractive({ useHandCursor: true })
+    board.on(
+      'pointerdown',
+      (
+        _pointer: Phaser.Input.Pointer,
+        _localX: number,
+        _localY: number,
+        event: Phaser.Types.Input.EventData,
+      ) => {
+        event.stopPropagation()
+        this.tryOpenGomokuGame()
+      },
+    )
+
+    const box = this.add.rectangle(x, y - 18, 72, 34, 0xff0000, 0).setDepth(1)
+    this.physics.add.existing(box, true)
+    this.obstacles.add(box)
+
+    return board
   }
 
   private readonly handleObstacleEditorPointerMove = (pointer: Phaser.Input.Pointer) => {
@@ -570,10 +630,20 @@ export class VillageScene extends Phaser.Scene {
   }
 
   private readonly handleNpcInteract = (event?: KeyboardEvent) => {
-    if (!this.isVillagerDialogueOpen && !this.settingsMenu.isOpen() && !this.dialogDismissed) {
+    if (
+      !this.isVillagerDialogueOpen &&
+      !this.settingsMenu.isOpen() &&
+      !this.isGomokuOpen &&
+      !this.dialogDismissed
+    ) {
       if (this.isPhotoBoothInRange) {
         event?.preventDefault()
         this.enterPhotoBoothScene()
+        return
+      }
+      if (this.isGomokuBoardInRange) {
+        event?.preventDefault()
+        this.enterGomokuGame()
         return
       }
       if (this.nearestNpcId) {
@@ -722,6 +792,12 @@ export class VillageScene extends Phaser.Scene {
     this.showNpcDialog(npcId)
   }
 
+  private tryOpenGomokuGame() {
+    if (this.isVillagerDialogueOpen || this.settingsMenu.isOpen() || this.isGomokuOpen) return
+    if (this.getGomokuBoardDistance() > GOMOKU_BOARD_INTERACT_DISTANCE) return
+    this.enterGomokuGame()
+  }
+
   private showNpcDialog(npcId: VillagerNpcId) {
     const dialog = this.dialogs.get(npcId)
     if (!dialog) return
@@ -760,8 +836,12 @@ export class VillageScene extends Phaser.Scene {
     setCenteredDialogText(dialog, text)
   }
 
+  private handleGomokuClosed() {
+    this.isGomokuOpen = false
+  }
+
   private updateInteractionHint(nearestNpc: VillageNpcInstance | null) {
-    if (this.isVillagerDialogueOpen || this.settingsMenu.isOpen()) {
+    if (this.isVillagerDialogueOpen || this.settingsMenu.isOpen() || this.isGomokuOpen) {
       this.interactionHint.hide()
       return
     }
@@ -772,6 +852,19 @@ export class VillageScene extends Phaser.Scene {
         this.photoBooth.y - this.photoBooth.displayHeight,
         '포토부스',
         { badgeLabel: '사진', helpMessage: 'E 또는 Enter로 사진 찍기' },
+      )
+      return
+    }
+
+    if (this.isGomokuBoardInRange && this.gomokuBoard) {
+      this.interactionHint.show(
+        this.gomokuBoard.x,
+        this.gomokuBoard.y - this.gomokuBoard.displayHeight,
+        '\uC624\uBAA9',
+        {
+          badgeLabel: '\uC624\uBAA9',
+          helpMessage: 'E / Enter: \uC624\uBAA9 \uD55C \uD310',
+        },
       )
       return
     }
@@ -798,6 +891,29 @@ export class VillageScene extends Phaser.Scene {
       this.photoBooth.x,
       this.photoBooth.y,
     )
+  }
+
+  private getGomokuBoardDistance() {
+    if (!this.gomokuBoard) {
+      return Number.POSITIVE_INFINITY
+    }
+    return Phaser.Math.Distance.Between(
+      this.player.x,
+      this.player.y,
+      this.gomokuBoard.x,
+      this.gomokuBoard.y,
+    )
+  }
+
+  private enterGomokuGame() {
+    this.isGomokuOpen = true
+    this.target = null
+    this.player.setVelocity(0, 0)
+    if (this.isVillagerDialogueOpen) {
+      this.hideDialog(false)
+    }
+    this.interactionHint.hide()
+    this.game.events.emit('gomoku:open')
   }
 
   private enterPhotoBoothScene() {

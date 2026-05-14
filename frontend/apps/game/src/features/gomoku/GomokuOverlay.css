@@ -1,0 +1,427 @@
+.gomoku-backdrop {
+  position: fixed;
+  inset: 0;
+  box-sizing: border-box;
+  z-index: 1200;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  overflow: hidden;
+  background:
+    linear-gradient(135deg, rgba(7, 38, 44, 0.88), rgba(24, 48, 40, 0.82)),
+    rgba(13, 21, 20, 0.78);
+  color: #17201d;
+  font-family:
+    "Pretendard Variable",
+    Pretendard,
+    "Noto Sans KR",
+    -apple-system,
+    BlinkMacSystemFont,
+    sans-serif;
+}
+
+.gomoku-shell {
+  width: min(1340px, calc(100vw - 36px));
+  height: min(860px, calc(100vh - 36px));
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+  border: 3px solid #315d57;
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(250, 253, 247, 0.98), rgba(234, 240, 224, 0.98)),
+    #f5f8ef;
+  box-shadow: 0 24px 60px rgba(4, 13, 15, 0.45);
+}
+
+.gomoku-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 20px;
+  border-bottom: 2px solid rgba(49, 93, 87, 0.18);
+  background: linear-gradient(90deg, #f8faf2, #eaf2ed);
+}
+
+.gomoku-topbar h1 {
+  margin: 0;
+  font-size: 26px;
+  line-height: 1.15;
+  letter-spacing: 0;
+}
+
+.gomoku-topbar p {
+  margin: 3px 0 0;
+  color: #48635d;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.gomoku-close-button,
+.gomoku-actions button,
+.gomoku-segmented button,
+.gomoku-timer-options button {
+  min-height: 36px;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  background: #dde9e4;
+  color: #17342f;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.gomoku-close-button {
+  padding: 0 16px;
+  background: #1e5a55;
+  color: #f8fff9;
+}
+
+.gomoku-layout {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(420px, 1fr) 340px;
+  gap: 14px;
+  padding: 14px;
+}
+
+.gomoku-board-zone {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 14px;
+}
+
+.gomoku-status {
+  min-height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 16px;
+  border: 2px solid rgba(49, 93, 87, 0.22);
+  border-radius: 8px;
+  background: #f7fbf4;
+}
+
+.gomoku-status strong {
+  font-size: 22px;
+  line-height: 1.15;
+}
+
+.gomoku-status span {
+  color: #395d57;
+  font-size: 15px;
+  font-weight: 900;
+  text-align: right;
+  word-break: keep-all;
+}
+
+.gomoku-board-wrap {
+  min-height: 0;
+  display: grid;
+  place-items: center;
+}
+
+.gomoku-board {
+  box-sizing: border-box;
+  width: min(68vh, 100%, 700px);
+  aspect-ratio: 1;
+  display: grid;
+  grid-template-columns: repeat(15, 1fr);
+  grid-template-rows: repeat(15, 1fr);
+  border: 8px solid #8b602e;
+  border-radius: 8px;
+  background:
+    linear-gradient(#6d481f 0 0) 0 0 / 100% 2px no-repeat,
+    linear-gradient(90deg, #6d481f 0 0) 0 0 / 2px 100% no-repeat,
+    linear-gradient(#6d481f 0 0) 100% 100% / 100% 2px no-repeat,
+    linear-gradient(90deg, #6d481f 0 0) 100% 100% / 2px 100% no-repeat,
+    repeating-linear-gradient(0deg, transparent 0 calc((100% - 2px) / 14), rgba(72, 47, 21, 0.62) calc((100% - 2px) / 14) calc((100% - 2px) / 14 + 2px)),
+    repeating-linear-gradient(90deg, transparent 0 calc((100% - 2px) / 14), rgba(72, 47, 21, 0.62) calc((100% - 2px) / 14) calc((100% - 2px) / 14 + 2px)),
+    linear-gradient(135deg, #d8a25a, #efc77a 48%, #bd7d39);
+  box-shadow:
+    inset 0 0 0 3px rgba(255, 244, 199, 0.54),
+    0 18px 36px rgba(24, 36, 31, 0.25);
+}
+
+.gomoku-cell {
+  position: relative;
+  display: grid;
+  place-items: center;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.gomoku-cell:disabled {
+  cursor: default;
+}
+
+.gomoku-cell.star::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(62, 39, 17, 0.72);
+}
+
+.gomoku-cell.hinted::after,
+.gomoku-cell.last::after,
+.gomoku-cell.winning::after {
+  content: "";
+  position: absolute;
+  inset: 15%;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.gomoku-cell.hinted::after {
+  border: 3px dashed #0e8a91;
+}
+
+.gomoku-cell.last::after {
+  border: 3px solid rgba(236, 83, 63, 0.82);
+}
+
+.gomoku-cell.winning::after {
+  border: 4px solid rgba(44, 160, 101, 0.9);
+  box-shadow: 0 0 0 5px rgba(44, 160, 101, 0.18);
+}
+
+.gomoku-stone {
+  width: 74%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  box-shadow: 0 5px 9px rgba(29, 20, 13, 0.32);
+}
+
+.stone-black .gomoku-stone {
+  background:
+    radial-gradient(circle at 34% 28%, rgba(255, 255, 255, 0.18), transparent 22%),
+    linear-gradient(135deg, #1d2423, #050707);
+  border: 2px solid #020303;
+}
+
+.stone-white .gomoku-stone {
+  background:
+    radial-gradient(circle at 34% 28%, #ffffff, transparent 28%),
+    linear-gradient(135deg, #ffffff, #d5ddd6);
+  border: 2px solid #eef4ed;
+}
+
+.gomoku-side {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto auto auto minmax(0, 1fr);
+  gap: 10px;
+}
+
+.gomoku-panel {
+  min-width: 0;
+  border: 2px solid rgba(49, 93, 87, 0.18);
+  border-radius: 8px;
+  background: #fbfdf8;
+  padding: 12px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.75);
+}
+
+.gomoku-control-group {
+  display: grid;
+  gap: 5px;
+  margin-bottom: 8px;
+}
+
+.gomoku-control-group > span {
+  color: #35514c;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.gomoku-segmented,
+.gomoku-timer-options,
+.gomoku-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.gomoku-segmented button.active,
+.gomoku-timer-options button.active {
+  border-color: #1e5a55;
+  background: #1e5a55;
+  color: #f8fff9;
+}
+
+.gomoku-segmented button:disabled,
+.gomoku-timer-options button:disabled,
+.gomoku-actions button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.gomoku-player-row,
+.gomoku-current-turn {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  align-items: center;
+  gap: 9px;
+  min-height: 34px;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.gomoku-player-row time {
+  min-width: 48px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.gomoku-player-dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  box-shadow: 0 2px 5px rgba(18, 21, 19, 0.25);
+}
+
+.gomoku-player-dot.black {
+  background: #101514;
+}
+
+.gomoku-player-dot.white {
+  border: 1px solid #ccd6cf;
+  background: #f8fffb;
+}
+
+.gomoku-current-turn {
+  grid-template-columns: 1fr auto;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(49, 93, 87, 0.16);
+  color: #24544d;
+}
+
+.gomoku-actions button {
+  background: #244b47;
+  color: #f8fff9;
+}
+
+.gomoku-actions button:nth-child(2) {
+  background: #7b4c2d;
+}
+
+.gomoku-actions button:nth-child(3) {
+  background: #0e7280;
+}
+
+.gomoku-history {
+  min-height: 0;
+  overflow: auto;
+}
+
+.gomoku-history h2 {
+  margin: 0 0 10px;
+  font-size: 18px;
+}
+
+.gomoku-history p {
+  margin: 0;
+  color: #61756e;
+  font-weight: 800;
+}
+
+.gomoku-history ol {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.gomoku-history li {
+  display: grid;
+  grid-template-columns: 28px 26px 1fr;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  border-radius: 7px;
+  background: #eef5ee;
+  padding: 0 8px;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.gomoku-history em {
+  color: #0e7280;
+  font-style: normal;
+  text-align: right;
+}
+
+@media (max-width: 980px) {
+  .gomoku-shell {
+    height: calc(100vh - 18px);
+  }
+
+  .gomoku-layout {
+    grid-template-columns: 1fr;
+    overflow: auto;
+  }
+
+  .gomoku-board {
+    width: min(86vw, 640px);
+  }
+
+  .gomoku-side {
+    grid-template-rows: none;
+  }
+}
+
+@media (max-width: 620px) {
+  .gomoku-backdrop {
+    padding: 0;
+  }
+
+  .gomoku-shell {
+    width: 100vw;
+    height: 100vh;
+    border-radius: 0;
+  }
+
+  .gomoku-topbar {
+    padding: 13px 14px;
+  }
+
+  .gomoku-topbar h1 {
+    font-size: 22px;
+  }
+
+  .gomoku-layout {
+    padding: 12px;
+  }
+
+  .gomoku-status {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .gomoku-status span {
+    text-align: left;
+  }
+
+  .gomoku-board {
+    width: min(93vw, 560px);
+    border-width: 5px;
+  }
+
+  .gomoku-segmented,
+  .gomoku-timer-options,
+  .gomoku-actions,
+  .gomoku-history ol {
+    grid-template-columns: 1fr;
+  }
+}
