@@ -66,8 +66,8 @@ class GuardianDialogueControllerIntegrationTest extends IntegrationTestSupport {
     void list_noFilter_returnsAllSessionsDesc() throws Exception {
         TestUser user = setupUserWithProfile("list-all@example.com", "list-all");
         long s1 = startSession(user, "YEONGCHEOL");
-        long s2 = startSession(user, "JOEUN");
-        long s3 = startSession(user, "DAIN");
+        long s2 = startSession(user, "SEORIN");
+        long s3 = startSession(user, "YEONGCHEOL");
 
         mockMvc.perform(
                         get("/guardian/patients/{pid}/dialogue/sessions", user.patientProfileId())
@@ -86,17 +86,17 @@ class GuardianDialogueControllerIntegrationTest extends IntegrationTestSupport {
     void list_npcFilter_returnsOnlyMatching() throws Exception {
         TestUser user = setupUserWithProfile("list-npc@example.com", "list-npc");
         startSession(user, "YEONGCHEOL");
-        long joeunSession = startSession(user, "JOEUN");
-        startSession(user, "DAIN");
+        long seorinSession = startSession(user, "SEORIN");
+        startSession(user, "YEONGCHEOL");
 
         mockMvc.perform(
                         get("/guardian/patients/{pid}/dialogue/sessions", user.patientProfileId())
                                 .header("Authorization", "Bearer " + user.token())
-                                .param("npc", "JOEUN"))
+                                .param("npc", "SEORIN"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.content.length()").value(1))
-                .andExpect(jsonPath("$.data.content[0].sessionId").value(joeunSession))
-                .andExpect(jsonPath("$.data.content[0].npcName").value("JOEUN"));
+                .andExpect(jsonPath("$.data.content[0].sessionId").value(seorinSession))
+                .andExpect(jsonPath("$.data.content[0].npcName").value("SEORIN"));
     }
 
     @Test

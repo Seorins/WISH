@@ -15,6 +15,7 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.comong.backend.domain.dialogue.catalog.model.ChoiceDefinition;
 import com.comong.backend.domain.dialogue.dto.FinishSessionRequest;
 import com.comong.backend.domain.dialogue.dto.FinishSessionResponse;
 import com.comong.backend.domain.dialogue.dto.GuardianSessionListItemResponse;
@@ -64,21 +65,37 @@ public class DialogueService {
     private final FallbackSceneProvider fallbackSceneProvider;
     private final ClaudeSceneProvider claudeSceneProvider;
     private final LighthouseIntentCatalog lighthouseIntentCatalog;
+    private final CatalogSceneProvider catalogSceneProvider;
+    private final com.comong.backend.domain.dialogue.catalog.DialogueCatalogService
+            dialogueCatalogService;
 
     @Transactional
     public StartSessionResponse createSession(Long currentUserId, StartSessionRequest request) {
         PatientProfile profile =
                 patientProfileService.findOwnedOrThrow(currentUserId, request.patientProfileId());
+
+        NpcName npcName = request.npcName();
+        String scriptId = null;
+        SceneResponse firstScene;
+
+        if (npcName.isLlmDriven()) {
+            // 등대지기: 기존 흐름 유지 (fallback firstScene + Claude 후속)
+            firstScene = fallbackSceneProvider.firstScene(npcName);
+        } else {
+            // 마을 NPC: catalog 에서 script 선택 후 첫 화면 반환
+            List<String> recentScripts =
+                    sessionRepository.findRecentScriptIds(profile.getId(), npcName);
+            scriptId = catalogSceneProvider.pickScriptId(npcName, recentScripts);
+            firstScene = catalogSceneProvider.firstScene(scriptId);
+        }
+
         DialogueSession session =
                 sessionRepository.save(
                         DialogueSession.builder()
                                 .patientProfile(profile)
-                                .npcName(request.npcName())
+                                .npcName(npcName)
+                                .scriptId(scriptId)
                                 .build());
-        SceneResponse firstScene =
-                request.npcName().isBackendDriven()
-                        ? fallbackSceneProvider.firstScene(request.npcName())
-                        : null; // 마을 주민은 FE 가 자체 스크립트로 첫 scene 로드
         return StartSessionResponse.of(session, firstScene);
     }
 
@@ -90,57 +107,111 @@ public class DialogueService {
 
         SelectedChoiceRequest choice = request.selectedChoice();
         int stepIndex = session.getStepCount();
-        DialogueTurnGeneratedBy generatedBy =
-                session.getNpcName().isBackendDriven()
-                        ? DialogueTurnGeneratedBy.FALLBACK
-                        : DialogueTurnGeneratedBy.NPC_SCRIPT;
 
-        // 등대지기는 BE catalog 의 metadata 가 진실 (FE 값 override).
-        // 마을 주민은 FE 자체 스크립트의 값 그대로 적재.
-        short intensity;
-        List<String> concernFlags;
-        List<String> protectiveFactors;
-        if (session.getNpcName().isBackendDriven()) {
-            LighthouseIntentCatalog.ChoiceIntentMetadata meta =
-                    lighthouseIntentCatalog
-                            .lookup(choice.choiceIntentId())
-                            .orElseThrow(
-                                    () ->
-                                            new BusinessException(
-                                                    DialogueErrorCode.INVALID_CHOICE_FOR_STEP));
-            intensity = meta.intensity();
-            concernFlags = meta.concernFlags();
-            protectiveFactors = meta.protectiveFactors();
-        } else {
-            intensity = choice.intensity();
-            concernFlags = choice.concernFlags();
-            protectiveFactors = choice.protectiveFactors();
+        if (session.getNpcName().isLlmDriven()) {
+            // 등대지기 경로: 기존 lighthouseIntentCatalog 기반 영속 + Claude/Fallback scene
+            return submitLighthouseTurn(session, request, choice, stepIndex);
         }
+        // 마을 NPC: BE catalog 기반 영속 + scene
+        return submitVillageTurn(session, request, choice, stepIndex);
+    }
 
+    private SubmitTurnResponse submitLighthouseTurn(
+            DialogueSession session,
+            SubmitTurnRequest request,
+            SelectedChoiceRequest choice,
+            int stepIndex) {
+        LighthouseIntentCatalog.ChoiceIntentMetadata meta =
+                lighthouseIntentCatalog
+                        .lookup(choice.choiceIntentId())
+                        .orElseThrow(
+                                () ->
+                                        new BusinessException(
+                                                DialogueErrorCode.INVALID_CHOICE_FOR_STEP));
+        persistTurn(
+                session,
+                stepIndex,
+                request.questionText(),
+                choice.choiceIntentId(),
+                choice.text(),
+                meta.intensity(),
+                meta.concernFlags(),
+                meta.protectiveFactors(),
+                DialogueTurnGeneratedBy.FALLBACK,
+                /* valence */ null,
+                /* tone */ null,
+                /* topicKeywords */ List.of(),
+                /* sentimentWords */ List.of());
+        session.incrementStepCount();
+        SceneResponse nextScene = buildLighthouseNextScene(session, choice.choiceIntentId());
+        return SubmitTurnResponse.of(session, nextScene);
+    }
+
+    private SubmitTurnResponse submitVillageTurn(
+            DialogueSession session,
+            SubmitTurnRequest request,
+            SelectedChoiceRequest choice,
+            int stepIndex) {
+        ChoiceDefinition def =
+                dialogueCatalogService
+                        .findChoice(choice.choiceIntentId())
+                        .orElseThrow(
+                                () ->
+                                        new BusinessException(
+                                                DialogueErrorCode.INVALID_CHOICE_FOR_STEP));
+        persistTurn(
+                session,
+                stepIndex,
+                request.questionText(),
+                def.choiceIntentId(),
+                def.text(),
+                (short) def.intensity(),
+                def.concernFlags(),
+                def.protectiveFactors(),
+                DialogueTurnGeneratedBy.NPC_SCRIPT,
+                def.valence(),
+                def.tone(),
+                def.topicKeywords(),
+                def.sentimentWords());
+        session.incrementStepCount();
+        SceneResponse nextScene = catalogSceneProvider.nextScene(session.getScriptId(), def);
+        return SubmitTurnResponse.of(session, nextScene);
+    }
+
+    private void persistTurn(
+            DialogueSession session,
+            int stepIndex,
+            String questionText,
+            String choiceIntentId,
+            String choiceText,
+            short intensity,
+            List<String> concernFlags,
+            List<String> protectiveFactors,
+            DialogueTurnGeneratedBy generatedBy,
+            com.comong.backend.domain.dialogue.catalog.model.ChoiceValence valence,
+            com.comong.backend.domain.dialogue.catalog.model.ChoiceTone tone,
+            List<String> topicKeywords,
+            List<com.comong.backend.domain.dialogue.catalog.model.SentimentWord> sentimentWords) {
         try {
             turnRepository.saveAndFlush(
                     DialogueTurn.builder()
                             .session(session)
                             .stepIndex(stepIndex)
-                            .questionText(request.questionText())
-                            .choiceIntentId(choice.choiceIntentId())
-                            .choiceText(choice.text())
+                            .questionText(questionText)
+                            .choiceIntentId(choiceIntentId)
+                            .choiceText(choiceText)
                             .intensity(intensity)
                             .concernFlags(concernFlags)
                             .protectiveFactors(protectiveFactors)
+                            .valence(valence)
+                            .tone(tone)
+                            .topicKeywords(topicKeywords)
+                            .sentimentWords(sentimentWords)
                             .generatedBy(generatedBy)
                             .build());
         } catch (DataIntegrityViolationException e) {
             throw mapTurnConstraintViolation(e);
         }
-
-        session.incrementStepCount();
-
-        SceneResponse nextScene =
-                session.getNpcName().isBackendDriven()
-                        ? buildLighthouseNextScene(session, choice.choiceIntentId())
-                        : null; // 마을 주민은 FE 가 자체 라우팅
-        return SubmitTurnResponse.of(session, nextScene);
     }
 
     /**
@@ -174,11 +245,16 @@ public class DialogueService {
         DialogueSession session = findOwnedSessionOrThrow(currentUserId, sessionId);
         requireInProgress(session);
         session.finish(request.finishReason());
-        List<String> closingLines =
-                session.getNpcName().isBackendDriven()
-                        ? fallbackSceneProvider.closingLines(
-                                session.getNpcName(), request.finishReason())
-                        : null; // 마을 주민은 FE 가 자체 closingLines 표시
+        List<String> closingLines;
+        if (session.getNpcName().isLlmDriven()) {
+            // 등대지기: fallback closing 사용
+            closingLines =
+                    fallbackSceneProvider.closingLines(
+                            session.getNpcName(), request.finishReason());
+        } else {
+            // 마을 NPC: ending scene 에서 이미 closingLine 을 전달했으므로 finish 응답엔 없음.
+            closingLines = null;
+        }
         return FinishSessionResponse.of(session, closingLines);
     }
 
