@@ -33,22 +33,38 @@ import { CUTE_CARD_PALETTES, drawCuteCardPanel, drawCutePillButton } from '@/gam
 const FONT_FAMILY =
   '"Pretendard Variable", Pretendard, "Noto Sans KR", -apple-system, BlinkMacSystemFont, sans-serif'
 
-type LobbyState = 'menu' | 'creating' | 'waitingCode' | 'joining' | 'lobby' | 'leaving'
+type LobbyState =
+  | 'modeSelect'
+  | 'multiMethod'
+  | 'creating'
+  | 'waitingCode'
+  | 'joining'
+  | 'lobby'
+  | 'leaving'
 
 const PALETTE_HOST = CUTE_CARD_PALETTES.butter
 const PALETTE_GUEST = CUTE_CARD_PALETTES.sage
 const PALETTE_EMPTY = CUTE_CARD_PALETTES.clay
-const PALETTE_PRIMARY = CUTE_CARD_PALETTES.butter
-const PALETTE_SECONDARY = CUTE_CARD_PALETTES.sage
 const PALETTE_DANGER = CUTE_CARD_PALETTES.rose
 
+// 게임 느낌 큰 버튼 컬러 — 채도 높여서 카드 톤과 분리.
+const COLOR_SOLO = 0xf4a64a
+const COLOR_SOLO_DARK = 0xc77a1f
+const COLOR_MULTI = 0x6aaa64
+const COLOR_MULTI_DARK = 0x447f3e
+const COLOR_CREATE = 0xf4a64a
+const COLOR_CREATE_DARK = 0xc77a1f
+const COLOR_JOIN = 0x4a8fc4
+const COLOR_JOIN_DARK = 0x2e6592
+
 export class QuizLobbyScene extends Phaser.Scene {
-  private state: LobbyState = 'menu'
+  private state: LobbyState = 'modeSelect'
   private snapshot: QuizRoomSnapshot | null = null
   private currentUserId: number | null = null
   private realtimeClient: QuizRealtimeClient | null = null
 
   private root!: Phaser.GameObjects.Container
+  private backdrop: Phaser.GameObjects.Rectangle | null = null
   private statusText!: Phaser.GameObjects.Text
 
   private menuContainer: Phaser.GameObjects.Container | null = null
@@ -70,48 +86,56 @@ export class QuizLobbyScene extends Phaser.Scene {
 
   create() {
     addCoverBackground(this, 'art-room-background')
+
+    // 메뉴/로비 모두 가독성을 위해 배경 위에 어두운 백드롭을 깔아둔다. alpha 0.55 면 배경 분위기는 살리고 텍스트는 또렷.
+    this.backdrop = this.add
+      .rectangle(0, 0, this.scale.width, this.scale.height, 0x000000, 0.55)
+      .setOrigin(0)
+      .setDepth(0)
     this.root = this.add.container(0, 0)
+    this.root.setDepth(1)
 
     this.statusText = this.add
       .text(0, 0, '', {
         fontFamily: FONT_FAMILY,
         fontSize: '20px',
-        color: '#5a3818',
+        color: '#ffe9c2',
       })
       .setOrigin(0.5)
     this.root.add(this.statusText)
 
-    // 화면 리사이즈 대응 — 핵심 컨테이너만 재배치.
     this.scale.on('resize', this.layout, this)
     this.events.once('shutdown', this.handleShutdown, this)
 
-    // React 오버레이가 코드 입력 결과를 돌려주는 채널.
     this.game.events.on('quiz-join-code:submitted', this.handleCodeSubmitted, this)
     this.game.events.on('quiz-join-code:cancelled', this.handleCodeCancelled, this)
 
-    this.showMenu()
+    this.showModeSelect()
   }
 
   private layout() {
+    this.backdrop?.setSize(this.scale.width, this.scale.height)
     if (this.state === 'lobby') {
       this.drawLobby()
-    } else if (this.state === 'menu') {
-      this.drawMenu()
+    } else if (this.state === 'modeSelect') {
+      this.drawModeSelect()
+    } else if (this.state === 'multiMethod') {
+      this.drawMultiMethod()
     }
-    this.statusText.setPosition(this.scale.width / 2, this.scale.height - 56)
+    this.statusText.setPosition(this.scale.width / 2, this.scale.height - 48)
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // menu
+  // mode select (Step 1: 솔로 / 멀티)
 
-  private showMenu() {
-    this.state = 'menu'
+  private showModeSelect() {
+    this.state = 'modeSelect'
     this.tearDownLobby()
-    this.drawMenu()
+    this.drawModeSelect()
     this.setStatus('')
   }
 
-  private drawMenu() {
+  private drawModeSelect() {
     this.menuContainer?.destroy()
     const w = this.scale.width
     const h = this.scale.height
@@ -119,84 +143,140 @@ export class QuizLobbyScene extends Phaser.Scene {
     this.root.add(container)
     this.menuContainer = container
 
-    const titleY = h * 0.18
-    const title = this.add
-      .text(w / 2, titleY, '그림 퀴즈', {
-        fontFamily: FONT_FAMILY,
-        fontSize: '44px',
-        color: '#3a2614',
-        fontStyle: 'bold',
-      })
-      .setOrigin(0.5)
-    const subtitle = this.add
-      .text(w / 2, titleY + 56, '어떻게 놀고 싶어?', {
-        fontFamily: FONT_FAMILY,
-        fontSize: '20px',
-        color: '#6a4a26',
-      })
-      .setOrigin(0.5)
-    container.add([title, subtitle])
+    this.drawHeader(container, '그림 퀴즈', '어떤 모드로 놀까?')
 
-    // 3개 카드 가로 배치: 혼자(AI) / 친구랑-방만들기 / 친구랑-코드입장
-    const buttonW = Math.min(280, (w - 120) / 3 - 30)
-    const buttonH = 200
-    const cy = h * 0.56
-    const gap = 36
-    const totalW = buttonW * 3 + gap * 2
-    let cursorX = w / 2 - totalW / 2 + buttonW / 2
+    // 큰 게임 버튼 2개 가로 배치.
+    const buttonW = Math.min(360, (w - 200) / 2)
+    const buttonH = 320
+    const gap = 56
+    const cy = h * 0.55
+    const leftX = w / 2 - buttonW / 2 - gap / 2
+    const rightX = w / 2 + buttonW / 2 + gap / 2
 
     container.add(
-      this.createMenuCard(cursorX, cy, buttonW, buttonH, {
-        tag: '혼자',
-        title: 'AI 랑',
-        desc: '제시어를 그리면 AI가 맞춰줘',
-        palette: PALETTE_PRIMARY,
+      this.createBigButton(leftX, cy, buttonW, buttonH, {
+        icon: '🎨',
+        title: '솔로 모드',
+        desc: 'AI 랑 둘이서\n제시어 그림 퀴즈',
+        fill: COLOR_SOLO,
+        shadow: COLOR_SOLO_DARK,
         onClick: () => this.startSingleplayer(),
       }),
     )
-    cursorX += buttonW + gap
 
     container.add(
-      this.createMenuCard(cursorX, cy, buttonW, buttonH, {
-        tag: '친구랑',
-        title: '방 만들기',
-        desc: '코드를 발급받고 친구를 초대해',
-        palette: PALETTE_SECONDARY,
-        onClick: () => this.startCreate(),
-      }),
-    )
-    cursorX += buttonW + gap
-
-    container.add(
-      this.createMenuCard(cursorX, cy, buttonW, buttonH, {
-        tag: '친구랑',
-        title: '코드로 입장',
-        desc: '친구가 알려준 코드를 입력해',
-        palette: PALETTE_SECONDARY,
-        onClick: () => this.startJoinByCode(),
+      this.createBigButton(rightX, cy, buttonW, buttonH, {
+        icon: '👥',
+        title: '멀티 모드',
+        desc: '친구들이랑 같이\n그리고 맞춰봐',
+        fill: COLOR_MULTI,
+        shadow: COLOR_MULTI_DARK,
+        onClick: () => this.showMultiMethod(),
       }),
     )
 
-    const backButton = this.createPillButton(
-      120,
-      h - 100,
-      180,
-      52,
-      '← 미술실로',
-      PALETTE_DANGER,
-      () => this.backToArtRoom(),
+    container.add(
+      this.createPillButton(130, h - 90, 200, 56, '← 미술실로', PALETTE_DANGER, () =>
+        this.backToArtRoom(),
+      ),
     )
-    container.add(backButton)
   }
 
   private startSingleplayer() {
-    if (this.state !== 'menu') return
+    if (this.state !== 'modeSelect') return
     // 혼자 모드는 기존 ArtFreeDrawingScene 단독 플로우. 본 로비/멀티 리소스는 정리하지 않아도 다음 씬에서 재초기화됨.
     fadeToScene(this, 'ArtFreeDrawingScene', { duration: 220 })
   }
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // multi method (Step 2: 방 만들기 / 코드 입장)
+
+  private showMultiMethod() {
+    if (this.state !== 'modeSelect') return
+    this.state = 'multiMethod'
+    this.drawMultiMethod()
+    this.setStatus('')
+  }
+
+  private drawMultiMethod() {
+    this.menuContainer?.destroy()
+    const w = this.scale.width
+    const h = this.scale.height
+    const container = this.add.container(0, 0)
+    this.root.add(container)
+    this.menuContainer = container
+
+    this.drawHeader(container, '멀티 모드', '방을 어떻게 잡을까?')
+
+    const buttonW = Math.min(360, (w - 200) / 2)
+    const buttonH = 320
+    const gap = 56
+    const cy = h * 0.55
+    const leftX = w / 2 - buttonW / 2 - gap / 2
+    const rightX = w / 2 + buttonW / 2 + gap / 2
+
+    container.add(
+      this.createBigButton(leftX, cy, buttonW, buttonH, {
+        icon: '🏠',
+        title: '방 만들기',
+        desc: '코드를 받아서\n친구를 초대해',
+        fill: COLOR_CREATE,
+        shadow: COLOR_CREATE_DARK,
+        onClick: () => this.startCreate(),
+      }),
+    )
+
+    container.add(
+      this.createBigButton(rightX, cy, buttonW, buttonH, {
+        icon: '🔑',
+        title: '코드로 입장',
+        desc: '친구가 알려준\n방 코드를 입력',
+        fill: COLOR_JOIN,
+        shadow: COLOR_JOIN_DARK,
+        onClick: () => this.startJoinByCode(),
+      }),
+    )
+
+    container.add(
+      this.createPillButton(130, h - 90, 200, 56, '← 뒤로', PALETTE_DANGER, () =>
+        this.showModeSelect(),
+      ),
+    )
+  }
+
+  private drawHeader(
+    container: Phaser.GameObjects.Container,
+    titleText: string,
+    subtitleText: string,
+  ) {
+    const w = this.scale.width
+    const h = this.scale.height
+    const titleY = h * 0.18
+    const title = this.add
+      .text(w / 2, titleY, titleText, {
+        fontFamily: FONT_FAMILY,
+        fontSize: '56px',
+        color: '#ffffff',
+        fontStyle: 'bold',
+        stroke: '#1a0e05',
+        strokeThickness: 8,
+        shadow: { offsetX: 0, offsetY: 4, color: '#000', blur: 8, fill: true },
+      })
+      .setOrigin(0.5)
+    const subtitle = this.add
+      .text(w / 2, titleY + 70, subtitleText, {
+        fontFamily: FONT_FAMILY,
+        fontSize: '22px',
+        color: '#ffe9c2',
+        stroke: '#1a0e05',
+        strokeThickness: 4,
+      })
+      .setOrigin(0.5)
+    container.add([title, subtitle])
+  }
+
   private startCreate() {
-    if (this.state !== 'menu') return
+    if (this.state !== 'multiMethod') return
     this.state = 'creating'
     this.setStatus('방 만드는 중…')
     this.tearDownMenu()
@@ -204,12 +284,12 @@ export class QuizLobbyScene extends Phaser.Scene {
       .then(snapshot => this.enterLobby(snapshot))
       .catch(error => {
         this.setStatus(extractMessage(error, '방 생성에 실패했어요. 잠시 후 다시 시도해줘.'))
-        this.showMenu()
+        this.showMultiMethod()
       })
   }
 
   private startJoinByCode() {
-    if (this.state !== 'menu') return
+    if (this.state !== 'multiMethod') return
     this.state = 'waitingCode'
     this.tearDownMenu()
     this.setStatus('코드 입력 창을 띄웠어요')
@@ -218,7 +298,7 @@ export class QuizLobbyScene extends Phaser.Scene {
 
   private handleCodeCancelled() {
     if (this.state !== 'waitingCode') return
-    this.showMenu()
+    this.showMultiMethod()
   }
 
   private handleCodeSubmitted(payload: { code: string }) {
@@ -229,7 +309,7 @@ export class QuizLobbyScene extends Phaser.Scene {
       .then(snapshot => this.enterLobby(snapshot))
       .catch(error => {
         this.setStatus(extractMessage(error, '입장에 실패했어요. 코드를 확인해줘.'))
-        this.showMenu()
+        this.showMultiMethod()
       })
   }
 
@@ -359,7 +439,7 @@ export class QuizLobbyScene extends Phaser.Scene {
         buttonW,
         buttonH,
         canStart ? '시작' : `친구 ${this.snapshot.minPlayers}명 모이면 시작`,
-        canStart ? PALETTE_PRIMARY : PALETTE_EMPTY,
+        canStart ? PALETTE_HOST : PALETTE_EMPTY,
         () => {
           if (canStart) this.handleStartGame()
         },
@@ -499,59 +579,86 @@ export class QuizLobbyScene extends Phaser.Scene {
     this.statusText.setPosition(this.scale.width / 2, this.scale.height - 56)
   }
 
-  private createMenuCard(
+  /**
+   * 게임 느낌의 큰 선택 버튼. 카드 톤이 아니라 RPG 메뉴 스타일 — 두툼한 채도 높은 색 + 짙은 하단 그림자 + 흰색 외곽선 + 큰 이모지 아이콘.
+   * hover 시 살짝 위로 떠오르고 그림자가 짧아진다.
+   */
+  private createBigButton(
     cx: number,
     cy: number,
     w: number,
     h: number,
     config: {
-      tag: string
+      icon: string
       title: string
       desc: string
-      palette: (typeof CUTE_CARD_PALETTES)[keyof typeof CUTE_CARD_PALETTES]
+      fill: number
+      shadow: number
       onClick: () => void
     },
   ) {
-    const { tag, title, desc, palette, onClick } = config
+    const { icon, title, desc, fill, shadow, onClick } = config
     const container = this.add.container(cx, cy)
-    const panel = this.add.graphics()
-    drawCuteCardPanel(panel, w, h, palette, 'default', 22)
-    const tagText = this.add
-      .text(0, -h / 2 + 32, tag, {
+    const radius = 28
+    const shadowOffset = 10
+
+    const shadowG = this.add.graphics()
+    const faceG = this.add.graphics()
+    const drawButton = (lifted: boolean) => {
+      const lift = lifted ? shadowOffset * 0.35 : 0
+      const shadowDepth = lifted ? shadowOffset * 0.55 : shadowOffset
+
+      shadowG.clear()
+      shadowG.fillStyle(0x000000, 0.35)
+      shadowG.fillRoundedRect(-w / 2, -h / 2 + shadowDepth - lift, w, h + shadowOffset, radius)
+
+      faceG.clear()
+      // 하단 어두운 면 (3D 두께감)
+      faceG.fillStyle(shadow, 1)
+      faceG.fillRoundedRect(-w / 2, -h / 2 - lift, w, h + 14, radius)
+      // 윗 면 (메인 컬러)
+      faceG.fillStyle(fill, 1)
+      faceG.fillRoundedRect(-w / 2, -h / 2 - lift, w, h, radius)
+      // 상단 글로스
+      faceG.fillStyle(0xffffff, 0.18)
+      faceG.fillRoundedRect(-w / 2 + 8, -h / 2 - lift + 8, w - 16, h * 0.32, radius - 8)
+      // 흰색 외곽선
+      faceG.lineStyle(4, 0xffffff, 0.9)
+      faceG.strokeRoundedRect(-w / 2, -h / 2 - lift, w, h, radius)
+      // 짙은 외곽
+      faceG.lineStyle(2, shadow, 1)
+      faceG.strokeRoundedRect(-w / 2 - 2, -h / 2 - 2 - lift, w + 4, h + 4, radius + 2)
+    }
+    drawButton(false)
+    container.add([shadowG, faceG])
+
+    const iconText = this.add
+      .text(0, -h / 2 + 96, icon, {
         fontFamily: FONT_FAMILY,
-        fontSize: '14px',
-        color: palette.accentHex,
-        fontStyle: 'bold',
+        fontSize: '88px',
       })
       .setOrigin(0.5)
     const titleText = this.add
-      .text(0, -h / 2 + 80, title, {
+      .text(0, -h / 2 + 192, title, {
         fontFamily: FONT_FAMILY,
-        fontSize: '28px',
-        color: '#3a2614',
+        fontSize: '34px',
+        color: '#ffffff',
         fontStyle: 'bold',
+        stroke: '#1a0e05',
+        strokeThickness: 5,
       })
       .setOrigin(0.5)
     const descText = this.add
-      .text(0, -h / 2 + 124, desc, {
-        fontFamily: FONT_FAMILY,
-        fontSize: '15px',
-        color: '#6a4a26',
-        wordWrap: { width: w - 40 },
-        align: 'center',
-      })
-      .setOrigin(0.5, 0)
-    const cta = this.add.graphics()
-    drawCutePillButton(cta, 0, h / 2 - 36, Math.min(w - 60, 200), 44, palette, 'default')
-    const ctaText = this.add
-      .text(0, h / 2 - 36, '선택', {
+      .text(0, -h / 2 + 240, desc, {
         fontFamily: FONT_FAMILY,
         fontSize: '17px',
-        color: '#ffffff',
-        fontStyle: 'bold',
+        color: '#fff4dc',
+        align: 'center',
+        wordWrap: { width: w - 40 },
       })
-      .setOrigin(0.5)
-    container.add([panel, tagText, titleText, descText, cta, ctaText])
+      .setOrigin(0.5, 0)
+    container.add([iconText, titleText, descText])
+
     container.setSize(w, h)
     container.setInteractive(
       new Phaser.Geom.Rectangle(-w / 2, -h / 2, w, h),
@@ -559,13 +666,17 @@ export class QuizLobbyScene extends Phaser.Scene {
     )
     container.on(Phaser.Input.Events.POINTER_DOWN, onClick)
     container.on(Phaser.Input.Events.POINTER_OVER, () => {
-      drawCuteCardPanel(panel, w, h, palette, 'hover', 22)
-      drawCutePillButton(cta, 0, h / 2 - 36, Math.min(w - 60, 200), 44, palette, 'hover')
+      drawButton(true)
+      iconText.y = -h / 2 + 96 - shadowOffset * 0.35
+      titleText.y = -h / 2 + 192 - shadowOffset * 0.35
+      descText.y = -h / 2 + 240 - shadowOffset * 0.35
       this.input.setDefaultCursor('pointer')
     })
     container.on(Phaser.Input.Events.POINTER_OUT, () => {
-      drawCuteCardPanel(panel, w, h, palette, 'default', 22)
-      drawCutePillButton(cta, 0, h / 2 - 36, Math.min(w - 60, 200), 44, palette, 'default')
+      drawButton(false)
+      iconText.y = -h / 2 + 96
+      titleText.y = -h / 2 + 192
+      descText.y = -h / 2 + 240
       this.input.setDefaultCursor('default')
     })
     return container
