@@ -63,12 +63,23 @@ export type RealtimeEvent =
       occurredAt: string
     }
 
+export type GamePresenceEvent = {
+  type: 'WATCHER_COUNT_CHANGED'
+  loginSessionId: number
+  watcherCount: number
+  occurredAt: string
+}
+
 const KNOWN_EVENT_TYPES: ReadonlySet<RealtimeEvent['type']> = new Set([
   'CONNECTED',
   'GAME_STARTED',
   'GAME_ENDED',
   'CONTENT_STARTED',
   'CONTENT_ENDED',
+])
+
+const KNOWN_GAME_PRESENCE_EVENT_TYPES: ReadonlySet<GamePresenceEvent['type']> = new Set([
+  'WATCHER_COUNT_CHANGED',
 ])
 
 export async function requestGameLivekitToken(loginSessionId: number) {
@@ -102,6 +113,12 @@ export async function endContent(loginSessionId: number) {
 
 type RealtimeSubscriptionOptions = {
   onEvent: (event: RealtimeEvent) => void
+  onError?: (error: unknown) => void
+  signal?: AbortSignal
+}
+
+type GamePresenceSubscriptionOptions = {
+  onEvent: (event: GamePresenceEvent) => void
   onError?: (error: unknown) => void
   signal?: AbortSignal
 }
@@ -155,6 +172,68 @@ export async function subscribeRealtimeEvents({
                 KNOWN_EVENT_TYPES.has(parsed.type as RealtimeEvent['type'])
               ) {
                 onEvent(parsed as RealtimeEvent)
+              }
+            } catch (parseError) {
+              onError?.(parseError)
+            }
+          }
+        }
+        separatorIndex = buffer.indexOf('\n\n')
+      }
+    }
+  } catch (streamError) {
+    if (signal?.aborted) return
+    onError?.(streamError)
+  } finally {
+    reader.releaseLock()
+  }
+}
+
+export async function subscribeGamePresence(
+  loginSessionId: number,
+  { onEvent, onError, signal }: GamePresenceSubscriptionOptions,
+): Promise<void> {
+  const baseUrl = import.meta.env.VITE_API_BASE_URL ?? '/api/v1'
+  const token = localStorage.getItem('wish_access_token')
+  const response = await fetch(
+    `${baseUrl}/realtime/login-sessions/${loginSessionId}/game-presence`,
+    {
+      method: 'GET',
+      headers: {
+        Accept: 'text/event-stream',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      signal,
+    },
+  )
+
+  if (!response.ok || !response.body) {
+    throw new Error(`Game presence SSE connection failed: ${response.status}`)
+  }
+
+  const reader = response.body.pipeThrough(new TextDecoderStream()).getReader()
+  let buffer = ''
+
+  try {
+    while (true) {
+      const { value, done } = await reader.read()
+      if (done) break
+      buffer += value
+      let separatorIndex = buffer.indexOf('\n\n')
+      while (separatorIndex !== -1) {
+        const rawMessage = buffer.slice(0, separatorIndex)
+        buffer = buffer.slice(separatorIndex + 2)
+        const dataLine = rawMessage.split('\n').find(line => line.startsWith('data:'))
+        if (dataLine) {
+          const payload = dataLine.slice('data:'.length).trim()
+          if (payload) {
+            try {
+              const parsed = JSON.parse(payload) as { type?: unknown }
+              if (
+                typeof parsed.type === 'string' &&
+                KNOWN_GAME_PRESENCE_EVENT_TYPES.has(parsed.type as GamePresenceEvent['type'])
+              ) {
+                onEvent(parsed as GamePresenceEvent)
               }
             } catch (parseError) {
               onError?.(parseError)

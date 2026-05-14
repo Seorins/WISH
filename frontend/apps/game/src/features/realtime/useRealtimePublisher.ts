@@ -7,30 +7,18 @@ import {
   RoomEvent,
   Track,
 } from 'livekit-client'
-import { requestGameLivekitToken } from '@wish/api-client'
+import {
+  requestGameLivekitToken,
+  subscribeGamePresence,
+  type GamePresenceEvent,
+} from '@wish/api-client'
 import { useLoginSessionStore } from '../../stores/loginSessionStore'
 
-// 보호자 participant 의 identity prefix — BE RealtimeLiveKitNaming 과 동기화 필요.
-// 변경되면 양쪽 같이 손봐야 한다.
 const GUARDIAN_IDENTITY_PREFIX = 'guardian-'
-
-// 캔버스 publish 시 사용할 인코딩 캡. dev 시연 환경(MacBook + 가정용 와이파이) 기준
-// 3Mbps / 30fps + h264 코덱으로 픽셀 도트 그래픽이 흐려지지 않게 한다. 업링크 여유가
-// 부족한 환경이라면 캡을 다시 내릴 것.
 const PUBLISH_MAX_BITRATE = 3_000_000
 const PUBLISH_FRAMERATE = 30
+const PRESENCE_RETRY_DELAY_MS = 3_000
 
-// 게임앱 LiveKit publisher 훅.
-// 1) loginSessionId(activeSession) + canvas 가 둘 다 준비되면 game-token 받아 room.connect
-// 2) 보호자 participant 가 입장하기 전엔 publish 하지 않는다 (업링크 자원 절약)
-// 3) 보호자 입장 시점에 canvas.captureStream() 으로 video track 1개 publish
-// 4) 보호자가 모두 떠나면 unpublish
-// 5) 보호자 audio track 은 자동 subscribe 되어 body 에 hidden <audio> 로 attach (PTT 수신)
-//
-// 다음 가정에 의존한다:
-// - BE token 응답이 LiveKit Cloud URL/JWT 를 그대로 내려준다 (FE env 비밀 0)
-// - 보호자 participant identity 는 'guardian-' 으로 시작 (BE RealtimeLiveKitNaming)
-// - canvas 는 Phaser 의 preserveDrawingBuffer=true 로 만들어진 동일 element
 export function useRealtimePublisher(canvas: HTMLCanvasElement | null) {
   const loginSessionId = useLoginSessionStore(state => state.loginSessionId)
 
@@ -38,26 +26,59 @@ export function useRealtimePublisher(canvas: HTMLCanvasElement | null) {
     if (loginSessionId === null || canvas === null) return
 
     let cancelled = false
-    const room = new Room()
+    let desiredConnected = false
+    let connecting = false
+    let connectVersion = 0
+    let lastAppliedOccurredAtMs = Number.NEGATIVE_INFINITY
+    let room: Room | null = null
     let videoTrack: LocalVideoTrack | null = null
+    let presenceAbortController: AbortController | null = null
     const attachedAudioElements: HTMLAudioElement[] = []
 
     const isGuardian = (participant: RemoteParticipant) =>
       participant.identity.startsWith(GUARDIAN_IDENTITY_PREFIX)
 
-    const guardiansPresent = () => Array.from(room.remoteParticipants.values()).some(isGuardian)
+    const guardiansPresent = (targetRoom: Room) =>
+      Array.from(targetRoom.remoteParticipants.values()).some(isGuardian)
 
-    const ensurePublishing = async () => {
-      if (videoTrack || cancelled) return
+    const removeAudioElement = (audioEl: HTMLAudioElement) => {
+      audioEl.remove()
+      const index = attachedAudioElements.indexOf(audioEl)
+      if (index !== -1) attachedAudioElements.splice(index, 1)
+    }
+
+    const removeAttachedAudioElements = () => {
+      while (attachedAudioElements.length > 0) {
+        const audioEl = attachedAudioElements.pop()
+        audioEl?.remove()
+      }
+    }
+
+    const stopPublishing = async (targetRoom: Room | null) => {
+      const track = videoTrack
+      if (!track) return
+      videoTrack = null
+      try {
+        if (targetRoom) {
+          await targetRoom.localParticipant.unpublishTrack(track, true)
+        } else {
+          track.stop()
+        }
+      } catch (error) {
+        console.warn('Game LiveKit unpublish failed', error)
+        track.stop()
+      }
+    }
+
+    const ensurePublishing = async (targetRoom: Room) => {
+      if (targetRoom !== room || videoTrack || cancelled || !desiredConnected) return
       const stream = canvas.captureStream(PUBLISH_FRAMERATE)
       const [mediaTrack] = stream.getVideoTracks()
       if (!mediaTrack) return
       const localTrack = new LocalVideoTrack(mediaTrack)
       try {
-        await room.localParticipant.publishTrack(localTrack, {
+        await targetRoom.localParticipant.publishTrack(localTrack, {
           source: Track.Source.Camera,
-          // h264 가 하드웨어 디코딩 지원이 넓어 보호자 측 끊김/지터에 유리. vp8 보다 같은 bitrate
-          // 에서 도트 그래픽 가독성도 양호. simulcast 는 단일 viewer 라 비활성.
           videoCodec: 'h264',
           simulcast: false,
           videoEncoding: {
@@ -65,25 +86,16 @@ export function useRealtimePublisher(canvas: HTMLCanvasElement | null) {
             maxFramerate: PUBLISH_FRAMERATE,
           },
         })
-        if (cancelled) {
-          await room.localParticipant.unpublishTrack(localTrack, true)
+
+        if (targetRoom !== room || cancelled || !desiredConnected) {
+          await targetRoom.localParticipant.unpublishTrack(localTrack, true)
           return
         }
+
         videoTrack = localTrack
       } catch (error) {
         console.warn('Game LiveKit publish failed', error)
         localTrack.stop()
-      }
-    }
-
-    const stopPublishing = async () => {
-      const track = videoTrack
-      if (!track) return
-      videoTrack = null
-      try {
-        await room.localParticipant.unpublishTrack(track, true)
-      } catch (error) {
-        console.warn('Game LiveKit unpublish failed', error)
       }
     }
 
@@ -98,47 +110,138 @@ export function useRealtimePublisher(canvas: HTMLCanvasElement | null) {
     const handleUnsubscribedTrack = (track: RemoteTrack) => {
       if (track.kind !== Track.Kind.Audio) return
       const detached = track.detach() as HTMLAudioElement[]
-      detached.forEach(el => el.remove())
+      detached.forEach(removeAudioElement)
     }
 
-    room.on(RoomEvent.ParticipantConnected, participant => {
-      if (isGuardian(participant)) void ensurePublishing()
-    })
-    room.on(RoomEvent.ParticipantDisconnected, participant => {
-      if (isGuardian(participant) && !guardiansPresent()) void stopPublishing()
-    })
-    room.on(RoomEvent.TrackSubscribed, (track, _publication, participant) => {
-      handleSubscribedTrack(track, participant)
-    })
-    room.on(RoomEvent.TrackUnsubscribed, track => {
-      handleUnsubscribedTrack(track)
-    })
+    const createRoom = () => {
+      const targetRoom = new Room()
 
-    const connect = async () => {
-      try {
-        const response = await requestGameLivekitToken(loginSessionId)
-        if (cancelled) return
-        const { livekitUrl, token } = response.data
-        await room.connect(livekitUrl, token)
-        if (cancelled) {
-          await room.disconnect()
-          return
+      targetRoom.on(RoomEvent.ParticipantConnected, participant => {
+        if (targetRoom === room && isGuardian(participant)) void ensurePublishing(targetRoom)
+      })
+      targetRoom.on(RoomEvent.ParticipantDisconnected, participant => {
+        if (targetRoom === room && isGuardian(participant) && !guardiansPresent(targetRoom)) {
+          void stopPublishing(targetRoom)
         }
-        // 보호자가 먼저 들어와 있는 경우(예: 게임 재진입) — 즉시 publish.
-        if (guardiansPresent()) await ensurePublishing()
-      } catch (error) {
-        console.warn('Game LiveKit publisher connection failed', error)
+      })
+      targetRoom.on(RoomEvent.TrackSubscribed, (track, _publication, participant) => {
+        if (targetRoom === room) handleSubscribedTrack(track, participant)
+      })
+      targetRoom.on(RoomEvent.TrackUnsubscribed, track => {
+        if (targetRoom === room) handleUnsubscribedTrack(track)
+      })
+
+      return targetRoom
+    }
+
+    const disconnectLiveKit = async () => {
+      desiredConnected = false
+      connectVersion += 1
+      connecting = false
+
+      const targetRoom = room
+      room = null
+      await stopPublishing(targetRoom)
+      removeAttachedAudioElements()
+
+      if (targetRoom) {
+        try {
+          await targetRoom.disconnect()
+        } catch (error) {
+          console.warn('Game LiveKit disconnect failed', error)
+        }
       }
     }
 
-    void connect()
+    const ensureConnected = async () => {
+      if (cancelled || !desiredConnected || connecting || room) return
+
+      const attemptVersion = ++connectVersion
+      const nextRoom = createRoom()
+      connecting = true
+
+      try {
+        const response = await requestGameLivekitToken(loginSessionId)
+        if (cancelled || !desiredConnected || attemptVersion !== connectVersion) {
+          await nextRoom.disconnect()
+          return
+        }
+
+        const { livekitUrl, token } = response.data
+        await nextRoom.connect(livekitUrl, token)
+        if (cancelled || !desiredConnected || attemptVersion !== connectVersion) {
+          await nextRoom.disconnect()
+          return
+        }
+
+        room = nextRoom
+        if (guardiansPresent(nextRoom)) await ensurePublishing(nextRoom)
+      } catch (error) {
+        if (!cancelled && desiredConnected && attemptVersion === connectVersion) {
+          console.warn('Game LiveKit publisher connection failed', error)
+        }
+      } finally {
+        if (attemptVersion === connectVersion) connecting = false
+      }
+    }
+
+    const handlePresenceEvent = (event: GamePresenceEvent) => {
+      if (event.loginSessionId !== loginSessionId) return
+
+      const occurredAtMs = Date.parse(event.occurredAt)
+      const comparableOccurredAtMs = Number.isNaN(occurredAtMs) ? Date.now() : occurredAtMs
+      if (comparableOccurredAtMs < lastAppliedOccurredAtMs) return
+      lastAppliedOccurredAtMs = comparableOccurredAtMs
+
+      if (event.watcherCount > 0) {
+        desiredConnected = true
+        void ensureConnected()
+        return
+      }
+
+      void disconnectLiveKit()
+    }
+
+    const waitBeforeRetry = () =>
+      new Promise<void>(resolve => {
+        window.setTimeout(resolve, PRESENCE_RETRY_DELAY_MS)
+      })
+
+    const subscribePresence = async () => {
+      while (!cancelled) {
+        const abortController = new AbortController()
+        presenceAbortController = abortController
+
+        try {
+          await subscribeGamePresence(loginSessionId, {
+            signal: abortController.signal,
+            onEvent: handlePresenceEvent,
+            onError: error => {
+              if (!abortController.signal.aborted) {
+                console.warn('Game presence SSE message failed', error)
+              }
+            },
+          })
+        } catch (error) {
+          if (abortController.signal.aborted || cancelled) break
+          console.warn('Game presence SSE disconnected, will retry.', error)
+        } finally {
+          if (presenceAbortController === abortController) presenceAbortController = null
+        }
+
+        if (!cancelled) {
+          await disconnectLiveKit()
+          await waitBeforeRetry()
+        }
+      }
+    }
+
+    void subscribePresence()
 
     return () => {
       cancelled = true
-      attachedAudioElements.forEach(el => el.remove())
-      void stopPublishing().finally(() => {
-        void room.disconnect()
-      })
+      presenceAbortController?.abort()
+      void disconnectLiveKit()
     }
   }, [loginSessionId, canvas])
 }
