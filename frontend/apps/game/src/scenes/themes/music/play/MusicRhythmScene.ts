@@ -128,6 +128,13 @@ export class MusicRhythmScene extends Phaser.Scene {
     this.returnToMusicSelect()
   }
 
+  // YouTube iframe 등으로 포커스가 빠져도 ESC 가 동작하도록 window 레벨 백업.
+  private readonly handleWindowEscDown = (e: KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      this.returnToMusicSelect()
+    }
+  }
+
   private readonly handleRestartDown = () => {
     if (this.isStarted || this.isFinished) {
       this.restartRound()
@@ -207,7 +214,7 @@ export class MusicRhythmScene extends Phaser.Scene {
     this.bindKeyboard()
 
     this.input.once('pointerdown', () => {
-      if (!this.isStarted && !this.isFinished) {
+      if (!this.isStarted && !this.isFinished && !this.isLeaving) {
         this.startRound()
       }
     })
@@ -241,6 +248,7 @@ export class MusicRhythmScene extends Phaser.Scene {
       this.input.keyboard?.off('keydown-SPACE', this.handleSpaceDown)
       this.input.keyboard?.off('keydown-ESC', this.handleEscDown)
       this.input.keyboard?.off('keydown-R', this.handleRestartDown)
+      window.removeEventListener('keydown', this.handleWindowEscDown)
     })
 
     this.cameras.main.fadeIn(220, 0, 0, 0)
@@ -550,6 +558,41 @@ export class MusicRhythmScene extends Phaser.Scene {
       .setDepth(55)
       .setAlpha(0)
       .setScrollFactor(0)
+
+    this.createExitButton(vw, vh)
+  }
+
+  private createExitButton(vw: number, vh: number) {
+    const size = Phaser.Math.Clamp(vh * 0.05, 34, 48)
+    const cx = vw - size * 0.9
+    const cy = size * 0.9
+
+    const bg = this.add.graphics().setDepth(60).setScrollFactor(0)
+    bg.fillStyle(0x000000, 0.55)
+    bg.fillCircle(cx, cy, size / 2)
+    bg.lineStyle(1.5, 0xffffff, 0.35)
+    bg.strokeCircle(cx, cy, size / 2)
+
+    const label = this.add
+      .text(cx, cy, '✕', {
+        fontFamily: GAME_FONT,
+        fontSize: `${Math.floor(size * 0.55)}px`,
+        color: '#ffffff',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5)
+      .setDepth(61)
+      .setScrollFactor(0)
+
+    const hit = this.add
+      .zone(cx, cy, size * 1.2, size * 1.2)
+      .setInteractive({ cursor: 'pointer' })
+      .setDepth(62)
+      .setScrollFactor(0)
+
+    hit.on('pointerover', () => label.setColor('#ff6f9d'))
+    hit.on('pointerout', () => label.setColor('#ffffff'))
+    hit.on('pointerdown', () => this.returnToMusicSelect())
   }
 
   private createLaneViews(_vh: number) {
@@ -941,6 +984,7 @@ export class MusicRhythmScene extends Phaser.Scene {
     keyboard.on('keydown-SPACE', this.handleSpaceDown)
     keyboard.on('keydown-ESC', this.handleEscDown)
     keyboard.on('keydown-R', this.handleRestartDown)
+    window.addEventListener('keydown', this.handleWindowEscDown)
   }
 
   private startRound() {
