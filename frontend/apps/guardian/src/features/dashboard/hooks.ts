@@ -70,8 +70,31 @@ function parseDateParts(date: string): { year: number; month: number; day: numbe
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date)
   if (!match) return null
 
-  const [, year, month, day] = match.map(Number)
-  if (!year || !month || !day) return null
+  const year = Number(match[1])
+  const month = Number(match[2])
+  const day = Number(match[3])
+  if (
+    !Number.isInteger(year) ||
+    !Number.isInteger(month) ||
+    !Number.isInteger(day) ||
+    year < 1 ||
+    month < 1 ||
+    month > 12 ||
+    day < 1 ||
+    day > 31
+  ) {
+    return null
+  }
+
+  const normalized = new Date(Date.UTC(year, month - 1, day))
+  if (
+    normalized.getUTCFullYear() !== year ||
+    normalized.getUTCMonth() !== month - 1 ||
+    normalized.getUTCDate() !== day
+  ) {
+    return null
+  }
+
   return { year, month, day }
 }
 
