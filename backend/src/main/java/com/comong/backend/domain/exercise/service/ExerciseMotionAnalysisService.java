@@ -30,7 +30,7 @@ public class ExerciseMotionAnalysisService {
 
     static final double MIN_LANDMARK_CONFIDENCE = 0.2;
 
-    private static final double MIN_VECTOR_LENGTH = 0.000001;
+    private static final double MIN_VECTOR_LENGTH = 0.01;
     private static final List<JointDefinition> JOINT_DEFINITIONS =
             List.of(
                     new JointDefinition(
@@ -118,6 +118,7 @@ public class ExerciseMotionAnalysisService {
     private ExerciseMotionMovementAnalysisResponse analyze(
             ExerciseSessionMotion sessionMotion, ReplayPayload replayPayload) {
         ExerciseMotionReplayData replay = replayPayload.data();
+        validateReplayTiming(sessionMotion.getId(), replay);
         List<ExerciseMotionReplayData.Frame> frames = replay.frames();
         Map<String, Integer> landmarkIndex = buildLandmarkIndex(replay.landmarks());
         List<JointAccumulator> jointAccumulators =
@@ -182,6 +183,38 @@ public class ExerciseMotionAnalysisService {
                 buildExcludedSegments(frameAnalyses, replay.durationMs()),
                 ExerciseMotionMovementAnalysisResponse.ReplaySegment.from(
                         replay.representativeSegment()));
+    }
+
+    private void validateReplayTiming(Long motionResultId, ExerciseMotionReplayData replay) {
+        if (replay.durationMs() == null || replay.durationMs() < 0) {
+            throwInvalidReplay(motionResultId, "durationMs is missing or negative");
+        }
+        if (replay.frames() == null || replay.frames().isEmpty()) {
+            throwInvalidReplay(motionResultId, "frames are missing or empty");
+        }
+
+        int previousTimestampMs = -1;
+        for (ExerciseMotionReplayData.Frame frame : replay.frames()) {
+            if (frame == null || frame.t() == null) {
+                throwInvalidReplay(motionResultId, "frame timestamp is missing");
+            }
+            int timestampMs = frame.t();
+            if (timestampMs <= previousTimestampMs) {
+                throwInvalidReplay(motionResultId, "frame timestamps are not strictly increasing");
+            }
+            if (timestampMs > replay.durationMs()) {
+                throwInvalidReplay(motionResultId, "frame timestamp exceeds durationMs");
+            }
+            previousTimestampMs = timestampMs;
+        }
+    }
+
+    private void throwInvalidReplay(Long motionResultId, String reason) {
+        log.error(
+                "Exercise motion replay timing is invalid for movement analysis. motionResultId={}, reason={}",
+                motionResultId,
+                reason);
+        throw new BusinessException(GlobalErrorCode.INTERNAL_SERVER_ERROR);
     }
 
     private Map<String, Integer> buildLandmarkIndex(List<String> landmarks) {

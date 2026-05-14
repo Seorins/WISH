@@ -272,6 +272,35 @@ class ExerciseSessionControllerIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
+    void getMovementAnalysis_rejectsInvalidReplayTiming() throws Exception {
+        TestUser user =
+                setupUserWithProfile("analysis-invalid@example.com", "analysis-invalid-user");
+        PatientProfile profile = findProfile(user);
+        ExerciseMotion march = exerciseMotionRepository.save(exerciseMotion("March", 1));
+        ExerciseSession session =
+                exerciseSessionRepository.save(exerciseSession(profile, 1, 0.8, 1));
+        ExerciseSessionMotion sessionMotion =
+                exerciseSessionMotionRepository.save(
+                        ExerciseSessionMotion.builder()
+                                .session(session)
+                                .exerciseMotion(march)
+                                .durationSec(1)
+                                .accuracy(0.8)
+                                .completedReps(1)
+                                .feedback("Good")
+                                .poseReplay(invalidTimingReplayJson())
+                                .build());
+
+        mockMvc.perform(
+                        get(
+                                        "/exercise-sessions/motions/{motionResultId}/movement-analysis",
+                                        sessionMotion.getId())
+                                .header("Authorization", "Bearer " + user.token()))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.code").value("G-999"));
+    }
+
+    @Test
     void createExerciseSession_acceptsV2PoseReplay() throws Exception {
         TestUser user = setupUserWithProfile("replay-v2@example.com", "replay-v2-user");
         ExerciseMotion march = exerciseMotionRepository.save(exerciseMotion("March", 1));
@@ -732,6 +761,25 @@ class ExerciseSessionControllerIntegrationTest extends IntegrationTestSupport {
                         straightPoseFrameTuplesJson(0.92),
                         straightPoseFrameTuplesJson(0.1),
                         bentLeftElbowFrameTuplesJson(0.92));
+    }
+
+    private String invalidTimingReplayJson() {
+        return """
+                {
+                  "version": 1,
+                  "fps": 30,
+                  "durationMs": 99,
+                  "landmarks": %s,
+                  "frames": [
+                    {"t": 0, "lm": %s},
+                    {"t": 120, "lm": %s}
+                  ]
+                }
+                """
+                .formatted(
+                        replayLandmarkNamesJson(),
+                        straightPoseFrameTuplesJson(0.92),
+                        straightPoseFrameTuplesJson(0.92));
     }
 
     private String straightPoseFrameTuplesJson(double confidence) {
