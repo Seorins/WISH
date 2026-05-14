@@ -2,6 +2,7 @@ package com.comong.backend.domain.village.realtime.config;
 
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
 import org.springframework.messaging.simp.config.ChannelRegistration;
 import org.springframework.messaging.simp.config.MessageBrokerRegistry;
 import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker;
@@ -30,6 +31,7 @@ import lombok.RequiredArgsConstructor;
 @Configuration
 @EnableWebSocketMessageBroker
 @EnableConfigurationProperties(VillageRealtimeProperties.class)
+@Order(0)
 @RequiredArgsConstructor
 public class VillageWebSocketConfig implements WebSocketMessageBrokerConfigurer {
 

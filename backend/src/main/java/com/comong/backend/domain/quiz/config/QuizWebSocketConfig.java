@@ -2,6 +2,7 @@ package com.comong.backend.domain.quiz.config;
 
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
 import org.springframework.messaging.simp.config.ChannelRegistration;
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
 import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
@@ -20,9 +21,13 @@ import lombok.RequiredArgsConstructor;
  *
  * <p>endpoint: {@code /ws/quiz}. 마을 endpoint 와 분리해 URL 만으로도 도메인 식별 가능. STOMP 라우팅 자체는 destination /
  * Room 헤더 prefix ({@code quiz.}) 로 일원화.
+ *
+ * <p>{@link Order} 로 village 보다 늦게 호출되도록 명시한다 — village 의 JWT 인증 인터셉터가 먼저 {@code Principal} 을 주입해야
+ * quiz presence 가 그걸 읽고 멤버십을 검증할 수 있다. 값이 클수록 늦게 호출되므로 quiz=100 (village=0).
  */
 @Configuration
 @EnableConfigurationProperties(QuizRealtimeProperties.class)
+@Order(100)
 @RequiredArgsConstructor
 public class QuizWebSocketConfig implements WebSocketMessageBrokerConfigurer {
 

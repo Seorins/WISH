@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.comong.backend.domain.quiz.dto.JoinRoomRequest;
+import com.comong.backend.domain.quiz.dto.QuizGameStartedResponse;
 import com.comong.backend.domain.quiz.dto.QuizRoomSnapshot;
 import com.comong.backend.domain.quiz.service.QuizRoomService;
 import com.comong.backend.global.common.response.ApiResponse;
@@ -94,5 +95,30 @@ public class QuizRoomController {
     @GetMapping("/{roomId}")
     public ResponseEntity<ApiResponse<QuizRoomSnapshot>> get(@PathVariable String roomId) {
         return ResponseEntity.ok(ApiResponse.success(quizRoomService.snapshot(roomId)));
+    }
+
+    @Operation(
+            summary = "라운드 시작",
+            description =
+                    "방장이 호출하여 다음 라운드를 시작합니다. WAITING 이면 게임 시작, PLAYING 이면 다음 라운드. 토픽에 round_started 이벤트가, 출제자 user queue 에는 제시어가 push 됩니다.")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "200",
+                description = "시작 성공"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "403",
+                description = "호출자가 방장이 아님 (Q-006)"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "404",
+                description = "방을 찾을 수 없음 (Q-001)"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "409",
+                description = "인원 부족 또는 종료된 방 (Q-008)")
+    })
+    @PostMapping("/{roomId}/start")
+    public ResponseEntity<ApiResponse<QuizGameStartedResponse>> start(
+            @AuthenticationPrincipal AuthenticatedUser currentUser, @PathVariable String roomId) {
+        QuizGameStartedResponse response = quizRoomService.startGame(currentUser.userId(), roomId);
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 }
