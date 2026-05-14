@@ -3,7 +3,6 @@ import { assetPath } from '@/game/assets/assetPath'
 import { fadeToScene } from '@/game/systems/sceneTransition'
 import { PHOTO_BOOTH_FRAMES, type PhotoFrame } from './frames'
 
-const PHOTO_BOOTH_RETURN_SPAWN = { xRatio: 0.515, yRatio: 0.345 }
 const FRAME_DISPLAY_WIDTH = 360
 const FRAME_GAP = 36
 const FRAMES_ROW_TOP = 230
@@ -36,7 +35,8 @@ export class PhotoBoothFrameSelectScene extends Phaser.Scene {
     this.currentIndex = 0
     this.frameItems = []
 
-    this.add.rectangle(0, 0, vw, vh, 0xffffff).setOrigin(0)
+    // 거의 불투명한 흰 배경 — paused 마을이 아주 어렴풋이만 비춤.
+    this.add.rectangle(0, 0, vw, vh, 0xffffff, 0.94).setOrigin(0)
 
     this.add
       .text(60, 80, '1  프레임 선택', {
@@ -111,7 +111,14 @@ export class PhotoBoothFrameSelectScene extends Phaser.Scene {
     this.input.keyboard?.on('keydown-ENTER', () => this.confirmSelection())
 
     this.renderSelection()
-    this.cameras.main.fadeIn(250, 0, 0, 0)
+    // 검은 fadeIn 대신 카메라 알파를 0 → 1 로 트윈 — 마을이 보이는 상태에서 자연스럽게 위에 떠오름.
+    this.cameras.main.setAlpha(0)
+    this.tweens.add({
+      targets: this.cameras.main,
+      alpha: 1,
+      duration: 250,
+      ease: 'Sine.easeOut',
+    })
   }
 
   private createNextButton(x: number, y: number) {
@@ -184,9 +191,17 @@ export class PhotoBoothFrameSelectScene extends Phaser.Scene {
   private returnToVillage() {
     if (this.isTransitioning) return
     this.isTransitioning = true
-    fadeToScene(this, 'VillageScene', {
+    // 마을은 paused 상태로 계속 살아 있으므로 fadeToScene 으로 새로 시작하지 않고 resume.
+    // 카메라 알파만 0 으로 트윈해 자연스럽게 사라지고, 끝나면 자기 자신만 stop.
+    this.tweens.add({
+      targets: this.cameras.main,
+      alpha: 0,
       duration: 250,
-      data: { spawn: PHOTO_BOOTH_RETURN_SPAWN, portalCooldownMs: 250 },
+      ease: 'Sine.easeIn',
+      onComplete: () => {
+        this.scene.resume('VillageScene')
+        this.scene.stop()
+      },
     })
   }
 }
