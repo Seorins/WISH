@@ -7,14 +7,23 @@ import type {
   FinishLighthouseEmotionApiResponse,
   FinishLighthouseEmotionRequest,
   FinishLighthouseEmotionResponse,
+  LighthouseChatApiResponse,
+  LighthouseChatHistoryItem,
+  LighthouseChatResponse,
   StartLighthouseEmotionApiResponse,
   StartLighthouseEmotionResponse,
+  SubmitLighthouseChatTurnRequest,
   SubmitLighthouseTurnApiResponse,
   SubmitLighthouseTurnRequest,
   SubmitLighthouseTurnResponse,
 } from './types'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api/v1'
+const AI_BASE_URL = import.meta.env.VITE_AI_BASE_URL ?? '/ai-api'
+
+export const FREE_INPUT_CHOICE_INTENT_ID = 'FREE_INPUT'
+export const MAX_USER_MESSAGE_LENGTH = 500
+export const MAX_CONVERSATION_HISTORY_TURNS = 20
 const LIGHTHOUSE_IDENTITY = getNpcIdentity('lighthouse_keeper')
 const ACCESS_TOKEN_STORAGE_KEY = 'wish_access_token'
 const DIALOGUE_SESSION_DETAIL_ERROR_MESSAGE = 'Dialogue session detail response is invalid.'
@@ -226,6 +235,79 @@ export async function finishLighthouseEmotionSession(
     sessionId: String(body.data?.sessionId ?? sessionId),
     status: body.data?.status ?? 'FINISHED',
     closingLines: body.data?.closingLines ?? [],
+  }
+}
+
+export async function chatWithLighthouseLlm(
+  patientProfileId: number,
+  userMessage: string,
+  conversationHistory: LighthouseChatHistoryItem[],
+  signal?: AbortSignal,
+): Promise<LighthouseChatResponse> {
+  const trimmed = userMessage.trim().slice(0, MAX_USER_MESSAGE_LENGTH)
+  const trimmedHistory = conversationHistory.slice(-MAX_CONVERSATION_HISTORY_TURNS)
+
+  const response = await fetch(`${AI_BASE_URL}/dialogue/chat`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify({
+      patient_profile_id: patientProfileId,
+      user_message: trimmed,
+      conversation_history: trimmedHistory.map(item => ({
+        role: item.role,
+        content: item.content,
+      })),
+    }),
+    signal,
+  })
+
+  if (!response.ok) {
+    throw new Error('Failed to chat with lighthouse LLM.')
+  }
+
+  const body = (await response.json()) as LighthouseChatApiResponse
+  return {
+    npcMessage: typeof body.npc_message === 'string' ? body.npc_message : '',
+    isFallback: Boolean(body.is_fallback),
+  }
+}
+
+export async function submitLighthouseChatTurn(
+  sessionId: string,
+  request: SubmitLighthouseChatTurnRequest,
+  signal?: AbortSignal,
+): Promise<void> {
+  const trimmedUserMessage = request.userMessage.trim().slice(0, MAX_USER_MESSAGE_LENGTH)
+
+  const response = await fetchWithAuth(`${API_BASE_URL}/dialogue/sessions/${sessionId}/turns`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify({
+      npcId: LIGHTHOUSE_IDENTITY.npcId,
+      npcName: LIGHTHOUSE_IDENTITY.backendNpcName,
+      questionText: request.questionText,
+      selectedChoice: {
+        choiceIntentId: FREE_INPUT_CHOICE_INTENT_ID,
+        text: trimmedUserMessage,
+        intensity: 0,
+        concernFlags: [],
+        protectiveFactors: [],
+      },
+      route: 'free_input',
+      npcResponseText: request.npcResponseText,
+      generatedBy: request.isFallback ? 'FALLBACK' : 'CLAUDE',
+    }),
+    signal,
+  })
+
+  if (!response.ok) {
+    throw new Error('Failed to submit lighthouse chat turn.')
   }
 }
 

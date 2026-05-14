@@ -23,17 +23,17 @@ const SAFE_EMPTY_LINE = '괜찮아. 천천히 말해도 된단다.'
 const SAFE_FINAL_LINE = '오늘은 여기까지 해도 괜찮아.'
 
 function isLoadingStatus(status: LighthouseDialogueStatus) {
-  return status === 'loading_llm'
+  return status === 'submitting_chat'
 }
 
 function getVisibleLines({
   status,
-  currentSceneQuestion,
+  currentQuestionText,
   npcResponseLines,
   closingLines,
 }: {
   status: LighthouseDialogueStatus
-  currentSceneQuestion?: string
+  currentQuestionText: string
   npcResponseLines: string[]
   closingLines: string[]
 }) {
@@ -45,11 +45,11 @@ function getVisibleLines({
     return LIGHTHOUSE_OPENING_SAFE_LINES
   }
 
-  if (status === 'showing_local_bridge' || status === 'showing_response') {
+  if (status === 'showing_response') {
     return npcResponseLines.length > 0 ? npcResponseLines : [SAFE_EMPTY_LINE]
   }
 
-  if (status === 'loading_llm') {
+  if (status === 'submitting_chat') {
     return [LIGHTHOUSE_LOADING_LINE]
   }
 
@@ -57,7 +57,7 @@ function getVisibleLines({
     return closingLines.length > 0 ? closingLines : [SAFE_FINAL_LINE]
   }
 
-  return currentSceneQuestion ? [currentSceneQuestion] : []
+  return currentQuestionText ? [currentQuestionText] : []
 }
 
 export function LighthouseEmotionController({
@@ -73,10 +73,11 @@ export function LighthouseEmotionController({
       : resolvedPatientProfileId
   const hasValidPatientProfileId =
     Number.isInteger(effectivePatientProfileId) && (effectivePatientProfileId ?? 0) > 0
-  const { state, start, advance, cancel, close, reset } = useLighthouseEmotionSession({
-    patientProfileId: effectivePatientProfileId ?? 0,
-    onFinished: onClose,
-  })
+  const { state, start, advance, submitSttInput, cancel, close, reset } =
+    useLighthouseEmotionSession({
+      patientProfileId: effectivePatientProfileId ?? 0,
+      onFinished: onClose,
+    })
 
   useEffect(() => {
     if (!isOpen) {
@@ -112,7 +113,7 @@ export function LighthouseEmotionController({
   const loading = isLoadingStatus(state.status)
   const visibleLines = getVisibleLines({
     status: state.status,
-    currentSceneQuestion: state.currentScene?.questionText,
+    currentQuestionText: state.currentQuestionText,
     npcResponseLines: state.npcResponseLines,
     closingLines: state.closingLines,
   })
@@ -127,18 +128,15 @@ export function LighthouseEmotionController({
 
   if (!isOpen) return null
 
-  const isAwaitingUserInput =
-    (state.status === 'entry_question' || state.status === 'waiting_choice') &&
-    state.currentScene !== null
+  const isAwaitingUserSpeech =
+    state.status === 'entry_question' || state.status === 'showing_response'
   const canAdvance =
     state.status === 'opening_welcome' ||
     state.status === 'opening_safe_line' ||
     state.status === 'waiting_final_close'
 
   const handleSttSubmit = (transcript: string) => {
-    if (import.meta.env.DEV) {
-      console.info('[lighthouse-stt] transcript captured', transcript)
-    }
+    void submitSttInput(transcript)
   }
 
   return (
@@ -149,7 +147,6 @@ export function LighthouseEmotionController({
         visibleLines={visibleLines}
         choices={[]}
         showChoices={false}
-        selectedChoiceId={state.selectedChoiceIntentId}
         loading={loading}
         loadingText={LIGHTHOUSE_LOADING_LINE}
         footerAction={null}
@@ -159,7 +156,7 @@ export function LighthouseEmotionController({
         onCancel={cancel}
       />
       <LighthouseSttOverlay
-        visible={isAwaitingUserInput && !loading}
+        visible={isAwaitingUserSpeech && !loading}
         disabled={loading}
         onSubmit={handleSttSubmit}
       />
