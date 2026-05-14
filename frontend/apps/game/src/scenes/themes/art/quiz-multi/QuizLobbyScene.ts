@@ -285,12 +285,33 @@ export class QuizLobbyScene extends Phaser.Scene {
     this.state = 'creating'
     this.setStatus('방 만드는 중…')
     this.tearDownMenu()
-    void createQuizRoom()
-      .then(snapshot => this.enterLobby(snapshot))
-      .catch(error => {
-        this.setStatus(extractMessage(error, '방 생성에 실패했어요. 잠시 후 다시 시도해줘.'))
-        this.showMultiMethod()
-      })
+    void this.createRoomWithStaleCleanup()
+  }
+
+  /**
+   * 방 생성 시 Q-004(이미 방에 있음) 가 떨어지면 BE 가 들고 있는 stale 방을 정리하고 한 번 더 시도. 페이지 새로고침/이탈 등으로 이전 세션이
+   * 깔끔하게 정리되지 못한 케이스를 자동 복구한다. (BE 의 WS disconnect 정리 흐름은 별도 카드)
+   */
+  private async createRoomWithStaleCleanup() {
+    try {
+      const snapshot = await createQuizRoom()
+      await this.enterLobby(snapshot)
+    } catch (error) {
+      if (isAlreadyInRoomError(error)) {
+        try {
+          await leaveQuizRoom()
+          const snapshot = await createQuizRoom()
+          await this.enterLobby(snapshot)
+          return
+        } catch (retryError) {
+          this.setStatus(extractMessage(retryError, '방 생성에 실패했어요. 잠시 후 다시 시도해줘.'))
+          this.showMultiMethod()
+          return
+        }
+      }
+      this.setStatus(extractMessage(error, '방 생성에 실패했어요. 잠시 후 다시 시도해줘.'))
+      this.showMultiMethod()
+    }
   }
 
   private startJoinByCode() {
@@ -310,12 +331,30 @@ export class QuizLobbyScene extends Phaser.Scene {
     if (this.state !== 'waitingCode') return
     this.state = 'joining'
     this.setStatus('방에 입장하는 중…')
-    void joinQuizRoom(payload.code)
-      .then(snapshot => this.enterLobby(snapshot))
-      .catch(error => {
-        this.setStatus(extractMessage(error, '입장에 실패했어요. 코드를 확인해줘.'))
-        this.showMultiMethod()
-      })
+    void this.joinRoomWithStaleCleanup(payload.code)
+  }
+
+  /** 입장 시 Q-004 가 떨어지면 stale 정리 후 재시도 — createRoomWithStaleCleanup 과 동일 사유. */
+  private async joinRoomWithStaleCleanup(code: string) {
+    try {
+      const snapshot = await joinQuizRoom(code)
+      await this.enterLobby(snapshot)
+    } catch (error) {
+      if (isAlreadyInRoomError(error)) {
+        try {
+          await leaveQuizRoom()
+          const snapshot = await joinQuizRoom(code)
+          await this.enterLobby(snapshot)
+          return
+        } catch (retryError) {
+          this.setStatus(extractMessage(retryError, '입장에 실패했어요. 코드를 확인해줘.'))
+          this.showMultiMethod()
+          return
+        }
+      }
+      this.setStatus(extractMessage(error, '입장에 실패했어요. 코드를 확인해줘.'))
+      this.showMultiMethod()
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -908,6 +947,13 @@ function extractMessage(error: unknown, fallback: string): string {
   }
   if (error instanceof Error && error.message) return error.message
   return fallback
+}
+
+/** axios error 의 응답 body.code 가 BE 의 ALREADY_IN_ROOM(Q-004) 인지 검사. 다른 형태 응답은 false. */
+function isAlreadyInRoomError(error: unknown): boolean {
+  if (!error || typeof error !== 'object' || !('response' in error)) return false
+  const response = (error as { response?: { status?: number; data?: { code?: string } } }).response
+  return response?.status === 409 && response?.data?.code === 'Q-004'
 }
 
 /**
