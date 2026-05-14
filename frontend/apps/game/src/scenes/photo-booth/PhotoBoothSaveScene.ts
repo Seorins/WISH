@@ -2,7 +2,7 @@ import Phaser from 'phaser'
 import { assetPath } from '@/game/assets/assetPath'
 import { fadeToScene } from '@/game/systems/sceneTransition'
 import { PHOTO_BOOTH_FRAMES, type PhotoFrame } from './frames'
-import { createRoundedButton, drawRoundedCard, type RoundedButtonHandle } from './roundedUi'
+import { createRoundedButton, drawRoundedCard } from './roundedUi'
 
 const FONT = "'Jua', 'Apple SD Gothic Neo', sans-serif"
 const PHOTO_BOOTH_RETURN_SPAWN = { xRatio: 0.515, yRatio: 0.345 }
@@ -46,7 +46,6 @@ export class PhotoBoothSaveScene extends Phaser.Scene {
   private toggleCenterY = 0
   private toggleW = 64
   private toggleH = 32
-  private downloadButton!: RoundedButtonHandle
 
   constructor() {
     super({ key: 'PhotoBoothSaveScene' })
@@ -130,7 +129,7 @@ export class PhotoBoothSaveScene extends Phaser.Scene {
     const panelCenterX = panelLeftX + RIGHT_PANEL_W / 2
 
     // 다운로드 버튼
-    this.downloadButton = createRoundedButton(this, {
+    createRoundedButton(this, {
       x: panelCenterX,
       y: CONTENT_TOP + 36,
       w: RIGHT_PANEL_W,
