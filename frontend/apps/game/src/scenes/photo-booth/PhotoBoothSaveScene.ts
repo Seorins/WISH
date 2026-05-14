@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { createPhotoBooth } from '@wish/api-client'
 import { assetPath } from '@/game/assets/assetPath'
 import { fadeToScene } from '@/game/systems/sceneTransition'
 import { PHOTO_BOOTH_FRAMES, type PhotoFrame } from './frames'
@@ -300,13 +301,17 @@ export class PhotoBoothSaveScene extends Phaser.Scene {
     })
   }
 
-  private async downloadComposite() {
+  /**
+   * 프레임 native 해상도로 사진 4컷 + 프레임 PNG 합성. 다운로드와 업로드에서 공유.
+   * 반환 캔버스의 toBlob/toDataURL 결과는 무손실 PNG.
+   */
+  private async buildCompositeCanvas(): Promise<HTMLCanvasElement | null> {
     const source = this.textures.get(this.frame.overlayKey).getSourceImage() as HTMLImageElement
     const c = document.createElement('canvas')
     c.width = source.width
     c.height = source.height
     const ctx = c.getContext('2d')
-    if (!ctx) return
+    if (!ctx) return null
     ctx.imageSmoothingEnabled = true
     ctx.imageSmoothingQuality = 'high'
 
@@ -332,22 +337,32 @@ export class PhotoBoothSaveScene extends Phaser.Scene {
         ctx.drawImage(img, drawX, drawY, drawW, drawH)
         ctx.restore()
       } catch (err) {
-        console.warn(`다운로드 이미지 로드 실패 (slot ${i})`, err)
+        console.warn(`합성 이미지 로드 실패 (slot ${i})`, err)
       }
     }
     ctx.drawImage(source, 0, 0)
+    return c
+  }
 
-    c.toBlob(blob => {
-      if (!blob) return
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = `인생네컷-${this.frame.id}-${Date.now()}.png`
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      setTimeout(() => URL.revokeObjectURL(url), 1000)
-    }, 'image/png')
+  private canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob | null> {
+    return new Promise(resolve => {
+      canvas.toBlob(blob => resolve(blob), 'image/png')
+    })
+  }
+
+  private async downloadComposite() {
+    const c = await this.buildCompositeCanvas()
+    if (!c) return
+    const blob = await this.canvasToBlob(c)
+    if (!blob) return
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `인생네컷-${this.frame.id}-${Date.now()}.png`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
   }
 
   private cleanupTextures() {
@@ -371,12 +386,28 @@ export class PhotoBoothSaveScene extends Phaser.Scene {
     })
   }
 
-  private confirm() {
+  private async confirm() {
     if (this.isTransitioning) return
     this.isTransitioning = true
-    if (this.isPublic) {
-      console.info('[Save] 공개로 저장하려고 했지만 백엔드 미구현. 마을로 복귀만.')
+
+    try {
+      const canvas = await this.buildCompositeCanvas()
+      const blob = canvas ? await this.canvasToBlob(canvas) : null
+      if (blob) {
+        await createPhotoBooth({
+          frameId: this.frame.id,
+          isPublic: this.isPublic,
+          image: blob,
+          filename: `photo-booth-${this.frame.id}-${Date.now()}.png`,
+        })
+      } else {
+        console.warn('[Save] 합성 캔버스 생성 실패 — 업로드 스킵')
+      }
+    } catch (err) {
+      // 업로드 실패해도 마을 복귀는 진행 (UX). 추후 토스트 등으로 안내 가능.
+      console.error('[Save] 사진 업로드 실패', err)
     }
+
     fadeToScene(this, 'VillageScene', {
       duration: 250,
       data: { spawn: PHOTO_BOOTH_RETURN_SPAWN, portalCooldownMs: 250 },
