@@ -31,6 +31,7 @@ import {
 } from '@/game/ui/cuteCard'
 import { addCoverBackground } from '@/game/world/background'
 import { createRatioRectangle, isPointInRectangle } from '@/game/world/portal'
+import { attachVillageRealtime, type VillageRealtimeIntegration } from '@/features/village-realtime'
 import {
   artChoiceOptions,
   rumiContentDialogs,
@@ -153,8 +154,12 @@ const ART_ROOM_OBSTACLES: ObstacleRect[] = [
 ]
 
 export class ArtSelectScene extends Phaser.Scene {
+  /** 룸 ID — 같은 테마 select 에 들어온 환자끼리만 보이도록 (S14P31E103-794). */
+  private static readonly REALTIME_ROOM_ID = 'art.select'
+
   private player!: PlayerSprite
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys
+  private villageRealtime: VillageRealtimeIntegration | null = null
   private obstacles!: Phaser.Physics.Arcade.StaticGroup
   private obstacleInstances: ObstacleInstance[] = []
   private obstacleEditorDraft?: Phaser.GameObjects.Rectangle
@@ -336,6 +341,13 @@ export class ArtSelectScene extends Phaser.Scene {
     this.input.keyboard!.on('keydown-R', this.clearEditedObstacleRects)
     this.input.mouse?.disableContextMenu()
 
+    this.villageRealtime = attachVillageRealtime({
+      scene: this,
+      worldWidth: vw,
+      worldHeight: vh,
+      roomId: ArtSelectScene.REALTIME_ROOM_ID,
+    })
+
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.clearContentStartTimer()
       this.input.off('pointerdown', this.handlePointerDown)
@@ -346,6 +358,8 @@ export class ArtSelectScene extends Phaser.Scene {
       this.input.keyboard?.off('keydown-E', this.exportObstacleRects)
       this.input.keyboard?.off('keydown-R', this.clearEditedObstacleRects)
       this.closeAlbum()
+      this.villageRealtime?.destroy()
+      this.villageRealtime = null
     })
 
     this.cameras.main.fadeIn(250, 0, 0, 0)
@@ -363,6 +377,7 @@ export class ArtSelectScene extends Phaser.Scene {
     this.target = movement.target
     this.lastDirection = movement.lastDirection
 
+    this.villageRealtime?.publishLocal(this.player, this.lastDirection, movement.moving)
     this.updateRumiConversation()
 
     if (this.isDialogVisible || this.isAlbumVisible) {

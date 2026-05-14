@@ -31,6 +31,7 @@ import {
   type CuteCardPalette,
 } from '@/game/ui/cuteCard'
 import { createRatioRectangle, getRectangleEntryState } from '@/game/world/portal'
+import { attachVillageRealtime, type VillageRealtimeIntegration } from '@/features/village-realtime'
 import { seongsuDialogs } from './dialog/seongsuDialogs'
 
 const TALK_DISTANCE = 82
@@ -178,8 +179,12 @@ type BackgroundDisplayArea = {
 }
 
 export class GymnasticsSelectScene extends Phaser.Scene {
+  /** 룸 ID — 같은 테마 select 에 들어온 환자끼리만 보이도록 (S14P31E103-794). */
+  private static readonly REALTIME_ROOM_ID = 'gymnastics.select'
+
   private player!: PlayerSprite
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys
+  private villageRealtime: VillageRealtimeIntegration | null = null
   private obstacles!: Phaser.Physics.Arcade.StaticGroup
   private obstacleInstances: ObstacleInstance[] = []
   private obstacleEditorDraft?: Phaser.GameObjects.Rectangle
@@ -312,6 +317,13 @@ export class GymnasticsSelectScene extends Phaser.Scene {
     this.input.keyboard!.on('keydown-R', this.clearEditedObstacleRects)
     this.input.mouse?.disableContextMenu()
 
+    this.villageRealtime = attachVillageRealtime({
+      scene: this,
+      worldWidth: vw,
+      worldHeight: vh,
+      roomId: GymnasticsSelectScene.REALTIME_ROOM_ID,
+    })
+
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.clearContentStartTimer()
       this.input.off('pointerdown', this.handlePointerDown)
@@ -319,6 +331,8 @@ export class GymnasticsSelectScene extends Phaser.Scene {
       this.input.off('pointerup', this.handleObstacleEditorPointerUp)
       this.input.keyboard?.off('keydown-E', this.exportObstacleRects)
       this.input.keyboard?.off('keydown-R', this.clearEditedObstacleRects)
+      this.villageRealtime?.destroy()
+      this.villageRealtime = null
     })
 
     this.playerWasInExitPortal = true
@@ -337,6 +351,7 @@ export class GymnasticsSelectScene extends Phaser.Scene {
     this.target = movement.target
     this.lastDirection = movement.lastDirection
 
+    this.villageRealtime?.publishLocal(this.player, this.lastDirection, movement.moving)
     this.updateSeongsuConversation()
 
     if (this.isDialogVisible) return

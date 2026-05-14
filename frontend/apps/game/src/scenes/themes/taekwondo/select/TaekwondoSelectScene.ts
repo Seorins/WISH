@@ -32,6 +32,7 @@ import {
 } from '@/game/ui/simpleDialog'
 import { addCoverBackground } from '@/game/world/background'
 import { createRatioRectangle, isPointInRectangle } from '@/game/world/portal'
+import { attachVillageRealtime, type VillageRealtimeIntegration } from '@/features/village-realtime'
 import { seokjaeSelectDialogs } from '../dialog/seokjaeDialogs'
 
 const TAEKWONDO_SPRITE_FRAME = { width: 384, height: 512 }
@@ -92,7 +93,11 @@ type TaekwondoSelectData = {
 }
 
 export class TaekwondoSelectScene extends Phaser.Scene {
+  /** 룸 ID — 같은 테마 select 에 들어온 환자끼리만 보이도록 (S14P31E103-794). */
+  private static readonly REALTIME_ROOM_ID = 'taekwondo.select'
+
   private player!: PlayerSprite
+  private villageRealtime: VillageRealtimeIntegration | null = null
   private seokjaeNpc!: Phaser.GameObjects.Sprite
   private obstacles!: Phaser.Physics.Arcade.StaticGroup
   private obstacleInstances: ObstacleInstance[] = []
@@ -221,6 +226,14 @@ export class TaekwondoSelectScene extends Phaser.Scene {
     this.input.keyboard!.on('keydown-E', this.exportObstacleRects)
     this.input.keyboard!.on('keydown-R', this.clearEditedObstacleRects)
     this.input.mouse?.disableContextMenu()
+
+    this.villageRealtime = attachVillageRealtime({
+      scene: this,
+      worldWidth: vw,
+      worldHeight: vh,
+      roomId: TaekwondoSelectScene.REALTIME_ROOM_ID,
+    })
+
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.isSceneShuttingDown = true
       this.input.off('pointerdown', this.handlePointerDown)
@@ -232,6 +245,8 @@ export class TaekwondoSelectScene extends Phaser.Scene {
       this.input.keyboard?.off('keydown-R', this.clearEditedObstacleRects)
       this.randomPoseTimer?.remove(false)
       this.randomPoseTimer = undefined
+      this.villageRealtime?.destroy()
+      this.villageRealtime = null
     })
 
     this.cameras.main.fadeIn(250, 0, 0, 0)
@@ -441,6 +456,7 @@ export class TaekwondoSelectScene extends Phaser.Scene {
     this.target = movement.target
     this.lastDirection = movement.lastDirection
 
+    this.villageRealtime?.publishLocal(this.player, this.lastDirection, movement.moving)
     this.updateSeokjaeTalkIcon()
     this.updateSeokjaeConversation()
 
