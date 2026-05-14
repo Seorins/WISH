@@ -1,4 +1,5 @@
--- V32: 마을 NPC 대화 세션의 script_id 영속화.
+-- V34: 마을 NPC 대화 세션의 script_id 영속화.
+-- (이력: 원래 V32 로 develop 에 머지되었으나 동반 V31(dialogue) 가 V33 으로 옮겨가면서 함께 V34 로 재번호.)
 --
 -- 핵심 결정:
 --   - 마을 NPC 가 도메인 스페셜리스트 모델로 전환되면서 한 NPC 가 여러 미니
@@ -7,7 +8,7 @@
 --     이미 본 script 를 제외한다.
 --   - 등대지기(YEONGCHEOL)는 catalog 기반이 아니므로 NULL.
 --   - 카탈로그 변경에도 세션 분석 안전성을 위해 script_id 도 스냅샷
---     (V31 의 turn metadata snapshot 정책과 동일).
+--     (V33 의 turn metadata snapshot 정책과 동일).
 
 ALTER TABLE dialogue_sessions
     ADD COLUMN script_id VARCHAR(64);
