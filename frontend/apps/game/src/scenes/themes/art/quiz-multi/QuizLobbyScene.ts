@@ -12,7 +12,7 @@ import type { QuizRoomEvent } from '@/features/quiz-realtime'
 import { extractUserIdFromToken } from '@/features/village-realtime/jwtUserId'
 import { fadeToScene } from '@/game/systems/sceneTransition'
 import { addCoverBackground } from '@/game/world/background'
-import { CUTE_CARD_PALETTES, drawCuteCardPanel, drawCutePillButton } from '@/game/ui/cuteCard'
+import { CUTE_CARD_PALETTES, drawCuteCardPanel } from '@/game/ui/cuteCard'
 
 /**
  * 그림 퀴즈 모드 선택 + 멀티플레이 로비 (S14P31E103-820).
@@ -621,22 +621,31 @@ export class QuizLobbyScene extends Phaser.Scene {
     const faceG = this.add.graphics()
     const drawButton = (lifted: boolean) => {
       const lift = lifted ? liftAmount : 0
+      // 부드러운 외부 드롭섀도우 — 한 번에 어두운 한 겹보단 여러 겹 알파로 깔면 자연스러움.
       shadowG.clear()
-      shadowG.fillStyle(0x000000, 0.4)
-      shadowG.fillRoundedRect(-w / 2, -h / 2 + dropOffset - lift * 0.5, w, h + thickness, radius)
+      const shadowSteps = 5
+      for (let i = 0; i < shadowSteps; i++) {
+        const spread = i * 2
+        shadowG.fillStyle(0x000000, 0.06)
+        shadowG.fillRoundedRect(
+          -w / 2 - spread,
+          -h / 2 + dropOffset - lift * 0.5 + spread * 0.6,
+          w + spread * 2,
+          h + thickness + spread,
+          radius + spread,
+        )
+      }
+
       faceG.clear()
-      // 하단 두께 면
+      // 하단 두께 면 (3D)
       faceG.fillStyle(shadow, 1)
       faceG.fillRoundedRect(-w / 2, -h / 2 - lift, w, h + thickness, radius)
-      // 윗 면
+      // 윗 면 (메인 컬러)
       faceG.fillStyle(fill, 1)
       faceG.fillRoundedRect(-w / 2, -h / 2 - lift, w, h, radius)
-      // 상단 하이라이트
-      faceG.fillStyle(0xffffff, 0.22)
-      faceG.fillRoundedRect(-w / 2 + 10, -h / 2 - lift + 10, w - 20, h * 0.3, radius - 10)
-      // 흰 외곽선
-      faceG.lineStyle(4, 0xffffff, 0.95)
-      faceG.strokeRoundedRect(-w / 2, -h / 2 - lift, w, h, radius)
+      // 같은 색 진한 톤으로 1px 안쪽 보더 — 흰 외곽선 대신 차분한 윤곽 정의
+      faceG.lineStyle(2, shadow, 0.7)
+      faceG.strokeRoundedRect(-w / 2 + 1, -h / 2 - lift + 1, w - 2, h - 2, radius - 1)
     }
     drawButton(false)
     container.add([hit, shadowG, faceG])
@@ -684,6 +693,10 @@ export class QuizLobbyScene extends Phaser.Scene {
     return container
   }
 
+  /**
+   * 단색 pill 버튼. 공용 drawCutePillButton 의 외곽 글로우/상단 글로스가 시각적으로 두꺼워 보이는 것을 피해, 본 씬에서는 직접 그린다.
+   * 클릭 영역은 investment 안 들이려고 투명 Rectangle hit zone 으로 시각 = 클릭 일치.
+   */
   private createPillButton(
     cx: number,
     cy: number,
@@ -694,8 +707,21 @@ export class QuizLobbyScene extends Phaser.Scene {
     onClick: () => void,
   ) {
     const container = this.add.container(cx, cy)
+    const radius = h / 2
+
+    const hit = this.add.rectangle(0, 0, w, h, 0xffffff, 0.001).setOrigin(0.5)
+    hit.setInteractive({ useHandCursor: true })
+
     const g = this.add.graphics()
-    drawCutePillButton(g, 0, 0, w, h, palette, 'default')
+    const draw = (hovered: boolean) => {
+      g.clear()
+      g.fillStyle(palette.accent, hovered ? 1 : 0.92)
+      g.fillRoundedRect(-w / 2, -h / 2, w, h, radius)
+      g.lineStyle(2, 0xffffff, hovered ? 1 : 0.9)
+      g.strokeRoundedRect(-w / 2, -h / 2, w, h, radius)
+    }
+    draw(false)
+
     const text = this.add
       .text(0, 0, label, {
         fontFamily: FONT_FAMILY,
@@ -704,21 +730,11 @@ export class QuizLobbyScene extends Phaser.Scene {
         fontStyle: 'bold',
       })
       .setOrigin(0.5)
-    container.add([g, text])
-    container.setSize(w, h)
-    container.setInteractive(
-      new Phaser.Geom.Rectangle(-w / 2, -h / 2, w, h),
-      Phaser.Geom.Rectangle.Contains,
-    )
-    container.on(Phaser.Input.Events.POINTER_DOWN, onClick)
-    container.on(Phaser.Input.Events.POINTER_OVER, () => {
-      drawCutePillButton(g, 0, 0, w, h, palette, 'hover')
-      this.input.setDefaultCursor('pointer')
-    })
-    container.on(Phaser.Input.Events.POINTER_OUT, () => {
-      drawCutePillButton(g, 0, 0, w, h, palette, 'default')
-      this.input.setDefaultCursor('default')
-    })
+    container.add([hit, g, text])
+
+    hit.on(Phaser.Input.Events.POINTER_DOWN, onClick)
+    hit.on(Phaser.Input.Events.POINTER_OVER, () => draw(true))
+    hit.on(Phaser.Input.Events.POINTER_OUT, () => draw(false))
     return container
   }
 }
