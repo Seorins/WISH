@@ -91,6 +91,32 @@
   gap: 8px;
 }
 
+.emptyState {
+  min-height: 188px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  padding: 20px;
+  border: 1px dashed var(--dash-color-border-strong);
+  border-radius: var(--dash-radius-card);
+  background: rgba(255, 255, 255, 0.62);
+  color: var(--dash-color-text-muted);
+  text-align: center;
+}
+
+.emptyState strong {
+  color: var(--dash-color-text-strong);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.emptyState span {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
 .row {
   appearance: none;
   border: 1.5px solid transparent;
