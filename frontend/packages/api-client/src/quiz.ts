@@ -30,11 +30,10 @@ export type QuizRoomSnapshot = {
   currentDrawerUserId: number
 }
 
-/** 출제자에게만 노출되는 라운드 제시어. 정답자는 글자수 힌트만 별도 라우팅으로 받음 (M2-5 예정). */
+/** 출제자에게만 노출되는 라운드 제시어. 단어만 전달. */
 export type PromptAssignment = {
   roundNumber: number
   word: string
-  hint: string
 }
 
 /**

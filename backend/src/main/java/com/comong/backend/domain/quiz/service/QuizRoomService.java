@@ -142,7 +142,7 @@ public class QuizRoomService {
 
         return new QuizGameStartedResponse(
                 QuizRoomSnapshot.of(updated),
-                new PromptAssignment(updated.roundNumber(), prompt.word(), prompt.hint()));
+                new PromptAssignment(updated.roundNumber(), prompt.word()));
     }
 
     private PatientProfile requireProfile(long userId) {
