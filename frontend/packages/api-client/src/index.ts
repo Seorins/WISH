@@ -11,6 +11,15 @@ export {
   updateArtwork,
 } from './artworks'
 export {
+  createQuizRoom,
+  getQuizRoom,
+  joinQuizRoom,
+  leaveQuizRoom,
+  type QuizMember,
+  type QuizRoomSnapshot,
+  type QuizRoomStatus,
+} from './quiz'
+export {
   createPhotoBooth,
   deletePhotoBooth,
   getMyPhotoBooths,
