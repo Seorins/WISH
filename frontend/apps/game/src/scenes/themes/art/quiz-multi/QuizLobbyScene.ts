@@ -15,17 +15,18 @@ import { addCoverBackground } from '@/game/world/background'
 import { CUTE_CARD_PALETTES, drawCuteCardPanel, drawCutePillButton } from '@/game/ui/cuteCard'
 
 /**
- * 그림 퀴즈 멀티플레이 로비 (S14P31E103-820).
+ * 그림 퀴즈 모드 선택 + 멀티플레이 로비 (S14P31E103-820).
  *
  * <p>상태 머신:
  *
  * <ul>
- *   <li>{@code menu} — 방 만들기 / 코드 입장 두 선택지 노출
+ *   <li>{@code modeSelect} — Step1: 솔로 (AI) / 멀티 두 큰 버튼
+ *   <li>{@code multiMethod} — Step2: 방 만들기 / 코드로 입장 두 큰 버튼
  *   <li>{@code creating} — createQuizRoom 진행 중
- *   <li>{@code waitingCode} — React 오버레이가 코드 입력 받는 중 (씬은 대기 표시)
+ *   <li>{@code waitingCode} — React 오버레이가 코드 입력 받는 중
  *   <li>{@code joining} — joinQuizRoom 진행 중
- *   <li>{@code lobby} — WS 연결 + 멤버 슬롯 표시 + 시작 버튼 (방장)
- *   <li>{@code leaving} — leaveQuizRoom + 마을 복귀
+ *   <li>{@code lobby} — WS 연결 + 멤버 슬롯 + 시작 버튼 (방장)
+ *   <li>{@code leaving} — leaveQuizRoom + 미술실 복귀
  * </ul>
  *
  * <p>M1 단계: 시작 버튼은 자리만 잡아두고 실제 게임 전이는 M2 에서.
