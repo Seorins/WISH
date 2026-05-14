@@ -123,6 +123,12 @@ type GamePresenceSubscriptionOptions = {
   signal?: AbortSignal
 }
 
+type WatchingSubscriptionOptions = {
+  onOpen?: () => void
+  onError?: (error: unknown) => void
+  signal?: AbortSignal
+}
+
 // EventSource 가 Authorization 헤더를 못 붙이는 한계를 우회하려고 fetch + ReadableStream 으로
 // 직접 SSE 를 구독한다. BE 는 `event:realtime\ndata:{...}\n\n` 형태로 보내며 본 파서는
 // data: 라인만 추출하므로 event: 라인은 자연스럽게 무시된다. 재연결/백오프는 호출자
@@ -180,6 +186,42 @@ export async function subscribeRealtimeEvents({
         }
         separatorIndex = buffer.indexOf('\n\n')
       }
+    }
+  } catch (streamError) {
+    if (signal?.aborted) return
+    onError?.(streamError)
+  } finally {
+    reader.releaseLock()
+  }
+}
+
+export async function subscribeWatching(
+  loginSessionId: number,
+  { onOpen, onError, signal }: WatchingSubscriptionOptions,
+): Promise<void> {
+  const baseUrl = import.meta.env.VITE_API_BASE_URL ?? '/api/v1'
+  const token = localStorage.getItem('wish_access_token')
+  const response = await fetch(`${baseUrl}/realtime/login-sessions/${loginSessionId}/watching`, {
+    method: 'GET',
+    headers: {
+      Accept: 'text/event-stream',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    signal,
+  })
+
+  if (!response.ok || !response.body) {
+    throw new Error(`Watching SSE connection failed: ${response.status}`)
+  }
+
+  onOpen?.()
+
+  const reader = response.body.pipeThrough(new TextDecoderStream()).getReader()
+
+  try {
+    while (true) {
+      const { done } = await reader.read()
+      if (done) break
     }
   } catch (streamError) {
     if (signal?.aborted) return

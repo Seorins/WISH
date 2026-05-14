@@ -53,6 +53,7 @@ export {
   startContent,
   subscribeGamePresence,
   subscribeRealtimeEvents,
+  subscribeWatching,
 } from './realtime'
 export { getCumulativeUsageStats, getDailyUsageStats, getUsageAverages } from './usage-stats'
 export {
