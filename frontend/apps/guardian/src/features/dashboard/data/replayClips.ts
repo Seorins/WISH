@@ -48,7 +48,12 @@ export function toRecordedMotionClip(
   const landmarkIndexes = LANDMARK_NAMES.map(landmarkName => replay.landmarks.indexOf(landmarkName))
 
   const frames = replay.frames
-    .filter(frame => Number.isFinite(frame.t) && Array.isArray(frame.lm))
+    .filter(
+      frame =>
+        Number.isFinite(frame.t) &&
+        Array.isArray(frame.lm) &&
+        frame.lm.length === replay.landmarks.length,
+    )
     .map(frame => ({
       t: Math.max(0, Math.round(frame.t)),
       lm: landmarkIndexes.map(index => toLandmark(index < 0 ? undefined : frame.lm[index])),

@@ -204,6 +204,13 @@ const FALLBACK_JOINTS: Joint[] = [
 
 const FALLBACK_JOINT_BY_ID = new Map(FALLBACK_JOINTS.map(joint => [joint.id, joint]))
 const DEFAULT_JOINT_POSITION: [number, number, number] = [0, 0, 0]
+const ARM_ELBOW_LANDMARK_NAMES = new Set<LandmarkName>(['LEFT_ELBOW', 'RIGHT_ELBOW'])
+const ARM_TARGET_LANDMARK_NAMES = new Set<LandmarkName>([
+  'LEFT_ELBOW',
+  'RIGHT_ELBOW',
+  'LEFT_WRIST',
+  'RIGHT_WRIST',
+])
 
 function isFiniteVector3(v: Vector3): boolean {
   return Number.isFinite(v.x) && Number.isFinite(v.y) && Number.isFinite(v.z)
@@ -225,23 +232,18 @@ function limitDirectionFromRest(restDir: Vector3, desiredDir: Vector3, maxRadian
 }
 
 function isArmElbowLandmark(name: LandmarkName): boolean {
-  return name === 'LEFT_ELBOW' || name === 'RIGHT_ELBOW'
+  return ARM_ELBOW_LANDMARK_NAMES.has(name)
 }
 
 function isArmTargetLandmark(name: LandmarkName): boolean {
-  return (
-    name === 'LEFT_ELBOW' ||
-    name === 'RIGHT_ELBOW' ||
-    name === 'LEFT_WRIST' ||
-    name === 'RIGHT_WRIST'
-  )
+  return ARM_TARGET_LANDMARK_NAMES.has(name)
 }
 
 function isLeftSideLandmark(name: LandmarkName): boolean {
   return name.startsWith('LEFT_')
 }
 
-function applyTorsoGuard(
+function mutateTorsoGuardedArmPoint(
   frame: MotionFrame,
   clip: MotionClip,
   childKp: LandmarkName,
@@ -547,7 +549,7 @@ function CharacterModel({
       }
 
       // 2. desired world direction (motion frame keypoint 기반)
-      applyTorsoGuard(
+      mutateTorsoGuardedArmPoint(
         frame,
         activeMotion,
         c.childKp,
