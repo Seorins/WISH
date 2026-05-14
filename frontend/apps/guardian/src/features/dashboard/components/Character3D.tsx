@@ -5,7 +5,9 @@ import { Matrix4, MathUtils, Quaternion, Vector3, type Bone, type Group } from '
 import squatGlbUrl from '@/assets/squat.glb?url'
 import walkingGlbUrl from '@/assets/walking.glb?url'
 import wishGlbUrl from '@/assets/wish.glb?url'
-import type { LandmarkName, MotionClip, MotionFrame } from '../data/motionClips'
+import { OneEuro1D, type OneEuroFilterOptions } from '@/shared/lib/oneEuroFilter'
+import type { Landmark, LandmarkName, MotionClip, MotionFrame } from '../data/motionClips'
+import { LANDMARK_NAMES } from '../data/motionClips'
 import { MinusIcon, PersonIcon, PlusIcon, RefreshIcon } from './icons'
 import styles from './Character3D.module.css'
 
@@ -49,16 +51,42 @@ const ARM_IK_ELBOW_FORWARD_BIAS = 0.18
 const UPPER_BODY_SLERP_FACTOR = 0.28
 const HEAD_RETARGET_SLERP_FACTOR = 0.24
 const SHOULDER_RETARGET_SLERP_FACTOR = 0.32
-const TORSO_MAX_YAW_RAD = Math.PI * 0.08
-const TORSO_MAX_ROLL_RAD = Math.PI * 0.06
-const TORSO_YAW_SCALE = 0.32
-const TORSO_ROLL_SCALE = 0.4
+// Yaw/roll/pitch 클램프: 너무 빡빡하면 정면 고정처럼 보임. 0.2π ≈ 36°.
+const TORSO_MAX_YAW_RAD = Math.PI * 0.2
+const TORSO_MAX_ROLL_RAD = Math.PI * 0.1
+const TORSO_MAX_PITCH_RAD = Math.PI * 0.18
+const TORSO_YAW_SCALE = 0.55
+const TORSO_ROLL_SCALE = 0.5
+// Depth damping(0.15)을 보상하기 위해 pitch 스케일을 크게 잡되, 클램프로 막음.
+const TORSO_PITCH_SCALE = 3.2
 const SHOULDER_MAX_ROTATION_RAD = Math.PI * 0.18
 const NECK_MAX_ROTATION_RAD = Math.PI * 0.14
 const HEAD_MAX_ROTATION_RAD = Math.PI * 0.12
+const HAND_MAX_ROTATION_RAD = Math.PI * 0.55
+const HAND_RETARGET_SLERP_FACTOR = 0.3
 const LOCAL_X_AXIS = new Vector3(1, 0, 0)
 const LOCAL_Y_AXIS = new Vector3(0, 1, 0)
 const LOCAL_Z_AXIS = new Vector3(0, 0, 1)
+
+/**
+ * 5fps 저장 클립을 ~60fps 렌더에서 부드럽게 재생하기 위한 보간/필터 파라미터.
+ *  - LM_FILTER_OPTIONS: 1-Euro 필터. minCutoff 낮을수록 떨림은 죽지만 지연이 늘어남.
+ *  - INTERPOLATION_MAX_GAP_MS: 이 시간 이상 떨어진 frame은 보간하지 않고 가장 가까운 값 사용
+ *    (긴 트래킹 결손 구간에서 잘못된 직선 보간 방지).
+ */
+const LM_FILTER_OPTIONS: OneEuroFilterOptions = { minCutoff: 1.2, beta: 0.02, dCutoff: 1.0 }
+const INTERPOLATION_MAX_GAP_MS = 500
+
+/**
+ * 사용자 rest 캘리브레이션:
+ *  - 모션 시작 시점 ~CALIBRATION_FRAME_COUNT 프레임을 모아 평균 → 사용자 rest 자세로 간주.
+ *  - 본 chain별로 (parent→child) 방향을 사용자 rest 기준 좌표계 → GLB rest 좌표계로
+ *    매핑하는 quaternion offset(calibrationDeltas)을 만들어, 이후 frame의 desired 방향을
+ *    이 offset으로 보정해서 retarget에 사용함.
+ *  - 캘리브레이션이 끝나기 전엔 GLB rest 그대로 유지.
+ */
+const CALIBRATION_FRAME_COUNT = 6
+const CALIBRATION_MIN_CONFIDENCE = 0.2
 
 /** UpLeg 본 위치(허리 라인)를 시각적 hip(엉덩이) 라인으로 내리는 오프셋 */
 const HIP_Y_OFFSET = -0.18
@@ -294,6 +322,9 @@ type ArmIkScratch = {
   rightShoulder: Vector3
   leftHip: Vector3
   rightHip: Vector3
+  bodyRight: Vector3
+  bodyUp: Vector3
+  bodyForward: Vector3
 }
 
 type DirectionRetargetScratch = {
@@ -509,7 +540,28 @@ function applyArmIkTargets(
   const observedPoleValid = normalizeDirection(scratch.observedPole)
 
   const sideSign = getArmSideSign(side)
-  scratch.fallbackPole.set(sideSign * ARM_IK_ELBOW_SIDE_BIAS, 0, ARM_IK_ELBOW_FORWARD_BIAS)
+  // 신체 좌표축(어깨-엉덩이 평면 기반)을 사용해 fallback pole 을 "옆구리 + 정면 + 살짝 아래" 로 잡음.
+  // 단순 월드축(X,Z) 기반 bias 는 캐릭터/사용자가 정면을 안 보고 있을 때 팔꿈치를 잘못된 방향으로 꺾이게 만든다.
+  const hasBodyBasis = tryComputeBodyBasis(
+    frame,
+    clip,
+    scratch.leftShoulder,
+    scratch.rightShoulder,
+    scratch.leftHip,
+    scratch.rightHip,
+    scratch.bodyRight,
+    scratch.bodyUp,
+    scratch.bodyForward,
+  )
+  if (hasBodyBasis) {
+    scratch.fallbackPole
+      .copy(scratch.bodyRight)
+      .multiplyScalar(sideSign * ARM_IK_ELBOW_SIDE_BIAS)
+      .addScaledVector(scratch.bodyForward, ARM_IK_ELBOW_FORWARD_BIAS)
+      .addScaledVector(scratch.bodyUp, -0.12)
+  } else {
+    scratch.fallbackPole.set(sideSign * ARM_IK_ELBOW_SIDE_BIAS, 0, ARM_IK_ELBOW_FORWARD_BIAS)
+  }
   scratch.fallbackPole.addScaledVector(
     scratch.chainDir,
     -scratch.fallbackPole.dot(scratch.chainDir),
@@ -646,6 +698,18 @@ function applyUpperBodyRetargeting(
     -TORSO_MAX_ROLL_RAD,
     TORSO_MAX_ROLL_RAD,
   )
+  // Pitch: 어깨중심-엉덩이중심 벡터의 forward(z) 성분이 사용자가 앞으로 숙인 정도.
+  // y 가 아래 양수(MediaPipe) 이므로 spineLength 는 hipY - shoulderY (양수). 카메라 쪽으로 숙이면 z↑.
+  const spineVerticalSpan = upperScratch.hipCenter.y - upperScratch.shoulderCenter.y
+  const spineForwardOffset = upperScratch.shoulderCenter.z - upperScratch.hipCenter.z
+  const pitch =
+    Number.isFinite(spineVerticalSpan) && Math.abs(spineVerticalSpan) > 1e-3
+      ? MathUtils.clamp(
+          Math.atan2(spineForwardOffset, Math.abs(spineVerticalSpan)) * TORSO_PITCH_SCALE,
+          -TORSO_MAX_PITCH_RAD,
+          TORSO_MAX_PITCH_RAD,
+        )
+      : 0
 
   let didRetarget = false
   didRetarget =
@@ -654,7 +718,7 @@ function applyUpperBodyRetargeting(
       restQuats.get('Spine'),
       yaw * 0.2,
       roll * 0.2,
-      0,
+      pitch * 0.2,
       UPPER_BODY_SLERP_FACTOR,
       upperScratch,
     ) || didRetarget
@@ -664,7 +728,7 @@ function applyUpperBodyRetargeting(
       restQuats.get('Spine01'),
       yaw * 0.35,
       roll * 0.3,
-      0,
+      pitch * 0.35,
       UPPER_BODY_SLERP_FACTOR,
       upperScratch,
     ) || didRetarget
@@ -674,7 +738,7 @@ function applyUpperBodyRetargeting(
       restQuats.get('Spine02'),
       yaw * 0.45,
       roll * 0.4,
-      0,
+      pitch * 0.45,
       UPPER_BODY_SLERP_FACTOR,
       upperScratch,
     ) || didRetarget
@@ -774,23 +838,6 @@ function classifyBone(rawName: string): string | null {
   return null
 }
 
-function frameToJoints(clip: MotionClip, frameIdx: number): Joint[] {
-  const frame = clip.frames[frameIdx]
-  return clip.landmarks.map((name, i) => {
-    const id = KP_TO_JOINT_ID[name]
-    const lm = frame.lm[i]
-    const fallback = FALLBACK_JOINT_BY_ID.get(id)?.position ?? DEFAULT_JOINT_POSITION
-    if (!lm || lm[0] == null || lm[1] == null || lm[2] == null || lm[3] <= 0.05) {
-      return { id, position: fallback }
-    }
-
-    return {
-      id,
-      position: [lm[0] * KP_SCALE, HIP_LOCAL_Y - lm[1] * KP_SCALE, -lm[2] * KP_SCALE],
-    }
-  })
-}
-
 function tryReadRetargetKp(
   frame: MotionFrame,
   clip: MotionClip,
@@ -804,6 +851,256 @@ function tryReadRetargetKp(
     return false
   }
   out.set(lm[0] * KP_SCALE, HIP_LOCAL_Y - lm[1] * KP_SCALE, -lm[2] * RETARGET_DEPTH_SCALE)
+  return true
+}
+
+/**
+ * 25 landmark × 3 좌표(x,y,z) 의 시계열을 1-Euro 필터로 평활화.
+ * confidence 가 낮거나 좌표가 null 인 경우엔 필터를 reset 해서 다음 유효 값이 시점 0이 되도록 함.
+ */
+class LandmarkStreamFilter {
+  private readonly filters: OneEuro1D[][]
+
+  constructor(landmarkCount: number, options: OneEuroFilterOptions) {
+    this.filters = Array.from({ length: landmarkCount }, () => [
+      new OneEuro1D(options),
+      new OneEuro1D(options),
+      new OneEuro1D(options),
+    ])
+  }
+
+  filter(
+    landmarkIdx: number,
+    x: number,
+    y: number,
+    z: number,
+    timeMs: number,
+  ): [number, number, number] {
+    const tri = this.filters[landmarkIdx]
+    return [tri[0].filter(x, timeMs), tri[1].filter(y, timeMs), tri[2].filter(z, timeMs)]
+  }
+
+  resetLandmark(landmarkIdx: number): void {
+    const tri = this.filters[landmarkIdx]
+    tri[0].reset()
+    tri[1].reset()
+    tri[2].reset()
+  }
+
+  resetAll(): void {
+    for (let i = 0; i < this.filters.length; i += 1) this.resetLandmark(i)
+  }
+}
+
+/**
+ * 5fps 같은 낮은 fps 클립을 ~60fps 렌더에서 부드럽게 보이도록,
+ * 현재 elapsedMs 에 해당하는 prev/next frame을 선형 보간한 lm 배열을 생성.
+ *  - 두 frame 의 시간 간격이 INTERPOLATION_MAX_GAP_MS 이상이면 보간하지 않고 가장 가까운 값 사용 (tracking 결손 안전).
+ *  - null/저신뢰 landmark 는 가까운 유효 frame 값을 그대로 사용 (보간하지 않음).
+ *  - out 배열은 외부에서 재사용하기 위해 미리 할당된 mutable lm 배열을 받음.
+ */
+function fillInterpolatedFrameLm(
+  clip: MotionClip,
+  elapsedMs: number,
+  outLm: Array<[number | null, number | null, number | null, number]>,
+): { prevIdx: number; nextIdx: number; alpha: number } | null {
+  const frames = clip.frames
+  if (frames.length === 0) return null
+  // binary search 대신 단순 선형 탐색 — 클립 길이가 충분히 짧음 (수백 프레임 이내).
+  let nextIdx = 0
+  while (nextIdx < frames.length && frames[nextIdx].t < elapsedMs) nextIdx += 1
+  const prevIdx = Math.max(0, nextIdx - 1)
+  const clampedNextIdx = Math.min(frames.length - 1, nextIdx)
+  const prev = frames[prevIdx]
+  const next = frames[clampedNextIdx]
+  const gap = next.t - prev.t
+  const canInterpolate = prevIdx !== clampedNextIdx && gap > 0 && gap <= INTERPOLATION_MAX_GAP_MS
+  const alpha = canInterpolate ? Math.min(1, Math.max(0, (elapsedMs - prev.t) / gap)) : 0
+
+  for (let i = 0; i < clip.landmarks.length; i += 1) {
+    const a: Landmark | undefined = prev.lm[i]
+    const b: Landmark | undefined = next.lm[i]
+    const aOk = !!a && a[0] != null && a[1] != null && a[2] != null && a[3] > 0.05
+    const bOk = !!b && b[0] != null && b[1] != null && b[2] != null && b[3] > 0.05
+
+    if (canInterpolate && aOk && bOk) {
+      outLm[i][0] = (a[0] as number) * (1 - alpha) + (b[0] as number) * alpha
+      outLm[i][1] = (a[1] as number) * (1 - alpha) + (b[1] as number) * alpha
+      outLm[i][2] = (a[2] as number) * (1 - alpha) + (b[2] as number) * alpha
+      outLm[i][3] = Math.min(a[3], b[3])
+    } else if (aOk && (alpha < 0.5 || !bOk)) {
+      outLm[i][0] = a[0]
+      outLm[i][1] = a[1]
+      outLm[i][2] = a[2]
+      outLm[i][3] = a[3]
+    } else if (bOk) {
+      outLm[i][0] = b[0]
+      outLm[i][1] = b[1]
+      outLm[i][2] = b[2]
+      outLm[i][3] = b[3]
+    } else {
+      outLm[i][0] = null
+      outLm[i][1] = null
+      outLm[i][2] = null
+      outLm[i][3] = 0
+    }
+  }
+  return { prevIdx, nextIdx: clampedNextIdx, alpha }
+}
+
+function applyFilterToLm(
+  filter: LandmarkStreamFilter,
+  lm: Array<[number | null, number | null, number | null, number]>,
+  timeMs: number,
+): void {
+  for (let i = 0; i < lm.length; i += 1) {
+    const tuple = lm[i]
+    if (tuple[0] == null || tuple[1] == null || tuple[2] == null || tuple[3] <= 0.05) {
+      // 결손 구간 진입 — 다음 유효 입력이 다시 시점 0에서 시작하도록 필터를 reset.
+      filter.resetLandmark(i)
+      continue
+    }
+    const filtered = filter.filter(i, tuple[0], tuple[1], tuple[2], timeMs)
+    tuple[0] = filtered[0]
+    tuple[1] = filtered[1]
+    tuple[2] = filtered[2]
+  }
+}
+
+/**
+ * 캘리브레이션: 첫 N프레임 동안 각 landmark의 평균을 누적해서 사용자 rest 자세를 추정.
+ * accumulator 배열은 [x, y, z, count] 꼴로 LANDMARK_NAMES 길이만큼 보관.
+ */
+type CalibrationAccumulator = Array<[number, number, number, number]>
+
+function createCalibrationAccumulator(): CalibrationAccumulator {
+  return LANDMARK_NAMES.map(() => [0, 0, 0, 0])
+}
+
+function accumulateCalibration(
+  acc: CalibrationAccumulator,
+  lm: ReadonlyArray<[number | null, number | null, number | null, number]>,
+): void {
+  for (let i = 0; i < lm.length; i += 1) {
+    const tuple = lm[i]
+    if (
+      tuple[0] == null ||
+      tuple[1] == null ||
+      tuple[2] == null ||
+      tuple[3] < CALIBRATION_MIN_CONFIDENCE
+    ) {
+      continue
+    }
+    const bucket = acc[i]
+    bucket[0] += tuple[0]
+    bucket[1] += tuple[1]
+    bucket[2] += tuple[2]
+    bucket[3] += 1
+  }
+}
+
+function getCalibratedKp(acc: CalibrationAccumulator, landmarkIdx: number, out: Vector3): boolean {
+  const bucket = acc[landmarkIdx]
+  if (bucket[3] <= 0) return false
+  const x = bucket[0] / bucket[3]
+  const y = bucket[1] / bucket[3]
+  const z = bucket[2] / bucket[3]
+  out.set(x * KP_SCALE, HIP_LOCAL_Y - y * KP_SCALE, -z * RETARGET_DEPTH_SCALE)
+  return true
+}
+
+/**
+ * 사용자 rest landmark 와 GLB rest 본 방향을 비교해서, chain별 보정 quaternion을 만든다.
+ *  - userRestDir = (parent → child) in 사용자 rest 좌표 (parent-local로 변환된 방향)
+ *  - restParentDir = GLB rest 의 parent-local 방향 (이미 저장돼 있음)
+ *  - delta = setFromUnitVectors(userRestDir, restParentDir)
+ *  - 매 frame: corrected = delta * observedUserDir → 이걸 restParentDir 와 비교해서 회전 산출
+ */
+function buildCalibrationDeltas(
+  clip: MotionClip,
+  acc: CalibrationAccumulator,
+  bones: Map<string, Bone>,
+  restParentDirs: Map<string, Vector3>,
+  chains: ReadonlyArray<{ bone: string; parentKp: LandmarkName; childKp: LandmarkName }>,
+): Map<string, Quaternion> {
+  const result = new Map<string, Quaternion>()
+  const parentVec = new Vector3()
+  const childVec = new Vector3()
+  const userDir = new Vector3()
+  const parentRot = new Quaternion()
+  const parentPos = new Vector3()
+  const parentScale = new Vector3()
+  const restDir = new Vector3()
+
+  for (const c of chains) {
+    const bone = bones.get(c.bone)
+    const parent = bone?.parent
+    const restDirSource = restParentDirs.get(c.bone)
+    if (!bone || !parent || !restDirSource) continue
+
+    const parentIdx = clip.landmarks.indexOf(c.parentKp)
+    const childIdx = clip.landmarks.indexOf(c.childKp)
+    if (parentIdx < 0 || childIdx < 0) continue
+    if (!getCalibratedKp(acc, parentIdx, parentVec)) continue
+    if (!getCalibratedKp(acc, childIdx, childVec)) continue
+
+    userDir.copy(childVec).sub(parentVec)
+    if (userDir.lengthSq() <= RETARGET_MIN_DIRECTION_LENGTH) continue
+    userDir.normalize()
+
+    parent.updateWorldMatrix(true, false)
+    parent.matrixWorld.decompose(parentPos, parentRot, parentScale)
+    parentRot.invert()
+    userDir.applyQuaternion(parentRot)
+    if (userDir.lengthSq() <= RETARGET_MIN_DIRECTION_LENGTH) continue
+    userDir.normalize()
+
+    restDir.copy(restDirSource).normalize()
+
+    const delta = new Quaternion().setFromUnitVectors(userDir, restDir)
+    result.set(c.bone, delta)
+  }
+  return result
+}
+
+/**
+ * shoulder-hip 평면 기반의 신체 좌표축 (right, up, forward).
+ *  - bodyRight: 왼어깨→오른어깨 정규화
+ *  - bodyUp:   엉덩이중심→어깨중심 정규화
+ *  - bodyForward: bodyRight × bodyUp (오른손좌표계 기준 카메라 쪽)
+ * 반환 false 이면 신체 평면을 구할 수 없는 상태(어깨/엉덩이 결손).
+ */
+function tryComputeBodyBasis(
+  frame: MotionFrame,
+  clip: MotionClip,
+  leftShoulder: Vector3,
+  rightShoulder: Vector3,
+  leftHip: Vector3,
+  rightHip: Vector3,
+  outRight: Vector3,
+  outUp: Vector3,
+  outForward: Vector3,
+): boolean {
+  if (
+    !tryReadRetargetKp(frame, clip, 'LEFT_SHOULDER', leftShoulder) ||
+    !tryReadRetargetKp(frame, clip, 'RIGHT_SHOULDER', rightShoulder) ||
+    !tryReadRetargetKp(frame, clip, 'LEFT_HIP', leftHip) ||
+    !tryReadRetargetKp(frame, clip, 'RIGHT_HIP', rightHip)
+  ) {
+    return false
+  }
+  outRight.copy(rightShoulder).sub(leftShoulder)
+  if (!normalizeDirection(outRight)) return false
+  outUp.copy(leftShoulder).add(rightShoulder).multiplyScalar(0.5)
+  const hipCenterX = (leftHip.x + rightHip.x) * 0.5
+  const hipCenterY = (leftHip.y + rightHip.y) * 0.5
+  const hipCenterZ = (leftHip.z + rightHip.z) * 0.5
+  outUp.x -= hipCenterX
+  outUp.y -= hipCenterY
+  outUp.z -= hipCenterZ
+  if (!normalizeDirection(outUp)) return false
+  outForward.copy(outRight).cross(outUp)
+  if (!normalizeDirection(outForward)) return false
   return true
 }
 
@@ -900,7 +1197,40 @@ function CharacterModel({
     rightShoulder: new Vector3(),
     leftHip: new Vector3(),
     rightHip: new Vector3(),
+    bodyRight: new Vector3(),
+    bodyUp: new Vector3(),
+    bodyForward: new Vector3(),
   })
+
+  /**
+   * 보간/필터/캘리브레이션 상태:
+   *  - lmFilterRef: 25개 landmark × 3축에 대한 1-Euro 필터 (motion 시작 시마다 reset).
+   *  - interpolatedFrameRef: 보간된 mutable frame (lm 배열이 매 frame 재사용됨).
+   *  - calibrationAccRef: 첫 N프레임 사용자 rest 자세 평균 누적.
+   *  - calibrationFrameCountRef: 누적된 frame 수.
+   *  - calibrationDeltasRef: chain별 보정 quaternion (사용자 rest → GLB rest).
+   *  - handChainsRef: scene 로드 시 자동 탐지한 손 본 chain (LeftHand/RightHand의 첫 자식 본).
+   *  - lastBoneChainParentIdsRef: 한 frame 안에서 parent matrix 재계산 캐시.
+   */
+  const lmFilterRef = useRef<LandmarkStreamFilter>(
+    new LandmarkStreamFilter(LANDMARK_NAMES.length, LM_FILTER_OPTIONS),
+  )
+  const interpolatedFrameRef = useRef<MotionFrame>({
+    t: 0,
+    lm: LANDMARK_NAMES.map(() => [null, null, null, 0]),
+  })
+  const calibrationAccRef = useRef<CalibrationAccumulator>(createCalibrationAccumulator())
+  const calibrationFrameCountRef = useRef(0)
+  const calibrationDeltasRef = useRef<Map<string, Quaternion>>(new Map())
+  const handChainsRef = useRef<
+    Array<{
+      bone: string
+      childBone: string
+      parentKp: LandmarkName
+      childKp: LandmarkName
+      maxRotationRad: number
+    }>
+  >([])
 
   useEffect(() => {
     const group = groupRef.current
@@ -919,7 +1249,44 @@ function CharacterModel({
       const bone = bones.get(boneName)
       if (bone) restQuats.set(boneName, bone.quaternion.clone())
     }
-    for (const c of DIRECTION_REST_CHAINS) {
+    // 손 본은 wish.glb 의 자식 본 이름이 모델별로 달라(LeftHandIndex1, LeftHandMiddle1 등)
+    // 동적으로 LeftHand/RightHand 의 첫 자식 본을 child 로 잡아 chain entry 생성.
+    const handChains: typeof handChainsRef.current = []
+    const findFirstChildBone = (bone: Bone): Bone | null => {
+      for (const child of bone.children) {
+        if ((child as Bone).isBone) return child as Bone
+      }
+      return null
+    }
+    const leftHandBone = bones.get('LeftHand')
+    const rightHandBone = bones.get('RightHand')
+    const leftHandChild = leftHandBone ? findFirstChildBone(leftHandBone) : null
+    const rightHandChild = rightHandBone ? findFirstChildBone(rightHandBone) : null
+    if (leftHandBone && leftHandChild) {
+      handChains.push({
+        bone: 'LeftHand',
+        childBone: leftHandChild.name,
+        parentKp: 'LEFT_WRIST',
+        childKp: 'LEFT_INDEX',
+        maxRotationRad: HAND_MAX_ROTATION_RAD,
+      })
+    }
+    if (rightHandBone && rightHandChild) {
+      handChains.push({
+        bone: 'RightHand',
+        childBone: rightHandChild.name,
+        parentKp: 'RIGHT_WRIST',
+        childKp: 'RIGHT_INDEX',
+        maxRotationRad: HAND_MAX_ROTATION_RAD,
+      })
+    }
+    handChainsRef.current = handChains
+    const allRestChains: ReadonlyArray<{ bone: string; childBone: string }> = [
+      ...DIRECTION_REST_CHAINS,
+      ...handChains,
+    ]
+
+    for (const c of allRestChains) {
       const bone = bones.get(c.bone)
       const childBone = bones.get(c.childBone)
       if (bone) restQuats.set(c.bone, bone.quaternion.clone())
@@ -965,6 +1332,13 @@ function CharacterModel({
   useEffect(() => {
     playStartMs.current = performance.now()
     lastFrameIdx.current = -1
+
+    // 새 motion 시작 시 1-Euro 필터/캘리브레이션을 초기화. 종료 시 본 회전을 rest 로 복원.
+    lmFilterRef.current.resetAll()
+    calibrationAccRef.current = createCalibrationAccumulator()
+    calibrationFrameCountRef.current = 0
+    calibrationDeltasRef.current = new Map()
+
     if (!activeMotion || activeMotion.source === 'recorded' || activeMotion.source === 'compact') {
       // motion 종료 시 본 회전 rest 복원
       for (const [name, q] of restQuatsRef.current) {
@@ -1030,18 +1404,89 @@ function CharacterModel({
       playbackTimeMs == null
         ? (performance.now() - playStartMs.current) % durationMs
         : Math.min(durationMs, Math.max(0, playbackTimeMs))
-    const idx = Math.min(
-      activeMotion.frames.length - 1,
-      Math.floor((elapsed / 1000) * activeMotion.fps),
+
+    // 1) 보간 — 저장된 5fps 데이터를 현재 elapsedMs 에 맞춰 prev/next 선형 보간.
+    const interpolatedFrame = interpolatedFrameRef.current
+    const interpolationResult = fillInterpolatedFrameLm(
+      activeMotion,
+      elapsed,
+      interpolatedFrame.lm as Array<[number | null, number | null, number | null, number]>,
     )
-    const frame = activeMotion.frames[idx]
+    if (!interpolationResult) return
+    interpolatedFrame.t = elapsed
+
+    // 2) 1-Euro 필터 — frame timestamp 기준으로 떨림 제거. loop 재생 시 elapsed 가 다시 0으로 가면
+    //    필터가 자동으로 새 시퀀스로 인식 (timeMs <= prevTime 처리).
+    applyFilterToLm(
+      lmFilterRef.current,
+      interpolatedFrame.lm as Array<[number | null, number | null, number | null, number]>,
+      elapsed,
+    )
+
+    // 마커 표시용 joint 위치는 보간된 frame 으로 매 render frame 갱신 (5fps 끊김 제거).
+    const interpolatedJoints = activeMotion.landmarks.map<Joint>((name, i) => {
+      const id = KP_TO_JOINT_ID[name]
+      const lm = interpolatedFrame.lm[i]
+      const fallback = FALLBACK_JOINT_BY_ID.get(id)?.position ?? DEFAULT_JOINT_POSITION
+      if (!lm || lm[0] == null || lm[1] == null || lm[2] == null || lm[3] <= 0.05) {
+        return { id, position: fallback }
+      }
+      return {
+        id,
+        position: [
+          (lm[0] as number) * KP_SCALE,
+          HIP_LOCAL_Y - (lm[1] as number) * KP_SCALE,
+          -(lm[2] as number) * KP_SCALE,
+        ],
+      }
+    })
+    // setJoints 호출은 frame index 가 바뀔 때만 (마커 ref position 만 갱신해도 시각 효과는 동일).
+    const idx = interpolationResult.prevIdx
     if (idx !== lastFrameIdx.current) {
       lastFrameIdx.current = idx
-      onMotionFrame(frameToJoints(activeMotion, idx))
+      onMotionFrame(interpolatedJoints)
+    } else {
+      // ref position 만 갱신 — Three.js 입장에선 setState 없어도 매 render 반영됨.
+      for (const j of interpolatedJoints) {
+        const ref = markerRefs.current.get(j.id)
+        if (ref) ref.position.set(j.position[0], j.position[1], j.position[2])
+      }
     }
 
     if (!ENABLE_BONE_RETARGETING) return
 
+    // 3) 캘리브레이션 — 첫 N프레임 동안은 사용자 rest 자세를 누적만 하고 retarget 은 보류.
+    //    N프레임이 차면 본 chain 별 보정 quaternion 계산.
+    if (calibrationFrameCountRef.current < CALIBRATION_FRAME_COUNT) {
+      accumulateCalibration(
+        calibrationAccRef.current,
+        interpolatedFrame.lm as ReadonlyArray<
+          [number | null, number | null, number | null, number]
+        >,
+      )
+      calibrationFrameCountRef.current += 1
+      if (calibrationFrameCountRef.current >= CALIBRATION_FRAME_COUNT) {
+        const calibrationChains = [
+          ...BONE_CHAINS.map(c => ({ bone: c.bone, parentKp: c.parentKp, childKp: c.childKp })),
+          ...handChainsRef.current.map(c => ({
+            bone: c.bone,
+            parentKp: c.parentKp,
+            childKp: c.childKp,
+          })),
+        ]
+        calibrationDeltasRef.current = buildCalibrationDeltas(
+          activeMotion,
+          calibrationAccRef.current,
+          bonesRef.current,
+          restParentDirsRef.current,
+          calibrationChains,
+        )
+      }
+      // 캘리브레이션 도중엔 retarget 안 함 (rest 자세 유지).
+      return
+    }
+
+    const frame = interpolatedFrame
     g.updateWorldMatrix(false, false)
     const groupMatrix = g.matrixWorld
     let didRetarget = false
@@ -1062,14 +1507,23 @@ function CharacterModel({
       g.updateWorldMatrix(false, true)
       didRetarget = true
     }
-    for (const c of BONE_CHAINS) {
+
+    const allRetargetChains: ReadonlyArray<{
+      bone: string
+      childBone: string
+      parentKp: LandmarkName
+      childKp: LandmarkName
+      maxRotationRad: number
+    }> = [...BONE_CHAINS, ...handChainsRef.current]
+    const calibrationDeltas = calibrationDeltasRef.current
+
+    for (const c of allRetargetChains) {
       const bone = bonesRef.current.get(c.bone)
       const restQuat = restQuatsRef.current.get(c.bone)
       const restParentDir = restParentDirsRef.current.get(c.bone)
       if (!bone || !restQuat || !restParentDir || !bone.parent) continue
       const parent = bone.parent
 
-      // 1. rest quaternion으로 일단 복원 후 matrixWorld 갱신 → rest world direction 측정
       if (
         !tryReadRetargetKp(frame, activeMotion, c.parentKp, tmpKpP.current) ||
         !tryReadRetargetKp(frame, activeMotion, c.childKp, tmpKpC.current)
@@ -1077,7 +1531,7 @@ function CharacterModel({
         continue
       }
 
-      // 2. desired world direction (motion frame keypoint 기반)
+      // 팔 chain 은 IK 로 elbow/wrist 위치 보정. 손/다리 chain 은 원본 keypoint 그대로 사용.
       applyArmIkTargets(
         frame,
         activeMotion,
@@ -1115,7 +1569,13 @@ function CharacterModel({
       tmpDesiredDir.current.applyQuaternion(tmpParentInvRot.current)
       if (!normalizeDirection(tmpDesiredDir.current)) continue
 
-      // 3. world space에서의 회전 변화량
+      // 캘리브레이션 보정: 사용자 rest 좌표계에서 본 GLB rest 좌표계로 정렬.
+      const calibration = calibrationDeltas.get(c.bone)
+      if (calibration) {
+        tmpDesiredDir.current.applyQuaternion(calibration)
+        if (!normalizeDirection(tmpDesiredDir.current)) continue
+      }
+
       tmpRestDir.current.copy(restParentDir)
       const restDirLengthSq = tmpRestDir.current.lengthSq()
       if (!Number.isFinite(restDirLengthSq) || restDirLengthSq <= RETARGET_MIN_DIRECTION_LENGTH) {
@@ -1125,9 +1585,12 @@ function CharacterModel({
       limitDirectionFromRest(tmpRestDir.current, tmpDesiredDir.current, c.maxRotationRad)
       tmpDelta.current.setFromUnitVectors(tmpRestDir.current, tmpDesiredDir.current)
 
-      // 4. bone.quaternion = parent-local delta * restQuat
       tmpTargetRot.current.copy(tmpDelta.current).multiply(restQuat)
-      bone.quaternion.slerp(tmpTargetRot.current, RETARGET_SLERP_FACTOR)
+      const slerpFactor =
+        c.bone === 'LeftHand' || c.bone === 'RightHand'
+          ? HAND_RETARGET_SLERP_FACTOR
+          : RETARGET_SLERP_FACTOR
+      bone.quaternion.slerp(tmpTargetRot.current, slerpFactor)
       didRetarget = true
     }
     if (didRetarget) g.updateWorldMatrix(false, true)
