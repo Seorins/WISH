@@ -33,14 +33,14 @@ export const PHOTO_BOOTH_FRAMES: PhotoFrame[] = [
   {
     id: 'frame-2',
     cutCount: 4,
-    aspect: 1465 / 978,
+    aspect: 1536 / 1024,
     overlayKey: 'photo-booth-frame-2',
     overlayPath: 'images/photo-booth/frames/frame2.png',
     slots: [
-      { xRatio: 0.0901, yRatio: 0.0573, wRatio: 0.3304, hRatio: 0.4172 },
-      { xRatio: 0.4287, yRatio: 0.0573, wRatio: 0.3304, hRatio: 0.4172 },
-      { xRatio: 0.2457, yRatio: 0.5276, wRatio: 0.3304, hRatio: 0.4213 },
-      { xRatio: 0.587, yRatio: 0.5276, wRatio: 0.3304, hRatio: 0.4172 },
+      { xRatio: 0.1257, yRatio: 0.0498, wRatio: 0.3092, hRatio: 0.4131 },
+      { xRatio: 0.4453, yRatio: 0.0498, wRatio: 0.3314, hRatio: 0.4141 },
+      { xRatio: 0.2559, yRatio: 0.5137, wRatio: 0.3379, hRatio: 0.416 },
+      { xRatio: 0.6042, yRatio: 0.5137, wRatio: 0.3203, hRatio: 0.415 },
     ],
   },
   {
