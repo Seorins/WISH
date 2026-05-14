@@ -385,6 +385,7 @@ export class QuizLobbyScene extends Phaser.Scene {
       },
       onEvent: event => this.handleRealtimeEvent(event),
       onError: error => this.setStatus(friendlyWsError(error.message)),
+      onReady: () => this.setStatus(''),
     })
     this.realtimeClient.connect()
   }
@@ -645,23 +646,34 @@ export class QuizLobbyScene extends Phaser.Scene {
     }
     container.add(g)
 
+    // 슬롯 내 vertical anchor — 빈/채워진 카드 모두 동일 위치를 사용해 줄이 흐트러지지 않게.
+    const avatarY = -h / 2 + 70
+    const nameY = -h / 2 + 140
+    const roleY = -h / 2 + 175
+
     if (!member) {
-      const placeholder = this.add
-        .text(0, 0, `${slotIndex + 1}P\n비어 있어요`, {
+      const slotLabel = this.add
+        .text(0, avatarY, `${slotIndex + 1}P`, {
+          fontFamily: FONT_FAMILY,
+          fontSize: '36px',
+          color: '#4a5468',
+          fontStyle: 'bold',
+        })
+        .setOrigin(0.5)
+      const empty = this.add
+        .text(0, nameY, '비어 있어요', {
           fontFamily: FONT_FAMILY,
           fontSize: '14px',
           color: '#7d8aa3',
-          align: 'center',
-          lineSpacing: 6,
         })
         .setOrigin(0.5)
-      container.add(placeholder)
+      container.add([slotLabel, empty])
       return container
     }
 
     const initial = (member.nickname || '?').slice(0, 1)
     const avatar = this.add
-      .text(0, -h / 2 + 70, initial, {
+      .text(0, avatarY, initial, {
         fontFamily: FONT_FAMILY,
         fontSize: '54px',
         color: isHost ? '#3a2614' : '#ffe9c2',
@@ -669,7 +681,7 @@ export class QuizLobbyScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
     const name = this.add
-      .text(0, -h / 2 + 140, member.nickname, {
+      .text(0, nameY, member.nickname, {
         fontFamily: FONT_FAMILY,
         fontSize: '18px',
         color: isHost ? '#1a0e05' : '#ffffff',
@@ -679,7 +691,7 @@ export class QuizLobbyScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
     const role = this.add
-      .text(0, -h / 2 + 175, isHost ? '방장' : '참여자', {
+      .text(0, roleY, isHost ? '방장' : '참여자', {
         fontFamily: FONT_FAMILY,
         fontSize: '13px',
         color: isHost ? '#5a3818' : '#c5d0e3',
@@ -957,17 +969,19 @@ function isAlreadyInRoomError(error: unknown): boolean {
 }
 
 /**
- * 사용자에게 그대로 노출하기 부적절한 STOMP/BE 원본 에러 문구를 친절한 한 줄로 매핑. 매칭 안 되면 일반화된 메시지로 폴백.
+ * 사용자에게 그대로 노출하기 부적절한 STOMP/BE 원본 에러 문구를 친절한 한 줄로 매핑.
+ *
+ * <p>대부분의 일시적 에러(서버 인터셉터 race, 네트워크 일시 끊김 등) 는 stomp client 가 자동 재접속하므로, 사용자 행동을 요구하는 단정적인 안내는
+ * 피하고 "잠시 후 다시 연결" 정도로 부드럽게 둔다. 진짜 사용자 액션이 필요한 케이스 (멤버 아님 등) 만 명시.
  */
 function friendlyWsError(raw: string): string {
-  if (!raw) return '연결에 문제가 생겼어요. 잠시 후 다시 시도해줘.'
+  if (!raw) return '연결을 확인하는 중…'
   const lower = raw.toLowerCase()
   if (lower.includes('not a member')) return '방 멤버가 아니에요. 다시 입장해줘.'
-  if (lower.includes('principal missing') || lower.includes('missing bearer'))
-    return '인증이 만료됐어요. 다시 로그인해줘.'
   if (lower.includes('quiz realtime disabled') || lower.includes('village realtime disabled'))
     return '실시간 기능이 잠시 꺼져 있어요.'
-  return '연결에 문제가 생겼어요. 잠시 후 다시 시도해줘.'
+  // principal missing / missing bearer / 일반 에러 — 자동 재접속에 맡기고 부드럽게.
+  return '연결을 다시 시도하는 중…'
 }
 
 /**
