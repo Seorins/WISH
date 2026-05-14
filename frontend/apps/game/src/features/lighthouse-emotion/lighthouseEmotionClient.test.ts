@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  chatWithLighthouseLlm,
   getDialogueSessionDetail,
   LIGHTHOUSE_ENTRY_QUESTION,
   sanitizeEmotionScene,
+  submitLighthouseChatTurn,
   submitLighthouseEmotionTurn,
 } from './lighthouseEmotionClient'
 import type { EmotionSceneViewModel } from './types'
@@ -250,5 +252,124 @@ describe('submitLighthouseEmotionTurn', () => {
         }),
       }),
     )
+  })
+})
+
+describe('chatWithLighthouseLlm', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('calls AI server /dialogue/chat with trimmed message and history', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        npc_message: '응, 그래서 어떤 마음이었어?',
+        is_fallback: false,
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(
+      chatWithLighthouseLlm(7, '  오늘은 조금 피곤해요  ', [
+        { role: 'assistant', content: '오늘은 어떻게 지내고 싶니?' },
+        { role: 'user', content: '괜찮아요' },
+      ]),
+    ).resolves.toEqual({
+      npcMessage: '응, 그래서 어떤 마음이었어?',
+      isFallback: false,
+    })
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringMatching(/\/dialogue\/chat$/),
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          patient_profile_id: 7,
+          user_message: '오늘은 조금 피곤해요',
+          conversation_history: [
+            { role: 'assistant', content: '오늘은 어떻게 지내고 싶니?' },
+            { role: 'user', content: '괜찮아요' },
+          ],
+        }),
+      }),
+    )
+  })
+
+  it('throws when AI chat response is not ok', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({}, false)))
+    await expect(chatWithLighthouseLlm(7, '안녕', [])).rejects.toThrow(
+      'Failed to chat with lighthouse LLM.',
+    )
+  })
+})
+
+describe('submitLighthouseChatTurn', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    localStorage.clear()
+  })
+
+  it('persists the user/assistant pair with FREE_INPUT choice intent', async () => {
+    localStorage.setItem('wish_access_token', 'token-1')
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ data: { sessionId: 42 } }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await submitLighthouseChatTurn('42', {
+      questionText: LIGHTHOUSE_ENTRY_QUESTION,
+      userMessage: '오늘은 조금 피곤해요',
+      npcResponseText: '응, 피곤한 날도 있지.',
+      isFallback: false,
+    })
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringMatching(/\/api\/v1\/dialogue\/sessions\/42\/turns$/),
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({ Authorization: 'Bearer token-1' }),
+        body: JSON.stringify({
+          npcId: 'lighthouse_keeper',
+          npcName: 'YEONGCHEOL',
+          questionText: LIGHTHOUSE_ENTRY_QUESTION,
+          selectedChoice: {
+            choiceIntentId: 'FREE_INPUT',
+            text: '오늘은 조금 피곤해요',
+            intensity: 0,
+            concernFlags: [],
+            protectiveFactors: [],
+          },
+          route: 'free_input',
+          npcResponseText: '응, 피곤한 날도 있지.',
+          generatedBy: 'CLAUDE',
+        }),
+      }),
+    )
+  })
+
+  it('marks generatedBy as FALLBACK when chat returned fallback flag', async () => {
+    localStorage.setItem('wish_access_token', 'token-1')
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ data: { sessionId: 42 } }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await submitLighthouseChatTurn('42', {
+      questionText: '응, 그래?',
+      userMessage: '음...',
+      npcResponseText: '괜찮아. 천천히 말해도 된단다.',
+      isFallback: true,
+    })
+
+    const calledBody = fetchMock.mock.calls[0]?.[1]?.body as string
+    expect(JSON.parse(calledBody).generatedBy).toBe('FALLBACK')
+  })
+
+  it('throws when turn save response is not ok', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({}, false)))
+    await expect(
+      submitLighthouseChatTurn('42', {
+        questionText: 'Q',
+        userMessage: 'U',
+        npcResponseText: 'N',
+        isFallback: false,
+      }),
+    ).rejects.toThrow('Failed to submit lighthouse chat turn.')
   })
 })

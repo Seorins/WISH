@@ -5,12 +5,41 @@ export type LighthouseDialogueStatus =
   | 'opening_welcome'
   | 'opening_safe_line'
   | 'entry_question'
-  | 'waiting_choice'
-  | 'showing_local_bridge'
-  | 'loading_llm'
+  | 'waiting_user_speech'
+  | 'submitting_chat'
   | 'showing_response'
   | 'waiting_final_close'
   | 'finished'
+
+export type LighthouseChatRole = 'user' | 'assistant'
+
+export interface LighthouseChatHistoryItem {
+  role: LighthouseChatRole
+  content: string
+}
+
+export interface LighthouseChatRequest {
+  patientProfileId: number
+  userMessage: string
+  conversationHistory: LighthouseChatHistoryItem[]
+}
+
+export interface LighthouseChatResponse {
+  npcMessage: string
+  isFallback: boolean
+}
+
+export interface LighthouseChatApiResponse {
+  npc_message: string
+  is_fallback: boolean
+}
+
+export interface SubmitLighthouseChatTurnRequest {
+  questionText: string
+  userMessage: string
+  npcResponseText: string
+  isFallback: boolean
+}
 
 export interface EmotionChoiceViewModel {
   choiceIntentId: string
@@ -148,11 +177,11 @@ export interface FinishLighthouseEmotionApiResponse {
 export interface LighthouseEmotionState {
   sessionId: string | null
   status: LighthouseDialogueStatus
-  currentScene: EmotionSceneViewModel | null
-  currentNodeId: string | null
+  currentQuestionText: string
   npcResponseLines: string[]
   closingLines: string[]
-  selectedChoiceIntentId: string | null
-  stepCount: number
+  conversationHistory: LighthouseChatHistoryItem[]
+  isFallback: boolean
   errorMessage: string | null
+  stepCount: number
 }
