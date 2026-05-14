@@ -1,3 +1,4 @@
+export { QuizJoinCodeOverlay } from './QuizJoinCodeOverlay'
 export { QuizRealtimeClient, type QuizRealtimeClientOptions } from './quizRealtimeClient'
 export type {
   QuizHostChangedEvent,

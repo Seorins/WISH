@@ -1,4 +1,4 @@
-export type ArtContentMode = 'free-drawing' | 'coloring'
+export type ArtContentMode = 'free-drawing' | 'coloring' | 'quiz-multi'
 
 export type RumiSelectDialogStage = 'greeting' | 'choice-prompt'
 
@@ -26,6 +26,7 @@ export interface ArtChoiceOption {
 export const artChoiceOptions: ArtChoiceOption[] = [
   { mode: 'free-drawing', label: '그림 퀴즈', description: '제시어를 그리면 AI가 맞춰줘!' },
   { mode: 'coloring', label: '색칠하기', description: '준비된 그림에 예쁜 색을 입혀봐!' },
+  { mode: 'quiz-multi', label: '친구랑 퀴즈', description: '친구랑 같이 그리고 맞춰봐!' },
 ]
 
 export const rumiSelectDialogs: Record<RumiSelectDialogStage, RumiDialogLine[]> = {
@@ -142,5 +143,21 @@ export const rumiContentDialogs: Record<
       { id: 'rumi-color-next-001', text: '다른 그림도 색칠해볼래, 아니면 자유롭게 그려볼까?' },
       { id: 'rumi-color-next-002', text: '이번 그림도 참 좋았어. 다음엔 또 다른 색으로 놀아보자.' },
     ],
+  },
+  'quiz-multi': {
+    confirm: [
+      { id: 'rumi-multi-confirm-001', text: '좋아, 친구랑 같이 그림 퀴즈 한 판 가보자.' },
+      { id: 'rumi-multi-confirm-002', text: '좋아, 방을 만들거나 친구가 준 코드로 들어가면 돼.' },
+    ],
+    intro: [
+      { id: 'rumi-multi-intro-001', text: '친구가 모이면 방장이 시작을 눌러줄 거야.' },
+      { id: 'rumi-multi-intro-002', text: '한 명은 그리고, 다른 친구들은 맞춰보는 놀이야.' },
+    ],
+    'first-action': [{ id: 'rumi-multi-first-001', text: '친구가 들어왔어! 같이 시작해보자.' }],
+    idle: [{ id: 'rumi-multi-idle-001', text: '친구를 좀 더 기다려볼까?' }],
+    encourage: [{ id: 'rumi-multi-encourage-001', text: '잘하고 있어, 같이 노는 게 더 재밌지?' }],
+    'almost-done': [{ id: 'rumi-multi-almost-001', text: '거의 다 왔어, 마지막 한 판!' }],
+    complete: [{ id: 'rumi-multi-complete-001', text: '둘이서 한 그림 퀴즈, 정말 재밌었어.' }],
+    'next-step': [{ id: 'rumi-multi-next-001', text: '한 판 더 할래, 아니면 다른 놀이 해볼까?' }],
   },
 }

@@ -77,6 +77,7 @@ const CARD_LAYOUT = {
 const ART_CONTENT_SCENE_KEYS: Record<ArtContentMode, string> = {
   'free-drawing': 'ArtFreeDrawingScene',
   coloring: 'ArtColoringSelectScene',
+  'quiz-multi': 'QuizLobbyScene',
 }
 
 type ArtSelectSceneData = {

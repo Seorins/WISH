@@ -16,6 +16,7 @@ import SideStepDebugPage from './debug/SideStepDebugPage'
 import SquatDebugPage from './debug/SquatDebugPage'
 import { AuthOverlay } from './features/auth'
 import { ExerciseSessionListOverlay } from './features/exerciseSessions'
+import { QuizJoinCodeOverlay } from './features/quiz-realtime'
 import { LighthouseEmotionController } from './features/lighthouse-emotion/components/LighthouseEmotionController'
 import { VillagerDialogueController } from './features/village-dialogue/components/VillagerDialogueController'
 import type { VillagerDialogueOpenPayload, VillagerNpcId } from './features/village-dialogue/types'
@@ -47,6 +48,7 @@ function App() {
   const gameRef = useRef<Phaser.Game | null>(null)
   const [showAuth, setShowAuth] = useState(false)
   const [showExerciseSessions, setShowExerciseSessions] = useState(false)
+  const [showQuizJoinCode, setShowQuizJoinCode] = useState(false)
   const [villagerNpcId, setVillagerNpcId] = useState<VillagerNpcId | null>(null)
   const [isLighthouseEmotionOpen, setIsLighthouseEmotionOpen] = useState(false)
   const [patientProfileId, setPatientProfileId] = useState<number | undefined>(undefined)
@@ -93,6 +95,7 @@ function App() {
       setPatientProfileId(id)
     })
     game.events.on('exercise-sessions:open', () => setShowExerciseSessions(true))
+    game.events.on('quiz-join-code:open', () => setShowQuizJoinCode(true))
     game.events.on('villager-dialogue:open', ({ npcId }: VillagerDialogueOpenPayload) => {
       setVillagerNpcId(npcId)
     })
@@ -239,6 +242,17 @@ function App() {
           onClose={() => setShowExerciseSessions(false)}
         />
       </QueryClientProvider>
+      <QuizJoinCodeOverlay
+        open={showQuizJoinCode}
+        onSubmit={code => {
+          setShowQuizJoinCode(false)
+          gameRef.current?.events.emit('quiz-join-code:submitted', { code })
+        }}
+        onCancel={() => {
+          setShowQuizJoinCode(false)
+          gameRef.current?.events.emit('quiz-join-code:cancelled')
+        }}
+      />
     </>
   )
 }
