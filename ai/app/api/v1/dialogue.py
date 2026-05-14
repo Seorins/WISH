@@ -67,7 +67,7 @@ async def search_memory(request: SearchMemoryRequest) -> SearchMemoryResponse:
 
 @router.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest) -> ChatResponse:
-    npc_message, is_fallback = generate_response(
+    npc_message, is_fallback = await generate_response(
         patient_profile_id=request.patient_profile_id,
         user_message=request.user_message,
         conversation_history=request.conversation_history,
