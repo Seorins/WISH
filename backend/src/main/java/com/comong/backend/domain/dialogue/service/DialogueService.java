@@ -15,6 +15,7 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.comong.backend.domain.dialogue.catalog.DialogueCatalogService;
 import com.comong.backend.domain.dialogue.catalog.model.ChoiceDefinition;
 import com.comong.backend.domain.dialogue.dto.FinishSessionRequest;
 import com.comong.backend.domain.dialogue.dto.FinishSessionResponse;
@@ -66,8 +67,8 @@ public class DialogueService {
     private final ClaudeSceneProvider claudeSceneProvider;
     private final LighthouseIntentCatalog lighthouseIntentCatalog;
     private final CatalogSceneProvider catalogSceneProvider;
-    private final com.comong.backend.domain.dialogue.catalog.DialogueCatalogService
-            dialogueCatalogService;
+    private final DialogueCatalogService dialogueCatalogService;
+    private final AiDialogueClient aiDialogueClient;
 
     @Transactional
     public StartSessionResponse createSession(Long currentUserId, StartSessionRequest request) {
@@ -245,16 +246,19 @@ public class DialogueService {
         DialogueSession session = findOwnedSessionOrThrow(currentUserId, sessionId);
         requireInProgress(session);
         session.finish(request.finishReason());
-        List<String> closingLines;
-        if (session.getNpcName().isLlmDriven()) {
-            // 등대지기: fallback closing 사용
-            closingLines =
-                    fallbackSceneProvider.closingLines(
-                            session.getNpcName(), request.finishReason());
-        } else {
-            // 마을 NPC: ending scene 에서 이미 closingLine 을 전달했으므로 finish 응답엔 없음.
-            closingLines = null;
-        }
+        List<String> closingLines =
+                session.getNpcName().isBackendDriven()
+                        ? fallbackSceneProvider.closingLines(
+                                session.getNpcName(), request.finishReason())
+                        : null; // 마을 주민은 FE 가 자체 closingLines 표시
+
+        // 세션 종료 후 RAG 임베딩 트리거 — fire-and-forget (S14P31E103-788).
+        // turns 는 @Async 스레드의 트랜잭션 밖에서 lazy 로딩이 끊기므로 미리 fetch.
+        // 실패는 AiDialogueClient 내부에서 swallow — 세션 종료 응답은 정상 처리한다.
+        List<DialogueTurn> turns =
+                turnRepository.findAllBySessionIdOrderByStepIndexAsc(session.getId());
+        aiDialogueClient.embedSessionAsync(session, turns);
+
         return FinishSessionResponse.of(session, closingLines);
     }
 
