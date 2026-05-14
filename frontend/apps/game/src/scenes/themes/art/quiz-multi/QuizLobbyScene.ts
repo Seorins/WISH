@@ -581,8 +581,10 @@ export class QuizLobbyScene extends Phaser.Scene {
   }
 
   /**
-   * 게임 느낌의 큰 선택 버튼. 카드 톤이 아니라 RPG 메뉴 스타일 — 두툼한 채도 높은 색 + 짙은 하단 그림자 + 흰색 외곽선 + 큰 이모지 아이콘.
-   * hover 시 살짝 위로 떠오르고 그림자가 짧아진다.
+   * 게임 느낌의 큰 선택 버튼. 채도 높은 색 + 짙은 하단 두께(3D) + 흰 외곽선 + 큰 이모지 + 타이틀/설명.
+   *
+   * <p>클릭 영역은 시각 바운드 전체와 항상 일치해야 한다 — 컨테이너에 Geom.Rectangle hit area 를 거는 방식은 자식 그래픽이 영역 밖으로 삐져나오면
+   * 시각 ≠ 클릭 이슈가 생기므로, 투명 Rectangle 게임오브젝트를 hit zone 으로 깔고 그 위에 그래픽/텍스트를 쌓는다.
    */
   private createBigButton(
     cx: number,
@@ -601,37 +603,40 @@ export class QuizLobbyScene extends Phaser.Scene {
     const { icon, title, desc, fill, shadow, onClick } = config
     const container = this.add.container(cx, cy)
     const radius = 28
-    const shadowOffset = 10
+    const thickness = 12
+    const dropOffset = 8
+    const liftAmount = 4
+
+    // hit zone = 외곽 그림자까지 포함한 전체 시각 영역. Phaser Rectangle 은 alpha=0 이면 hit 도 안 받아서 0.001 로.
+    const hitW = w + 4
+    const hitH = h + thickness + dropOffset + 4
+    const hitY = (thickness + dropOffset) / 2 - 2
+    const hit = this.add.rectangle(0, hitY, hitW, hitH, 0xffffff, 0.001).setOrigin(0.5)
+    hit.setInteractive({ useHandCursor: true })
 
     const shadowG = this.add.graphics()
     const faceG = this.add.graphics()
     const drawButton = (lifted: boolean) => {
-      const lift = lifted ? shadowOffset * 0.35 : 0
-      const shadowDepth = lifted ? shadowOffset * 0.55 : shadowOffset
-
+      const lift = lifted ? liftAmount : 0
       shadowG.clear()
-      shadowG.fillStyle(0x000000, 0.35)
-      shadowG.fillRoundedRect(-w / 2, -h / 2 + shadowDepth - lift, w, h + shadowOffset, radius)
-
+      shadowG.fillStyle(0x000000, 0.4)
+      shadowG.fillRoundedRect(-w / 2, -h / 2 + dropOffset - lift * 0.5, w, h + thickness, radius)
       faceG.clear()
-      // 하단 어두운 면 (3D 두께감)
+      // 하단 두께 면
       faceG.fillStyle(shadow, 1)
-      faceG.fillRoundedRect(-w / 2, -h / 2 - lift, w, h + 14, radius)
-      // 윗 면 (메인 컬러)
+      faceG.fillRoundedRect(-w / 2, -h / 2 - lift, w, h + thickness, radius)
+      // 윗 면
       faceG.fillStyle(fill, 1)
       faceG.fillRoundedRect(-w / 2, -h / 2 - lift, w, h, radius)
-      // 상단 글로스
-      faceG.fillStyle(0xffffff, 0.18)
-      faceG.fillRoundedRect(-w / 2 + 8, -h / 2 - lift + 8, w - 16, h * 0.32, radius - 8)
-      // 흰색 외곽선
-      faceG.lineStyle(4, 0xffffff, 0.9)
+      // 상단 하이라이트
+      faceG.fillStyle(0xffffff, 0.22)
+      faceG.fillRoundedRect(-w / 2 + 10, -h / 2 - lift + 10, w - 20, h * 0.3, radius - 10)
+      // 흰 외곽선
+      faceG.lineStyle(4, 0xffffff, 0.95)
       faceG.strokeRoundedRect(-w / 2, -h / 2 - lift, w, h, radius)
-      // 짙은 외곽
-      faceG.lineStyle(2, shadow, 1)
-      faceG.strokeRoundedRect(-w / 2 - 2, -h / 2 - 2 - lift, w + 4, h + 4, radius + 2)
     }
     drawButton(false)
-    container.add([shadowG, faceG])
+    container.add([hit, shadowG, faceG])
 
     const iconText = this.add
       .text(0, -h / 2 + 96, icon, {
@@ -660,25 +665,18 @@ export class QuizLobbyScene extends Phaser.Scene {
       .setOrigin(0.5, 0)
     container.add([iconText, titleText, descText])
 
-    container.setSize(w, h)
-    container.setInteractive(
-      new Phaser.Geom.Rectangle(-w / 2, -h / 2, w, h),
-      Phaser.Geom.Rectangle.Contains,
-    )
-    container.on(Phaser.Input.Events.POINTER_DOWN, onClick)
-    container.on(Phaser.Input.Events.POINTER_OVER, () => {
+    hit.on(Phaser.Input.Events.POINTER_DOWN, onClick)
+    hit.on(Phaser.Input.Events.POINTER_OVER, () => {
       drawButton(true)
-      iconText.y = -h / 2 + 96 - shadowOffset * 0.35
-      titleText.y = -h / 2 + 192 - shadowOffset * 0.35
-      descText.y = -h / 2 + 240 - shadowOffset * 0.35
-      this.input.setDefaultCursor('pointer')
+      iconText.y = -h / 2 + 96 - liftAmount
+      titleText.y = -h / 2 + 192 - liftAmount
+      descText.y = -h / 2 + 240 - liftAmount
     })
-    container.on(Phaser.Input.Events.POINTER_OUT, () => {
+    hit.on(Phaser.Input.Events.POINTER_OUT, () => {
       drawButton(false)
       iconText.y = -h / 2 + 96
       titleText.y = -h / 2 + 192
       descText.y = -h / 2 + 240
-      this.input.setDefaultCursor('default')
     })
     return container
   }
