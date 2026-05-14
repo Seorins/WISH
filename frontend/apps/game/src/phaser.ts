@@ -20,6 +20,7 @@ import { MusicSelectScene } from './scenes/themes/music/select/MusicSelectScene'
 import { MusicSongSelectScene } from './scenes/themes/music/select/MusicSongSelectScene'
 import { YouTubeSearchScene } from './scenes/themes/music/search/YouTubeSearchScene'
 import { VillageScene } from './scenes/village/VillageScene'
+import { PhotoBoothFrameSelectScene } from './scenes/photo-booth/PhotoBoothFrameSelectScene'
 
 function configureTouchSurface(element: HTMLElement) {
   element.style.setProperty('overscroll-behavior', 'none')
@@ -80,6 +81,7 @@ export function createGame(parent: HTMLElement): Phaser.Game {
       MusicSongSelectScene,
       YouTubeSearchScene,
       MusicRhythmScene,
+      PhotoBoothFrameSelectScene,
     ],
     scale: {
       mode: Phaser.Scale.RESIZE,
@@ -88,6 +90,10 @@ export function createGame(parent: HTMLElement): Phaser.Game {
   })
 
   configureTouchSurface(game.canvas)
+
+  if (import.meta.env.DEV) {
+    ;(window as unknown as { __GAME__?: Phaser.Game }).__GAME__ = game
+  }
 
   return game
 }
