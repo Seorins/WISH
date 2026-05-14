@@ -137,3 +137,12 @@ gms:
     version: ${GMS_ANTHROPIC_VERSION:2023-06-01}
     # Claude 응답 timeout. 5s 권장 — 사용자(아이) 화면이 로딩 상태로 너무 오래 멈추지 않도록.
     timeout-seconds: ${GMS_ANTHROPIC_TIMEOUT_SECONDS:5}
+
+# AI 서버 RAG 어댑터 설정 (세션 종료 시 임베딩 트리거, S14P31E103-788).
+# base-url 이 비어있으면 임베딩 호출 자체를 스킵 — 로컬/테스트 환경에서 AI 서버 없이도 컨텍스트 부팅이 깨지지 않도록 한다.
+# dev/prod 에서는 컨테이너 네트워크 hostname (예: http://ai-dev:8001/api/v1) 을 환경변수로 주입.
+ai:
+  dialogue:
+    base-url: ${AI_DIALOGUE_BASE_URL:}
+    # 임베딩 호출 timeout. fire-and-forget 이라 사용자 응답에는 영향 없지만, ThreadPool 점유를 풀어주기 위해 10초 캡.
+    timeout-seconds: ${AI_DIALOGUE_TIMEOUT_SECONDS:10}
