@@ -29,9 +29,9 @@ public record ExerciseMotionReplayData(
                 Integer durationMs,
         @Schema(description = "Landmark names ordered to match every frame tuple list")
                 @NotNull
-                @Size(min = 12, max = 12)
+                @Size(min = 12, max = 25)
                 List<@NotBlank String> landmarks,
-        @Schema(description = "Replay frames. lm is 12 compact [x,y,z,confidence] tuples.")
+        @Schema(description = "Replay frames. lm is compact [x,y,z,confidence] tuples.")
                 @NotNull
                 @Size(min = 1, max = 5400)
                 List<@Valid Frame> frames,
@@ -51,9 +51,9 @@ public record ExerciseMotionReplayData(
                     Integer t,
             @Schema(
                             description =
-                                    "12 compact [x,y,z,confidence] tuples. x/y/z may be null when a landmark is not tracked; confidence is required.")
+                                    "Compact [x,y,z,confidence] tuples. x/y/z may be null when a landmark is not tracked; confidence is required.")
                     @NotNull
-                    @Size(min = 12, max = 12)
+                    @Size(min = 12, max = 25)
                     List<List<Double>> lm) {}
 
     public record Segment(

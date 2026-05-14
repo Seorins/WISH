@@ -49,7 +49,7 @@ public class ExerciseSessionService {
     private static final int REPLAY_MAX_DURATION_MS = REPLAY_MAX_CAPTURE_SECONDS * 1000;
     private static final int REPLAY_TUPLE_SIZE = 4;
     private static final double REPLAY_NORMALIZED_COORDINATE_ABS_LIMIT = 10.0;
-    private static final List<String> REPLAY_LANDMARK_NAMES =
+    private static final List<String> REPLAY_LANDMARK_NAMES_V1 =
             List.of(
                     "LEFT_SHOULDER",
                     "RIGHT_SHOULDER",
@@ -63,6 +63,33 @@ public class ExerciseSessionService {
                     "RIGHT_KNEE",
                     "LEFT_ANKLE",
                     "RIGHT_ANKLE");
+    private static final List<String> REPLAY_LANDMARK_NAMES_V2 =
+            List.of(
+                    "NOSE",
+                    "LEFT_EAR",
+                    "RIGHT_EAR",
+                    "LEFT_SHOULDER",
+                    "RIGHT_SHOULDER",
+                    "LEFT_ELBOW",
+                    "RIGHT_ELBOW",
+                    "LEFT_WRIST",
+                    "RIGHT_WRIST",
+                    "LEFT_PINKY",
+                    "RIGHT_PINKY",
+                    "LEFT_INDEX",
+                    "RIGHT_INDEX",
+                    "LEFT_THUMB",
+                    "RIGHT_THUMB",
+                    "LEFT_HIP",
+                    "RIGHT_HIP",
+                    "LEFT_KNEE",
+                    "RIGHT_KNEE",
+                    "LEFT_ANKLE",
+                    "RIGHT_ANKLE",
+                    "LEFT_HEEL",
+                    "RIGHT_HEEL",
+                    "LEFT_FOOT_INDEX",
+                    "RIGHT_FOOT_INDEX");
 
     private final ExerciseSessionRepository exerciseSessionRepository;
     private final ExerciseSessionMotionRepository exerciseSessionMotionRepository;
@@ -264,7 +291,8 @@ public class ExerciseSessionService {
                 || replay.frames().size() > maxFrames) {
             throw new BusinessException(GlobalErrorCode.INVALID_INPUT);
         }
-        if (!REPLAY_LANDMARK_NAMES.equals(replay.landmarks())) {
+        List<String> expectedLandmarks = getExpectedReplayLandmarks(replay.version());
+        if (expectedLandmarks == null || !expectedLandmarks.equals(replay.landmarks())) {
             throw new BusinessException(GlobalErrorCode.INVALID_INPUT);
         }
 
@@ -276,7 +304,7 @@ public class ExerciseSessionService {
                 throw new BusinessException(GlobalErrorCode.INVALID_INPUT);
             }
             previousTimestampMs = frame.t();
-            validateReplayFrame(frame);
+            validateReplayFrame(frame, expectedLandmarks.size());
         }
 
         ExerciseMotionReplayData.Segment segment = replay.representativeSegment();
@@ -299,6 +327,16 @@ public class ExerciseSessionService {
         };
     }
 
+    private List<String> getExpectedReplayLandmarks(Integer version) {
+        if (Integer.valueOf(1).equals(version)) {
+            return REPLAY_LANDMARK_NAMES_V1;
+        }
+        if (Integer.valueOf(2).equals(version)) {
+            return REPLAY_LANDMARK_NAMES_V2;
+        }
+        return null;
+    }
+
     private boolean isValidReplaySegment(ExerciseMotionReplayData.Segment segment, int durationMs) {
         return segment != null
                 && segment.startMs() != null
@@ -307,8 +345,8 @@ public class ExerciseSessionService {
                 && segment.endMs() <= durationMs;
     }
 
-    private void validateReplayFrame(ExerciseMotionReplayData.Frame frame) {
-        if (frame.lm() == null || frame.lm().size() != REPLAY_LANDMARK_NAMES.size()) {
+    private void validateReplayFrame(ExerciseMotionReplayData.Frame frame, int landmarkCount) {
+        if (frame.lm() == null || frame.lm().size() != landmarkCount) {
             throw new BusinessException(GlobalErrorCode.INVALID_INPUT);
         }
 

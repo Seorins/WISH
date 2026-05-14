@@ -33,6 +33,11 @@ const RETARGET_DEPTH_SCALE = KP_SCALE * RETARGET_DEPTH_DAMPING_RATIO
 // Smooths replay bone rotation across render frames.
 const RETARGET_SLERP_FACTOR = 0.45
 const RETARGET_MIN_DIRECTION_LENGTH = 0.001
+const RETARGET_UPPER_LIMB_MAX_ROTATION_RAD = Math.PI * 0.68
+const RETARGET_LOWER_LIMB_MAX_ROTATION_RAD = Math.PI * 0.78
+const TORSO_GUARD_VERTICAL_PADDING = 0.04
+const TORSO_GUARD_SIDE_MARGIN_RATIO = 0.08
+const TORSO_GUARD_FORWARD_Z = 0.09
 
 /** UpLeg 본 위치(허리 라인)를 시각적 hip(엉덩이) 라인으로 내리는 오프셋 */
 const HIP_Y_OFFSET = -0.18
@@ -53,18 +58,31 @@ const ENABLE_BONE_RETARGETING = true
 const ENABLE_SIN_MARKER_MOTION = false
 
 const KP_TO_JOINT_ID: Record<LandmarkName, string> = {
+  NOSE: 'head',
+  LEFT_EAR: 'ear-l',
+  RIGHT_EAR: 'ear-r',
   LEFT_SHOULDER: 'shoulder-l',
   RIGHT_SHOULDER: 'shoulder-r',
   LEFT_ELBOW: 'elbow-l',
   RIGHT_ELBOW: 'elbow-r',
   LEFT_WRIST: 'wrist-l',
   RIGHT_WRIST: 'wrist-r',
+  LEFT_PINKY: 'pinky-l',
+  RIGHT_PINKY: 'pinky-r',
+  LEFT_INDEX: 'index-l',
+  RIGHT_INDEX: 'index-r',
+  LEFT_THUMB: 'thumb-l',
+  RIGHT_THUMB: 'thumb-r',
   LEFT_HIP: 'hip-l',
   RIGHT_HIP: 'hip-r',
   LEFT_KNEE: 'knee-l',
   RIGHT_KNEE: 'knee-r',
   LEFT_ANKLE: 'ankle-l',
   RIGHT_ANKLE: 'ankle-r',
+  LEFT_HEEL: 'heel-l',
+  RIGHT_HEEL: 'heel-r',
+  LEFT_FOOT_INDEX: 'foot-index-l',
+  RIGHT_FOOT_INDEX: 'foot-index-r',
 }
 
 /** 마커 id → 추적할 Mixamo 본 이름 (클립 재생 중 마커가 본 따라가도록) */
@@ -94,42 +112,94 @@ const BONE_CHAINS: ReadonlyArray<{
   childBone: string
   parentKp: LandmarkName
   childKp: LandmarkName
+  maxRotationRad: number
 }> = [
-  { bone: 'LeftArm', childBone: 'LeftForeArm', parentKp: 'LEFT_SHOULDER', childKp: 'LEFT_ELBOW' },
-  { bone: 'LeftForeArm', childBone: 'LeftHand', parentKp: 'LEFT_ELBOW', childKp: 'LEFT_WRIST' },
+  {
+    bone: 'LeftArm',
+    childBone: 'LeftForeArm',
+    parentKp: 'LEFT_SHOULDER',
+    childKp: 'LEFT_ELBOW',
+    maxRotationRad: RETARGET_UPPER_LIMB_MAX_ROTATION_RAD,
+  },
+  {
+    bone: 'LeftForeArm',
+    childBone: 'LeftHand',
+    parentKp: 'LEFT_ELBOW',
+    childKp: 'LEFT_WRIST',
+    maxRotationRad: RETARGET_LOWER_LIMB_MAX_ROTATION_RAD,
+  },
   {
     bone: 'RightArm',
     childBone: 'RightForeArm',
     parentKp: 'RIGHT_SHOULDER',
     childKp: 'RIGHT_ELBOW',
+    maxRotationRad: RETARGET_UPPER_LIMB_MAX_ROTATION_RAD,
   },
   {
     bone: 'RightForeArm',
     childBone: 'RightHand',
     parentKp: 'RIGHT_ELBOW',
     childKp: 'RIGHT_WRIST',
+    maxRotationRad: RETARGET_LOWER_LIMB_MAX_ROTATION_RAD,
   },
-  { bone: 'LeftUpLeg', childBone: 'LeftLeg', parentKp: 'LEFT_HIP', childKp: 'LEFT_KNEE' },
-  { bone: 'LeftLeg', childBone: 'LeftFoot', parentKp: 'LEFT_KNEE', childKp: 'LEFT_ANKLE' },
-  { bone: 'RightUpLeg', childBone: 'RightLeg', parentKp: 'RIGHT_HIP', childKp: 'RIGHT_KNEE' },
-  { bone: 'RightLeg', childBone: 'RightFoot', parentKp: 'RIGHT_KNEE', childKp: 'RIGHT_ANKLE' },
+  {
+    bone: 'LeftUpLeg',
+    childBone: 'LeftLeg',
+    parentKp: 'LEFT_HIP',
+    childKp: 'LEFT_KNEE',
+    maxRotationRad: RETARGET_UPPER_LIMB_MAX_ROTATION_RAD,
+  },
+  {
+    bone: 'LeftLeg',
+    childBone: 'LeftFoot',
+    parentKp: 'LEFT_KNEE',
+    childKp: 'LEFT_ANKLE',
+    maxRotationRad: RETARGET_LOWER_LIMB_MAX_ROTATION_RAD,
+  },
+  {
+    bone: 'RightUpLeg',
+    childBone: 'RightLeg',
+    parentKp: 'RIGHT_HIP',
+    childKp: 'RIGHT_KNEE',
+    maxRotationRad: RETARGET_UPPER_LIMB_MAX_ROTATION_RAD,
+  },
+  {
+    bone: 'RightLeg',
+    childBone: 'RightFoot',
+    parentKp: 'RIGHT_KNEE',
+    childKp: 'RIGHT_ANKLE',
+    maxRotationRad: RETARGET_LOWER_LIMB_MAX_ROTATION_RAD,
+  },
 ]
 
 type Joint = { id: string; position: [number, number, number] }
 
 const FALLBACK_JOINTS: Joint[] = [
+  { id: 'head', position: [0, 1.54, 0.05] },
+  { id: 'ear-l', position: [-0.12, 1.48, 0.05] },
+  { id: 'ear-r', position: [0.12, 1.48, 0.05] },
   { id: 'shoulder-l', position: [-0.18, 1.3, 0.06] },
   { id: 'shoulder-r', position: [0.18, 1.3, 0.06] },
   { id: 'elbow-l', position: [-0.22, 1.0, 0.05] },
   { id: 'elbow-r', position: [0.22, 1.0, 0.05] },
   { id: 'wrist-l', position: [-0.24, 0.7, 0.05] },
   { id: 'wrist-r', position: [0.24, 0.7, 0.05] },
+  { id: 'pinky-l', position: [-0.28, 0.68, 0.05] },
+  { id: 'pinky-r', position: [0.28, 0.68, 0.05] },
+  { id: 'index-l', position: [-0.27, 0.69, 0.05] },
+  { id: 'index-r', position: [0.27, 0.69, 0.05] },
+  { id: 'thumb-l', position: [-0.23, 0.7, 0.05] },
+  { id: 'thumb-r', position: [0.23, 0.7, 0.05] },
   { id: 'hip-l', position: [-0.1, 0.62, 0.06] },
   { id: 'hip-r', position: [0.1, 0.62, 0.06] },
   { id: 'knee-l', position: [-0.1, 0.4, 0.06] },
   { id: 'knee-r', position: [0.1, 0.4, 0.06] },
   { id: 'ankle-l', position: [-0.1, 0.05, 0.06] },
   { id: 'ankle-r', position: [0.1, 0.05, 0.06] },
+  { id: 'heel-l', position: [-0.11, 0.02, 0.07] },
+  { id: 'heel-r', position: [0.11, 0.02, 0.07] },
+  { id: 'foot-index-l', position: [-0.1, 0, 0.0] },
+  { id: 'foot-index-r', position: [0.1, 0, 0.0] },
 ]
 
 const FALLBACK_JOINT_BY_ID = new Map(FALLBACK_JOINTS.map(joint => [joint.id, joint]))
@@ -144,6 +214,78 @@ function normalizeDirection(v: Vector3): boolean {
   if (!Number.isFinite(lengthSq) || lengthSq <= RETARGET_MIN_DIRECTION_LENGTH) return false
   v.normalize()
   return isFiniteVector3(v)
+}
+
+function limitDirectionFromRest(restDir: Vector3, desiredDir: Vector3, maxRadians: number): void {
+  const angle = restDir.angleTo(desiredDir)
+  if (!Number.isFinite(angle) || angle <= maxRadians) return
+
+  desiredDir.copy(restDir).lerp(desiredDir, maxRadians / angle)
+  normalizeDirection(desiredDir)
+}
+
+function isArmElbowLandmark(name: LandmarkName): boolean {
+  return name === 'LEFT_ELBOW' || name === 'RIGHT_ELBOW'
+}
+
+function isArmTargetLandmark(name: LandmarkName): boolean {
+  return (
+    name === 'LEFT_ELBOW' ||
+    name === 'RIGHT_ELBOW' ||
+    name === 'LEFT_WRIST' ||
+    name === 'RIGHT_WRIST'
+  )
+}
+
+function isLeftSideLandmark(name: LandmarkName): boolean {
+  return name.startsWith('LEFT_')
+}
+
+function applyTorsoGuard(
+  frame: MotionFrame,
+  clip: MotionClip,
+  childKp: LandmarkName,
+  point: Vector3,
+  leftShoulder: Vector3,
+  rightShoulder: Vector3,
+  leftHip: Vector3,
+  rightHip: Vector3,
+): void {
+  if (!isArmTargetLandmark(childKp)) return
+  if (
+    !tryReadRetargetKp(frame, clip, 'LEFT_SHOULDER', leftShoulder) ||
+    !tryReadRetargetKp(frame, clip, 'RIGHT_SHOULDER', rightShoulder) ||
+    !tryReadRetargetKp(frame, clip, 'LEFT_HIP', leftHip) ||
+    !tryReadRetargetKp(frame, clip, 'RIGHT_HIP', rightHip)
+  ) {
+    return
+  }
+
+  const shoulderSpan = Math.abs(rightShoulder.x - leftShoulder.x)
+  if (!Number.isFinite(shoulderSpan) || shoulderSpan <= RETARGET_MIN_DIRECTION_LENGTH) return
+
+  const topY = Math.max(leftShoulder.y, rightShoulder.y) + TORSO_GUARD_VERTICAL_PADDING
+  const bottomY = Math.min(leftHip.y, rightHip.y) - TORSO_GUARD_VERTICAL_PADDING
+  if (point.y > topY || point.y < bottomY) return
+
+  const torsoMinX = Math.min(leftShoulder.x, rightShoulder.x, leftHip.x, rightHip.x)
+  const torsoMaxX = Math.max(leftShoulder.x, rightShoulder.x, leftHip.x, rightHip.x)
+  const centerZ = (leftShoulder.z + rightShoulder.z + leftHip.z + rightHip.z) / 4
+
+  if (point.x >= torsoMinX && point.x <= torsoMaxX) {
+    point.z = Math.max(point.z, centerZ + TORSO_GUARD_FORWARD_Z)
+  }
+
+  if (!isArmElbowLandmark(childKp)) return
+
+  const sideMargin = shoulderSpan * TORSO_GUARD_SIDE_MARGIN_RATIO
+  if (isLeftSideLandmark(childKp)) {
+    const leftLimit = Math.min(leftShoulder.x, leftHip.x) - sideMargin
+    if (point.x > leftLimit) point.x = leftLimit
+  } else {
+    const rightLimit = Math.max(rightShoulder.x, rightHip.x) + sideMargin
+    if (point.x < rightLimit) point.x = rightLimit
+  }
 }
 
 function classifyBone(rawName: string): string | null {
@@ -234,6 +376,10 @@ function CharacterModel({
   // 매 프레임 재사용할 임시 객체들
   const tmpKpP = useRef(new Vector3())
   const tmpKpC = useRef(new Vector3())
+  const tmpGuardLeftShoulder = useRef(new Vector3())
+  const tmpGuardRightShoulder = useRef(new Vector3())
+  const tmpGuardLeftHip = useRef(new Vector3())
+  const tmpGuardRightHip = useRef(new Vector3())
   const tmpBonePos = useRef(new Vector3())
   const tmpChildPos = useRef(new Vector3())
   const tmpRestDir = useRef(new Vector3())
@@ -401,6 +547,16 @@ function CharacterModel({
       }
 
       // 2. desired world direction (motion frame keypoint 기반)
+      applyTorsoGuard(
+        frame,
+        activeMotion,
+        c.childKp,
+        tmpKpC.current,
+        tmpGuardLeftShoulder.current,
+        tmpGuardRightShoulder.current,
+        tmpGuardLeftHip.current,
+        tmpGuardRightHip.current,
+      )
       const kpP = tmpKpP.current
       const kpC = tmpKpC.current
       tmpKpPWorld.current.copy(kpP).applyMatrix4(groupMatrix)
@@ -429,6 +585,7 @@ function CharacterModel({
         continue
       }
       if (!normalizeDirection(tmpRestDir.current)) continue
+      limitDirectionFromRest(tmpRestDir.current, tmpDesiredDir.current, c.maxRotationRad)
       tmpDelta.current.setFromUnitVectors(tmpRestDir.current, tmpDesiredDir.current)
 
       // 4. bone.quaternion = parent-local delta * restQuat

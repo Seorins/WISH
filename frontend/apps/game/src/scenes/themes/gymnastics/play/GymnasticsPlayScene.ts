@@ -96,18 +96,31 @@ type LocalExerciseMotionRecord = {
 }
 
 type ReplayLandmarkName =
+  | 'NOSE'
+  | 'LEFT_EAR'
+  | 'RIGHT_EAR'
   | 'LEFT_SHOULDER'
   | 'RIGHT_SHOULDER'
   | 'LEFT_ELBOW'
   | 'RIGHT_ELBOW'
   | 'LEFT_WRIST'
   | 'RIGHT_WRIST'
+  | 'LEFT_PINKY'
+  | 'RIGHT_PINKY'
+  | 'LEFT_INDEX'
+  | 'RIGHT_INDEX'
+  | 'LEFT_THUMB'
+  | 'RIGHT_THUMB'
   | 'LEFT_HIP'
   | 'RIGHT_HIP'
   | 'LEFT_KNEE'
   | 'RIGHT_KNEE'
   | 'LEFT_ANKLE'
   | 'RIGHT_ANKLE'
+  | 'LEFT_HEEL'
+  | 'RIGHT_HEEL'
+  | 'LEFT_FOOT_INDEX'
+  | 'RIGHT_FOOT_INDEX'
 
 type LocalMotionReplaySample = {
   frame: MotionReplayFrame
@@ -430,6 +443,7 @@ const FEEDBACK_TIMER_MAX_FONT_SIZE = 44
 const FEEDBACK_TIMER_MIN_FONT_SIZE = 26
 const AI_EVALUATION_INTERVAL_MS = 550
 const REPLAY_FPS = 30
+const REPLAY_VERSION = 2
 const COMPACT_REPLAY_FPS = 5
 const REPLAY_SAMPLE_INTERVAL_MS = 1000 / REPLAY_FPS
 const REPLAY_MAX_FRAMES = REPLAY_FPS * 180
@@ -446,18 +460,31 @@ const COMPACT_REPLAY_MARKER_MERGE_GAP_MS = 500
 const TOP_COUNT_MARKER_WINDOW_MS = 2000
 const COACHING_MARKER_WINDOW_MS = 1200
 const REPLAY_LANDMARK_NAMES: readonly ReplayLandmarkName[] = [
+  'NOSE',
+  'LEFT_EAR',
+  'RIGHT_EAR',
   'LEFT_SHOULDER',
   'RIGHT_SHOULDER',
   'LEFT_ELBOW',
   'RIGHT_ELBOW',
   'LEFT_WRIST',
   'RIGHT_WRIST',
+  'LEFT_PINKY',
+  'RIGHT_PINKY',
+  'LEFT_INDEX',
+  'RIGHT_INDEX',
+  'LEFT_THUMB',
+  'RIGHT_THUMB',
   'LEFT_HIP',
   'RIGHT_HIP',
   'LEFT_KNEE',
   'RIGHT_KNEE',
   'LEFT_ANKLE',
   'RIGHT_ANKLE',
+  'LEFT_HEEL',
+  'RIGHT_HEEL',
+  'LEFT_FOOT_INDEX',
+  'RIGHT_FOOT_INDEX',
 ]
 const REPLAY_REQUIRED_TRACKING_NAMES: readonly ReplayLandmarkName[] = [
   'LEFT_SHOULDER',
@@ -3633,7 +3660,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     const replayDurationMs = Math.max(0, Math.round(Math.max(durationMs, lastFrameMs)))
 
     return {
-      version: 1,
+      version: REPLAY_VERSION,
       fps: REPLAY_FPS,
       durationMs: replayDurationMs,
       landmarks: REPLAY_LANDMARK_NAMES,
@@ -3685,7 +3712,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
         )
 
         return {
-          version: 1,
+          version: REPLAY_VERSION,
           fps: COMPACT_REPLAY_FPS,
           durationMs: clipDurationMs,
           landmarks: REPLAY_LANDMARK_NAMES,
@@ -3724,7 +3751,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     )
 
     return {
-      version: 1,
+      version: REPLAY_VERSION,
       fps: COMPACT_REPLAY_FPS,
       durationMs: replayDurationMs,
       landmarks: REPLAY_LANDMARK_NAMES,
