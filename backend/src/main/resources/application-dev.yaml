@@ -41,3 +41,9 @@ app:
     village:
       enabled: true
       room-capacity: 100
+
+# AI 서버 임베딩 트리거 활성화 (S14P31E103-788). docker-compose dev 네트워크 내부 hostname.
+# 운영 배포 시 AI_DIALOGUE_BASE_URL 환경변수로 override.
+ai:
+  dialogue:
+    base-url: ${AI_DIALOGUE_BASE_URL:http://ai-dev:8001/api/v1}
