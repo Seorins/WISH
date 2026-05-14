@@ -81,6 +81,34 @@ const replayLandmarks = [
   'RIGHT_ANKLE',
 ] as const
 
+const replayLandmarksV2 = [
+  'NOSE',
+  'LEFT_EAR',
+  'RIGHT_EAR',
+  'LEFT_SHOULDER',
+  'RIGHT_SHOULDER',
+  'LEFT_ELBOW',
+  'RIGHT_ELBOW',
+  'LEFT_WRIST',
+  'RIGHT_WRIST',
+  'LEFT_PINKY',
+  'RIGHT_PINKY',
+  'LEFT_INDEX',
+  'RIGHT_INDEX',
+  'LEFT_THUMB',
+  'RIGHT_THUMB',
+  'LEFT_HIP',
+  'RIGHT_HIP',
+  'LEFT_KNEE',
+  'RIGHT_KNEE',
+  'LEFT_ANKLE',
+  'RIGHT_ANKLE',
+  'LEFT_HEEL',
+  'RIGHT_HEEL',
+  'LEFT_FOOT_INDEX',
+  'RIGHT_FOOT_INDEX',
+] as const
+
 function replayClip(fps: number): ExerciseMotionReplayClip {
   return {
     version: 1,
@@ -95,6 +123,37 @@ function replayClip(fps: number): ExerciseMotionReplayClip {
       {
         t: 200,
         lm: replayLandmarks.map(() => [0.2, 0.9, 0, 0.92] as const),
+      },
+    ],
+    representativeSegment: {
+      startMs: 0,
+      endMs: 200,
+      reason: 'test segment',
+    },
+    markers: [
+      {
+        startMs: 0,
+        endMs: 200,
+        reason: 'test marker',
+      },
+    ],
+  }
+}
+
+function replayClipV2(fps: number): ExerciseMotionReplayClip {
+  return {
+    version: 2,
+    fps,
+    durationMs: 200,
+    landmarks: replayLandmarksV2,
+    frames: [
+      {
+        t: 0,
+        lm: replayLandmarksV2.map(() => [0.1, 0.9, 0, 0.92] as const),
+      },
+      {
+        t: 200,
+        lm: replayLandmarksV2.map(() => [0.2, 0.9, 0, 0.92] as const),
       },
     ],
     representativeSegment: {
@@ -321,6 +380,21 @@ describe('createExerciseSession', () => {
 describe('validateCreateExerciseSessionRequest', () => {
   it('accepts a valid payload', () => {
     expect(() => validateCreateExerciseSessionRequest(createPayload)).not.toThrow()
+  })
+
+  it('accepts v2 replay payloads with extended landmarks', () => {
+    expect(() =>
+      validateCreateExerciseSessionRequest({
+        ...createPayload,
+        motions: [
+          {
+            ...createPayload.motions[0],
+            poseReplay: replayClipV2(30),
+            compactPoseReplay: replayClipV2(5),
+          },
+        ],
+      }),
+    ).not.toThrow()
   })
 
   it('rejects invalid patient, exercise type, empty motions, and invalid motion values', () => {

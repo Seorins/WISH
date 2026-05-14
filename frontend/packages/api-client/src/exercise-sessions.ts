@@ -151,7 +151,7 @@ const INVALID_POSE_REPLAY_MESSAGE =
 const RAW_REPLAY_FPS = 30
 const COMPACT_REPLAY_MIN_FPS = 5
 const COMPACT_REPLAY_MAX_FPS = 10
-const REPLAY_LANDMARK_NAMES = [
+const REPLAY_LANDMARK_NAMES_V1 = [
   'LEFT_SHOULDER',
   'RIGHT_SHOULDER',
   'LEFT_ELBOW',
@@ -165,7 +165,33 @@ const REPLAY_LANDMARK_NAMES = [
   'LEFT_ANKLE',
   'RIGHT_ANKLE',
 ] as const
-const REPLAY_LANDMARK_COUNT = REPLAY_LANDMARK_NAMES.length
+const REPLAY_LANDMARK_NAMES_V2 = [
+  'NOSE',
+  'LEFT_EAR',
+  'RIGHT_EAR',
+  'LEFT_SHOULDER',
+  'RIGHT_SHOULDER',
+  'LEFT_ELBOW',
+  'RIGHT_ELBOW',
+  'LEFT_WRIST',
+  'RIGHT_WRIST',
+  'LEFT_PINKY',
+  'RIGHT_PINKY',
+  'LEFT_INDEX',
+  'RIGHT_INDEX',
+  'LEFT_THUMB',
+  'RIGHT_THUMB',
+  'LEFT_HIP',
+  'RIGHT_HIP',
+  'LEFT_KNEE',
+  'RIGHT_KNEE',
+  'LEFT_ANKLE',
+  'RIGHT_ANKLE',
+  'LEFT_HEEL',
+  'RIGHT_HEEL',
+  'LEFT_FOOT_INDEX',
+  'RIGHT_FOOT_INDEX',
+] as const
 const REPLAY_TUPLE_SIZE = 4
 const REPLAY_MAX_CAPTURE_SECONDS = 180
 const REPLAY_MAX_DURATION_MS = REPLAY_MAX_CAPTURE_SECONDS * 1000
@@ -238,10 +264,19 @@ function assertCompletionRate(value: number, message: string) {
   }
 }
 
-function hasExpectedReplayLandmarks(landmarks: readonly string[]): boolean {
+function getExpectedReplayLandmarks(version: number): readonly string[] | null {
+  if (version === 1) return REPLAY_LANDMARK_NAMES_V1
+  if (version === 2) return REPLAY_LANDMARK_NAMES_V2
+  return null
+}
+
+function hasExpectedReplayLandmarks(
+  landmarks: readonly string[],
+  expectedLandmarks: readonly string[],
+): boolean {
   return (
-    landmarks.length === REPLAY_LANDMARK_COUNT &&
-    landmarks.every((landmark, index) => landmark === REPLAY_LANDMARK_NAMES[index])
+    landmarks.length === expectedLandmarks.length &&
+    landmarks.every((landmark, index) => landmark === expectedLandmarks[index])
   )
 }
 
@@ -267,15 +302,16 @@ function validateReplaySegment(
 }
 
 function validatePoseReplay(replay: ExerciseMotionReplayClip, mode: 'raw' | 'compact'): void {
+  const expectedLandmarks = getExpectedReplayLandmarks(replay.version)
   if (
-    replay.version !== 1 ||
+    expectedLandmarks == null ||
     !Number.isInteger(replay.fps) ||
     !isValidReplayFps(replay.fps, mode) ||
     !Number.isInteger(replay.durationMs) ||
     replay.durationMs < 0 ||
     replay.durationMs > REPLAY_MAX_DURATION_MS ||
     !Array.isArray(replay.landmarks) ||
-    !hasExpectedReplayLandmarks(replay.landmarks) ||
+    !hasExpectedReplayLandmarks(replay.landmarks, expectedLandmarks) ||
     !Array.isArray(replay.frames) ||
     replay.frames.length === 0 ||
     replay.frames.length > replay.fps * REPLAY_MAX_CAPTURE_SECONDS
@@ -291,7 +327,7 @@ function validatePoseReplay(replay: ExerciseMotionReplayClip, mode: 'raw' | 'com
       frame.t <= previousTimestampMs ||
       frame.t > replay.durationMs ||
       !Array.isArray(frame.lm) ||
-      frame.lm.length !== REPLAY_LANDMARK_COUNT
+      frame.lm.length !== expectedLandmarks.length
     ) {
       throw new Error(INVALID_POSE_REPLAY_MESSAGE)
     }

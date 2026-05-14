@@ -180,6 +180,63 @@ class ExerciseSessionControllerIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
+    void createExerciseSession_acceptsV2PoseReplay() throws Exception {
+        TestUser user = setupUserWithProfile("replay-v2@example.com", "replay-v2-user");
+        ExerciseMotion march = exerciseMotionRepository.save(exerciseMotion("March", 1));
+
+        String body =
+                mockMvc.perform(
+                                post("/exercise-sessions")
+                                        .header("Authorization", "Bearer " + user.token())
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .content(
+                                                """
+                                                {
+                                                  "patientProfileId": %d,
+                                                  "exerciseType": "TOP",
+                                                  "durationSec": 12,
+                                                  "averageAccuracy": 0.91,
+                                                  "motions": [
+                                                    {
+                                                      "exerciseMotionId": %d,
+                                                      "durationSec": 12,
+                                                      "accuracy": 0.91,
+                                                      "completedReps": 8,
+                                                      "feedback": "Good",
+                                                      "poseReplay": %s,
+                                                      "compactPoseReplay": %s
+                                                    }
+                                                  ]
+                                                }
+                                                """
+                                                        .formatted(
+                                                                user.patientProfileId(),
+                                                                march.getId(),
+                                                                replayJsonV2(30, 67, "raw v2"),
+                                                                replayJsonV2(
+                                                                        5, 400, "compact v2"))))
+                        .andExpect(status().isCreated())
+                        .andExpect(jsonPath("$.data.motions[0].replayAvailable").value(true))
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString();
+
+        JsonNode motion = objectMapper.readTree(body).get("data").get("motions").get(0);
+        Long motionResultId = motion.get("id").asLong();
+
+        mockMvc.perform(
+                        get("/exercise-sessions/motions/{motionResultId}/replay", motionResultId)
+                                .header("Authorization", "Bearer " + user.token()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.replay.version").value(2))
+                .andExpect(jsonPath("$.data.replay.landmarks.length()").value(25))
+                .andExpect(jsonPath("$.data.replay.frames[0].lm.length()").value(25))
+                .andExpect(jsonPath("$.data.compactReplay.version").value(2))
+                .andExpect(jsonPath("$.data.compactReplay.landmarks.length()").value(25))
+                .andExpect(jsonPath("$.data.compactReplay.frames[0].lm.length()").value(25));
+    }
+
+    @Test
     void listExerciseSessions_returnsOwnedPatientSessionsOrderedByCreatedAtDesc() throws Exception {
         TestUser user = setupUserWithProfile("list-session@example.com", "list-session-user");
         PatientProfile profile = findProfile(user);
@@ -492,6 +549,44 @@ class ExerciseSessionControllerIntegrationTest extends IntegrationTestSupport {
                         reason);
     }
 
+    private String replayJsonV2(int fps, int endMs, String reason) {
+        return """
+                {
+                  "version": 2,
+                  "fps": %d,
+                  "durationMs": %d,
+                  "landmarks": %s,
+                  "frames": [
+                    {"t": 0, "lm": %s},
+                    {"t": %d, "lm": %s}
+                  ],
+                  "representativeSegment": {
+                    "startMs": 0,
+                    "endMs": %d,
+                    "reason": "%s"
+                  },
+                  "markers": [
+                    {
+                      "startMs": 0,
+                      "endMs": %d,
+                      "reason": "%s"
+                    }
+                  ]
+                }
+                """
+                .formatted(
+                        fps,
+                        endMs,
+                        replayLandmarkNamesV2Json(),
+                        replayFrameTuplesV2Json(),
+                        endMs,
+                        replayFrameTuplesV2Json(),
+                        endMs,
+                        reason,
+                        endMs,
+                        reason);
+    }
+
     private String replayLandmarkNamesJson() {
         return """
                 [
@@ -519,6 +614,30 @@ class ExerciseSessionControllerIntegrationTest extends IntegrationTestSupport {
                   [0.2, 2.2, 0.0, 0.9]
                 ]
                 """;
+    }
+
+    private String replayLandmarkNamesV2Json() {
+        return """
+                [
+                  "NOSE", "LEFT_EAR", "RIGHT_EAR", "LEFT_SHOULDER", "RIGHT_SHOULDER",
+                  "LEFT_ELBOW", "RIGHT_ELBOW", "LEFT_WRIST", "RIGHT_WRIST",
+                  "LEFT_PINKY", "RIGHT_PINKY", "LEFT_INDEX", "RIGHT_INDEX",
+                  "LEFT_THUMB", "RIGHT_THUMB", "LEFT_HIP", "RIGHT_HIP",
+                  "LEFT_KNEE", "RIGHT_KNEE", "LEFT_ANKLE", "RIGHT_ANKLE",
+                  "LEFT_HEEL", "RIGHT_HEEL", "LEFT_FOOT_INDEX", "RIGHT_FOOT_INDEX"
+                ]
+                """;
+    }
+
+    private String replayFrameTuplesV2Json() {
+        StringBuilder builder = new StringBuilder("[\n");
+        for (int i = 0; i < 25; i++) {
+            if (i > 0) {
+                builder.append(",\n");
+            }
+            builder.append("                  [0.1, 0.9, 0.0, 0.92]");
+        }
+        return builder.append("\n                ]").toString();
     }
 
     private TestUser setupUserWithProfile(String email, String nickname) throws Exception {

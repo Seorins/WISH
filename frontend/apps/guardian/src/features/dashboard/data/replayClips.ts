@@ -3,6 +3,20 @@ import { LANDMARK_NAMES, type Landmark, type LandmarkName, type MotionClip } fro
 
 const LANDMARK_NAME_SET = new Set<string>(LANDMARK_NAMES)
 const MISSING_LANDMARK: Landmark = [null, null, null, 0]
+const REQUIRED_LANDMARK_NAMES = [
+  'LEFT_SHOULDER',
+  'RIGHT_SHOULDER',
+  'LEFT_ELBOW',
+  'RIGHT_ELBOW',
+  'LEFT_WRIST',
+  'RIGHT_WRIST',
+  'LEFT_HIP',
+  'RIGHT_HIP',
+  'LEFT_KNEE',
+  'RIGHT_KNEE',
+  'LEFT_ANKLE',
+  'RIGHT_ANKLE',
+] as const satisfies readonly LandmarkName[]
 
 function isLandmarkName(name: string): name is LandmarkName {
   return LANDMARK_NAME_SET.has(name)
@@ -27,15 +41,22 @@ export function toRecordedMotionClip(
 ): MotionClip | null {
   if (!replay || replay.fps < 5 || replay.fps > 30 || !Array.isArray(replay.frames)) return null
   if (!replay.landmarks.every(isLandmarkName)) return null
+  if (REQUIRED_LANDMARK_NAMES.some(landmarkName => !replay.landmarks.includes(landmarkName))) {
+    return null
+  }
 
   const landmarkIndexes = LANDMARK_NAMES.map(landmarkName => replay.landmarks.indexOf(landmarkName))
-  if (landmarkIndexes.some(index => index < 0)) return null
 
   const frames = replay.frames
-    .filter(frame => Number.isFinite(frame.t) && Array.isArray(frame.lm))
+    .filter(
+      frame =>
+        Number.isFinite(frame.t) &&
+        Array.isArray(frame.lm) &&
+        frame.lm.length === replay.landmarks.length,
+    )
     .map(frame => ({
       t: Math.max(0, Math.round(frame.t)),
-      lm: landmarkIndexes.map(index => toLandmark(frame.lm[index])),
+      lm: landmarkIndexes.map(index => toLandmark(index < 0 ? undefined : frame.lm[index])),
     }))
 
   if (frames.length === 0) return null

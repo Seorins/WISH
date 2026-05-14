@@ -11,18 +11,31 @@
  */
 
 export const LANDMARK_NAMES = [
+  'NOSE',
+  'LEFT_EAR',
+  'RIGHT_EAR',
   'LEFT_SHOULDER',
   'RIGHT_SHOULDER',
   'LEFT_ELBOW',
   'RIGHT_ELBOW',
   'LEFT_WRIST',
   'RIGHT_WRIST',
+  'LEFT_PINKY',
+  'RIGHT_PINKY',
+  'LEFT_INDEX',
+  'RIGHT_INDEX',
+  'LEFT_THUMB',
+  'RIGHT_THUMB',
   'LEFT_HIP',
   'RIGHT_HIP',
   'LEFT_KNEE',
   'RIGHT_KNEE',
   'LEFT_ANKLE',
   'RIGHT_ANKLE',
+  'LEFT_HEEL',
+  'RIGHT_HEEL',
+  'LEFT_FOOT_INDEX',
+  'RIGHT_FOOT_INDEX',
 ] as const
 
 export type LandmarkName = (typeof LANDMARK_NAMES)[number]
@@ -65,18 +78,31 @@ const FRAME_DT = 1000 / FPS
 
 /** 정규화 좌표계의 기본(rest) 자세 — 똑바로 서서 팔 살짝 옆으로 */
 const REST: Record<LandmarkName, [number, number, number]> = {
+  NOSE: [0, -1.55, -0.08],
+  LEFT_EAR: [-0.22, -1.48, -0.05],
+  RIGHT_EAR: [0.22, -1.48, -0.05],
   LEFT_SHOULDER: [-0.5, -1.1, -0.05],
   RIGHT_SHOULDER: [0.5, -1.1, -0.05],
   LEFT_ELBOW: [-0.62, -0.55, -0.05],
   RIGHT_ELBOW: [0.62, -0.55, -0.05],
   LEFT_WRIST: [-0.68, 0.0, -0.05],
   RIGHT_WRIST: [0.68, 0.0, -0.05],
+  LEFT_PINKY: [-0.75, 0.02, -0.05],
+  RIGHT_PINKY: [0.75, 0.02, -0.05],
+  LEFT_INDEX: [-0.72, -0.02, -0.06],
+  RIGHT_INDEX: [0.72, -0.02, -0.06],
+  LEFT_THUMB: [-0.64, -0.02, -0.08],
+  RIGHT_THUMB: [0.64, -0.02, -0.08],
   LEFT_HIP: [-0.22, 0.0, 0.0],
   RIGHT_HIP: [0.22, 0.0, 0.0],
   LEFT_KNEE: [-0.24, 1.0, 0.02],
   RIGHT_KNEE: [0.24, 1.0, 0.02],
   LEFT_ANKLE: [-0.25, 1.95, 0.05],
   RIGHT_ANKLE: [0.25, 1.95, 0.05],
+  LEFT_HEEL: [-0.28, 2.02, 0.02],
+  RIGHT_HEEL: [0.28, 2.02, 0.02],
+  LEFT_FOOT_INDEX: [-0.25, 2.13, -0.1],
+  RIGHT_FOOT_INDEX: [0.25, 2.13, -0.1],
 }
 
 type Modifier = (
