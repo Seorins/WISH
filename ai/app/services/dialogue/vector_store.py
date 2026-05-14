@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 import pickle
+import threading
 from pathlib import Path
 from typing import List, Dict, Tuple, Optional
 
@@ -29,6 +30,17 @@ TOP_K = 3
 
 class DialogueVectorStore:
     """아이별 FAISS 벡터 DB를 관리하는 클래스."""
+
+    def __init__(self):
+        self._locks: dict[int, threading.Lock] = {}
+        self._locks_lock = threading.Lock()  # _locks dict 자체를 보호하는 락
+
+    def _get_patient_lock(self, patient_profile_id: int) -> threading.Lock:
+        """patient_profile_id별 락 반환. 없으면 생성."""
+        with self._locks_lock:
+            if patient_profile_id not in self._locks:
+                self._locks[patient_profile_id] = threading.Lock()
+            return self._locks[patient_profile_id]
 
     def _patient_dir(self, patient_profile_id: int) -> Path:
         path = VECTOR_STORE_BASE / str(patient_profile_id)
@@ -104,23 +116,25 @@ class DialogueVectorStore:
             logger.error("[VectorStore] 임베딩 실패 (session_id=%d): %s", session_id, e)
             return
 
-        index, existing_docs = self._load(patient_profile_id)
+        lock = self._get_patient_lock(patient_profile_id)
+        with lock:
+            index, existing_docs = self._load(patient_profile_id)
 
-        if index is None:
-            dimension = vectors.shape[1]
-            index = faiss.IndexFlatIP(dimension)  # 코사인 유사도 (normalize된 벡터)
+            if index is None:
+                dimension = vectors.shape[1]
+                index = faiss.IndexFlatIP(dimension)  # 코사인 유사도 (normalize된 벡터)
 
-        index.add(vectors)
-        existing_docs.extend(docs)
+            index.add(vectors)
+            existing_docs.extend(docs)
 
-        try:
-            self._save(patient_profile_id, index, existing_docs)
-            logger.info(
-                "[VectorStore] 저장 완료 (patient=%d, session=%d, turns=%d)",
-                patient_profile_id, session_id, len(turns),
-            )
-        except Exception as e:
-            logger.error("[VectorStore] 저장 실패 (session_id=%d): %s", session_id, e)
+            try:
+                self._save(patient_profile_id, index, existing_docs)
+                logger.info(
+                    "[VectorStore] 저장 완료 (patient=%d, session=%d, turns=%d)",
+                    patient_profile_id, session_id, len(turns),
+                )
+            except Exception as e:
+                logger.error("[VectorStore] 저장 실패 (session_id=%d): %s", session_id, e)
 
     def search(
         self,
