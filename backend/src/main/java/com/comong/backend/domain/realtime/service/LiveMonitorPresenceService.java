@@ -76,7 +76,7 @@ public class LiveMonitorPresenceService {
         emitter.onCompletion(() -> removeWatcher(watcherKey));
         emitter.onTimeout(() -> removeWatcher(watcherKey));
         emitter.onError(error -> removeWatcher(watcherKey));
-        registerWatcher(watcherKey);
+        publishIfPresent(loginSessionId, registerWatcher(watcherKey));
         return emitter;
     }
 
@@ -86,16 +86,13 @@ public class LiveMonitorPresenceService {
         SseEmitter emitter = createEmitter();
         GameEmitterRegistration registration = new GameEmitterRegistration(loginSessionId, emitter);
         registerGameEmitter(registration);
-        int currentWatcherCount = watcherCount(loginSessionId);
-        lastPublishedWatcherCountBySessionId.put(loginSessionId, currentWatcherCount);
-        sendOrRemove(
-                registration,
-                GamePresenceEventResponse.watcherCountChanged(loginSessionId, currentWatcherCount));
+        sendOrRemove(registration, currentWatcherCountSnapshot(loginSessionId));
         return emitter;
     }
 
     @PreDestroy
     public void shutdown() {
+        cancelAllZeroWatcherDebounces();
         if (delayScheduler instanceof AutoCloseable closeable) {
             try {
                 closeable.close();
@@ -124,58 +121,67 @@ public class LiveMonitorPresenceService {
         emitter.send(SseEmitter.event().name(GAME_PRESENCE_EVENT_NAME).data(event));
     }
 
-    private synchronized void registerWatcher(WatcherKey watcherKey) {
-        Long loginSessionId = watcherKey.loginSessionId();
-        int previousCount = watcherCount(loginSessionId);
-        watchersBySessionId.compute(
-                loginSessionId,
-                (ignored, current) -> {
-                    Set<WatcherKey> watchers =
-                            current == null ? ConcurrentHashMap.newKeySet() : current;
-                    watchers.add(watcherKey);
-                    return watchers;
-                });
-        cancelZeroWatcherDebounce(loginSessionId);
+    private GamePresenceEventResponse registerWatcher(WatcherKey watcherKey) {
+        synchronized (this) {
+            Long loginSessionId = watcherKey.loginSessionId();
+            int previousCount = watcherCount(loginSessionId);
+            watchersBySessionId.compute(
+                    loginSessionId,
+                    (ignored, current) -> {
+                        Set<WatcherKey> watchers =
+                                current == null ? ConcurrentHashMap.newKeySet() : current;
+                        watchers.add(watcherKey);
+                        return watchers;
+                    });
+            cancelZeroWatcherDebounce(loginSessionId);
 
-        int currentCount = watcherCount(loginSessionId);
-        if (currentCount != previousCount) {
-            publishWatcherCount(loginSessionId, currentCount);
+            int currentCount = watcherCount(loginSessionId);
+            if (currentCount != previousCount) {
+                return watcherCountChangedEvent(loginSessionId, currentCount);
+            }
+            return null;
         }
     }
 
-    private synchronized void removeWatcher(WatcherKey watcherKey) {
+    private void removeWatcher(WatcherKey watcherKey) {
         Long loginSessionId = watcherKey.loginSessionId();
-        int previousCount = watcherCount(loginSessionId);
-        watchersBySessionId.computeIfPresent(
-                loginSessionId,
-                (ignored, current) -> {
-                    current.remove(watcherKey);
-                    return current.isEmpty() ? null : current;
-                });
+        GamePresenceEventResponse event = null;
+        synchronized (this) {
+            int previousCount = watcherCount(loginSessionId);
+            watchersBySessionId.computeIfPresent(
+                    loginSessionId,
+                    (ignored, current) -> {
+                        current.remove(watcherKey);
+                        return current.isEmpty() ? null : current;
+                    });
 
-        int currentCount = watcherCount(loginSessionId);
-        if (currentCount == previousCount) {
-            return;
+            int currentCount = watcherCount(loginSessionId);
+            if (currentCount == previousCount) {
+                return;
+            }
+            if (currentCount > 0) {
+                event = watcherCountChangedEvent(loginSessionId, currentCount);
+            } else {
+                scheduleZeroWatcherDebounce(loginSessionId);
+            }
         }
-        if (currentCount > 0) {
-            publishWatcherCount(loginSessionId, currentCount);
-            return;
-        }
-        scheduleZeroWatcherDebounce(loginSessionId);
+        publishIfPresent(loginSessionId, event);
     }
 
-    private synchronized void registerGameEmitter(GameEmitterRegistration registration) {
+    private void registerGameEmitter(GameEmitterRegistration registration) {
         registration.emitter().onCompletion(() -> removeGameEmitter(registration));
         registration.emitter().onTimeout(() -> removeGameEmitter(registration));
         registration.emitter().onError(error -> removeGameEmitter(registration));
-        gameEmittersBySessionId.compute(
-                registration.loginSessionId(),
-                (ignored, current) -> {
-                    Set<GameEmitterRegistration> emitters =
-                            current == null ? ConcurrentHashMap.newKeySet() : current;
-                    emitters.add(registration);
-                    return emitters;
-                });
+        synchronized (this) {
+            gameEmittersBySessionId.compute(
+                    registration.loginSessionId(),
+                    (ignored, current) -> {
+                        Set<GameEmitterRegistration> emitters =
+                                current == null ? ConcurrentHashMap.newKeySet() : current;
+                        emitters.add(registration);
+                        return emitters;
+                    });
+        }
     }
 
     private synchronized void removeGameEmitter(GameEmitterRegistration registration) {
@@ -187,14 +193,26 @@ public class LiveMonitorPresenceService {
                 });
     }
 
-    private void publishWatcherCount(Long loginSessionId, int watcherCount) {
+    private synchronized GamePresenceEventResponse currentWatcherCountSnapshot(
+            Long loginSessionId) {
+        int currentWatcherCount = watcherCount(loginSessionId);
+        lastPublishedWatcherCountBySessionId.put(loginSessionId, currentWatcherCount);
+        return GamePresenceEventResponse.watcherCountChanged(loginSessionId, currentWatcherCount);
+    }
+
+    private GamePresenceEventResponse watcherCountChangedEvent(
+            Long loginSessionId, int watcherCount) {
         Integer previous = lastPublishedWatcherCountBySessionId.put(loginSessionId, watcherCount);
         if (previous != null && previous.intValue() == watcherCount) {
-            return;
+            return null;
         }
-        publish(
-                loginSessionId,
-                GamePresenceEventResponse.watcherCountChanged(loginSessionId, watcherCount));
+        return GamePresenceEventResponse.watcherCountChanged(loginSessionId, watcherCount);
+    }
+
+    private void publishIfPresent(Long loginSessionId, GamePresenceEventResponse event) {
+        if (event != null) {
+            publish(loginSessionId, event);
+        }
     }
 
     private void publish(Long loginSessionId, GamePresenceEventResponse event) {
@@ -244,11 +262,22 @@ public class LiveMonitorPresenceService {
         }
     }
 
-    private synchronized void publishZeroIfStillEmpty(Long loginSessionId) {
-        zeroWatcherDebounceBySessionId.remove(loginSessionId);
-        if (watcherCount(loginSessionId) == 0) {
-            publishWatcherCount(loginSessionId, 0);
+    private void publishZeroIfStillEmpty(Long loginSessionId) {
+        GamePresenceEventResponse event = null;
+        synchronized (this) {
+            zeroWatcherDebounceBySessionId.remove(loginSessionId);
+            if (watcherCount(loginSessionId) == 0) {
+                event = watcherCountChangedEvent(loginSessionId, 0);
+            }
         }
+        publishIfPresent(loginSessionId, event);
+    }
+
+    private synchronized void cancelAllZeroWatcherDebounces() {
+        for (CancellableTask task : zeroWatcherDebounceBySessionId.values()) {
+            task.cancel();
+        }
+        zeroWatcherDebounceBySessionId.clear();
     }
 
     record WatcherKey(Long loginSessionId, Long guardianUserId, String connectionId) {
@@ -312,6 +341,11 @@ public class LiveMonitorPresenceService {
         @Override
         public void close() {
             executor.shutdownNow();
+            try {
+                executor.awaitTermination(5, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
         }
     }
 }
