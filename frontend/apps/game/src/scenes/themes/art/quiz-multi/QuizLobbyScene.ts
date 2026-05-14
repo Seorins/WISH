@@ -452,10 +452,6 @@ export class QuizLobbyScene extends Phaser.Scene {
 
     // 헤더 — 모드 선택 화면과 같은 톤(흰 텍스트 + 짙은 외곽선) 으로 배경과 분리.
     const headerY = h * 0.15
-    const subtitleText =
-      this.snapshot.members.length >= this.snapshot.minPlayers
-        ? `${this.snapshot.members.length}/${this.snapshot.maxPlayers} · 준비됐어요!`
-        : `${this.snapshot.members.length}/${this.snapshot.maxPlayers} · 친구를 기다리는 중`
     const header = this.add
       .text(w / 2, headerY, '방 코드', {
         fontFamily: FONT_FAMILY,
@@ -472,17 +468,6 @@ export class QuizLobbyScene extends Phaser.Scene {
     const codeBoxH = 92
     const codeBoxY = headerY + 22
     this.drawCodeBox(container, w / 2, codeBoxY, codeBoxW, codeBoxH, this.snapshot.code)
-
-    const subtitle = this.add
-      .text(w / 2, codeBoxY + codeBoxH / 2 + 20, subtitleText, {
-        fontFamily: FONT_FAMILY,
-        fontSize: '18px',
-        color: '#fff4dc',
-        stroke: '#1a0e05',
-        strokeThickness: 3,
-      })
-      .setOrigin(0.5, 0)
-    container.add(subtitle)
 
     // 멤버 슬롯 — 최대 정원만큼 가로 정렬, 게임 메뉴 톤(다크 카드 + 강조 보더).
     const slotW = Math.min(180, (w - 80) / this.snapshot.maxPlayers - 20)
