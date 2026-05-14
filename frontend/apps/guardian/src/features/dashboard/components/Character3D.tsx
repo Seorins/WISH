@@ -41,6 +41,15 @@ const TORSO_GUARD_VERTICAL_PADDING = 0.04
 const TORSO_GUARD_SIDE_MARGIN_RATIO = 0.1
 const TORSO_GUARD_FORWARD_Z = 0.08
 const TORSO_MIN_SHOULDER_SPAN = 0.08
+/**
+ * Cross-body 의도 인식:
+ *  - 손목 x 가 신체 중앙선(어깨중앙)을 넘어 반대편 어깨 라인까지 얼마나 진입했는지를 [0..1] factor 로 환산.
+ *  - factor 가 ENGAGE 임계 이상이면 TORSO_GUARD 의 side margin clamp 를 해제 (팔이 몸통을 가로지르는 동작 허용).
+ *  - factor 가 커질수록 z forward push 도 비례로 약화 (이미 앞으로 뻗는 동작은 guard 가 더 끼어들면 짧아 보임).
+ *  - 대각선 몸통 지르기, 반대 어깨 터치 같은 cross-body 운동에서 팔이 꺾여 끝나는 현상 방지.
+ */
+const CROSS_BODY_ENGAGE_FACTOR = 0.2
+const CROSS_BODY_FORWARD_Z_FALLOFF = 1.0
 // Keep a small reach margin because replay landmarks and GLB arm length are not identical.
 const ARM_IK_MAX_REACH_RATIO = 1.15
 const ARM_IK_MIN_REACH_RATIO = 0.18
@@ -410,6 +419,38 @@ function getArmSideSign(side: ArmSide): number {
   return side === 'LEFT' ? -1 : 1
 }
 
+function getArmSideFromLandmark(name: LandmarkName): ArmSide | null {
+  if (name === 'LEFT_ELBOW' || name === 'LEFT_WRIST') return 'LEFT'
+  if (name === 'RIGHT_ELBOW' || name === 'RIGHT_WRIST') return 'RIGHT'
+  return null
+}
+
+// 모듈 레벨 임시 Vector3 — mutateTorsoGuardedArmPoint 가 매 frame 여러 번 호출되므로 할당 회피.
+const tmpCrossBodyWrist = new Vector3()
+
+/**
+ * 손목이 신체 중앙선을 넘어 반대편으로 얼마나 진입했는지를 [0..1] factor 로 반환.
+ *  - 0: 자기 쪽에 있음 (정상 자세)
+ *  - 1: 손목이 반대편 어깨 라인 또는 그 너머까지 도달 (대각선 지르기/반대 어깨 터치 등)
+ */
+function computeCrossBodyFactor(
+  frame: MotionFrame,
+  clip: MotionClip,
+  side: ArmSide,
+  leftShoulder: Vector3,
+  rightShoulder: Vector3,
+): number {
+  const wristKp: LandmarkName = side === 'LEFT' ? 'LEFT_WRIST' : 'RIGHT_WRIST'
+  if (!tryReadRetargetKp(frame, clip, wristKp, tmpCrossBodyWrist)) return 0
+  const midX = (leftShoulder.x + rightShoulder.x) * 0.5
+  const halfSpan = Math.abs(rightShoulder.x - leftShoulder.x) * 0.5
+  if (!Number.isFinite(halfSpan) || halfSpan <= TORSO_MIN_SHOULDER_SPAN * 0.5) return 0
+  // 왼팔: x>midX 이면 오른쪽으로 가로지름. 오른팔: x<midX 이면 왼쪽으로 가로지름.
+  const crossing = side === 'LEFT' ? tmpCrossBodyWrist.x - midX : midX - tmpCrossBodyWrist.x
+  if (crossing <= 0) return 0
+  return Math.min(1, crossing / halfSpan)
+}
+
 function mutateTorsoGuardedArmPoint(
   frame: MotionFrame,
   clip: MotionClip,
@@ -449,11 +490,24 @@ function mutateTorsoGuardedArmPoint(
   const torsoMaxX = Math.max(leftShoulder.x, rightShoulder.x, leftHip.x, rightHip.x)
   const centerZ = (leftShoulder.z + rightShoulder.z + leftHip.z + rightHip.z) / 4
 
+  // Cross-body 의도 (대각선 지르기/반대 어깨 터치 등) 인식 — 손목이 반대편으로 진입한 비율 [0..1].
+  // factor 가 클수록 TORSO_GUARD 의 측면 클램프/z forward push 를 비례로 약화시킴.
+  const side = getArmSideFromLandmark(childKp)
+  const crossBodyFactor = side
+    ? computeCrossBodyFactor(frame, clip, side, leftShoulder, rightShoulder)
+    : 0
+
   if (point.x >= torsoMinX && point.x <= torsoMaxX) {
-    point.z = Math.max(point.z, centerZ + TORSO_GUARD_FORWARD_Z)
+    const forwardZ =
+      TORSO_GUARD_FORWARD_Z * Math.max(0, 1 - crossBodyFactor * CROSS_BODY_FORWARD_Z_FALLOFF)
+    point.z = Math.max(point.z, centerZ + forwardZ)
   }
 
   if (!isArmElbowLandmark(childKp)) return
+
+  // 손목이 반대편으로 충분히 진입한 경우엔 side margin clamp 를 해제 — 그렇지 않으면 cross-body 동작에서
+  // 팔꿈치가 강제로 자기 쪽 옆구리로 밀려나 동작이 짧게 끝나 보임.
+  if (crossBodyFactor >= CROSS_BODY_ENGAGE_FACTOR) return
 
   const sideMargin = shoulderSpan * TORSO_GUARD_SIDE_MARGIN_RATIO
   if (isLeftSideLandmark(childKp)) {
