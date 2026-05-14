@@ -9,3 +9,7 @@ torch==2.5.1
 numpy==1.26.4
 scipy==1.14.1
 fastdtw==0.3.4
+
+# RAG (784)
+sentence-transformers==3.4.1
+faiss-cpu==1.10.0
