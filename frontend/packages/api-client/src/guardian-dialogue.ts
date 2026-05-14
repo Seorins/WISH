@@ -16,6 +16,15 @@ export type GuardianDialogueFinishReason = 'COMPLETED' | 'REST_TODAY' | 'TIMEOUT
 
 export type GuardianDialogueGeneratedBy = 'CLAUDE' | 'TEMPLATE' | 'FALLBACK'
 
+export type GuardianDialogueChoiceValence = 'POSITIVE' | 'NEUTRAL' | 'NEGATIVE'
+export type GuardianDialogueChoiceTone = 'CALM' | 'TIRED' | 'WORRIED'
+export type GuardianDialogueSentimentTone = 'POSITIVE' | 'NEGATIVE'
+
+export type GuardianDialogueSentimentWord = {
+  phrase: string
+  tone: GuardianDialogueSentimentTone
+}
+
 export type GuardianDialogueSessionMeta = {
   sessionId: number
   npcName: GuardianDialogueNpc
@@ -37,6 +46,10 @@ export type GuardianDialogueTurn = {
   intensity: number | null
   concernFlags: string[]
   protectiveFactors: string[]
+  valence: GuardianDialogueChoiceValence | null
+  tone: GuardianDialogueChoiceTone | null
+  topicKeywords: string[]
+  sentimentWords: GuardianDialogueSentimentWord[]
   generatedBy: GuardianDialogueGeneratedBy
   createdAt: string
 }
@@ -117,6 +130,7 @@ export type GuardianDialogueDailySummary = {
   signals: GuardianDialogueSignal[]
   topics: string[]
   npcsVisited: GuardianNpcVisited[]
+  recommendedActivity: string | null
   sessionCount: number
 }
 
