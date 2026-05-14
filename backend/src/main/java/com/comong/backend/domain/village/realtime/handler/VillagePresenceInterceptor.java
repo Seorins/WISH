@@ -8,6 +8,7 @@ import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.messaging.support.ChannelInterceptor;
 import org.springframework.messaging.support.MessageHeaderAccessor;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 
 import com.comong.backend.domain.village.realtime.exception.VillagePatientProfileMissingException;
 import com.comong.backend.domain.village.realtime.exception.VillageRoomFullException;
@@ -16,7 +17,10 @@ import com.comong.backend.domain.village.realtime.service.VillagePresenceService
 import lombok.RequiredArgsConstructor;
 
 /**
- * STOMP CONNECT 단계에서 마을 광장 룸에 presence 를 등록한다.
+ * STOMP CONNECT 단계에서 지정 룸에 presence 를 등록한다.
+ *
+ * <p>S14P31E103-793: 클라가 {@code Room} 네이티브 헤더로 룸 ID 를 전달한다 (예: {@code village.default}, {@code
+ * gymnastics.select}). 헤더가 없으면 {@code village.default} 로 fallback — 기존 단일-룸 클라이언트 호환.
  *
  * <p>{@link VillageStompAuthInterceptor} 가 먼저 실행되어 {@link VillageStompPrincipal} 을 주입한 상태를 전제로 한다 —
  * {@link
@@ -28,6 +32,11 @@ import lombok.RequiredArgsConstructor;
 @Component
 @RequiredArgsConstructor
 public class VillagePresenceInterceptor implements ChannelInterceptor {
+
+    private static final String ROOM_HEADER = "Room";
+
+    /** 기존 단일-룸 클라이언트 / 테스트 호환용. 신규 클라는 명시 권장. */
+    private static final String DEFAULT_ROOM_ID = "village.default";
 
     private final VillagePresenceService presenceService;
 
@@ -47,11 +56,18 @@ public class VillagePresenceInterceptor implements ChannelInterceptor {
             throw new MessagingException(message, "presence: STOMP sessionId missing");
         }
 
+        String roomId = resolveRoomId(accessor);
+
         try {
-            presenceService.join(sessionId, principal.userId());
+            presenceService.join(sessionId, principal.userId(), roomId);
         } catch (VillageRoomFullException | VillagePatientProfileMissingException e) {
             throw new MessagingException(message, e.getMessage(), e);
         }
         return message;
+    }
+
+    private static String resolveRoomId(StompHeaderAccessor accessor) {
+        String header = accessor.getFirstNativeHeader(ROOM_HEADER);
+        return StringUtils.hasText(header) ? header : DEFAULT_ROOM_ID;
     }
 }

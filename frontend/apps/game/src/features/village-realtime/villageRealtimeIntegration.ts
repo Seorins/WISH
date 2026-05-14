@@ -40,6 +40,8 @@ interface AttachOptions {
   scene: Phaser.Scene
   worldWidth: number
   worldHeight: number
+  /** 룸 ID — BE 의 STOMP destination / topic 구성 (예: {@code village.default}, {@code gymnastics.select}, S14P31E103-793). */
+  roomId: string
   /** WS broker URL — 미지정 시 same-origin {@code /api/v1/ws/village}. */
   brokerUrl?: string
 }
@@ -62,6 +64,7 @@ export function attachVillageRealtime(opts: AttachOptions): VillageRealtimeInteg
   })
 
   const client = new VillageRealtimeClient({
+    roomId: opts.roomId,
     url: opts.brokerUrl,
     // 매 (재)접속마다 최신 토큰. refresh 인터셉터가 갱신한 토큰이 자동 반영되도록 store 보다 ensureFreshAccessToken
     // 우선 — store 는 메모리 캐시이고 만료 임박 시 자동 갱신은 ensureFresh 가 담당 (S14P31E103-782).

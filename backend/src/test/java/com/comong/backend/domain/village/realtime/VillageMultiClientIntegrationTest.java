@@ -101,7 +101,7 @@ class VillageMultiClientIntegrationTest extends IntegrationTestSupport {
         StompSession sessionB = connectAsUser(userB);
         LinkedBlockingQueue<Map<String, Object>> snapshotsForB = subscribeSnapshot(sessionB);
         Thread.sleep(SUBSCRIBE_GRACE_MS);
-        sessionB.send("/app/village/ready", new byte[0]);
+        sessionB.send("/app/village.default/ready", new byte[0]);
 
         Map<String, Object> snapshot =
                 snapshotsForB.poll(RECEIVE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
@@ -203,7 +203,7 @@ class VillageMultiClientIntegrationTest extends IntegrationTestSupport {
     private StompSession connectAndReady(User user) throws Exception {
         StompSession session = connectAsUser(user);
         waitMs(SUBSCRIBE_GRACE_MS);
-        session.send("/app/village/ready", new byte[0]);
+        session.send("/app/village.default/ready", new byte[0]);
         return session;
     }
 

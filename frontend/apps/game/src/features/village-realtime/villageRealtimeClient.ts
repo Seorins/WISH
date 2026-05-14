@@ -2,17 +2,18 @@ import { Client, type IFrame, type StompSubscription } from '@stomp/stompjs'
 
 import type { EmotePacket, PositionPacket, VillageEvent, VillageSnapshot } from './types'
 
-// BE 라우팅 규약 (S14P31E103-714 / 718 / 728). 변경 시 BE 와 함께 손본다.
-const TOPIC_VILLAGE = '/topic/village.default'
+// BE 라우팅 규약 (S14P31E103-714 / 718 / 728 / 793). 변경 시 BE 와 함께 손본다.
+// roomId 별로 destination 파라미터화 — 같은 클라이언트 코드를 마을 / 테마 select 씬이 공용 사용.
 const QUEUE_SNAPSHOT = '/user/queue/village.snapshot'
-const APP_READY = '/app/village/ready'
-const APP_POSITION = '/app/village/position'
-const APP_EMOTE = '/app/village/emote'
+const TOPIC_PREFIX = '/topic/'
+const APP_PREFIX = '/app/'
 
 /** 재접속 대기 시간 (ms). 너무 짧으면 BE 가 받는 부담 — 5s 면 사용자 체감/서버 부담 균형 (S14P31E103-782). */
 const RECONNECT_DELAY_MS = 5_000
 
 export interface VillageRealtimeClientOptions {
+  /** 룸 ID (예: {@code village.default}, {@code gymnastics.select}). BE 의 STOMP destination / topic 구성 (S14P31E103-793). */
+  roomId: string
   /** WS broker URL — 미지정 시 동일 origin 의 {@code /api/v1/ws/village} 사용. */
   url?: string
   /**
@@ -33,19 +34,30 @@ export interface VillageRealtimeClientOptions {
 }
 
 /**
- * 마을 광장 STOMP 클라이언트 wrapper.
+ * 마을 광장 + 테마 select 씬 STOMP 클라이언트 wrapper.
  *
- * <p>흐름: connect() → CONNECT → 구독 (snapshot 큐 + 토픽) → ready 발행 → 서버로부터 snapshot + 자기 join 수신.
+ * <p>흐름: connect() → CONNECT (Room 헤더에 roomId) → 구독 ({@code /topic/{roomId}} + snapshot 큐) → ready 발행 →
+ * 서버로부터 snapshot + 자기 join 수신.
  *
- * <p>S14P31E103-782: 자동 재접속 (5s) 활성화. 매 연결 시 {@link VillageRealtimeClientOptions#getAccessToken} 로 최신 토큰을
- * 받아 CONNECT 프레임에 싣는다 — JWT 만료 후 refresh 인터셉터가 갱신한 새 토큰이 자동 반영. 토큰을 못 받으면 deactivate 해서 무한 루프 차단.
+ * <p>S14P31E103-782: 자동 재접속 (5s) + 매 연결 시 fresh token. S14P31E103-793: roomId 옵션으로 destination 파라미터화.
  */
 export class VillageRealtimeClient {
   private readonly client: Client
+  private readonly roomId: string
+  private readonly topic: string
+  private readonly appReady: string
+  private readonly appPosition: string
+  private readonly appEmote: string
   private topicSubscription: StompSubscription | null = null
   private snapshotSubscription: StompSubscription | null = null
 
   constructor(private readonly options: VillageRealtimeClientOptions) {
+    this.roomId = options.roomId
+    this.topic = `${TOPIC_PREFIX}${this.roomId}`
+    this.appReady = `${APP_PREFIX}${this.roomId}/ready`
+    this.appPosition = `${APP_PREFIX}${this.roomId}/position`
+    this.appEmote = `${APP_PREFIX}${this.roomId}/emote`
+
     this.client = new Client({
       brokerURL: options.url ?? defaultBrokerUrl(),
       reconnectDelay: RECONNECT_DELAY_MS,
@@ -77,7 +89,7 @@ export class VillageRealtimeClient {
   publishPosition(packet: PositionPacket): boolean {
     if (!this.client.connected) return false
     this.client.publish({
-      destination: APP_POSITION,
+      destination: this.appPosition,
       body: JSON.stringify(packet),
     })
     return true
@@ -87,7 +99,7 @@ export class VillageRealtimeClient {
   publishEmote(packet: EmotePacket): boolean {
     if (!this.client.connected) return false
     this.client.publish({
-      destination: APP_EMOTE,
+      destination: this.appEmote,
       body: JSON.stringify(packet),
     })
     return true
@@ -101,19 +113,23 @@ export class VillageRealtimeClient {
       this.options.onError?.(new Error('No access token available for village WS connect.'))
       return
     }
-    this.client.connectHeaders = { Authorization: `Bearer ${token}` }
+    // Room 헤더로 BE 에 룸 ID 전달 (S14P31E103-793). VillagePresenceInterceptor 가 읽어 join 시 사용.
+    this.client.connectHeaders = {
+      Authorization: `Bearer ${token}`,
+      Room: this.roomId,
+    }
   }
 
   private handleConnect(): void {
     this.snapshotSubscription = this.client.subscribe(QUEUE_SNAPSHOT, frame => {
       this.options.onSnapshot(JSON.parse(frame.body) as VillageSnapshot)
     })
-    this.topicSubscription = this.client.subscribe(TOPIC_VILLAGE, frame => {
+    this.topicSubscription = this.client.subscribe(this.topic, frame => {
       this.options.onEvent(JSON.parse(frame.body) as VillageEvent)
     })
     // 구독 SUBSCRIBE 프레임은 같은 inbound 채널에 직렬 처리되므로 곧바로 ready 를 보내도
     // 서버 처리 순서상 구독 등록이 먼저 끝난다. SimpleBroker 는 RECEIPT 가 없어 클라가 따로 동기화 불가능.
-    this.client.publish({ destination: APP_READY, body: '' })
+    this.client.publish({ destination: this.appReady, body: '' })
     this.options.onReady?.()
   }
 
