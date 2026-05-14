@@ -81,6 +81,26 @@ public class QuizRoomService {
                         });
     }
 
+    /** WS disconnect 시 호출 — sessionId 로 사용자를 찾아 방에서 자동 제거하고 broadcast. 매핑 없으면 no-op. 멱등. */
+    public void leaveBySession(String sessionId) {
+        roomRegistry
+                .leaveBySession(sessionId)
+                .ifPresent(
+                        result -> {
+                            String roomId = result.room().roomId();
+                            long leftUserId = result.member().userId();
+                            broadcastService.broadcastEvent(
+                                    roomId, QuizRoomEvent.memberLeft(leftUserId));
+                            if (!result.closed()
+                                    && result.room().hostUserId() != leftUserId
+                                    && result.room().hostUserId() != 0L) {
+                                broadcastService.broadcastEvent(
+                                        roomId,
+                                        QuizRoomEvent.hostChanged(result.room().hostUserId()));
+                            }
+                        });
+    }
+
     /** 특정 방 스냅샷 조회 — 멤버 검증은 컨트롤러가 책임 (재접속 시나리오). */
     public QuizRoomSnapshot snapshot(String roomId) {
         return roomRegistry

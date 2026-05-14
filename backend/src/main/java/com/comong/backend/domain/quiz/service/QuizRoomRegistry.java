@@ -48,6 +48,12 @@ public class QuizRoomRegistry {
     /** userId → roomId. 한 사용자 = 한 방 invariant 보장. */
     private final Map<Long, String> userIndex = new ConcurrentHashMap<>();
 
+    /** STOMP sessionId → userId. WS disconnect 시 사용자 추적용 (M2-2 보강). */
+    private final Map<String, Long> sessionToUser = new ConcurrentHashMap<>();
+
+    /** userId → 현재 활성 sessionId. latest-wins 위해 매핑. */
+    private final Map<Long, String> userToSession = new ConcurrentHashMap<>();
+
     public QuizRoomRegistry(QuizRealtimeProperties properties) {
         this.properties = properties;
     }
@@ -118,6 +124,11 @@ public class QuizRoomRegistry {
      */
     public Optional<LeaveResult> leave(long userId) {
         String roomId = userIndex.remove(userId);
+        // 세션 매핑도 같이 정리 — REST leave 후 WS disconnect 가 와도 중복 leave 안 일어남.
+        String boundSession = userToSession.remove(userId);
+        if (boundSession != null) {
+            sessionToUser.remove(boundSession);
+        }
         if (roomId == null) {
             return Optional.empty();
         }
@@ -159,6 +170,37 @@ public class QuizRoomRegistry {
         } finally {
             entry.lock.unlock();
         }
+    }
+
+    /**
+     * STOMP CONNECT 시 호출 — userId 에 sessionId 를 묶는다. 동일 userId 가 이미 다른 세션에 묶여 있으면 그 세션 매핑은
+     * 무효화(latest-wins). 무효화된 옛 세션의 disconnect 는 lookup 실패로 자동 no-op.
+     */
+    public void bindSession(String sessionId, long userId) {
+        String previousSession = userToSession.put(userId, sessionId);
+        if (previousSession != null && !previousSession.equals(sessionId)) {
+            sessionToUser.remove(previousSession);
+        }
+        sessionToUser.put(sessionId, userId);
+    }
+
+    /**
+     * WS disconnect 시 호출 — sessionId 로 userId 를 찾아 방에서 제거한다. 매핑이 없으면 no-op.
+     *
+     * @return 퇴장 결과. 매핑 없거나 멤버 아니면 Optional.empty.
+     */
+    public Optional<LeaveResult> leaveBySession(String sessionId) {
+        Long userId = sessionToUser.remove(sessionId);
+        if (userId == null) {
+            return Optional.empty();
+        }
+        // 다른 세션이 이미 latest-wins 로 잡고 있다면 그 사용자는 여전히 활성 — 룸에서 빼지 않는다.
+        String currentSession = userToSession.get(userId);
+        if (currentSession != null && !currentSession.equals(sessionId)) {
+            return Optional.empty();
+        }
+        userToSession.remove(userId);
+        return leave(userId);
     }
 
     /**
