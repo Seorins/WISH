@@ -10,19 +10,21 @@ import org.springframework.messaging.support.MessageHeaderAccessor;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
-import com.comong.backend.domain.village.realtime.config.VillageRealtimeProperties;
 import com.comong.backend.global.security.JwtTokenProvider;
 
 import io.jsonwebtoken.JwtException;
 import lombok.RequiredArgsConstructor;
 
 /**
- * 마을 광장 STOMP CONNECT 프레임의 {@code Authorization: Bearer <JWT>} 헤더를 검증한다.
+ * STOMP CONNECT 프레임의 {@code Authorization: Bearer <JWT>} 헤더를 검증해 {@link VillageStompPrincipal} 을
+ * 주입한다.
  *
  * <p>HTTP 핸드셰이크는 익명 허용 (SecurityConfig). 실제 인증은 여기 — CONNECT 프레임 단계에서 ChannelInterceptor 로 일원화한다.
  * 표준 Spring 패턴이며, query param 방식이 토큰을 액세스 로그에 남기는 문제를 피한다 (계획서 14절 결정).
  *
- * <p>{@link VillageRealtimeProperties#enabled()} 가 false 면 CONNECT 자체를 거부 — 시연 안정성 폴백.
+ * <p>S14P31E103-820: 그림 퀴즈 멀티플레이가 같은 inbound 채널을 공유하므로 이 인터셉터는 endpoint-neutral 한 JWT 검증만 담당. 마을
+ * 활성화 토글({@code app.realtime.village.enabled})은 village 전용 관심사이므로 {@link
+ * VillagePresenceInterceptor} 로 이동시켰다.
  */
 @Component
 @RequiredArgsConstructor
@@ -32,7 +34,6 @@ public class VillageStompAuthInterceptor implements ChannelInterceptor {
     private static final String BEARER_PREFIX = "Bearer ";
 
     private final JwtTokenProvider jwtTokenProvider;
-    private final VillageRealtimeProperties properties;
 
     @Override
     public Message<?> preSend(Message<?> message, MessageChannel channel) {
@@ -40,10 +41,6 @@ public class VillageStompAuthInterceptor implements ChannelInterceptor {
                 MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
         if (accessor == null || !StompCommand.CONNECT.equals(accessor.getCommand())) {
             return message;
-        }
-
-        if (!properties.enabled()) {
-            throw new MessagingException(message, "village realtime disabled");
         }
 
         String token = resolveBearerToken(accessor);
