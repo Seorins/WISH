@@ -68,9 +68,12 @@ const VILLAGE_PHOTO_BOOTH = {
   yRatio: 0.31,
   scale: 0.145,
 } as const
+const VILLAGE_GOMOKU_BOARD_KEY = 'village-gomoku-board'
+const VILLAGE_GOMOKU_BOARD_PATH = 'images/village/objects/gomoku-board.png'
 const VILLAGE_GOMOKU_BOARD = {
   xRatio: 0.62,
   yRatio: 0.49,
+  scale: 0.15,
 } as const
 const DEFAULT_PLAYER_SPAWN = { xRatio: 0.5, yRatio: 0.3 }
 const MAP_TILE_ROWS = 3
@@ -167,7 +170,7 @@ export class VillageScene extends Phaser.Scene {
   private obstacleManager?: VillageObstacleManager
   private sehyunNpc!: Phaser.GameObjects.Sprite
   private photoBooth?: Phaser.GameObjects.Image
-  private gomokuBoard?: Phaser.GameObjects.Container
+  private gomokuBoard?: Phaser.GameObjects.Image
   private isPhotoBoothInRange = false
   private isGomokuBoardInRange = false
   private dialogs = new Map<VillagerNpcId, SimpleDialogUi>()
@@ -208,6 +211,7 @@ export class VillageScene extends Phaser.Scene {
     this.load.image(VILLAGE_DIALOG_FRAME_KEY, assetPath(VILLAGE_DIALOG_FRAME_PATH))
     this.load.image(VILLAGE_SHIP_KEY, assetPath(VILLAGE_SHIP_PATH))
     this.load.image(VILLAGE_PHOTO_BOOTH_KEY, assetPath(VILLAGE_PHOTO_BOOTH_PATH))
+    this.load.image(VILLAGE_GOMOKU_BOARD_KEY, assetPath(VILLAGE_GOMOKU_BOARD_PATH))
     this.load.image('profile', assetPath('images/common/profile.png'))
     this.load.image('menu-frame', assetPath('images/ui/buttons/meunframe.png'))
     this.load.image('setting-frame', assetPath('images/ui/buttons/settingframe.png'))
@@ -577,48 +581,13 @@ export class VillageScene extends Phaser.Scene {
   private createGomokuBoard(worldWidth: number, worldHeight: number) {
     const x = VILLAGE_GOMOKU_BOARD.xRatio * worldWidth
     const y = VILLAGE_GOMOKU_BOARD.yRatio * worldHeight
-    const container = this.add.container(x, y).setDepth(3).setSize(100, 86)
-    const shadow = this.add.graphics()
-    shadow.fillStyle(0x352314, 0.28)
-    shadow.fillRoundedRect(-48, -44, 96, 62, 10)
-
-    const board = this.add.graphics()
-    board.fillStyle(0xd7a25c, 1)
-    board.fillRoundedRect(-44, -54, 88, 66, 8)
-    board.lineStyle(3, 0x7a4e24, 1)
-    board.strokeRoundedRect(-44, -54, 88, 66, 8)
-    board.lineStyle(1, 0x5e3c1e, 0.82)
-    for (let index = 0; index < 7; index += 1) {
-      const offset = -32 + index * 10.5
-      board.lineBetween(offset, -45, offset, 3)
-      board.lineBetween(-32, -45 + index * 8, 31, -45 + index * 8)
-    }
-    board.fillStyle(0x191f1e, 1)
-    board.fillCircle(-11, -29, 4)
-    board.fillCircle(10, -13, 4)
-    board.fillStyle(0xf6fbf7, 1)
-    board.fillCircle(0, -21, 4)
-    board.fillCircle(20, -37, 4)
-
-    const label = this.add
-      .text(0, 22, '\uC624\uBAA9', {
-        fontFamily: 'Pretendard, "Noto Sans KR", sans-serif',
-        fontSize: '17px',
-        fontStyle: '900',
-        color: '#f9fff8',
-        backgroundColor: '#214e49',
-        padding: { left: 8, right: 8, top: 3, bottom: 3 },
-        resolution: 2,
-      })
-      .setOrigin(0.5)
-
-    container.add([shadow, board, label])
-    container.setInteractive({
-      hitArea: new Phaser.Geom.Rectangle(-52, -58, 104, 90),
-      hitAreaCallback: Phaser.Geom.Rectangle.Contains,
-      useHandCursor: true,
-    })
-    container.on(
+    const board = this.add
+      .image(x, y, VILLAGE_GOMOKU_BOARD_KEY)
+      .setOrigin(0.5, 1)
+      .setScale(VILLAGE_GOMOKU_BOARD.scale)
+      .setDepth(3)
+      .setInteractive({ useHandCursor: true })
+    board.on(
       'pointerdown',
       (
         _pointer: Phaser.Input.Pointer,
@@ -631,11 +600,11 @@ export class VillageScene extends Phaser.Scene {
       },
     )
 
-    const box = this.add.rectangle(x, y - 22, 82, 38, 0xff0000, 0).setDepth(1)
+    const box = this.add.rectangle(x, y - 18, 72, 34, 0xff0000, 0).setDepth(1)
     this.physics.add.existing(box, true)
     this.obstacles.add(box)
 
-    return container
+    return board
   }
 
   private readonly handleObstacleEditorPointerMove = (pointer: Phaser.Input.Pointer) => {
@@ -882,10 +851,15 @@ export class VillageScene extends Phaser.Scene {
     }
 
     if (this.isGomokuBoardInRange && this.gomokuBoard) {
-      this.interactionHint.show(this.gomokuBoard.x, this.gomokuBoard.y - 64, '\uC624\uBAA9', {
-        badgeLabel: '\uC624\uBAA9',
-        helpMessage: 'E / Enter: \uC624\uBAA9 \uD55C \uD310',
-      })
+      this.interactionHint.show(
+        this.gomokuBoard.x,
+        this.gomokuBoard.y - this.gomokuBoard.displayHeight,
+        '\uC624\uBAA9',
+        {
+          badgeLabel: '\uC624\uBAA9',
+          helpMessage: 'E / Enter: \uC624\uBAA9 \uD55C \uD310',
+        },
+      )
       return
     }
 
