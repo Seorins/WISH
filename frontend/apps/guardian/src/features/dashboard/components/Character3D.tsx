@@ -38,7 +38,9 @@ const RETARGET_LOWER_LIMB_MAX_ROTATION_RAD = Math.PI * 0.78
 const TORSO_GUARD_VERTICAL_PADDING = 0.04
 const TORSO_GUARD_SIDE_MARGIN_RATIO = 0.1
 const TORSO_GUARD_FORWARD_Z = 0.08
-const ARM_IK_MAX_REACH_RATIO = 1.25
+const TORSO_MIN_SHOULDER_SPAN = 0.08
+// Keep a small reach margin because replay landmarks and GLB arm length are not identical.
+const ARM_IK_MAX_REACH_RATIO = 1.15
 const ARM_IK_MIN_REACH_RATIO = 0.18
 const ARM_IK_OBSERVED_POLE_WEIGHT = 0.72
 const ARM_IK_CROSS_BODY_OBSERVED_POLE_WEIGHT = 0.45
@@ -406,7 +408,7 @@ function mutateTorsoGuardedArmPoint(
   }
 
   const shoulderSpan = Math.abs(rightShoulder.x - leftShoulder.x)
-  if (!Number.isFinite(shoulderSpan) || shoulderSpan <= RETARGET_MIN_DIRECTION_LENGTH) return
+  if (!Number.isFinite(shoulderSpan) || shoulderSpan <= TORSO_MIN_SHOULDER_SPAN) return
 
   const topY = Math.max(leftShoulder.y, rightShoulder.y) + TORSO_GUARD_VERTICAL_PADDING
   const bottomY = Math.min(leftHip.y, rightHip.y) - TORSO_GUARD_VERTICAL_PADDING
@@ -558,18 +560,15 @@ function retargetBoneFromPoints(
   scratch: DirectionRetargetScratch,
 ): boolean {
   if (!bone || !restQuat || !restParentDir || !bone.parent) return false
+  const parent = bone.parent
 
   scratch.startWorld.copy(startPoint).applyMatrix4(groupMatrix)
   scratch.endWorld.copy(endPoint).applyMatrix4(groupMatrix)
   scratch.desiredDir.copy(scratch.endWorld).sub(scratch.startWorld)
   if (!normalizeDirection(scratch.desiredDir)) return false
 
-  bone.parent.updateWorldMatrix(true, false)
-  bone.parent.matrixWorld.decompose(
-    scratch.parentPosition,
-    scratch.parentRotation,
-    scratch.parentScale,
-  )
+  parent.updateWorldMatrix(true, false)
+  parent.matrixWorld.decompose(scratch.parentPosition, scratch.parentRotation, scratch.parentScale)
   scratch.parentInvRotation.copy(scratch.parentRotation).invert()
   scratch.desiredDir.applyQuaternion(scratch.parentInvRotation)
   if (!normalizeDirection(scratch.desiredDir)) return false
@@ -626,7 +625,7 @@ function applyUpperBodyRetargeting(
   }
 
   const shoulderSpan = upperScratch.leftShoulder.distanceTo(upperScratch.rightShoulder)
-  if (!Number.isFinite(shoulderSpan) || shoulderSpan <= RETARGET_MIN_DIRECTION_LENGTH) {
+  if (!Number.isFinite(shoulderSpan) || shoulderSpan <= TORSO_MIN_SHOULDER_SPAN) {
     return false
   }
 
@@ -1068,6 +1067,7 @@ function CharacterModel({
       const restQuat = restQuatsRef.current.get(c.bone)
       const restParentDir = restParentDirsRef.current.get(c.bone)
       if (!bone || !restQuat || !restParentDir || !bone.parent) continue
+      const parent = bone.parent
 
       // 1. rest quaternion으로 일단 복원 후 matrixWorld 갱신 → rest world direction 측정
       if (
@@ -1105,16 +1105,12 @@ function CharacterModel({
       tmpDesiredDir.current.copy(tmpKpCWorld.current).sub(tmpKpPWorld.current)
       if (!normalizeDirection(tmpDesiredDir.current)) continue
 
-      const parentId = bone.parent.uuid
+      const parentId = parent.uuid
       if (!updatedParentIds.has(parentId)) {
-        bone.parent.updateWorldMatrix(true, false)
+        parent.updateWorldMatrix(true, false)
         updatedParentIds.add(parentId)
       }
-      bone.parent.matrixWorld.decompose(
-        tmpBonePos.current,
-        tmpParentRot.current,
-        tmpChildPos.current,
-      )
+      parent.matrixWorld.decompose(tmpBonePos.current, tmpParentRot.current, tmpChildPos.current)
       tmpParentInvRot.current.copy(tmpParentRot.current).invert()
       tmpDesiredDir.current.applyQuaternion(tmpParentInvRot.current)
       if (!normalizeDirection(tmpDesiredDir.current)) continue
