@@ -247,10 +247,10 @@ public class DialogueService {
         requireInProgress(session);
         session.finish(request.finishReason());
         List<String> closingLines =
-                session.getNpcName().isBackendDriven()
+                session.getNpcName().isLlmDriven()
                         ? fallbackSceneProvider.closingLines(
                                 session.getNpcName(), request.finishReason())
-                        : null; // 마을 주민은 FE 가 자체 closingLines 표시
+                        : null; // 마을 주민은 catalog ending scene 에서 이미 closingLines 전달
 
         // 세션 종료 후 RAG 임베딩 트리거 — fire-and-forget (S14P31E103-788).
         // turns 는 @Async 스레드의 트랜잭션 밖에서 lazy 로딩이 끊기므로 미리 fetch.
