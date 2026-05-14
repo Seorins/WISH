@@ -180,6 +180,98 @@ class ExerciseSessionControllerIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
+    void getMovementAnalysis_returnsConfidenceFilteredJointRanges() throws Exception {
+        TestUser user = setupUserWithProfile("analysis@example.com", "analysis-user");
+        ExerciseMotion march = exerciseMotionRepository.save(exerciseMotion("March", 1));
+
+        String body =
+                mockMvc.perform(
+                                post("/exercise-sessions")
+                                        .header("Authorization", "Bearer " + user.token())
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .content(
+                                                """
+                                                {
+                                                  "patientProfileId": %d,
+                                                  "exerciseType": "TOP",
+                                                  "durationSec": 1,
+                                                  "averageAccuracy": 0.91,
+                                                  "motions": [
+                                                    {
+                                                      "exerciseMotionId": %d,
+                                                      "durationSec": 1,
+                                                      "accuracy": 0.91,
+                                                      "completedReps": 1,
+                                                      "feedback": "Good",
+                                                      "poseReplay": %s
+                                                    }
+                                                  ]
+                                                }
+                                                """
+                                                        .formatted(
+                                                                user.patientProfileId(),
+                                                                march.getId(),
+                                                                analysisReplayJson())))
+                        .andExpect(status().isCreated())
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString();
+
+        JsonNode motion = objectMapper.readTree(body).get("data").get("motions").get(0);
+        Long motionResultId = motion.get("id").asLong();
+
+        mockMvc.perform(
+                        get(
+                                        "/exercise-sessions/motions/{motionResultId}/movement-analysis",
+                                        motionResultId)
+                                .header("Authorization", "Bearer " + user.token()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.analysisAvailable").value(true))
+                .andExpect(jsonPath("$.data.replaySource").value("RAW"))
+                .andExpect(jsonPath("$.data.totalFrameCount").value(3))
+                .andExpect(jsonPath("$.data.analyzedFrameCount").value(2))
+                .andExpect(jsonPath("$.data.excludedFrameCount").value(1))
+                .andExpect(jsonPath("$.data.analyzedDurationMs").value(66))
+                .andExpect(jsonPath("$.data.excludedDurationMs").value(33))
+                .andExpect(jsonPath("$.data.confidenceThreshold").value(0.2))
+                .andExpect(jsonPath("$.data.averageConfidence").value(0.92))
+                .andExpect(jsonPath("$.data.joints[0].jointName").value("LEFT_ELBOW"))
+                .andExpect(jsonPath("$.data.joints[0].validFrameCount").value(2))
+                .andExpect(jsonPath("$.data.joints[0].coverageRate").value(0.667))
+                .andExpect(jsonPath("$.data.joints[0].minAngleDeg").value(90.0))
+                .andExpect(jsonPath("$.data.joints[0].maxAngleDeg").value(180.0))
+                .andExpect(jsonPath("$.data.joints[0].rangeDeg").value(90.0))
+                .andExpect(jsonPath("$.data.excludedSegments[0].startMs").value(33))
+                .andExpect(jsonPath("$.data.excludedSegments[0].endMs").value(66))
+                .andExpect(jsonPath("$.data.excludedSegments[0].reason").value("LOW_CONFIDENCE"))
+                .andExpect(
+                        jsonPath("$.data.representativeSegment.reason").value("analysis window"));
+    }
+
+    @Test
+    void getMovementAnalysis_returnsUnavailableWhenReplayIsMissing() throws Exception {
+        TestUser user = setupUserWithProfile("analysis-empty@example.com", "analysis-empty-user");
+        PatientProfile profile = findProfile(user);
+        ExerciseMotion march = exerciseMotionRepository.save(exerciseMotion("March", 1));
+        ExerciseSession session =
+                exerciseSessionRepository.save(exerciseSession(profile, 1, 0.8, 1));
+        ExerciseSessionMotion sessionMotion =
+                exerciseSessionMotionRepository.save(sessionMotion(session, march, 1, 0.8));
+
+        mockMvc.perform(
+                        get(
+                                        "/exercise-sessions/motions/{motionResultId}/movement-analysis",
+                                        sessionMotion.getId())
+                                .header("Authorization", "Bearer " + user.token()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.analysisAvailable").value(false))
+                .andExpect(jsonPath("$.data.replaySource").value("NONE"))
+                .andExpect(jsonPath("$.data.totalFrameCount").value(0))
+                .andExpect(jsonPath("$.data.joints.length()").value(0))
+                .andExpect(jsonPath("$.data.excludedSegments.length()").value(0));
+    }
+
+    @Test
     void createExerciseSession_acceptsV2PoseReplay() throws Exception {
         TestUser user = setupUserWithProfile("replay-v2@example.com", "replay-v2-user");
         ExerciseMotion march = exerciseMotionRepository.save(exerciseMotion("March", 1));
@@ -614,6 +706,72 @@ class ExerciseSessionControllerIntegrationTest extends IntegrationTestSupport {
                   [0.2, 2.2, 0.0, 0.9]
                 ]
                 """;
+    }
+
+    private String analysisReplayJson() {
+        return """
+                {
+                  "version": 1,
+                  "fps": 30,
+                  "durationMs": 99,
+                  "landmarks": %s,
+                  "frames": [
+                    {"t": 0, "lm": %s},
+                    {"t": 33, "lm": %s},
+                    {"t": 66, "lm": %s}
+                  ],
+                  "representativeSegment": {
+                    "startMs": 0,
+                    "endMs": 99,
+                    "reason": "analysis window"
+                  }
+                }
+                """
+                .formatted(
+                        replayLandmarkNamesJson(),
+                        straightPoseFrameTuplesJson(0.92),
+                        straightPoseFrameTuplesJson(0.1),
+                        bentLeftElbowFrameTuplesJson(0.92));
+    }
+
+    private String straightPoseFrameTuplesJson(double confidence) {
+        return """
+                [
+                  [0.0, 0.0, 0.0, %1$.2f],
+                  [1.0, 0.0, 0.0, %1$.2f],
+                  [0.0, 1.0, 0.0, %1$.2f],
+                  [1.0, 1.0, 0.0, %1$.2f],
+                  [0.0, 2.0, 0.0, %1$.2f],
+                  [1.0, 2.0, 0.0, %1$.2f],
+                  [0.0, 3.0, 0.0, %1$.2f],
+                  [1.0, 3.0, 0.0, %1$.2f],
+                  [0.0, 4.0, 0.0, %1$.2f],
+                  [1.0, 4.0, 0.0, %1$.2f],
+                  [0.0, 5.0, 0.0, %1$.2f],
+                  [1.0, 5.0, 0.0, %1$.2f]
+                ]
+                """
+                .formatted(confidence);
+    }
+
+    private String bentLeftElbowFrameTuplesJson(double confidence) {
+        return """
+                [
+                  [0.0, 0.0, 0.0, %1$.2f],
+                  [1.0, 0.0, 0.0, %1$.2f],
+                  [0.0, 1.0, 0.0, %1$.2f],
+                  [1.0, 1.0, 0.0, %1$.2f],
+                  [1.0, 1.0, 0.0, %1$.2f],
+                  [1.0, 2.0, 0.0, %1$.2f],
+                  [0.0, 3.0, 0.0, %1$.2f],
+                  [1.0, 3.0, 0.0, %1$.2f],
+                  [0.0, 4.0, 0.0, %1$.2f],
+                  [1.0, 4.0, 0.0, %1$.2f],
+                  [0.0, 5.0, 0.0, %1$.2f],
+                  [1.0, 5.0, 0.0, %1$.2f]
+                ]
+                """
+                .formatted(confidence);
     }
 
     private String replayLandmarkNamesV2Json() {
