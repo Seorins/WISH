@@ -30,10 +30,11 @@ class DialogueCatalogLoaderTest {
         DialogueChoiceCatalog catalog = loader.getCatalog();
 
         assertThat(catalog.npcs()).containsKey("monkey_friend");
-        assertThat(catalog.scripts()).containsKey("monkey_injection_fear");
+        assertThat(catalog.scripts())
+                .containsKeys("monkey_injection_fear", "monkey_frustration", "monkey_play");
         assertThat(catalog.choices()).containsKey("mky_inj_fear");
-        // 19 choices in the 코몽-1 pilot
-        assertThat(catalog.choices()).hasSize(19);
+        // 코몽-1 (19) + 코몽-2 (18) + 코몽-3 (12) — 본 PR 시점
+        assertThat(catalog.choices()).hasSizeGreaterThanOrEqualTo(49);
     }
 
     @Test

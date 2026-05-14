@@ -67,7 +67,8 @@ class DialogueCatalogServiceTest {
 
     @Test
     void scriptIdsOf_returnsScriptsOfNpc() {
-        assertThat(service.scriptIdsOf("monkey_friend")).containsExactly("monkey_injection_fear");
+        assertThat(service.scriptIdsOf("monkey_friend"))
+                .containsExactly("monkey_injection_fear", "monkey_frustration", "monkey_play");
     }
 
     @Test
