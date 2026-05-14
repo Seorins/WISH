@@ -76,7 +76,16 @@ public class LiveMonitorPresenceService {
         emitter.onCompletion(() -> removeWatcher(watcherKey));
         emitter.onTimeout(() -> removeWatcher(watcherKey));
         emitter.onError(error -> removeWatcher(watcherKey));
-        publishIfPresent(loginSessionId, registerWatcher(watcherKey));
+        WatcherRegistrationResult registrationResult = registerWatcher(watcherKey);
+        try {
+            sendWatchingOpenEvent(emitter);
+        } catch (IOException | RuntimeException e) {
+            log.debug("Watching SSE initial send failed. loginSessionId={}", loginSessionId, e);
+            removeWatcher(watcherKey);
+            completeWithErrorSafely(emitter, e);
+            throw new IllegalStateException("Watching SSE initial send failed.", e);
+        }
+        publishIfPresent(loginSessionId, watcherRegistrationEvent(registrationResult));
         return emitter;
     }
 
@@ -121,7 +130,11 @@ public class LiveMonitorPresenceService {
         emitter.send(SseEmitter.event().name(GAME_PRESENCE_EVENT_NAME).data(event));
     }
 
-    private GamePresenceEventResponse registerWatcher(WatcherKey watcherKey) {
+    void sendWatchingOpenEvent(SseEmitter emitter) throws IOException {
+        emitter.send(SseEmitter.event().comment("connected"));
+    }
+
+    private WatcherRegistrationResult registerWatcher(WatcherKey watcherKey) {
         synchronized (this) {
             Long loginSessionId = watcherKey.loginSessionId();
             int previousCount = watcherCount(loginSessionId);
@@ -136,10 +149,8 @@ public class LiveMonitorPresenceService {
             cancelZeroWatcherDebounce(loginSessionId);
 
             int currentCount = watcherCount(loginSessionId);
-            if (currentCount != previousCount) {
-                return watcherCountChangedEvent(loginSessionId, currentCount);
-            }
-            return null;
+            return new WatcherRegistrationResult(
+                    loginSessionId, currentCount != previousCount, currentCount);
         }
     }
 
@@ -215,6 +226,13 @@ public class LiveMonitorPresenceService {
         }
     }
 
+    private GamePresenceEventResponse watcherRegistrationEvent(WatcherRegistrationResult result) {
+        if (!result.countChanged()) {
+            return null;
+        }
+        return watcherCountChangedEvent(result.loginSessionId(), result.watcherCount());
+    }
+
     private void publish(Long loginSessionId, GamePresenceEventResponse event) {
         Set<GameEmitterRegistration> emitters = gameEmittersBySessionId.get(loginSessionId);
         if (emitters == null || emitters.isEmpty()) {
@@ -244,6 +262,14 @@ public class LiveMonitorPresenceService {
                     event.watcherCount(),
                     e);
             removeGameEmitter(registration);
+        }
+    }
+
+    private void completeWithErrorSafely(SseEmitter emitter, Throwable error) {
+        try {
+            emitter.completeWithError(error);
+        } catch (RuntimeException e) {
+            log.debug("Watching SSE completeWithError failed.", e);
         }
     }
 
@@ -288,6 +314,9 @@ public class LiveMonitorPresenceService {
             Objects.requireNonNull(connectionId, "connectionId must not be null");
         }
     }
+
+    private record WatcherRegistrationResult(
+            Long loginSessionId, boolean countChanged, int watcherCount) {}
 
     private record GameEmitterRegistration(Long loginSessionId, SseEmitter emitter) {
 
