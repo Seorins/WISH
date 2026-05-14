@@ -18,8 +18,8 @@ import com.comong.backend.global.exception.BusinessException;
  *   <li><b>쓰기</b> (수정/삭제): 공개 여부와 무관하게 작성자만
  * </ul>
  *
- * <p>현재 사용자 식별은 호출자가 책임지고 {@code currentUserId} 인자로 전달 (비로그인은 {@code null}). artwork
- * AccessChecker 와 동일한 패턴 — 비공개 사진을 비소유자가 조회 시 NOT_FOUND (enumeration 방지).
+ * <p>현재 사용자 식별은 호출자가 책임지고 {@code currentUserId} 인자로 전달 (비로그인은 {@code null}). artwork AccessChecker
+ * 와 동일한 패턴 — 비공개 사진을 비소유자가 조회 시 NOT_FOUND (enumeration 방지).
  */
 @Component
 public class PhotoBoothAccessChecker {

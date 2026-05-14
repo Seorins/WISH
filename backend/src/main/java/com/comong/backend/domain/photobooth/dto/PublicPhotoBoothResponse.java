@@ -15,11 +15,7 @@ import com.comong.backend.global.storage.ImageStorage;
  * <p>{@code imageUrl} 은 {@link ImageStorage#toPublicUrl} 을 거친 값.
  */
 public record PublicPhotoBoothResponse(
-        Long id,
-        String frameId,
-        String imageUrl,
-        LocalDateTime createdAt,
-        Author author) {
+        Long id, String frameId, String imageUrl, LocalDateTime createdAt, Author author) {
 
     public record Author(String nickname) {}
 

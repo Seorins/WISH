@@ -88,11 +88,11 @@ public class PhotoBoothPhoto {
     /**
      * 주어진 사용자가 본 사진의 소유자인지 판단. {@code patientProfile.user.id} 와 비교한다.
      *
-     * <p>{@code userId} 가 null 이면 (비로그인 등) 항상 false. {@code patientProfile} 또는 그 user 가 null 인 비정상 상태도
-     * 안전하게 false (DB FK NOT NULL 이라 정상 흐름에선 발생 안 함 — 정합성 안전망).
+     * <p>{@code userId} 가 null 이면 (비로그인 등) 항상 false. {@code patientProfile} 또는 그 user 가 null 인 비정상
+     * 상태도 안전하게 false (DB FK NOT NULL 이라 정상 흐름에선 발생 안 함 — 정합성 안전망).
      *
-     * <p><b>LAZY fetch 주의</b>: {@link com.comong.backend.domain.artwork.entity.Artwork#isOwnedBy} 와 동일하게,
-     * 권한 체크 이전에 {@code JOIN FETCH photo.patientProfile.user} 로 미리 로딩해야 N+1 을 방지.
+     * <p><b>LAZY fetch 주의</b>: {@link com.comong.backend.domain.artwork.entity.Artwork#isOwnedBy} 와
+     * 동일하게, 권한 체크 이전에 {@code JOIN FETCH photo.patientProfile.user} 로 미리 로딩해야 N+1 을 방지.
      */
     public boolean isOwnedBy(Long userId) {
         if (userId == null) {

@@ -31,13 +31,13 @@ import lombok.extern.slf4j.Slf4j;
  * <p><b>트랜잭션 정합성</b>: artwork 와 동일한 orphan 최소화 패턴을 사용한다 (파일시스템/S3 는 트랜잭션 외 자원).
  *
  * <ul>
- *   <li>Create: 업로드 → DB save. DB 롤백 시 {@link
- *       TransactionSynchronization#afterCompletion(int)} 에서 업로드한 파일 삭제.
+ *   <li>Create: 업로드 → DB save. DB 롤백 시 {@link TransactionSynchronization#afterCompletion(int)} 에서
+ *       업로드한 파일 삭제.
  *   <li>Delete: DB 삭제 → 커밋 성공 후 파일 삭제 (커밋 실패 시 파일 보존).
  * </ul>
  *
- * <p>현재는 사진을 한 번 저장하면 이미지 교체는 지원하지 않는다 (Update 는 공개 여부만). 추후 교체 필요해지면
- * {@link com.comong.backend.domain.artwork.service.ArtworkService} 의 {@code
+ * <p>현재는 사진을 한 번 저장하면 이미지 교체는 지원하지 않는다 (Update 는 공개 여부만). 추후 교체 필요해지면 {@link
+ * com.comong.backend.domain.artwork.service.ArtworkService} 의 {@code
  * registerImageReplacementCleanup} 패턴을 그대로 가져온다.
  */
 @Slf4j
@@ -115,7 +115,8 @@ public class PhotoBoothService {
     private PhotoBoothPhoto findOrThrow(Long id) {
         return photoRepository
                 .findByIdWithProfileAndUser(id)
-                .orElseThrow(() -> new BusinessException(PhotoBoothErrorCode.PHOTO_BOOTH_NOT_FOUND));
+                .orElseThrow(
+                        () -> new BusinessException(PhotoBoothErrorCode.PHOTO_BOOTH_NOT_FOUND));
     }
 
     /** Create 용 — 트랜잭션 롤백 시 업로드 파일 삭제. */

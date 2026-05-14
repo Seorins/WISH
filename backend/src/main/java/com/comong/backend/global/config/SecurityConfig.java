@@ -123,9 +123,7 @@ public class SecurityConfig {
                                         .permitAll()
                                         // 3. /me 는 본인 컨텐츠만이라 인증 필수 (밑의 catch 보다 먼저 매칭)
                                         .requestMatchers(
-                                                HttpMethod.GET,
-                                                "/artworks/me",
-                                                "/photo-booths/me")
+                                                HttpMethod.GET, "/artworks/me", "/photo-booths/me")
                                         .authenticated()
                                         // 4. GET /artworks/{id}, /photo-booths/{id} — 비공개는 service
                                         //    레이어 AccessChecker.verifyReadable 가 담당.

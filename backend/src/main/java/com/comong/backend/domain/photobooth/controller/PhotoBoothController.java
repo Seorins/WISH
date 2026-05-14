@@ -71,7 +71,8 @@ public class PhotoBoothController {
             @AuthenticationPrincipal AuthenticatedUser currentUser,
             @Valid @RequestPart("request") PhotoBoothCreateRequest request,
             @RequestPart("image") MultipartFile image) {
-        PhotoBoothResponse response = photoBoothService.create(currentUser.userId(), request, image);
+        PhotoBoothResponse response =
+                photoBoothService.create(currentUser.userId(), request, image);
         URI location = URI.create("/photo-booths/" + response.id());
         return ResponseEntity.created(location).body(ApiResponse.success(response));
     }
@@ -178,9 +179,8 @@ public class PhotoBoothController {
     /**
      * 정렬 강제 — createdAt DESC 로 고정 (사용자 입력 sort 무시).
      *
-     * <p>인덱스 (idx_photo_booth_photos_patient_created /
-     * idx_photo_booth_photos_public_created) 를 활용하면서, 임의 컬럼 정렬로 인한 풀스캔 / 정보 노출 / SQL injection
-     * 표면을 차단. artwork 컨트롤러와 동일한 정책.
+     * <p>인덱스 (idx_photo_booth_photos_patient_created / idx_photo_booth_photos_public_created) 를
+     * 활용하면서, 임의 컬럼 정렬로 인한 풀스캔 / 정보 노출 / SQL injection 표면을 차단. artwork 컨트롤러와 동일한 정책.
      */
     private Pageable withCreatedAtDesc(Pageable pageable) {
         return PageRequest.of(
