@@ -1,4 +1,6 @@
--- V31: Add catalog-driven metadata columns to dialogue_turns.
+-- V33: Add catalog-driven metadata columns to dialogue_turns.
+-- (이력: 원래 V31 로 develop 에 머지되었으나 photo_booth V31 과 충돌하여 V33 으로 재번호.
+--  dev DB 의 flyway_schema_history 에는 V31 photo_booth 만 적용된 상태였으므로 안전하게 재번호.)
 --
 -- 핵심 결정:
 --   - valence / tone 은 BE 카탈로그(JSON) 기반 응답 분류·정서 카테고리. 보호자 화면의
