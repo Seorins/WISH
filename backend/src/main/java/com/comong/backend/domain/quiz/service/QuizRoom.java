@@ -35,6 +35,13 @@ public class QuizRoom {
 
     private int joinCounter = 0;
 
+    // ── 라운드 진행 상태 (PLAYING 일 때만 의미 있음, M2-2)
+    /** 1-based 라운드 번호. 0 = 아직 시작 안 함. */
+    private int roundNumber = 0;
+
+    private long currentDrawerUserId = 0L;
+    private DrawingPrompt currentPrompt = null;
+
     QuizRoom(String roomId, String code, int minPlayers, int maxPlayers, Instant createdAt) {
         this.roomId = roomId;
         this.code = code;
@@ -137,22 +144,52 @@ public class QuizRoom {
     }
 
     /**
-     * 게임 시작. 방장만 호출 가능 (호출자에서 검증). 최소 인원/상태 검사는 여기서.
+     * 다음 라운드 시작 (게임 첫 시작 = 1라운드). 방장 검증은 호출자(Service) 가 하고, 본 메서드는 상태/인원 invariant 만 확인.
      *
-     * @throws QuizRoomNotReadyToStartException 인원 부족 / 이미 시작됨
+     * <p>현재 시점 멤버 중 join 순서대로 다음 출제자를 선정한다(라운드 N → joinOrder N mod size). 호스트 변경/이탈로 인덱스가 어긋나도 join
+     * 순서 기반이라 결정적.
+     *
+     * @param prompt 본 라운드 제시어
+     * @throws QuizRoomNotReadyToStartException WAITING 도 PLAYING 도 아님 / 인원 부족
      */
-    void start() {
-        if (status != QuizRoomStatus.WAITING) {
+    void startNextRound(DrawingPrompt prompt) {
+        if (status == QuizRoomStatus.FINISHED) {
             throw new QuizRoomNotReadyToStartException();
         }
         if (members.size() < minPlayers) {
             throw new QuizRoomNotReadyToStartException();
         }
         status = QuizRoomStatus.PLAYING;
+        roundNumber += 1;
+        currentPrompt = prompt;
+        currentDrawerUserId = pickDrawerForRound(roundNumber);
+    }
+
+    private long pickDrawerForRound(int round) {
+        // joinOrder 가장 작은 멤버부터 순환. round 1 → 가장 먼저 들어온 사람, 2 → 그다음 ...
+        List<QuizMember> sorted =
+                members.values().stream()
+                        .sorted(Comparator.comparingInt(QuizMember::joinOrder))
+                        .toList();
+        int index = (round - 1) % sorted.size();
+        return sorted.get(index).userId();
+    }
+
+    public int roundNumber() {
+        return roundNumber;
+    }
+
+    public long currentDrawerUserId() {
+        return currentDrawerUserId;
+    }
+
+    public DrawingPrompt currentPrompt() {
+        return currentPrompt;
     }
 
     void finish() {
         status = QuizRoomStatus.FINISHED;
+        currentPrompt = null;
     }
 
     /** 멤버가 방의 일원인지 확인. 아니면 예외. STOMP 메시지 핸들러에서 호출. */

@@ -161,6 +161,27 @@ public class QuizRoomRegistry {
         }
     }
 
+    /**
+     * 다음 라운드 시작 — 호스트 검증은 호출자(Service) 책임. 룸 lock 안에서 상태 전이 + 제시어 세팅.
+     *
+     * @param roomId 대상 룸
+     * @param prompt 본 라운드 제시어
+     * @return 변경 후 룸 (lock 해제 후 snapshot 용)
+     */
+    public QuizRoom startNextRound(String roomId, DrawingPrompt prompt) {
+        RoomEntry entry = rooms.get(roomId);
+        if (entry == null) {
+            throw new com.comong.backend.domain.quiz.exception.QuizRoomNotFoundException();
+        }
+        entry.lock.lock();
+        try {
+            entry.room.startNextRound(prompt);
+            return entry.room;
+        } finally {
+            entry.lock.unlock();
+        }
+    }
+
     /** 등록된 방 수 — 메트릭/디버깅용. */
     public int roomCount() {
         return rooms.size();

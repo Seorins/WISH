@@ -14,28 +14,47 @@ import com.fasterxml.jackson.annotation.JsonInclude;
  *   <li>{@code member_left}: type, userId
  *   <li>{@code host_changed}: type, hostUserId
  *   <li>{@code status_changed}: type, status (예: PLAYING / FINISHED)
+ *   <li>{@code round_started}: type, status=PLAYING, roundNumber, currentDrawerUserId (제시어는 출제자
+ *       user queue 로만 전송)
  * </ul>
  *
  * <p>타입별로 채워지는 필드가 달라 단일 record + {@code @JsonInclude(NON_NULL)} 로 처리한다 (village 와 동일 패턴).
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record QuizRoomEvent(
-        String type, Long userId, QuizMemberDto member, Long hostUserId, QuizRoomStatus status) {
+        String type,
+        Long userId,
+        QuizMemberDto member,
+        Long hostUserId,
+        QuizRoomStatus status,
+        Integer roundNumber,
+        Long currentDrawerUserId) {
 
     public static QuizRoomEvent memberJoined(QuizMember member, boolean isHost) {
         return new QuizRoomEvent(
-                "member_joined", null, QuizMemberDto.of(member, isHost), null, null);
+                "member_joined", null, QuizMemberDto.of(member, isHost), null, null, null, null);
     }
 
     public static QuizRoomEvent memberLeft(long userId) {
-        return new QuizRoomEvent("member_left", userId, null, null, null);
+        return new QuizRoomEvent("member_left", userId, null, null, null, null, null);
     }
 
     public static QuizRoomEvent hostChanged(long hostUserId) {
-        return new QuizRoomEvent("host_changed", null, null, hostUserId, null);
+        return new QuizRoomEvent("host_changed", null, null, hostUserId, null, null, null);
     }
 
     public static QuizRoomEvent statusChanged(QuizRoomStatus status) {
-        return new QuizRoomEvent("status_changed", null, null, null, status);
+        return new QuizRoomEvent("status_changed", null, null, null, status, null, null);
+    }
+
+    public static QuizRoomEvent roundStarted(int roundNumber, long currentDrawerUserId) {
+        return new QuizRoomEvent(
+                "round_started",
+                null,
+                null,
+                null,
+                QuizRoomStatus.PLAYING,
+                roundNumber,
+                currentDrawerUserId);
     }
 }

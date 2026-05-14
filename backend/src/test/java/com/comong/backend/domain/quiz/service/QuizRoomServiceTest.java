@@ -36,15 +36,19 @@ class QuizRoomServiceTest {
     private PatientProfileService patientProfileService;
     private QuizBroadcastService broadcastService;
     private QuizRoomRegistry registry;
+    private QuizPromptCatalog promptCatalog;
     private QuizRoomService service;
 
     @BeforeEach
     void setUp() {
         patientProfileService = mock(PatientProfileService.class);
         broadcastService = mock(QuizBroadcastService.class);
+        promptCatalog = new QuizPromptCatalog();
         QuizRealtimeProperties properties = new QuizRealtimeProperties(true, MIN, MAX, 90, 60);
         registry = new QuizRoomRegistry(properties);
-        service = new QuizRoomService(registry, broadcastService, patientProfileService);
+        service =
+                new QuizRoomService(
+                        registry, broadcastService, patientProfileService, promptCatalog);
     }
 
     @Test
@@ -166,6 +170,73 @@ class QuizRoomServiceTest {
         // 멤버 아닌 사용자가 호출해도 예외/broadcast 없이 조용히 지나간다.
         service.leave(999L);
         verify(broadcastService, never()).broadcastEvent(anyString(), any());
+    }
+
+    @Test
+    void startGameByHostTransitionsToPlayingAndBroadcastsAndPushesPromptToDrawer() {
+        stubProfile(1L, 100L, "h");
+        stubProfile(2L, 101L, "g");
+        QuizRoomSnapshot host = service.createRoom(1L);
+        service.joinByCode(2L, host.code());
+
+        QuizRoomSnapshot after = service.startGame(1L, host.roomId());
+
+        assertThat(after.status())
+                .isEqualTo(com.comong.backend.domain.quiz.service.QuizRoomStatus.PLAYING);
+        assertThat(after.roundNumber()).isEqualTo(1);
+        // 출제자는 joinOrder 0 인 host (= round 1 → index 0).
+        assertThat(after.currentDrawerUserId()).isEqualTo(1L);
+
+        // round_started 토픽 broadcast 1회.
+        verify(broadcastService, times(1))
+                .broadcastEvent(
+                        eq(host.roomId()),
+                        org.mockito.ArgumentMatchers.argThat(
+                                ev ->
+                                        ev != null
+                                                && "round_started".equals(ev.type())
+                                                && ev.roundNumber() == 1
+                                                && ev.currentDrawerUserId() == 1L));
+        // 출제자(1L) user queue 로 제시어 1회 push.
+        verify(broadcastService, times(1)).sendPromptToUser(eq("1"), eq(host.roomId()), any());
+    }
+
+    @Test
+    void startGameByNonHostIsRejected() {
+        stubProfile(1L, 100L, "h");
+        stubProfile(2L, 101L, "g");
+        QuizRoomSnapshot host = service.createRoom(1L);
+        service.joinByCode(2L, host.code());
+
+        assertThatThrownBy(() -> service.startGame(2L, host.roomId()))
+                .isInstanceOf(
+                        com.comong.backend.domain.quiz.exception.QuizNotRoomHostException.class);
+    }
+
+    @Test
+    void startGameWithBelowMinPlayersIsRejected() {
+        stubProfile(1L, 100L, "h");
+        QuizRoomSnapshot host = service.createRoom(1L);
+
+        assertThatThrownBy(() -> service.startGame(1L, host.roomId()))
+                .isInstanceOf(
+                        com.comong.backend.domain.quiz.exception.QuizRoomNotReadyToStartException
+                                .class);
+    }
+
+    @Test
+    void startGameAdvancesDrawerOnSubsequentRounds() {
+        stubProfile(1L, 100L, "h");
+        stubProfile(2L, 101L, "g");
+        QuizRoomSnapshot host = service.createRoom(1L);
+        service.joinByCode(2L, host.code());
+
+        QuizRoomSnapshot r1 = service.startGame(1L, host.roomId());
+        QuizRoomSnapshot r2 = service.startGame(1L, host.roomId());
+
+        assertThat(r1.currentDrawerUserId()).isEqualTo(1L);
+        assertThat(r2.currentDrawerUserId()).isEqualTo(2L);
+        assertThat(r2.roundNumber()).isEqualTo(2);
     }
 
     private void stubProfile(long userId, long profileId, String nickname) {
