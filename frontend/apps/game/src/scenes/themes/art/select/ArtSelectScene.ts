@@ -75,9 +75,9 @@ const CARD_LAYOUT = {
 } as const
 
 const ART_CONTENT_SCENE_KEYS: Record<ArtContentMode, string> = {
-  'free-drawing': 'ArtFreeDrawingScene',
+  // 그림 퀴즈 진입은 mode-select(QuizLobbyScene) 가 먼저 — 거기서 혼자(AI) / 친구랑(멀티) 분기 (S14P31E103-820).
+  'free-drawing': 'QuizLobbyScene',
   coloring: 'ArtColoringSelectScene',
-  'quiz-multi': 'QuizLobbyScene',
 }
 
 type ArtSelectSceneData = {

@@ -121,7 +121,7 @@ export class QuizLobbyScene extends Phaser.Scene {
 
     const titleY = h * 0.18
     const title = this.add
-      .text(w / 2, titleY, '친구랑 그림 퀴즈', {
+      .text(w / 2, titleY, '그림 퀴즈', {
         fontFamily: FONT_FAMILY,
         fontSize: '44px',
         color: '#3a2614',
@@ -129,7 +129,7 @@ export class QuizLobbyScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
     const subtitle = this.add
-      .text(w / 2, titleY + 56, '방을 만들거나 친구의 코드를 입력해서 같이 놀자', {
+      .text(w / 2, titleY + 56, '어떻게 놀고 싶어?', {
         fontFamily: FONT_FAMILY,
         fontSize: '20px',
         color: '#6a4a26',
@@ -137,32 +137,44 @@ export class QuizLobbyScene extends Phaser.Scene {
       .setOrigin(0.5)
     container.add([title, subtitle])
 
-    const buttonW = Math.min(380, w * 0.32)
-    const buttonH = 96
-    const cy = h * 0.55
-    const gap = 60
+    // 3개 카드 가로 배치: 혼자(AI) / 친구랑-방만들기 / 친구랑-코드입장
+    const buttonW = Math.min(280, (w - 120) / 3 - 30)
+    const buttonH = 200
+    const cy = h * 0.56
+    const gap = 36
+    const totalW = buttonW * 3 + gap * 2
+    let cursorX = w / 2 - totalW / 2 + buttonW / 2
 
     container.add(
-      this.createCardButton(
-        w / 2 - buttonW / 2 - gap / 2,
-        cy,
-        buttonW,
-        buttonH,
-        '방 만들기',
-        PALETTE_PRIMARY,
-        () => this.startCreate(),
-      ),
+      this.createMenuCard(cursorX, cy, buttonW, buttonH, {
+        tag: '혼자',
+        title: 'AI 랑',
+        desc: '제시어를 그리면 AI가 맞춰줘',
+        palette: PALETTE_PRIMARY,
+        onClick: () => this.startSingleplayer(),
+      }),
     )
+    cursorX += buttonW + gap
+
     container.add(
-      this.createCardButton(
-        w / 2 + buttonW / 2 + gap / 2,
-        cy,
-        buttonW,
-        buttonH,
-        '코드로 입장',
-        PALETTE_SECONDARY,
-        () => this.startJoinByCode(),
-      ),
+      this.createMenuCard(cursorX, cy, buttonW, buttonH, {
+        tag: '친구랑',
+        title: '방 만들기',
+        desc: '코드를 발급받고 친구를 초대해',
+        palette: PALETTE_SECONDARY,
+        onClick: () => this.startCreate(),
+      }),
+    )
+    cursorX += buttonW + gap
+
+    container.add(
+      this.createMenuCard(cursorX, cy, buttonW, buttonH, {
+        tag: '친구랑',
+        title: '코드로 입장',
+        desc: '친구가 알려준 코드를 입력해',
+        palette: PALETTE_SECONDARY,
+        onClick: () => this.startJoinByCode(),
+      }),
     )
 
     const backButton = this.createPillButton(
@@ -175,6 +187,12 @@ export class QuizLobbyScene extends Phaser.Scene {
       () => this.backToArtRoom(),
     )
     container.add(backButton)
+  }
+
+  private startSingleplayer() {
+    if (this.state !== 'menu') return
+    // 혼자 모드는 기존 ArtFreeDrawingScene 단독 플로우. 본 로비/멀티 리소스는 정리하지 않아도 다음 씬에서 재초기화됨.
+    fadeToScene(this, 'ArtFreeDrawingScene', { duration: 220 })
   }
 
   private startCreate() {
@@ -481,27 +499,59 @@ export class QuizLobbyScene extends Phaser.Scene {
     this.statusText.setPosition(this.scale.width / 2, this.scale.height - 56)
   }
 
-  private createCardButton(
+  private createMenuCard(
     cx: number,
     cy: number,
     w: number,
     h: number,
-    label: string,
-    palette: (typeof CUTE_CARD_PALETTES)[keyof typeof CUTE_CARD_PALETTES],
-    onClick: () => void,
+    config: {
+      tag: string
+      title: string
+      desc: string
+      palette: (typeof CUTE_CARD_PALETTES)[keyof typeof CUTE_CARD_PALETTES]
+      onClick: () => void
+    },
   ) {
+    const { tag, title, desc, palette, onClick } = config
     const container = this.add.container(cx, cy)
     const panel = this.add.graphics()
-    drawCuteCardPanel(panel, w, h, palette, 'default', 18)
-    const text = this.add
-      .text(0, 0, label, {
+    drawCuteCardPanel(panel, w, h, palette, 'default', 22)
+    const tagText = this.add
+      .text(0, -h / 2 + 32, tag, {
         fontFamily: FONT_FAMILY,
-        fontSize: '26px',
+        fontSize: '14px',
         color: palette.accentHex,
         fontStyle: 'bold',
       })
       .setOrigin(0.5)
-    container.add([panel, text])
+    const titleText = this.add
+      .text(0, -h / 2 + 80, title, {
+        fontFamily: FONT_FAMILY,
+        fontSize: '28px',
+        color: '#3a2614',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5)
+    const descText = this.add
+      .text(0, -h / 2 + 124, desc, {
+        fontFamily: FONT_FAMILY,
+        fontSize: '15px',
+        color: '#6a4a26',
+        wordWrap: { width: w - 40 },
+        align: 'center',
+      })
+      .setOrigin(0.5, 0)
+    const cta = this.add.graphics()
+    drawCutePillButton(cta, 0, h / 2 - 36, Math.min(w - 60, 200), 44, palette, 'default')
+    const ctaText = this.add
+      .text(0, h / 2 - 36, '선택', {
+        fontFamily: FONT_FAMILY,
+        fontSize: '17px',
+        color: '#ffffff',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5)
+    container.add([panel, tagText, titleText, descText, cta, ctaText])
     container.setSize(w, h)
     container.setInteractive(
       new Phaser.Geom.Rectangle(-w / 2, -h / 2, w, h),
@@ -509,11 +559,13 @@ export class QuizLobbyScene extends Phaser.Scene {
     )
     container.on(Phaser.Input.Events.POINTER_DOWN, onClick)
     container.on(Phaser.Input.Events.POINTER_OVER, () => {
-      drawCuteCardPanel(panel, w, h, palette, 'hover', 18)
+      drawCuteCardPanel(panel, w, h, palette, 'hover', 22)
+      drawCutePillButton(cta, 0, h / 2 - 36, Math.min(w - 60, 200), 44, palette, 'hover')
       this.input.setDefaultCursor('pointer')
     })
     container.on(Phaser.Input.Events.POINTER_OUT, () => {
-      drawCuteCardPanel(panel, w, h, palette, 'default', 18)
+      drawCuteCardPanel(panel, w, h, palette, 'default', 22)
+      drawCutePillButton(cta, 0, h / 2 - 36, Math.min(w - 60, 200), 44, palette, 'default')
       this.input.setDefaultCursor('default')
     })
     return container
