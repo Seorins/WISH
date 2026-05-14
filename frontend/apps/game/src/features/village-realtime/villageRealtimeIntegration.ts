@@ -15,6 +15,10 @@ const POSITION_CHANGE_THRESHOLD = 0.001
 /**
  * 정지 상태에서도 강제 publish 하는 간격 — BE idle-disconnect (기본 60s) 안 쪽으로 안전 마진. 사용자가 한 자리에 가만히 있어도
  * lastSeen 이 갱신되어 좀비 정리에 걸리지 않게 한다 (S14P31E103-767).
+ *
+ * <p>setInterval 로 발화 (S14P31E103-791): Phaser 가 백그라운드 탭에서 게임 루프를 일시정지해도 setInterval 은 계속 발화한다 —
+ * 브라우저가 ≥1s 로 clamp 하지만 30s 간격 + BE 60s threshold 면 충분히 안전 마진. publishLocal 의 in-loop heartbeat 가 아니라
+ * 게임 루프 무관한 wall-clock timer 가 필요한 이유.
  */
 const HEARTBEAT_INTERVAL_MS = 30_000
 /** publishEmote 최대 빈도 (클라). 서버측 2s throttle 의 절반 — UX 용. */
@@ -74,12 +78,32 @@ export function attachVillageRealtime(opts: AttachOptions): VillageRealtimeInteg
 
   // publishLocal throttling 상태
   let lastPublishMs = 0
+  /** Wall-clock 기준 마지막 publish 시각. Phaser 가 백그라운드에서 멈춰도 setInterval 이 이 값을 보고 heartbeat 결정. */
+  let lastPublishWallMs = 0
   let lastX = Number.NaN
   let lastY = Number.NaN
   let lastDir: PlayerDirection | null = null
   let lastMoving = false
   // publishEmote throttling
   let lastEmoteMs = 0
+
+  // S14P31E103-791: Phaser 가 백그라운드 탭에서 update() 를 멈춰도 setInterval 은 계속 발화 (브라우저가 ≥1s clamp). 마지막 publish
+  // 이후 HEARTBEAT_INTERVAL_MS 가 지났으면 마지막 위치/방향 그대로 강제 publish — BE idle eviction (60s) 차단.
+  const heartbeatTimer = setInterval(() => {
+    if (Number.isNaN(lastX)) return // 첫 publish 는 publishLocal 이 담당
+    if (Date.now() - lastPublishWallMs < HEARTBEAT_INTERVAL_MS) return
+    if (
+      !client.publishPosition({
+        x: lastX,
+        y: lastY,
+        dir: lastDir ?? 'down',
+        moving: lastMoving,
+      })
+    ) {
+      return
+    }
+    lastPublishWallMs = Date.now()
+  }, HEARTBEAT_INTERVAL_MS)
 
   return {
     publishLocal(player, dir, moving) {
@@ -92,16 +116,15 @@ export function attachVillageRealtime(opts: AttachOptions): VillageRealtimeInteg
         Math.abs(xRatio - lastX) > POSITION_CHANGE_THRESHOLD ||
         Math.abs(yRatio - lastY) > POSITION_CHANGE_THRESHOLD
       const stateChanged = moving !== lastMoving || dir !== lastDir
-      // 정지 상태에서도 idle-disconnect (기본 60s) 안 쪽으로 keep-alive 발행. BE 좀비 정리에 걸려 다른
-      // 사용자 화면에서 사라지는 문제를 차단한다 (S14P31E103-767).
-      const heartbeatDue = now - lastPublishMs >= HEARTBEAT_INTERVAL_MS
 
-      if (!positionChanged && !stateChanged && !heartbeatDue) return
+      // heartbeat 는 setInterval 이 wall-clock 으로 별도 처리 (S14P31E103-791) — 게임 루프 안에서 중복 발화 불필요.
+      if (!positionChanged && !stateChanged) return
 
       // 연결 전이면 publishPosition 이 false 반환 → throttle state 유지해야 onReady 후 첫 publish 가
       // skip 되지 않는다 (S14P31E103-763).
       if (!client.publishPosition({ x: xRatio, y: yRatio, dir, moving })) return
       lastPublishMs = now
+      lastPublishWallMs = Date.now()
       lastX = xRatio
       lastY = yRatio
       lastDir = dir
@@ -118,6 +141,7 @@ export function attachVillageRealtime(opts: AttachOptions): VillageRealtimeInteg
     },
 
     destroy() {
+      clearInterval(heartbeatTimer)
       void client.disconnect()
       remotePlayers.destroy()
     },
