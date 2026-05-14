@@ -1,9 +1,3 @@
-"""
-대화 임베딩 API 엔드포인트.
-
-BE(Spring Boot)가 세션 종료 시 호출하여 대화 데이터를 임베딩한다.
-임베딩 실패 시에도 200을 반환하여 BE 흐름을 막지 않는다 (fire-and-forget 정책).
-"""
 import logging
 
 from fastapi import APIRouter
@@ -15,7 +9,9 @@ from app.schemas.dialogue import (
     SearchMemoryResponse,
     MemoryResult,
 )
+from app.schemas.dialogue_chat import ChatRequest, ChatResponse
 from app.services.dialogue.vector_store import dialogue_vector_store
+from app.services.dialogue.chat_service import generate_response
 
 router = APIRouter(prefix="/dialogue", tags=["Dialogue RAG"])
 logger = logging.getLogger(__name__)
@@ -23,12 +19,6 @@ logger = logging.getLogger(__name__)
 
 @router.post("/embed-session", response_model=EmbedSessionResponse)
 async def embed_session(request: EmbedSessionRequest) -> EmbedSessionResponse:
-    """
-    세션 종료 시 대화 턴들을 임베딩하여 아이별 벡터 DB에 저장.
-
-    BE가 /dialogue/sessions/{id}/finish 처리 후 비동기로 호출한다.
-    실패 시에도 success=False로 응답하며 BE 흐름을 막지 않는다.
-    """
     turns = [t.model_dump() for t in request.turns]
     try:
         dialogue_vector_store.add_session(
@@ -55,12 +45,6 @@ async def embed_session(request: EmbedSessionRequest) -> EmbedSessionResponse:
 
 @router.post("/search-memory", response_model=SearchMemoryResponse)
 async def search_memory(request: SearchMemoryRequest) -> SearchMemoryResponse:
-    """
-    아이 발화와 유사한 과거 대화 기억 검색.
-
-    785번 RAG API에서 내부적으로 호출하거나,
-    직접 테스트용으로 사용한다.
-    """
     results = dialogue_vector_store.search(
         patient_profile_id=request.patient_profile_id,
         query=request.query,
@@ -79,3 +63,13 @@ async def search_memory(request: SearchMemoryRequest) -> SearchMemoryResponse:
             for r in results
         ],
     )
+
+
+@router.post("/chat", response_model=ChatResponse)
+async def chat(request: ChatRequest) -> ChatResponse:
+    npc_message, is_fallback = await generate_response(
+        patient_profile_id=request.patient_profile_id,
+        user_message=request.user_message,
+        conversation_history=request.conversation_history,
+    )
+    return ChatResponse(npc_message=npc_message, is_fallback=is_fallback)
