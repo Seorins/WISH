@@ -50,7 +50,12 @@ export {
   saveMusicResult,
 } from './music-results'
 export { consumeFuel, getFuelInbox, getFuelStatus, sendFuel } from './fuel'
-export { getGuardianDialogueSession, listGuardianDialogueSessions } from './guardian-dialogue'
+export {
+  getGuardianDialogueDailySummary,
+  getGuardianDialogueSession,
+  getGuardianDialogueWeeklyTrend,
+  listGuardianDialogueSessions,
+} from './guardian-dialogue'
 export { requestPresignedUploadUrls, uploadToPresignedUrl } from './uploads'
 export { createPatientProfile, listPatientProfiles } from './patient-profiles'
 export { endLoginSession, heartbeatLoginSession, startLoginSession } from './login-sessions'
@@ -199,13 +204,20 @@ export type {
   FuelStatus,
 } from './fuel'
 export type {
+  GuardianDialogueDailySummary,
   GuardianDialogueFinishReason,
   GuardianDialogueGeneratedBy,
   GuardianDialogueNpc,
   GuardianDialogueSessionDetail,
   GuardianDialogueSessionMeta,
   GuardianDialogueSessionStatus,
+  GuardianDialogueSignal,
+  GuardianDialogueSignalKind,
   GuardianDialogueTurn,
+  GuardianDialogueValenceDistribution,
+  GuardianDialogueWeeklyTrend,
+  GuardianDialogueWeeklyTrendPoint,
+  GuardianNpcVisited,
   ListGuardianDialogueSessionsParams,
 } from './guardian-dialogue'
 export type {

@@ -80,11 +80,22 @@ function TrendLine({ points }: { points: EmotionTrendPoint[] }) {
   )
 }
 
+export type NpcVisitedItem = {
+  npcName: string
+  displayName: string
+  scriptTitle: string | null
+  sessionCount: number
+}
+
 type Props = {
   todayScore: number
   shares: EmotionShare[]
   trend: EmotionTrendPoint[]
   signals: EmotionSignal[]
+  /** BE daily summary 의 정성 요약 문단. 있으면 최상단 카드로 표시. */
+  summaryText?: string | null
+  /** 오늘 방문한 NPC + 다룬 도메인. 있으면 '오늘 만난 친구들' 카드로 표시. */
+  npcsVisited?: NpcVisitedItem[] | null
   summarySample?: boolean
   trendSample?: boolean
   signalsSample?: boolean
@@ -99,12 +110,30 @@ export function EmotionPanel({
   shares,
   trend,
   signals,
+  summaryText,
+  npcsVisited,
   summarySample = false,
   trendSample = false,
   signalsSample = false,
 }: Props) {
   return (
     <div className={styles.stack}>
+      {summaryText ? (
+        <div className={styles.card}>
+          <h3 className={styles.cardTitle}>오늘의 관찰</h3>
+          <p
+            style={{
+              margin: 0,
+              fontSize: 13,
+              lineHeight: 1.6,
+              color: '#445064',
+              whiteSpace: 'pre-line',
+            }}
+          >
+            {summaryText}
+          </p>
+        </div>
+      ) : null}
       <div className={styles.card}>
         <h3 className={styles.cardTitle}>오늘의 응답 톤 {summarySample && <SampleBadge />}</h3>
         <div className={styles.summaryRow}>
@@ -129,6 +158,34 @@ export function EmotionPanel({
         <h3 className={styles.cardTitle}>지난 주 응답 톤 변화 {trendSample && <SampleBadge />}</h3>
         <TrendLine points={trend} />
       </div>
+
+      {npcsVisited && npcsVisited.length > 0 ? (
+        <div className={styles.card}>
+          <h3 className={styles.cardTitle}>오늘 만난 친구들</h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {npcsVisited.map(n => (
+              <div
+                key={`${n.npcName}-${n.scriptTitle ?? 'none'}`}
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '8px 10px',
+                  background: '#f7f4ff',
+                  borderRadius: 8,
+                  fontSize: 13,
+                }}
+              >
+                <span style={{ color: '#445064', fontWeight: 600 }}>{n.displayName}</span>
+                <span style={{ color: '#7c5cff' }}>
+                  {n.scriptTitle ?? '대화'}
+                  {n.sessionCount > 1 ? ` · ${n.sessionCount}회` : ''}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       <div className={styles.card}>
         <h3 className={styles.cardTitle}>오늘 보인 감정 신호 {signalsSample && <SampleBadge />}</h3>
