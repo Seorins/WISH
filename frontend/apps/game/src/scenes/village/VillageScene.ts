@@ -71,9 +71,15 @@ const VILLAGE_PHOTO_BOOTH = {
 const VILLAGE_GOMOKU_BOARD_KEY = 'village-gomoku-board'
 const VILLAGE_GOMOKU_BOARD_PATH = 'images/village/objects/gomoku-board.png'
 const VILLAGE_GOMOKU_BOARD = {
-  xRatio: VILLAGE_PHOTO_BOOTH.xRatio,
-  yRatio: 0.398,
-  scale: 0.17,
+  xRatio: VILLAGE_PHOTO_BOOTH.xRatio + 0.012,
+  yRatio: 0.392,
+  scale: 0.187,
+} as const
+const GOMOKU_BOARD_INTERACT_RECT = {
+  left: 0.72,
+  top: 1.08,
+  width: 1.36,
+  height: 0.9,
 } as const
 const DEFAULT_PLAYER_SPAWN = { xRatio: 0.5, yRatio: 0.3 }
 const MAP_TILE_ROWS = 3
@@ -602,11 +608,11 @@ export class VillageScene extends Phaser.Scene {
         event: Phaser.Types.Input.EventData,
       ) => {
         event.stopPropagation()
-        this.tryOpenGomokuGame()
+        this.enterGomokuGame()
       },
     )
 
-    const box = this.add.rectangle(x, y - 20, 82, 40, 0xff0000, 0).setDepth(1)
+    const box = this.add.rectangle(x, y - 22, 90, 44, 0xff0000, 0).setDepth(1)
     this.physics.add.existing(box, true)
     this.obstacles.add(box)
 
@@ -643,7 +649,7 @@ export class VillageScene extends Phaser.Scene {
       }
       if (this.isGomokuBoardInRange) {
         event?.preventDefault()
-        this.enterGomokuGame()
+        this.tryOpenGomokuGame()
         return
       }
       if (this.nearestNpcId) {
@@ -897,12 +903,25 @@ export class VillageScene extends Phaser.Scene {
     if (!this.gomokuBoard) {
       return Number.POSITIVE_INFINITY
     }
-    return Phaser.Math.Distance.Between(
-      this.player.x,
-      this.player.y,
-      this.gomokuBoard.x,
-      this.gomokuBoard.y,
-    )
+
+    const rect = this.getGomokuBoardInteractionRect()
+    const nearestX = Phaser.Math.Clamp(this.player.x, rect.left, rect.right)
+    const nearestY = Phaser.Math.Clamp(this.player.y, rect.top, rect.bottom)
+
+    return Phaser.Math.Distance.Between(this.player.x, this.player.y, nearestX, nearestY)
+  }
+
+  private getGomokuBoardInteractionRect() {
+    if (!this.gomokuBoard) {
+      return new Phaser.Geom.Rectangle(0, 0, 0, 0)
+    }
+
+    const width = this.gomokuBoard.displayWidth * GOMOKU_BOARD_INTERACT_RECT.width
+    const height = this.gomokuBoard.displayHeight * GOMOKU_BOARD_INTERACT_RECT.height
+    const x = this.gomokuBoard.x - this.gomokuBoard.displayWidth * GOMOKU_BOARD_INTERACT_RECT.left
+    const y = this.gomokuBoard.y - this.gomokuBoard.displayHeight * GOMOKU_BOARD_INTERACT_RECT.top
+
+    return new Phaser.Geom.Rectangle(x, y, width, height)
   }
 
   private enterGomokuGame() {
