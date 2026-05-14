@@ -8,6 +8,18 @@
 # 테스트 stage 는 백엔드 테스트 인프라 구축 이슈에서 추가 예정.
 # 파이프라인 최신화용 주석
 
+workflow:
+  auto_cancel:
+    on_new_commit: none
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      auto_cancel:
+        on_new_commit: interruptible
+    - if: $CI_COMMIT_BRANCH == "develop" || $CI_COMMIT_BRANCH == "master" || $CI_COMMIT_BRANCH == "main"
+      auto_cancel:
+        on_new_commit: none
+    - when: never
+
 stages:
   - verify
   - build
@@ -16,6 +28,7 @@ stages:
   - notify
 
 default:
+  interruptible: false
   tags:
     - docker
 
@@ -215,10 +228,7 @@ default:
       - backend/.gradle/
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-      changes:
-        - backend/**/*
-        - .gitlab-ci.yml
-    - if: $CI_COMMIT_BRANCH == "develop" || $CI_COMMIT_BRANCH == "master" || $CI_COMMIT_BRANCH == "main"
+      interruptible: true
       changes:
         - backend/**/*
         - .gitlab-ci.yml
@@ -261,9 +271,6 @@ backend:image:
   image:
     name: gcr.io/kaniko-project/executor:v1.23.2-debug
     entrypoint: [""]
-  needs:
-    - backend:format
-    - backend:test
   variables:
     BACKEND_IMAGE_NAME: ${DOCKER_HUB_IMAGE}
   before_script:
@@ -582,10 +589,7 @@ ai:deploy-dev:
       - .pnpm-store/
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-      changes:
-        - frontend/**/*
-        - .gitlab-ci.yml
-    - if: $CI_COMMIT_BRANCH == "develop" || $CI_COMMIT_BRANCH == "master" || $CI_COMMIT_BRANCH == "main"
+      interruptible: true
       changes:
         - frontend/**/*
         - .gitlab-ci.yml
@@ -613,6 +617,7 @@ frontend:build:
     - pnpm build
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      interruptible: true
       changes:
         - frontend/**/*
         - .gitlab-ci.yml
@@ -626,9 +631,6 @@ frontend:image:game:
   image:
     name: gcr.io/kaniko-project/executor:v1.23.2-debug
     entrypoint: [""]
-  needs:
-    - frontend:verify
-    - frontend:test
   variables:
     FRONTEND_IMAGE_NAME: ${DOCKER_HUB_IMAGE}
   before_script:
@@ -667,9 +669,6 @@ frontend:image:admin:
   image:
     name: gcr.io/kaniko-project/executor:v1.23.2-debug
     entrypoint: [""]
-  needs:
-    - frontend:verify
-    - frontend:test
   variables:
     FRONTEND_IMAGE_NAME: ${DOCKER_HUB_IMAGE}
   before_script:
@@ -706,9 +705,6 @@ frontend:image:guardian:
   image:
     name: gcr.io/kaniko-project/executor:v1.23.2-debug
     entrypoint: [""]
-  needs:
-    - frontend:verify
-    - frontend:test
   variables:
     FRONTEND_IMAGE_NAME: ${DOCKER_HUB_IMAGE}
   before_script:
