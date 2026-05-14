@@ -6,6 +6,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.comong.backend.domain.patient.entity.PatientProfile;
 import com.comong.backend.domain.patient.service.PatientProfileService;
 import com.comong.backend.domain.quiz.dto.PromptAssignment;
+import com.comong.backend.domain.quiz.dto.QuizGameStartedResponse;
 import com.comong.backend.domain.quiz.dto.QuizRoomEvent;
 import com.comong.backend.domain.quiz.dto.QuizRoomSnapshot;
 import com.comong.backend.domain.quiz.exception.QuizNotRoomHostException;
@@ -95,15 +96,14 @@ public class QuizRoomService {
      *   <li>방 검증 — 존재 + 호출자가 방장
      *   <li>제시어 선택 — 직전 단어와 다른 단어로
      *   <li>{@link QuizRoomRegistry#startNextRound} — 상태 PLAYING 전이 + 출제자 결정 (lock 안)
-     *   <li>방 전체에 {@code round_started} broadcast — status / 라운드 / 출제자 공개
-     *   <li>출제자에게만 user queue 로 제시어 push
+     *   <li>방 전체에 {@code round_started} broadcast — status / 라운드 / 출제자 공개 (제시어 비포함)
+     *   <li>호출자에겐 REST 응답에 제시어 동봉 — WS race 회피 (출제자만 prompt 알게 됨)
      * </ol>
      *
-     * @return 변경 후 룸 스냅샷
      * @throws QuizRoomNotFoundException 방이 없음
      * @throws QuizNotRoomHostException 호출자가 방장이 아님
      */
-    public QuizRoomSnapshot startGame(long userId, String roomId) {
+    public QuizGameStartedResponse startGame(long userId, String roomId) {
         QuizRoom roomSnapshot =
                 roomRegistry.findById(roomId).orElseThrow(QuizRoomNotFoundException::new);
         if (roomSnapshot.hostUserId() != userId) {
@@ -119,12 +119,10 @@ public class QuizRoomService {
         broadcastService.broadcastEvent(
                 roomId,
                 QuizRoomEvent.roundStarted(updated.roundNumber(), updated.currentDrawerUserId()));
-        broadcastService.sendPromptToUser(
-                String.valueOf(updated.currentDrawerUserId()),
-                roomId,
-                new PromptAssignment(updated.roundNumber(), prompt.word(), prompt.hint()));
 
-        return QuizRoomSnapshot.of(updated);
+        return new QuizGameStartedResponse(
+                QuizRoomSnapshot.of(updated),
+                new PromptAssignment(updated.roundNumber(), prompt.word(), prompt.hint()));
     }
 
     private PatientProfile requireProfile(long userId) {

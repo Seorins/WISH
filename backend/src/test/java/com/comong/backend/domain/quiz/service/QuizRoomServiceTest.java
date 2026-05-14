@@ -173,21 +173,26 @@ class QuizRoomServiceTest {
     }
 
     @Test
-    void startGameByHostTransitionsToPlayingAndBroadcastsAndPushesPromptToDrawer() {
+    void startGameByHostTransitionsToPlayingAndBroadcastsAndReturnsPrompt() {
         stubProfile(1L, 100L, "h");
         stubProfile(2L, 101L, "g");
         QuizRoomSnapshot host = service.createRoom(1L);
         service.joinByCode(2L, host.code());
 
-        QuizRoomSnapshot after = service.startGame(1L, host.roomId());
+        com.comong.backend.domain.quiz.dto.QuizGameStartedResponse response =
+                service.startGame(1L, host.roomId());
 
-        assertThat(after.status())
+        assertThat(response.snapshot().status())
                 .isEqualTo(com.comong.backend.domain.quiz.service.QuizRoomStatus.PLAYING);
-        assertThat(after.roundNumber()).isEqualTo(1);
+        assertThat(response.snapshot().roundNumber()).isEqualTo(1);
         // 출제자는 joinOrder 0 인 host (= round 1 → index 0).
-        assertThat(after.currentDrawerUserId()).isEqualTo(1L);
+        assertThat(response.snapshot().currentDrawerUserId()).isEqualTo(1L);
+        // 호출자가 호스트이므로 제시어 동봉.
+        assertThat(response.prompt()).isNotNull();
+        assertThat(response.prompt().roundNumber()).isEqualTo(1);
+        assertThat(response.prompt().word()).isNotBlank();
 
-        // round_started 토픽 broadcast 1회.
+        // round_started 토픽 broadcast 1회 (제시어는 비포함).
         verify(broadcastService, times(1))
                 .broadcastEvent(
                         eq(host.roomId()),
@@ -197,8 +202,8 @@ class QuizRoomServiceTest {
                                                 && "round_started".equals(ev.type())
                                                 && ev.roundNumber() == 1
                                                 && ev.currentDrawerUserId() == 1L));
-        // 출제자(1L) user queue 로 제시어 1회 push.
-        verify(broadcastService, times(1)).sendPromptToUser(eq("1"), eq(host.roomId()), any());
+        // user queue 로 제시어를 push 하지 않음 — REST 응답에 동봉되므로.
+        verify(broadcastService, never()).sendPromptToUser(anyString(), anyString(), any());
     }
 
     @Test
@@ -231,12 +236,14 @@ class QuizRoomServiceTest {
         QuizRoomSnapshot host = service.createRoom(1L);
         service.joinByCode(2L, host.code());
 
-        QuizRoomSnapshot r1 = service.startGame(1L, host.roomId());
-        QuizRoomSnapshot r2 = service.startGame(1L, host.roomId());
+        com.comong.backend.domain.quiz.dto.QuizGameStartedResponse r1 =
+                service.startGame(1L, host.roomId());
+        com.comong.backend.domain.quiz.dto.QuizGameStartedResponse r2 =
+                service.startGame(1L, host.roomId());
 
-        assertThat(r1.currentDrawerUserId()).isEqualTo(1L);
-        assertThat(r2.currentDrawerUserId()).isEqualTo(2L);
-        assertThat(r2.roundNumber()).isEqualTo(2);
+        assertThat(r1.snapshot().currentDrawerUserId()).isEqualTo(1L);
+        assertThat(r2.snapshot().currentDrawerUserId()).isEqualTo(2L);
+        assertThat(r2.snapshot().roundNumber()).isEqualTo(2);
     }
 
     private void stubProfile(long userId, long profileId, String nickname) {

@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.comong.backend.domain.quiz.dto.JoinRoomRequest;
+import com.comong.backend.domain.quiz.dto.QuizGameStartedResponse;
 import com.comong.backend.domain.quiz.dto.QuizRoomSnapshot;
 import com.comong.backend.domain.quiz.service.QuizRoomService;
 import com.comong.backend.global.common.response.ApiResponse;
@@ -115,9 +116,9 @@ public class QuizRoomController {
                 description = "인원 부족 또는 종료된 방 (Q-008)")
     })
     @PostMapping("/{roomId}/start")
-    public ResponseEntity<ApiResponse<QuizRoomSnapshot>> start(
+    public ResponseEntity<ApiResponse<QuizGameStartedResponse>> start(
             @AuthenticationPrincipal AuthenticatedUser currentUser, @PathVariable String roomId) {
-        QuizRoomSnapshot snapshot = quizRoomService.startGame(currentUser.userId(), roomId);
-        return ResponseEntity.ok(ApiResponse.success(snapshot));
+        QuizGameStartedResponse response = quizRoomService.startGame(currentUser.userId(), roomId);
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 }
