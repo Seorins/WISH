@@ -28,3 +28,5 @@ app:
   realtime:
     village:
       enabled: true
+    quiz:
+      enabled: true

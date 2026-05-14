@@ -4,6 +4,7 @@ import { ArtAlbumScene } from './scenes/themes/art/album/ArtAlbumScene'
 import { ArtColoringScene } from './scenes/themes/art/coloring/ArtColoringScene'
 import { ArtColoringSelectScene } from './scenes/themes/art/coloring/ArtColoringSelectScene'
 import { ArtFreeDrawingScene } from './scenes/themes/art/free-drawing/ArtFreeDrawingScene'
+import { QuizLobbyScene } from './scenes/themes/art/quiz-multi/QuizLobbyScene'
 import { ArtSelectScene } from './scenes/themes/art/select/ArtSelectScene'
 import { TaekwondoPoomsaeSelectScene } from './scenes/themes/taekwondo/select/TaekwondoPoomsaeSelectScene'
 import { TaekwondoSelectScene } from './scenes/themes/taekwondo/select/TaekwondoSelectScene'
@@ -71,6 +72,7 @@ export function createGame(parent: HTMLElement): Phaser.Game {
       ArtSelectScene,
       ArtAlbumScene,
       ArtFreeDrawingScene,
+      QuizLobbyScene,
       ArtColoringSelectScene,
       ArtColoringScene,
       TaekwondoSelectScene,

@@ -50,7 +50,6 @@ const ART_EXIT_PORTAL = { xRatio: 0.44, yRatio: 0.86, widthRatio: 0.12, heightRa
 const ART_RETURN_SPAWN = { xRatio: 0.37, yRatio: 0.58 }
 const RUMI_TALK_ICON = { xRatio: 0.37, yRatio: 0.42 }
 const RUMI_INTERACTION = { xRatio: 0.37, yRatio: 0.66, radiusRatio: 0.06 }
-const ALBUM_OBJECT = { xRatio: 0.755, yRatio: 0.73, sizeRatio: 0.086 }
 // frame asset is 2172 x 724 — values below are in that pixel space
 const DIALOG_TEXT_BOX = { x: 580, y: 180, width: 1500, height: 400 }
 const DIALOG_NAME_BOX = { x: 505, y: 107, width: 390, height: 150 }
@@ -75,7 +74,8 @@ const CARD_LAYOUT = {
 } as const
 
 const ART_CONTENT_SCENE_KEYS: Record<ArtContentMode, string> = {
-  'free-drawing': 'ArtFreeDrawingScene',
+  // 그림 퀴즈 진입은 mode-select(QuizLobbyScene) 가 먼저 — 거기서 혼자(AI) / 친구랑(멀티) 분기 (S14P31E103-820).
+  'free-drawing': 'QuizLobbyScene',
   coloring: 'ArtColoringSelectScene',
 }
 
@@ -262,7 +262,6 @@ export class ArtSelectScene extends Phaser.Scene {
     this.load.image('art-room-background', assetPath('images/themes/art/background/background.png'))
     loadInteractionIcons(this)
     this.load.image('rumi-dialog-frame', assetPath('images/npcs/rumi/dialog-frame.png'))
-    this.load.image('art-ui-album', assetPath('images/themes/art/ui/album.png'))
     this.load.image('art-rumi-character', assetPath('images/themes/art/ui/rumi.png'))
     this.load.image('art-card-free', assetPath('images/themes/art/ui/free.png'))
     this.load.image('art-card-paint', assetPath('images/themes/art/ui/paint.png'))
@@ -295,13 +294,6 @@ export class ArtSelectScene extends Phaser.Scene {
       width: background.displayWidth,
       height: background.displayHeight,
     }
-
-    this.createAlbumObject(
-      backgroundLeft,
-      backgroundTop,
-      background.displayWidth,
-      background.displayHeight,
-    )
 
     this.talkIcon = createFloatingInteractionIcon(this, {
       x: backgroundLeft + background.displayWidth * RUMI_TALK_ICON.xRatio,
@@ -982,86 +974,6 @@ export class ArtSelectScene extends Phaser.Scene {
   private clearContentStartTimer() {
     this.contentStartTimer?.remove(false)
     this.contentStartTimer = null
-  }
-
-  private createAlbumObject(
-    backgroundLeft: number,
-    backgroundTop: number,
-    backgroundWidth: number,
-    backgroundHeight: number,
-  ) {
-    const albumSize = backgroundWidth * ALBUM_OBJECT.sizeRatio
-    const albumX = backgroundLeft + backgroundWidth * ALBUM_OBJECT.xRatio
-    const albumY = backgroundTop + backgroundHeight * ALBUM_OBJECT.yRatio
-    // soft yellow rim — visible enough to signal "this is interactive"
-    const albumGlow = this.add
-      .image(albumX, albumY, 'art-ui-album')
-      .setDepth(7)
-      .setDisplaySize(albumSize * 1.12, albumSize * 1.12)
-      .setTint(0xffd86a)
-      .setAlpha(0.5)
-      .setBlendMode(Phaser.BlendModes.ADD)
-
-    this.tweens.add({
-      targets: albumGlow,
-      alpha: 0.78,
-      duration: 1000,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
-    })
-
-    const album = this.add
-      .image(albumX, albumY, 'art-ui-album')
-      .setDepth(8)
-      .setDisplaySize(albumSize, albumSize)
-      .setInteractive({ useHandCursor: true })
-
-    const baseScale = { x: album.scaleX, y: album.scaleY }
-
-    album.on('pointerover', () => {
-      album.setTint(0xfff3c4)
-      album.setScale(baseScale.x * 1.05, baseScale.y * 1.05)
-    })
-    album.on('pointerout', () => {
-      album.clearTint()
-      album.setScale(baseScale.x, baseScale.y)
-    })
-    album.on(
-      'pointerdown',
-      (
-        _pointer: Phaser.Input.Pointer,
-        _x: number,
-        _y: number,
-        event: Phaser.Types.Input.EventData,
-      ) => {
-        event.stopPropagation()
-        album.clearTint()
-        album.setScale(baseScale.x, baseScale.y)
-        this.openAlbum()
-      },
-    )
-  }
-
-  private openAlbum() {
-    if (this.isTransitioning || this.isAlbumVisible) {
-      return
-    }
-
-    this.target = null
-    this.player.setVelocity(0, 0)
-
-    if (this.isDialogVisible) {
-      this.closeDialog(false)
-    }
-
-    this.isAlbumVisible = true
-    const albumScene = this.scene.get('ArtAlbumScene')
-    albumScene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-      this.isAlbumVisible = false
-    })
-    this.scene.launch('ArtAlbumScene')
-    this.scene.bringToTop('ArtAlbumScene')
   }
 
   private closeAlbum() {

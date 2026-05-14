@@ -24,7 +24,7 @@ export interface ArtChoiceOption {
 }
 
 export const artChoiceOptions: ArtChoiceOption[] = [
-  { mode: 'free-drawing', label: '그림 퀴즈', description: '제시어를 그리면 AI가 맞춰줘!' },
+  { mode: 'free-drawing', label: '그림 퀴즈', description: '제시어를 보고 그림으로 표현해봐!' },
   { mode: 'coloring', label: '색칠하기', description: '준비된 그림에 예쁜 색을 입혀봐!' },
 ]
 
@@ -51,8 +51,8 @@ export const rumiContentDialogs: Record<
 > = {
   'free-drawing': {
     confirm: [
-      { id: 'rumi-free-confirm-001', text: '좋아, 오늘은 제시어를 보고 그림 퀴즈를 풀어보자.' },
-      { id: 'rumi-free-confirm-002', text: '좋아, 내가 보여주는 단어를 그려봐. AI가 맞춰볼게.' },
+      { id: 'rumi-free-confirm-001', text: '좋아, 어떻게 놀고 싶은지 골라보자.' },
+      { id: 'rumi-free-confirm-002', text: '좋아, 혼자 할지 친구랑 할지 골라봐.' },
     ],
     intro: [
       { id: 'rumi-free-intro-001', text: '위쪽에 제시어가 보이지? 천천히 그려보자.' },
