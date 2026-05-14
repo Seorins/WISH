@@ -1,5 +1,5 @@
 import Phaser from 'phaser'
-import { type QuizRoomSnapshot } from '@wish/api-client'
+import { type PromptAssignment, type QuizRoomSnapshot } from '@wish/api-client'
 import { assetPath } from '@/game/assets/assetPath'
 import { fadeToScene } from '@/game/systems/sceneTransition'
 import { addCoverBackground } from '@/game/world/background'
@@ -33,11 +33,14 @@ const TOOLBAR_BG = 0x1a2230
 export interface QuizPlaySceneInit {
   snapshot: QuizRoomSnapshot
   currentUserId: number | null
+  /** 호스트(=출제자) 한정으로 채워지는 본 라운드 제시어. 게스트는 null. */
+  prompt: PromptAssignment | null
 }
 
 export class QuizPlayScene extends Phaser.Scene {
   private snapshot!: QuizRoomSnapshot
   private currentUserId: number | null = null
+  private prompt: PromptAssignment | null = null
 
   private root!: Phaser.GameObjects.Container
   private backdrop: Phaser.GameObjects.Rectangle | null = null
@@ -54,6 +57,7 @@ export class QuizPlayScene extends Phaser.Scene {
     }
     this.snapshot = data.snapshot
     this.currentUserId = data.currentUserId ?? null
+    this.prompt = data.prompt ?? null
   }
 
   preload() {
@@ -144,22 +148,32 @@ export class QuizPlayScene extends Phaser.Scene {
     panel.strokeRoundedRect(x, y, w, h, 14)
     container.add(panel)
 
-    // 출제자 표시 (왼쪽)
-    const hostMember = this.snapshot.members.find(m => m.userId === this.snapshot.hostUserId)
+    // 현재 출제자 + 라운드 번호 (왼쪽)
+    const drawer = this.snapshot.members.find(m => m.userId === this.snapshot.currentDrawerUserId)
     const turnLabel = this.add
-      .text(x + 24, y + h / 2, `🎨 출제자: ${hostMember?.nickname ?? '미정'}`, {
-        fontFamily: FONT_FAMILY,
-        fontSize: '18px',
-        color: '#ffe9c2',
-        fontStyle: 'bold',
-      })
+      .text(
+        x + 24,
+        y + h / 2,
+        `🎨 R${this.snapshot.roundNumber} · 출제자: ${drawer?.nickname ?? '미정'}`,
+        {
+          fontFamily: FONT_FAMILY,
+          fontSize: '18px',
+          color: '#ffe9c2',
+          fontStyle: 'bold',
+        },
+      )
       .setOrigin(0, 0.5)
     container.add(turnLabel)
 
-    // 제시어 / 글자수 (중앙)
-    const isHost = this.snapshot.hostUserId === this.currentUserId
+    // 제시어 (출제자 본인) / 안내 (정답자) (중앙). 글자수 힌트는 M2-5 에서.
+    const isDrawer = this.snapshot.currentDrawerUserId === this.currentUserId
+    const promptText = isDrawer
+      ? this.prompt?.word
+        ? `제시어:  ${this.prompt.word}`
+        : '제시어 대기 중…'
+      : '그림을 맞춰봐!'
     const promptLabel = this.add
-      .text(x + w / 2, y + h / 2, isHost ? '제시어 대기 중…' : '글자수 대기 중…', {
+      .text(x + w / 2, y + h / 2, promptText, {
         fontFamily: FONT_FAMILY,
         fontSize: '22px',
         color: '#ffffff',
@@ -307,12 +321,12 @@ export class QuizPlayScene extends Phaser.Scene {
     container.add(canvas)
 
     // placeholder 텍스트
-    const isHost = this.snapshot.hostUserId === this.currentUserId
+    const isDrawer = this.snapshot.currentDrawerUserId === this.currentUserId
     const hint = this.add
       .text(
         x + w / 2,
         y + h / 2,
-        isHost ? '여기에 그림을 그려요 (M2-3에서 활성)' : '출제자의 그림이 여기 나타나요',
+        isDrawer ? '여기에 그림을 그려요 (M2-3에서 활성)' : '출제자의 그림이 여기 나타나요',
         {
           fontFamily: FONT_FAMILY,
           fontSize: '16px',
@@ -338,8 +352,8 @@ export class QuizPlayScene extends Phaser.Scene {
     panel.strokeRoundedRect(x, y, w, h, 14)
     container.add(panel)
 
-    const isHost = this.snapshot.hostUserId === this.currentUserId
-    if (isHost) {
+    const isDrawer = this.snapshot.currentDrawerUserId === this.currentUserId
+    if (isDrawer) {
       // 팔레트 placeholder — 색상 swatch 5개
       const colors = [0xff4d4d, 0xffa64a, 0xffd84a, 0x5cc26b, 0x4a90e2]
       const swatchSize = Math.min(48, h * 0.4)

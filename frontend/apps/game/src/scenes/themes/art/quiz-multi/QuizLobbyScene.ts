@@ -4,6 +4,8 @@ import {
   ensureFreshAccessToken,
   joinQuizRoom,
   leaveQuizRoom,
+  startQuizRoom,
+  type PromptAssignment,
   type QuizRoomSnapshot,
 } from '@wish/api-client'
 import { assetPath } from '@/game/assets/assetPath'
@@ -41,6 +43,8 @@ type LobbyState =
   | 'waitingCode'
   | 'joining'
   | 'lobby'
+  | 'starting'
+  | 'transitioningToPlay'
   | 'leaving'
 
 const PALETTE_HOST = CUTE_CARD_PALETTES.butter
@@ -372,9 +376,32 @@ export class QuizLobbyScene extends Phaser.Scene {
       }
     } else if (event.type === 'status_changed') {
       this.snapshot = { ...this.snapshot, status: event.status }
-      // M2: PLAYING 으로 바뀌면 플레이 씬으로 전이. 일단 표시만.
+    } else if (event.type === 'round_started') {
+      // 게스트 진입 경로: 호스트가 /start 호출 → BE broadcast → 여기서 플레이 씬 전이.
+      // 호스트는 REST 응답 핸들러에서 직접 전이하므로(이미 state=transitioningToPlay), 중복 호출 안 됨.
+      this.snapshot = {
+        ...this.snapshot,
+        status: event.status,
+        roundNumber: event.roundNumber,
+        currentDrawerUserId: event.currentDrawerUserId,
+      }
+      this.transitionToPlayScene(this.snapshot, null)
+      return
     }
     this.drawLobby()
+  }
+
+  private transitionToPlayScene(snapshot: QuizRoomSnapshot, prompt: PromptAssignment | null) {
+    if (this.state === 'transitioningToPlay' || this.state === 'leaving') return
+    this.state = 'transitioningToPlay'
+    fadeToScene(this, 'QuizPlayScene', {
+      duration: 220,
+      data: {
+        snapshot,
+        currentUserId: this.currentUserId,
+        prompt,
+      },
+    })
   }
 
   private drawLobby() {
@@ -527,15 +554,21 @@ export class QuizLobbyScene extends Phaser.Scene {
 
   private handleStartGame() {
     if (!this.snapshot) return
-    // M2-1: 우선 플레이 씬 레이아웃 확인용으로 직접 전이.
-    // M2-2 에서 BE 라운드 시작 API + status_changed broadcast 수신 흐름으로 교체.
-    fadeToScene(this, 'QuizPlayScene', {
-      duration: 220,
-      data: {
-        snapshot: this.snapshot,
-        currentUserId: this.currentUserId,
-      },
-    })
+    if (this.state !== 'lobby') return
+    const roomId = this.snapshot.roomId
+    this.state = 'starting'
+    this.setStatus('게임 시작 중…')
+    void startQuizRoom(roomId)
+      .then(response => {
+        // 호스트 진입 경로: REST 응답에 prompt 동봉. 토픽의 round_started 가 비슷한 시점에 도착하지만,
+        // transitionToPlayScene 가 상태 가드로 중복 전이를 막는다.
+        this.transitionToPlayScene(response.snapshot, response.prompt)
+      })
+      .catch(error => {
+        this.setStatus(extractMessage(error, '시작에 실패했어요. 잠시 후 다시 시도해줘.'))
+        this.state = 'lobby'
+        this.drawLobby()
+      })
   }
 
   private async handleLeave() {

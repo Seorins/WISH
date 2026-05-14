@@ -24,6 +24,26 @@ export type QuizRoomSnapshot = {
   members: QuizMember[]
   /** STOMP CONNECT 시 Room 헤더로 전달할 prefixed 키 (예: {@code quiz.AB12CD}). */
   stompRoomKey: string
+  /** 1-based 라운드 번호. WAITING/FINISHED 일 땐 0. */
+  roundNumber: number
+  /** 현재 출제자 userId. PLAYING 일 때만 의미 있음 (0 = 미정). */
+  currentDrawerUserId: number
+}
+
+/** 출제자에게만 노출되는 라운드 제시어. 정답자는 글자수 힌트만 별도 라우팅으로 받음 (M2-5 예정). */
+export type PromptAssignment = {
+  roundNumber: number
+  word: string
+  hint: string
+}
+
+/**
+ * {@code POST /quiz/rooms/{roomId}/start} 응답. 방장만 호출하므로 prompt 는 항상 채워진다 — WS race 회피용으로 REST 에
+ * 동봉.
+ */
+export type QuizGameStartedResponse = {
+  snapshot: QuizRoomSnapshot
+  prompt: PromptAssignment
 }
 
 /** 방장이 새 방 생성. 본인이 첫 멤버 + 호스트로 등록됨. */
@@ -49,6 +69,16 @@ export async function leaveQuizRoom(): Promise<void> {
 export async function getQuizRoom(roomId: string): Promise<QuizRoomSnapshot> {
   const response = await apiClient.get<ApiResponse<QuizRoomSnapshot>>(
     `/quiz/rooms/${encodeURIComponent(roomId)}`,
+  )
+  return response.data.data
+}
+
+/**
+ * 방장이 호출 — 다음 라운드 시작. WAITING → PLAYING 또는 PLAYING 다음 라운드. 응답에 새 스냅샷 + 제시어 동봉.
+ */
+export async function startQuizRoom(roomId: string): Promise<QuizGameStartedResponse> {
+  const response = await apiClient.post<ApiResponse<QuizGameStartedResponse>>(
+    `/quiz/rooms/${encodeURIComponent(roomId)}/start`,
   )
   return response.data.data
 }
