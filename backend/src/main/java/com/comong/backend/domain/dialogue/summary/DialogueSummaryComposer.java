@@ -178,6 +178,23 @@ public class DialogueSummaryComposer {
     }
 
     /**
+     * 보호자 화면 "추천 후속 활동" 카드용 문구. 여러 세션 중 가장 무거운 endingType 의 advice 를 반환. 세션 없으면 {@link
+     * Optional#empty}.
+     */
+    public Optional<String> resolveRecommendedActivity(
+            List<DialogueSession> sessions, Map<Long, List<DialogueTurn>> turnsBySession) {
+        if (sessions == null || sessions.isEmpty()) return Optional.empty();
+        ChoiceEndingType heaviest = null;
+        for (DialogueSession s : sessions) {
+            List<DialogueTurn> turns = turnsBySession.getOrDefault(s.getId(), List.of());
+            ChoiceEndingType e = resolveEndingType(turns).orElse(null);
+            heaviest = pickHeavier(heaviest, e);
+        }
+        if (heaviest == null) return Optional.empty();
+        return Optional.of(EndingAdvice.adviceOf(heaviest));
+    }
+
+    /**
      * 두 endingType 중 "더 무거운" 쪽을 고른다. 임상적으로 가장 능동적 후속 권유가 필요한 유형이 우선.
      *
      * <p>의료 자원 호출 > 어른 호출 > 도움 요청 > 표현 활동 > 휴식 > 사회 연결 > NO_PRESSURE

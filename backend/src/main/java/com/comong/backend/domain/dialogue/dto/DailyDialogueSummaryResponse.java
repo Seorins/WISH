@@ -18,4 +18,9 @@ public record DailyDialogueSummaryResponse(
         @Schema(description = "오늘 보인 감정 신호") List<DialogueSignalResponse> signals,
         @Schema(description = "주제 태그 union") List<String> topics,
         @Schema(description = "오늘 만난 NPC + 다룬 도메인 + 빈도") List<NpcVisitedResponse> npcsVisited,
+        @Schema(
+                        description =
+                                "보호자에게 표시할 추천 후속 활동 (오늘 세션 중 가장 무거운 endingType 기반). 세션 없으면 null.",
+                        example = "옆에 있어달라는 마음을 들어주세요.")
+                String recommendedActivity,
         @Schema(description = "오늘 진행한 세션 개수") int sessionCount) {}

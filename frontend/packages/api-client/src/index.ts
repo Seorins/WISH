@@ -213,10 +213,14 @@ export type {
   FuelStatus,
 } from './fuel'
 export type {
+  GuardianDialogueChoiceTone,
+  GuardianDialogueChoiceValence,
   GuardianDialogueDailySummary,
   GuardianDialogueFinishReason,
   GuardianDialogueGeneratedBy,
   GuardianDialogueNpc,
+  GuardianDialogueSentimentTone,
+  GuardianDialogueSentimentWord,
   GuardianDialogueSessionDetail,
   GuardianDialogueSessionMeta,
   GuardianDialogueSessionStatus,

@@ -67,6 +67,7 @@ public class GuardianDialogueSummaryService {
                     List.of(),
                     List.of(),
                     List.of(),
+                    null,
                     0);
         }
 
@@ -77,9 +78,18 @@ public class GuardianDialogueSummaryService {
         List<DialogueSignalResponse> signals = buildSignals(sessions, turnsBySession);
         List<String> topics = aggregateTopics(turnsBySession.values());
         List<NpcVisitedResponse> npcsVisited = aggregateNpcVisited(sessions);
+        String recommendedActivity =
+                summaryComposer.resolveRecommendedActivity(sessions, turnsBySession).orElse(null);
 
         return new DailyDialogueSummaryResponse(
-                date, summaryText, valence, signals, topics, npcsVisited, sessions.size());
+                date,
+                summaryText,
+                valence,
+                signals,
+                topics,
+                npcsVisited,
+                recommendedActivity,
+                sessions.size());
     }
 
     /** 주간 응답 톤 변화 — {@code endDate} 포함 직전 7일. */
