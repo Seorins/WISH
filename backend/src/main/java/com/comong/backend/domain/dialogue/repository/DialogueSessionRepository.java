@@ -1,5 +1,6 @@
 package com.comong.backend.domain.dialogue.repository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -29,4 +30,23 @@ public interface DialogueSessionRepository
             """)
     List<String> findRecentScriptIds(
             @Param("patientProfileId") Long patientProfileId, @Param("npcName") NpcName npcName);
+
+    /**
+     * 환자의 특정 기간 (KST) 동안 시작된 세션 목록. 보호자 페이지의 일별/주별 요약에서 사용.
+     *
+     * <p>{@code from} inclusive, {@code to} exclusive.
+     */
+    @Query(
+            """
+            SELECT s
+            FROM DialogueSession s
+            WHERE s.patientProfile.id = :patientProfileId
+              AND s.startedAt >= :from
+              AND s.startedAt < :to
+            ORDER BY s.startedAt ASC
+            """)
+    List<DialogueSession> findInRange(
+            @Param("patientProfileId") Long patientProfileId,
+            @Param("from") LocalDateTime from,
+            @Param("to") LocalDateTime to);
 }
