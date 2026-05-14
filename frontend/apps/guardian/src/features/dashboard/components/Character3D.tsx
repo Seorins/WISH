@@ -36,8 +36,13 @@ const RETARGET_MIN_DIRECTION_LENGTH = 0.001
 const RETARGET_UPPER_LIMB_MAX_ROTATION_RAD = Math.PI * 0.68
 const RETARGET_LOWER_LIMB_MAX_ROTATION_RAD = Math.PI * 0.78
 const TORSO_GUARD_VERTICAL_PADDING = 0.04
-const TORSO_GUARD_SIDE_MARGIN_RATIO = 0.08
-const TORSO_GUARD_FORWARD_Z = 0.09
+const TORSO_GUARD_SIDE_MARGIN_RATIO = 0.16
+const TORSO_GUARD_FORWARD_Z = 0.14
+const ARM_IK_MAX_REACH_RATIO = 0.94
+const ARM_IK_MIN_REACH_RATIO = 0.18
+const ARM_IK_OBSERVED_POLE_WEIGHT = 0.35
+const ARM_IK_ELBOW_SIDE_BIAS = 0.7
+const ARM_IK_ELBOW_FORWARD_BIAS = 0.45
 
 /** UpLeg 본 위치(허리 라인)를 시각적 hip(엉덩이) 라인으로 내리는 오프셋 */
 const HIP_Y_OFFSET = -0.18
@@ -211,6 +216,39 @@ const ARM_TARGET_LANDMARK_NAMES = new Set<LandmarkName>([
   'LEFT_WRIST',
   'RIGHT_WRIST',
 ])
+type ArmSide = 'LEFT' | 'RIGHT'
+const ARM_KPS_BY_SIDE = {
+  LEFT: {
+    shoulder: 'LEFT_SHOULDER',
+    elbow: 'LEFT_ELBOW',
+    wrist: 'LEFT_WRIST',
+  },
+  RIGHT: {
+    shoulder: 'RIGHT_SHOULDER',
+    elbow: 'RIGHT_ELBOW',
+    wrist: 'RIGHT_WRIST',
+  },
+} as const satisfies Record<
+  ArmSide,
+  { shoulder: LandmarkName; elbow: LandmarkName; wrist: LandmarkName }
+>
+
+type ArmIkScratch = {
+  shoulder: Vector3
+  elbow: Vector3
+  wrist: Vector3
+  targetElbow: Vector3
+  targetWrist: Vector3
+  chainDir: Vector3
+  projectedBase: Vector3
+  observedPole: Vector3
+  fallbackPole: Vector3
+  pole: Vector3
+  leftShoulder: Vector3
+  rightShoulder: Vector3
+  leftHip: Vector3
+  rightHip: Vector3
+}
 
 function isFiniteVector3(v: Vector3): boolean {
   return Number.isFinite(v.x) && Number.isFinite(v.y) && Number.isFinite(v.z)
@@ -243,6 +281,26 @@ function isLeftSideLandmark(name: LandmarkName): boolean {
   return name.startsWith('LEFT_')
 }
 
+function getArmSide(parentKp: LandmarkName, childKp: LandmarkName): ArmSide | null {
+  if (
+    (parentKp === 'LEFT_SHOULDER' && childKp === 'LEFT_ELBOW') ||
+    (parentKp === 'LEFT_ELBOW' && childKp === 'LEFT_WRIST')
+  ) {
+    return 'LEFT'
+  }
+  if (
+    (parentKp === 'RIGHT_SHOULDER' && childKp === 'RIGHT_ELBOW') ||
+    (parentKp === 'RIGHT_ELBOW' && childKp === 'RIGHT_WRIST')
+  ) {
+    return 'RIGHT'
+  }
+  return null
+}
+
+function getArmSideSign(side: ArmSide): number {
+  return side === 'LEFT' ? -1 : 1
+}
+
 function mutateTorsoGuardedArmPoint(
   frame: MotionFrame,
   clip: MotionClip,
@@ -259,6 +317,14 @@ function mutateTorsoGuardedArmPoint(
     !tryReadRetargetKp(frame, clip, 'RIGHT_SHOULDER', rightShoulder) ||
     !tryReadRetargetKp(frame, clip, 'LEFT_HIP', leftHip) ||
     !tryReadRetargetKp(frame, clip, 'RIGHT_HIP', rightHip)
+  ) {
+    return
+  }
+  if (
+    !isFiniteVector3(leftShoulder) ||
+    !isFiniteVector3(rightShoulder) ||
+    !isFiniteVector3(leftHip) ||
+    !isFiniteVector3(rightHip)
   ) {
     return
   }
@@ -287,6 +353,117 @@ function mutateTorsoGuardedArmPoint(
   } else {
     const rightLimit = Math.max(rightShoulder.x, rightHip.x) + sideMargin
     if (point.x < rightLimit) point.x = rightLimit
+  }
+}
+
+function applyArmIkTargets(
+  frame: MotionFrame,
+  clip: MotionClip,
+  parentKp: LandmarkName,
+  childKp: LandmarkName,
+  parentPoint: Vector3,
+  childPoint: Vector3,
+  scratch: ArmIkScratch,
+): void {
+  const side = getArmSide(parentKp, childKp)
+  if (!side) return
+
+  const kps = ARM_KPS_BY_SIDE[side]
+  if (
+    !tryReadRetargetKp(frame, clip, kps.shoulder, scratch.shoulder) ||
+    !tryReadRetargetKp(frame, clip, kps.elbow, scratch.elbow) ||
+    !tryReadRetargetKp(frame, clip, kps.wrist, scratch.wrist)
+  ) {
+    return
+  }
+
+  const upperLen = scratch.shoulder.distanceTo(scratch.elbow)
+  const lowerLen = scratch.elbow.distanceTo(scratch.wrist)
+  if (
+    !Number.isFinite(upperLen) ||
+    !Number.isFinite(lowerLen) ||
+    upperLen <= RETARGET_MIN_DIRECTION_LENGTH ||
+    lowerLen <= RETARGET_MIN_DIRECTION_LENGTH
+  ) {
+    return
+  }
+
+  scratch.targetWrist.copy(scratch.wrist)
+  mutateTorsoGuardedArmPoint(
+    frame,
+    clip,
+    kps.wrist,
+    scratch.targetWrist,
+    scratch.leftShoulder,
+    scratch.rightShoulder,
+    scratch.leftHip,
+    scratch.rightHip,
+  )
+
+  scratch.chainDir.copy(scratch.targetWrist).sub(scratch.shoulder)
+  let reach = scratch.chainDir.length()
+  if (!Number.isFinite(reach) || reach <= RETARGET_MIN_DIRECTION_LENGTH) return
+
+  const maxReach = (upperLen + lowerLen) * ARM_IK_MAX_REACH_RATIO
+  const minReach = Math.max(
+    Math.abs(upperLen - lowerLen) + RETARGET_MIN_DIRECTION_LENGTH,
+    (upperLen + lowerLen) * ARM_IK_MIN_REACH_RATIO,
+  )
+  scratch.chainDir.normalize()
+  if (reach > maxReach) {
+    reach = maxReach
+    scratch.targetWrist.copy(scratch.shoulder).addScaledVector(scratch.chainDir, reach)
+  } else if (reach < minReach) {
+    reach = minReach
+    scratch.targetWrist.copy(scratch.shoulder).addScaledVector(scratch.chainDir, reach)
+  }
+
+  const mid =
+    (upperLen * upperLen - lowerLen * lowerLen + reach * reach) / Math.max(2 * reach, 0.0001)
+  const bendHeight = Math.sqrt(Math.max(0, upperLen * upperLen - mid * mid))
+  scratch.projectedBase.copy(scratch.shoulder).addScaledVector(scratch.chainDir, mid)
+
+  scratch.observedPole.copy(scratch.elbow).sub(scratch.shoulder)
+  scratch.observedPole.addScaledVector(
+    scratch.chainDir,
+    -scratch.observedPole.dot(scratch.chainDir),
+  )
+  const observedPoleValid = normalizeDirection(scratch.observedPole)
+
+  const sideSign = getArmSideSign(side)
+  scratch.fallbackPole.set(sideSign * ARM_IK_ELBOW_SIDE_BIAS, 0, ARM_IK_ELBOW_FORWARD_BIAS)
+  scratch.fallbackPole.addScaledVector(
+    scratch.chainDir,
+    -scratch.fallbackPole.dot(scratch.chainDir),
+  )
+  if (!normalizeDirection(scratch.fallbackPole)) {
+    scratch.fallbackPole.set(sideSign, 0, 0)
+  }
+
+  scratch.pole.copy(scratch.fallbackPole)
+  if (observedPoleValid && scratch.observedPole.x * sideSign > 0) {
+    scratch.pole.lerp(scratch.observedPole, ARM_IK_OBSERVED_POLE_WEIGHT)
+    normalizeDirection(scratch.pole)
+  }
+
+  scratch.targetElbow.copy(scratch.projectedBase).addScaledVector(scratch.pole, bendHeight)
+  mutateTorsoGuardedArmPoint(
+    frame,
+    clip,
+    kps.elbow,
+    scratch.targetElbow,
+    scratch.leftShoulder,
+    scratch.rightShoulder,
+    scratch.leftHip,
+    scratch.rightHip,
+  )
+
+  if (parentKp === kps.shoulder && childKp === kps.elbow) {
+    parentPoint.copy(scratch.shoulder)
+    childPoint.copy(scratch.targetElbow)
+  } else if (parentKp === kps.elbow && childKp === kps.wrist) {
+    parentPoint.copy(scratch.targetElbow)
+    childPoint.copy(scratch.targetWrist)
   }
 }
 
@@ -392,6 +569,22 @@ function CharacterModel({
   const tmpParentRot = useRef(new Quaternion())
   const tmpParentInvRot = useRef(new Quaternion())
   const tmpTargetRot = useRef(new Quaternion())
+  const armIkScratch = useRef<ArmIkScratch>({
+    shoulder: new Vector3(),
+    elbow: new Vector3(),
+    wrist: new Vector3(),
+    targetElbow: new Vector3(),
+    targetWrist: new Vector3(),
+    chainDir: new Vector3(),
+    projectedBase: new Vector3(),
+    observedPole: new Vector3(),
+    fallbackPole: new Vector3(),
+    pole: new Vector3(),
+    leftShoulder: new Vector3(),
+    rightShoulder: new Vector3(),
+    leftHip: new Vector3(),
+    rightHip: new Vector3(),
+  })
 
   useEffect(() => {
     const group = groupRef.current
@@ -549,6 +742,16 @@ function CharacterModel({
       }
 
       // 2. desired world direction (motion frame keypoint 기반)
+      applyArmIkTargets(
+        frame,
+        activeMotion,
+        c.parentKp,
+        c.childKp,
+        tmpKpP.current,
+        tmpKpC.current,
+        armIkScratch.current,
+      )
+
       mutateTorsoGuardedArmPoint(
         frame,
         activeMotion,
