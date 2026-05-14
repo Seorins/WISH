@@ -11,6 +11,14 @@ export {
   updateArtwork,
 } from './artworks'
 export {
+  createPhotoBooth,
+  deletePhotoBooth,
+  getMyPhotoBooths,
+  getPhotoBooth,
+  getPublicPhotoBooths,
+  updatePhotoBooth,
+} from './photo-booths'
+export {
   createExerciseMotion,
   deleteExerciseMotion,
   getExerciseMotion,
@@ -133,6 +141,17 @@ export type {
   UpdateArtworkParams,
   UpdateArtworkRequest,
 } from './artworks'
+export type {
+  CreatePhotoBoothParams,
+  CreatePhotoBoothRequest,
+  ListPhotoBoothParams,
+  PhotoBooth,
+  PhotoBoothPage,
+  PublicPhotoBooth,
+  PublicPhotoBoothAuthor,
+  PublicPhotoBoothPage,
+  UpdatePhotoBoothRequest,
+} from './photo-booths'
 export type {
   CreateExerciseMotionParams,
   CreateExerciseMotionRequest,

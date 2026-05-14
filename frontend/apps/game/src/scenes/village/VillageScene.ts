@@ -498,7 +498,13 @@ export class VillageScene extends Phaser.Scene {
     this.game.events.on('villager-dialogue:closed', this.handleVillagerDialogueClosed, this)
     this.game.events.on('villager-dialogue:text', this.handleVillagerDialogueText, this)
     this.game.events.on('gomoku:closed', this.handleGomokuClosed, this)
+    // photo-booth FrameSelect 가 pause 해뒀던 마을을 resume 시켜 돌아올 때 isTransitioning 해제.
+    // 안 풀면 update 의 transitioning 가드에 걸려 입력이 죽음.
+    this.events.on(Phaser.Scenes.Events.RESUME, () => {
+      this.isTransitioning = false
+    })
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.events.off(Phaser.Scenes.Events.RESUME)
       this.game.events.off('villager-dialogue:closed', this.handleVillagerDialogueClosed, this)
       this.game.events.off('villager-dialogue:text', this.handleVillagerDialogueText, this)
       this.game.events.off('gomoku:closed', this.handleGomokuClosed, this)
@@ -918,7 +924,12 @@ export class VillageScene extends Phaser.Scene {
     if (this.isVillagerDialogueOpen) {
       this.hideDialog(false)
     }
-    fadeToScene(this, 'PhotoBoothFrameSelectScene', { duration: 250 })
+    // 마을은 정지(paused) 상태로 두고 FrameSelect 를 위에 띄워서 마을이 반투명하게 비춰 보이게.
+    // 다른 photo-booth 씬(Camera/Pick/Result/Save) 은 불투명 배경이라 마을이 가려지므로 그대로 paused.
+    // 마지막에 fadeToScene('VillageScene') 으로 복귀 시 Phaser 가 stop + restart 처리.
+    this.scene.launch('PhotoBoothFrameSelectScene')
+    this.scene.bringToTop('PhotoBoothFrameSelectScene')
+    this.scene.pause()
   }
 
   private getActiveDialog() {
