@@ -1,0 +1,420 @@
+{
+  "npcs": {
+    "monkey_friend": {
+      "npcId": "monkey_friend",
+      "displayName": "코몽",
+      "tone": "장난기 있지만 공감 잘하는 친구",
+      "scripts": ["monkey_injection_fear"]
+    }
+  },
+
+  "scripts": {
+    "monkey_injection_fear": {
+      "scriptId": "monkey_injection_fear",
+      "npcId": "monkey_friend",
+      "title": "시술 무서움",
+      "entryNodeId": "mky_inj_01_entry",
+      "nodes": {
+        "mky_inj_01_entry": {
+          "nodeId": "mky_inj_01_entry",
+          "questionText": "오늘 좀 무서운 거 있어?",
+          "npcLines": [
+            "어… 표정이 좀 흐려졌네.",
+            "오늘 좀 무서운 거 있어?"
+          ],
+          "choices": ["mky_inj_fear", "mky_inj_unknown", "mky_inj_unsure"]
+        },
+        "mky_inj_02a_who": {
+          "nodeId": "mky_inj_02a_who",
+          "questionText": "너도 손 잡아줄 사람 있어?",
+          "npcLines": [
+            "주사라니… 코몽이도 주사 무서워서 한 번 의자 밑에 숨었어.",
+            "엄마가 와서 손 꼭 잡아주니까 그제서야 나왔지.",
+            "너도 손 잡아줄 사람 있어?"
+          ],
+          "choices": ["mky_inj_mom", "mky_inj_dunno_who", "mky_inj_monkey_holds"]
+        },
+        "mky_inj_03a1_how": {
+          "nodeId": "mky_inj_03a1_how",
+          "questionText": "엄마한테 어떻게 말할까?",
+          "npcLines": [
+            "오케이!",
+            "엄마한테 어떻게 말할까?"
+          ],
+          "choices": ["mky_inj_say_hold", "mky_inj_say_be_near", "mky_inj_just_go"]
+        },
+        "mky_inj_03a2_offer": {
+          "nodeId": "mky_inj_03a2_offer",
+          "questionText": "코몽이가 같이 가줄까?",
+          "npcLines": [
+            "음… 그럼 코몽이가 같이 가줄까?"
+          ],
+          "choices": ["mky_inj_yes_together", "mky_inj_be_near_me"]
+        },
+        "mky_inj_03a3_check": {
+          "nodeId": "mky_inj_03a3_check",
+          "questionText": "어때, 좀 든든해?",
+          "npcLines": [
+            "코몽이? 좋아!",
+            "(꼬리로 손 잡는 흉내) 자, 잡았다!",
+            "어때, 좀 든든해?"
+          ],
+          "choices": ["mky_inj_feel_good", "mky_inj_still_scared"]
+        },
+        "mky_inj_02b_ask": {
+          "nodeId": "mky_inj_02b_ask",
+          "questionText": "누구한테 물어볼 수 있어?",
+          "npcLines": [
+            "아아, 모르는 게 제일 무섭지.",
+            "코몽이도 새 거 할 때 머리가 빙글빙글해.",
+            "누구한테 물어볼 수 있어?"
+          ],
+          "choices": ["mky_inj_ask_teacher", "mky_inj_ask_mom", "mky_inj_not_ask"]
+        },
+        "mky_inj_02c_now": {
+          "nodeId": "mky_inj_02c_now",
+          "questionText": "지금은 뭐 하고 싶어?",
+          "npcLines": [
+            "음… 잘 모르는 마음도 있지. 코몽이도 그래.",
+            "지금은 뭐 하고 싶어?"
+          ],
+          "choices": ["mky_inj_with_monkey", "mky_inj_stay_still", "mky_inj_other_friend"]
+        }
+      }
+    }
+  },
+
+  "choices": {
+    "mky_inj_fear": {
+      "choiceIntentId": "mky_inj_fear",
+      "text": "주사가 무서워요",
+      "nextNodeId": "mky_inj_02a_who",
+      "isEnding": false,
+      "valence": "NEGATIVE",
+      "tone": "WORRIED",
+      "intensity": 3,
+      "concernFlags": ["procedure_fear", "pain_concern"],
+      "protectiveFactors": ["can_name_fear", "emotion_named"],
+      "topicKeywords": ["주사"],
+      "sentimentWords": [
+        { "phrase": "무서워요", "tone": "NEGATIVE" }
+      ]
+    },
+    "mky_inj_unknown": {
+      "choiceIntentId": "mky_inj_unknown",
+      "text": "다음에 뭐 할지 잘 몰라서요",
+      "nextNodeId": "mky_inj_02b_ask",
+      "isEnding": false,
+      "valence": "NEUTRAL",
+      "tone": "WORRIED",
+      "intensity": 2,
+      "concernFlags": ["uncertainty", "information_need"],
+      "protectiveFactors": ["uncertainty_named"],
+      "topicKeywords": ["모름"],
+      "sentimentWords": []
+    },
+    "mky_inj_unsure": {
+      "choiceIntentId": "mky_inj_unsure",
+      "text": "잘 모르겠어요",
+      "nextNodeId": "mky_inj_02c_now",
+      "isEnding": false,
+      "valence": "NEUTRAL",
+      "tone": "CALM",
+      "intensity": 1,
+      "concernFlags": ["uncertainty"],
+      "protectiveFactors": [],
+      "topicKeywords": [],
+      "sentimentWords": []
+    },
+    "mky_inj_mom": {
+      "choiceIntentId": "mky_inj_mom",
+      "text": "엄마요",
+      "nextNodeId": "mky_inj_03a1_how",
+      "isEnding": false,
+      "valence": "POSITIVE",
+      "tone": "CALM",
+      "intensity": 1,
+      "concernFlags": [],
+      "protectiveFactors": ["family_support_preference"],
+      "topicKeywords": ["가족"],
+      "sentimentWords": []
+    },
+    "mky_inj_dunno_who": {
+      "choiceIntentId": "mky_inj_dunno_who",
+      "text": "잘 모르겠어요",
+      "nextNodeId": "mky_inj_03a2_offer",
+      "isEnding": false,
+      "valence": "NEUTRAL",
+      "tone": "WORRIED",
+      "intensity": 2,
+      "concernFlags": ["uncertainty", "hesitation_to_share"],
+      "protectiveFactors": [],
+      "topicKeywords": [],
+      "sentimentWords": []
+    },
+    "mky_inj_monkey_holds": {
+      "choiceIntentId": "mky_inj_monkey_holds",
+      "text": "코몽이가 잡아줘요",
+      "nextNodeId": "mky_inj_03a3_check",
+      "isEnding": false,
+      "valence": "POSITIVE",
+      "tone": "CALM",
+      "intensity": 1,
+      "concernFlags": [],
+      "protectiveFactors": ["playful_coping", "social_connection", "can_name_fear"],
+      "topicKeywords": ["놀이"],
+      "sentimentWords": []
+    },
+    "mky_inj_say_hold": {
+      "choiceIntentId": "mky_inj_say_hold",
+      "text": "「손 잡고 있어줘」라고 할래요",
+      "nextNodeId": null,
+      "isEnding": true,
+      "valence": "POSITIVE",
+      "tone": "CALM",
+      "intensity": 1,
+      "concernFlags": [],
+      "protectiveFactors": ["verbal_expression", "support_need_named", "family_support_preference"],
+      "topicKeywords": ["가족", "손잡기"],
+      "sentimentWords": [],
+      "endingType": "ASK_ADULT_FIRST",
+      "endingNpcLines": [
+        "그 한 마디면 엄마도 코몽이 친구라고 좋아할걸.",
+        "오늘 와줘서 고마워."
+      ],
+      "closingLine": "또 놀러 와!"
+    },
+    "mky_inj_say_be_near": {
+      "choiceIntentId": "mky_inj_say_be_near",
+      "text": "「옆에만 있어줘」라고 할래요",
+      "nextNodeId": null,
+      "isEnding": true,
+      "valence": "POSITIVE",
+      "tone": "CALM",
+      "intensity": 1,
+      "concernFlags": [],
+      "protectiveFactors": ["verbal_expression", "support_need_named", "family_support_preference"],
+      "topicKeywords": ["가족"],
+      "sentimentWords": [],
+      "endingType": "ASK_ADULT_FIRST",
+      "endingNpcLines": [
+        "옆에만 있는 것도 든든해.",
+        "짧게 그 한 마디만."
+      ],
+      "closingLine": "다음에 또 와!"
+    },
+    "mky_inj_just_go": {
+      "choiceIntentId": "mky_inj_just_go",
+      "text": "그냥 가서 손 잡을래요",
+      "nextNodeId": null,
+      "isEnding": true,
+      "valence": "NEUTRAL",
+      "tone": "CALM",
+      "intensity": 1,
+      "concernFlags": [],
+      "protectiveFactors": ["agency_coping", "family_support_preference"],
+      "topicKeywords": ["가족"],
+      "sentimentWords": [],
+      "endingType": "REST_ONLY",
+      "endingNpcLines": [
+        "말 없이 가도 엄마가 알아챌 거야.",
+        "그 정도 사이잖아."
+      ],
+      "closingLine": "또 와!"
+    },
+    "mky_inj_yes_together": {
+      "choiceIntentId": "mky_inj_yes_together",
+      "text": "좋아요, 같이 가요",
+      "nextNodeId": null,
+      "isEnding": true,
+      "valence": "POSITIVE",
+      "tone": "CALM",
+      "intensity": 1,
+      "concernFlags": [],
+      "protectiveFactors": ["support_seeking", "playful_coping", "social_connection"],
+      "topicKeywords": ["코몽"],
+      "sentimentWords": [],
+      "endingType": "NO_PRESSURE",
+      "endingNpcLines": [
+        "오케이! 다음에 무서울 때 코몽이 떠올려.",
+        "(꼬리로 손 흔들며) 같이 갈게."
+      ],
+      "closingLine": "또 와!"
+    },
+    "mky_inj_be_near_me": {
+      "choiceIntentId": "mky_inj_be_near_me",
+      "text": "그냥 옆에 있어주세요",
+      "nextNodeId": null,
+      "isEnding": true,
+      "valence": "POSITIVE",
+      "tone": "CALM",
+      "intensity": 1,
+      "concernFlags": [],
+      "protectiveFactors": ["support_need_named", "social_connection"],
+      "topicKeywords": ["코몽"],
+      "sentimentWords": [],
+      "endingType": "REST_ONLY",
+      "endingNpcLines": [
+        "응, 옆에 있을게.",
+        "무서울 때마다 코몽이 생각해."
+      ],
+      "closingLine": "또 놀러 와!"
+    },
+    "mky_inj_feel_good": {
+      "choiceIntentId": "mky_inj_feel_good",
+      "text": "응, 든든해요",
+      "nextNodeId": null,
+      "isEnding": true,
+      "valence": "POSITIVE",
+      "tone": "CALM",
+      "intensity": 0,
+      "concernFlags": [],
+      "protectiveFactors": ["positive_mood", "playful_coping"],
+      "topicKeywords": ["놀이"],
+      "sentimentWords": [
+        { "phrase": "든든해요", "tone": "POSITIVE" }
+      ],
+      "endingType": "NO_PRESSURE",
+      "endingNpcLines": [
+        "오케이! 그럼 다음에 주사 맞을 때 코몽이 꼬리 떠올려."
+      ],
+      "closingLine": "또 놀러 와!"
+    },
+    "mky_inj_still_scared": {
+      "choiceIntentId": "mky_inj_still_scared",
+      "text": "음, 아직 무서워요",
+      "nextNodeId": null,
+      "isEnding": true,
+      "valence": "NEGATIVE",
+      "tone": "WORRIED",
+      "intensity": 2,
+      "concernFlags": ["procedure_fear"],
+      "protectiveFactors": ["can_name_fear", "emotion_named"],
+      "topicKeywords": ["주사"],
+      "sentimentWords": [
+        { "phrase": "무서워요", "tone": "NEGATIVE" }
+      ],
+      "endingType": "ASK_ADULT_FIRST",
+      "endingNpcLines": [
+        "그럼 엄마 손도 같이 잡아.",
+        "둘이면 두 배로 든든해."
+      ],
+      "closingLine": "다음에 또 와!"
+    },
+    "mky_inj_ask_teacher": {
+      "choiceIntentId": "mky_inj_ask_teacher",
+      "text": "선생님께 물어볼래요",
+      "nextNodeId": null,
+      "isEnding": true,
+      "valence": "POSITIVE",
+      "tone": "CALM",
+      "intensity": 0,
+      "concernFlags": [],
+      "protectiveFactors": ["medical_support_preference", "support_seeking", "information_seeking"],
+      "topicKeywords": ["의료진"],
+      "sentimentWords": [],
+      "endingType": "ASK_MEDICAL_FIRST",
+      "endingNpcLines": [
+        "좋아. 선생님이 차근차근 알려줄 거야.",
+        "'오늘 뭐 해요?' 한 마디만.",
+        "모르는 건 묻는 게 빠른 길이거든."
+      ],
+      "closingLine": "또 와!"
+    },
+    "mky_inj_ask_mom": {
+      "choiceIntentId": "mky_inj_ask_mom",
+      "text": "엄마한테 물어볼래요",
+      "nextNodeId": null,
+      "isEnding": true,
+      "valence": "POSITIVE",
+      "tone": "CALM",
+      "intensity": 0,
+      "concernFlags": [],
+      "protectiveFactors": ["family_support_preference", "support_seeking", "information_seeking"],
+      "topicKeywords": ["가족"],
+      "sentimentWords": [],
+      "endingType": "ASK_HELP_FIRST",
+      "endingNpcLines": [
+        "엄마랑 같이 알아보면 든든하지.",
+        "혼자 끙끙대지 말기 약속!"
+      ],
+      "closingLine": "다음에 와서 어땠는지 알려줘."
+    },
+    "mky_inj_not_ask": {
+      "choiceIntentId": "mky_inj_not_ask",
+      "text": "안 물어볼래요, 그냥 있을래요",
+      "nextNodeId": null,
+      "isEnding": true,
+      "valence": "NEUTRAL",
+      "tone": "CALM",
+      "intensity": 1,
+      "concernFlags": ["hesitation_to_share"],
+      "protectiveFactors": ["sets_boundary"],
+      "topicKeywords": [],
+      "sentimentWords": [],
+      "endingType": "PRIVATE_OKAY",
+      "endingNpcLines": [
+        "응, 지금은 그게 편하면 그래도 돼.",
+        "궁금해지면 그때 와도 늦지 않아."
+      ],
+      "closingLine": "또 놀러 와!"
+    },
+    "mky_inj_with_monkey": {
+      "choiceIntentId": "mky_inj_with_monkey",
+      "text": "그냥 같이 있을래요",
+      "nextNodeId": null,
+      "isEnding": true,
+      "valence": "POSITIVE",
+      "tone": "CALM",
+      "intensity": 0,
+      "concernFlags": [],
+      "protectiveFactors": ["support_need_named", "social_connection"],
+      "topicKeywords": ["코몽"],
+      "sentimentWords": [],
+      "endingType": "NO_PRESSURE",
+      "endingNpcLines": [
+        "오케이! 코몽이도 그게 좋아.",
+        "(옆에 와서 앉으며) 말 안 해도 돼."
+      ],
+      "closingLine": "또 와!"
+    },
+    "mky_inj_stay_still": {
+      "choiceIntentId": "mky_inj_stay_still",
+      "text": "잠깐 가만히 있을래요",
+      "nextNodeId": null,
+      "isEnding": true,
+      "valence": "NEUTRAL",
+      "tone": "TIRED",
+      "intensity": 1,
+      "concernFlags": ["needs_rest"],
+      "protectiveFactors": ["sets_boundary", "rest_need_named"],
+      "topicKeywords": ["휴식"],
+      "sentimentWords": [],
+      "endingType": "REST_ONLY",
+      "endingNpcLines": [
+        "응, 가만히 있어도 충분해.",
+        "(꼬리 살랑) 코몽이 옆에서 같이 있을게."
+      ],
+      "closingLine": "또 와!"
+    },
+    "mky_inj_other_friend": {
+      "choiceIntentId": "mky_inj_other_friend",
+      "text": "다른 친구 만나러 갈래요",
+      "nextNodeId": null,
+      "isEnding": true,
+      "valence": "POSITIVE",
+      "tone": "CALM",
+      "intensity": 0,
+      "concernFlags": [],
+      "protectiveFactors": ["agency_coping", "social_connection"],
+      "topicKeywords": ["친구"],
+      "sentimentWords": [],
+      "endingType": "SOCIAL_CONNECT",
+      "endingNpcLines": [
+        "오, 좋아! 가볍게 놀다 와.",
+        "코몽이는 여기서 기다릴게."
+      ],
+      "closingLine": "또 와!"
+    }
+  }
+}
