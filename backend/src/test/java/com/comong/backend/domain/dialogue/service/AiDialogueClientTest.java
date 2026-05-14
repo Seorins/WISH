@@ -25,8 +25,7 @@ class AiDialogueClientTest {
     @Test
     @DisplayName("base-url 미설정이면 RestClient 호출 없이 즉시 스킵")
     void skipsWhenBaseUrlEmpty() {
-        AiDialogueClient client =
-                new AiDialogueClient(restClient, new AiDialogueProperties("", 5));
+        AiDialogueClient client = new AiDialogueClient(restClient, new AiDialogueProperties("", 5));
 
         client.embedSessionAsync(mock(DialogueSession.class), List.of(mock(DialogueTurn.class)));
 

@@ -10,8 +10,8 @@ import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
 /**
- * AI 서버 RAG/임베딩 호출용 RestClient 빈. baseUrl 미설정이면 빈을 만들지 않는다 ({@code @EnableConfigurationProperties} 만
- * 활성화).
+ * AI 서버 RAG/임베딩 호출용 RestClient 빈. baseUrl 미설정이면 빈을 만들지 않는다 ({@code @EnableConfigurationProperties}
+ * 만 활성화).
  *
  * <p>JDK HttpClient 기반 ({@link JdkClientHttpRequestFactory}) — Claude RestClient 와 동일 패턴.
  */

@@ -46,7 +46,9 @@ public class AiDialogueClient {
     @Async("aiDialogueTaskExecutor")
     public void embedSessionAsync(DialogueSession session, List<DialogueTurn> turns) {
         if (!properties.isEnabled()) {
-            log.debug("AI dialogue disabled (no base-url) — skip embed for session={}", session.getId());
+            log.debug(
+                    "AI dialogue disabled (no base-url) — skip embed for session={}",
+                    session.getId());
             return;
         }
         if (turns == null || turns.isEmpty()) {
@@ -71,10 +73,7 @@ public class AiDialogueClient {
                             .body(new org.springframework.core.ParameterizedTypeReference<>() {});
             Object success = response != null ? response.get("success") : null;
             if (Boolean.TRUE.equals(success)) {
-                log.info(
-                        "AI embed-session ok session={} turns={}",
-                        session.getId(),
-                        turns.size());
+                log.info("AI embed-session ok session={} turns={}", session.getId(), turns.size());
             } else {
                 log.warn(
                         "AI embed-session returned non-success session={} body={}",
