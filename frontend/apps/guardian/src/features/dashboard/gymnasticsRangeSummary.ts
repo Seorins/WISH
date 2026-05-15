@@ -81,11 +81,13 @@ function resolveTargetCount(exerciseType: string, motion: ExerciseSessionMotionR
 }
 
 function resolveRangeRate(exerciseType: string, motion: ExerciseSessionMotionResult): number {
-  const completionRate = clampRate(motion.accuracy)
   const targetCount = resolveTargetCount(exerciseType, motion)
-  const countRate = clampRate(normalizeCompletedCount(motion.completedReps) / targetCount)
+  if (targetCount > 0) {
+    // Guardian summary avoids noisy accuracy scores and uses completed reps for TOP motions.
+    return clampRate(normalizeCompletedCount(motion.completedReps) / targetCount)
+  }
 
-  return Math.max(completionRate, countRate)
+  return clampRate(motion.accuracy)
 }
 
 function resolveProgressLabel(exerciseType: string, motion: ExerciseSessionMotionResult): string {

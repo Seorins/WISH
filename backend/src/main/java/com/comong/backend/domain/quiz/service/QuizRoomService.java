@@ -5,9 +5,13 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.comong.backend.domain.patient.entity.PatientProfile;
 import com.comong.backend.domain.patient.service.PatientProfileService;
+import com.comong.backend.domain.quiz.dto.PromptAssignment;
+import com.comong.backend.domain.quiz.dto.QuizGameStartedResponse;
 import com.comong.backend.domain.quiz.dto.QuizRoomEvent;
 import com.comong.backend.domain.quiz.dto.QuizRoomSnapshot;
+import com.comong.backend.domain.quiz.exception.QuizNotRoomHostException;
 import com.comong.backend.domain.quiz.exception.QuizPatientProfileMissingException;
+import com.comong.backend.domain.quiz.exception.QuizRoomNotFoundException;
 
 import lombok.RequiredArgsConstructor;
 
@@ -32,6 +36,7 @@ public class QuizRoomService {
     private final QuizRoomRegistry roomRegistry;
     private final QuizBroadcastService broadcastService;
     private final PatientProfileService patientProfileService;
+    private final QuizPromptCatalog promptCatalog;
 
     /** 새 방 생성 — 호스트가 첫 멤버로 자동 등록된다. broadcast 는 아직 구독자가 없으므로 생략. */
     public QuizRoomSnapshot createRoom(long userId) {
@@ -76,15 +81,68 @@ public class QuizRoomService {
                         });
     }
 
+    /** WS disconnect 시 호출 — sessionId 로 사용자를 찾아 방에서 자동 제거하고 broadcast. 매핑 없으면 no-op. 멱등. */
+    public void leaveBySession(String sessionId) {
+        roomRegistry
+                .leaveBySession(sessionId)
+                .ifPresent(
+                        result -> {
+                            String roomId = result.room().roomId();
+                            long leftUserId = result.member().userId();
+                            broadcastService.broadcastEvent(
+                                    roomId, QuizRoomEvent.memberLeft(leftUserId));
+                            if (!result.closed()
+                                    && result.room().hostUserId() != leftUserId
+                                    && result.room().hostUserId() != 0L) {
+                                broadcastService.broadcastEvent(
+                                        roomId,
+                                        QuizRoomEvent.hostChanged(result.room().hostUserId()));
+                            }
+                        });
+    }
+
     /** 특정 방 스냅샷 조회 — 멤버 검증은 컨트롤러가 책임 (재접속 시나리오). */
     public QuizRoomSnapshot snapshot(String roomId) {
         return roomRegistry
                 .findById(roomId)
                 .map(QuizRoomSnapshot::of)
-                .orElseThrow(
-                        () ->
-                                new com.comong.backend.domain.quiz.exception
-                                        .QuizRoomNotFoundException());
+                .orElseThrow(QuizRoomNotFoundException::new);
+    }
+
+    /**
+     * 방장 요청으로 다음 라운드를 시작한다 (M2-2). 흐름:
+     *
+     * <ol>
+     *   <li>방 검증 — 존재 + 호출자가 방장
+     *   <li>제시어 선택 — 직전 단어와 다른 단어로
+     *   <li>{@link QuizRoomRegistry#startNextRound} — 상태 PLAYING 전이 + 출제자 결정 (lock 안)
+     *   <li>방 전체에 {@code round_started} broadcast — status / 라운드 / 출제자 공개 (제시어 비포함)
+     *   <li>호출자에겐 REST 응답에 제시어 동봉 — WS race 회피 (출제자만 prompt 알게 됨)
+     * </ol>
+     *
+     * @throws QuizRoomNotFoundException 방이 없음
+     * @throws QuizNotRoomHostException 호출자가 방장이 아님
+     */
+    public QuizGameStartedResponse startGame(long userId, String roomId) {
+        QuizRoom roomSnapshot =
+                roomRegistry.findById(roomId).orElseThrow(QuizRoomNotFoundException::new);
+        if (roomSnapshot.hostUserId() != userId) {
+            throw new QuizNotRoomHostException();
+        }
+        // 직전 단어는 currentPrompt — null 일 수도(첫 라운드) 있다.
+        String previousWord =
+                roomSnapshot.currentPrompt() == null ? null : roomSnapshot.currentPrompt().word();
+        DrawingPrompt prompt = promptCatalog.pickRandom(previousWord);
+
+        QuizRoom updated = roomRegistry.startNextRound(roomId, prompt);
+
+        broadcastService.broadcastEvent(
+                roomId,
+                QuizRoomEvent.roundStarted(updated.roundNumber(), updated.currentDrawerUserId()));
+
+        return new QuizGameStartedResponse(
+                QuizRoomSnapshot.of(updated),
+                new PromptAssignment(updated.roundNumber(), prompt.word()));
     }
 
     private PatientProfile requireProfile(long userId) {

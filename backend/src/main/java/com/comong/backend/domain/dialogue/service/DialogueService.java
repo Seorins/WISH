@@ -14,7 +14,10 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
+import com.comong.backend.domain.dialogue.catalog.DialogueCatalogService;
 import com.comong.backend.domain.dialogue.catalog.model.ChoiceDefinition;
 import com.comong.backend.domain.dialogue.dto.FinishSessionRequest;
 import com.comong.backend.domain.dialogue.dto.FinishSessionResponse;
@@ -66,8 +69,8 @@ public class DialogueService {
     private final ClaudeSceneProvider claudeSceneProvider;
     private final LighthouseIntentCatalog lighthouseIntentCatalog;
     private final CatalogSceneProvider catalogSceneProvider;
-    private final com.comong.backend.domain.dialogue.catalog.DialogueCatalogService
-            dialogueCatalogService;
+    private final DialogueCatalogService dialogueCatalogService;
+    private final AiDialogueClient aiDialogueClient;
 
     @Transactional
     public StartSessionResponse createSession(Long currentUserId, StartSessionRequest request) {
@@ -245,16 +248,31 @@ public class DialogueService {
         DialogueSession session = findOwnedSessionOrThrow(currentUserId, sessionId);
         requireInProgress(session);
         session.finish(request.finishReason());
-        List<String> closingLines;
-        if (session.getNpcName().isLlmDriven()) {
-            // 등대지기: fallback closing 사용
-            closingLines =
-                    fallbackSceneProvider.closingLines(
-                            session.getNpcName(), request.finishReason());
-        } else {
-            // 마을 NPC: ending scene 에서 이미 closingLine 을 전달했으므로 finish 응답엔 없음.
-            closingLines = null;
-        }
+        List<String> closingLines =
+                session.getNpcName().isLlmDriven()
+                        ? fallbackSceneProvider.closingLines(
+                                session.getNpcName(), request.finishReason())
+                        : null; // 마을 주민은 catalog ending scene 에서 이미 closingLines 전달
+
+        // 세션 종료 후 RAG 임베딩 트리거 — fire-and-forget (S14P31E103-788).
+        // 1) lazy 연관(patientProfile) 을 트랜잭션 안에서 미리 unpack — 비동기 스레드에서 LazyInitializationException
+        // 회피.
+        // 2) turns 도 트랜잭션 안에서 fetch.
+        // 3) afterCommit 시점에 호출 — 롤백 시 임베딩이 외부에 새지 않도록 정합성 보장.
+        long patientProfileId = session.getPatientProfile().getId();
+        long sessionIdValue = session.getId();
+        NpcName npcName = session.getNpcName();
+        List<DialogueTurn> turns =
+                turnRepository.findAllBySessionIdOrderByStepIndexAsc(sessionIdValue);
+        TransactionSynchronizationManager.registerSynchronization(
+                new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        aiDialogueClient.embedSessionAsync(
+                                patientProfileId, sessionIdValue, npcName, turns);
+                    }
+                });
+
         return FinishSessionResponse.of(session, closingLines);
     }
 

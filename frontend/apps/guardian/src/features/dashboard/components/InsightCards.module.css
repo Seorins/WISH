@@ -198,10 +198,37 @@
 
 .scoreBody {
   display: grid;
-  grid-template-columns: 96px 1fr auto;
+  grid-template-columns: minmax(92px, auto) 1fr auto;
   align-items: center;
   gap: var(--dash-space-3);
   padding-top: 2px;
+}
+
+.timeMetric {
+  min-width: 92px;
+  min-height: 88px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: var(--dash-radius-md);
+  background: var(--dash-color-primary-50);
+  border: 1px solid var(--dash-color-primary-100);
+  text-align: center;
+}
+
+.timeMetric strong {
+  font-size: 21px;
+  font-weight: 800;
+  color: var(--dash-color-primary);
+  line-height: 1.1;
+}
+
+.timeMetric span {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--dash-color-text-muted);
 }
 
 .scoreCopy {
@@ -254,6 +281,33 @@
   transform: rotate(180deg);
 }
 
+.scoreStats {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 72px;
+}
+
+.scoreStats span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 7px 9px;
+  border-radius: var(--dash-radius-md);
+  background: var(--dash-color-surface-tint);
+  color: var(--dash-color-text-muted);
+  font-size: 10.5px;
+  font-weight: 700;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.scoreStats strong {
+  color: var(--dash-color-text-strong);
+  font-size: 16px;
+  line-height: 1;
+}
+
 .scoreStar {
   font-size: 32px;
   line-height: 1;
@@ -267,6 +321,26 @@
   flex: 1;
   min-height: 100px;
   margin: -4px -8px 0 -8px;
+}
+
+.trendEmpty {
+  height: 100%;
+  min-height: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--dash-color-text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.trendSummary {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--dash-color-text-muted);
+  font-size: 11.5px;
+  font-weight: 700;
 }
 
 /* ===== ROM Summary ===== */
@@ -338,13 +412,38 @@
   color: #2c9bbd;
 }
 
+.romEmpty {
+  min-height: 86px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed var(--dash-color-border-strong);
+  border-radius: var(--dash-radius-md);
+  color: var(--dash-color-text-muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+}
+
 @media (max-width: 768px) {
   .card {
     padding: var(--dash-space-4);
   }
   .scoreBody {
-    grid-template-columns: 80px 1fr auto;
+    grid-template-columns: minmax(82px, auto) 1fr;
     gap: var(--dash-space-3);
+  }
+  .timeMetric {
+    min-width: 82px;
+    min-height: 78px;
+  }
+  .timeMetric strong {
+    font-size: 18px;
+  }
+  .scoreStats {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .scoreTitle {
     font-size: 16px;

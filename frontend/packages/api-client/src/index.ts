@@ -15,6 +15,9 @@ export {
   getQuizRoom,
   joinQuizRoom,
   leaveQuizRoom,
+  startQuizRoom,
+  type PromptAssignment,
+  type QuizGameStartedResponse,
   type QuizMember,
   type QuizRoomSnapshot,
   type QuizRoomStatus,
@@ -82,6 +85,7 @@ export { createPatientProfile, listPatientProfiles } from './patient-profiles'
 export { endLoginSession, heartbeatLoginSession, startLoginSession } from './login-sessions'
 export {
   endContent,
+  getActiveLiveSession,
   requestGameLivekitToken,
   requestGuardianLivekitToken,
   startContent,
@@ -244,10 +248,14 @@ export type {
   FuelStatus,
 } from './fuel'
 export type {
+  GuardianDialogueChoiceTone,
+  GuardianDialogueChoiceValence,
   GuardianDialogueDailySummary,
   GuardianDialogueFinishReason,
   GuardianDialogueGeneratedBy,
   GuardianDialogueNpc,
+  GuardianDialogueSentimentTone,
+  GuardianDialogueSentimentWord,
   GuardianDialogueSessionDetail,
   GuardianDialogueSessionMeta,
   GuardianDialogueSessionStatus,
@@ -268,6 +276,7 @@ export type {
 export type { Gender, PatientProfile, PatientProfileCreateRequest } from './patient-profiles'
 export type { LoginSession, LoginSessionStartRequest } from './login-sessions'
 export type {
+  ActiveLiveSessionResponse,
   GamePresenceEvent,
   LiveKitTokenResponse,
   RealtimeContentType,

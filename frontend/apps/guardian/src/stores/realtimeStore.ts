@@ -1,5 +1,9 @@
 import { create } from 'zustand'
-import type { RealtimeContentType, RealtimeEvent } from '@wish/api-client'
+import type {
+  ActiveLiveSessionResponse,
+  RealtimeContentType,
+  RealtimeEvent,
+} from '@wish/api-client'
 
 // SSE 연결 상태.
 // - idle: 초기 상태(미인증)
@@ -25,6 +29,7 @@ type RealtimeState = {
   activeSession: ActiveLiveSession | null
   contentActive: boolean
   contentType: RealtimeContentType | null
+  sessionVersion: number
 
   // 토스트 레이어가 useEffect 로 구독하기 위한 transient 필드.
   // lastEventNonce 가 증가하면 새 이벤트가 들어온 것 — 같은 객체 비교가 아니라
@@ -34,6 +39,10 @@ type RealtimeState = {
 
   setConnectionStatus: (status: RealtimeConnectionStatus) => void
   applyEvent: (event: RealtimeEvent) => void
+  hydrateActiveSession: (
+    snapshot: ActiveLiveSessionResponse | null,
+    expectedSessionVersion?: number,
+  ) => void
   reset: () => void
 }
 
@@ -42,6 +51,7 @@ const INITIAL_STATE = {
   activeSession: null,
   contentActive: false,
   contentType: null,
+  sessionVersion: 0,
   lastEvent: null,
   lastEventNonce: 0,
 }
@@ -60,6 +70,7 @@ export const useRealtimeStore = create<RealtimeState>(set => ({
           // 페이로드 없음 — 연결 확인용. derived state 변경 없음.
           break
         case 'GAME_STARTED':
+          next.sessionVersion = state.sessionVersion + 1
           next.activeSession = {
             loginSessionId: event.loginSessionId,
             patientProfileId: event.patientProfileId,
@@ -71,6 +82,7 @@ export const useRealtimeStore = create<RealtimeState>(set => ({
         case 'GAME_ENDED':
           // 현재 활성 세션과 일치할 때만 비운다 (out-of-order 방지).
           if (state.activeSession?.loginSessionId === event.loginSessionId) {
+            next.sessionVersion = state.sessionVersion + 1
             next.activeSession = null
             next.contentActive = false
             next.contentType = null
@@ -78,18 +90,63 @@ export const useRealtimeStore = create<RealtimeState>(set => ({
           break
         case 'CONTENT_STARTED':
           if (state.activeSession?.loginSessionId === event.loginSessionId) {
+            next.sessionVersion = state.sessionVersion + 1
             next.contentActive = true
             next.contentType = event.contentType
           }
           break
         case 'CONTENT_ENDED':
           if (state.activeSession?.loginSessionId === event.loginSessionId) {
+            next.sessionVersion = state.sessionVersion + 1
             next.contentActive = false
             next.contentType = null
           }
           break
       }
       return next
+    }),
+  hydrateActiveSession: (snapshot, expectedSessionVersion) =>
+    set(state => {
+      if (expectedSessionVersion !== undefined && state.sessionVersion !== expectedSessionVersion) {
+        return {}
+      }
+
+      if (!snapshot) {
+        if (!state.activeSession && !state.contentActive && state.contentType === null) {
+          return {}
+        }
+        return {
+          activeSession: null,
+          contentActive: false,
+          contentType: null,
+          sessionVersion: state.sessionVersion + 1,
+        }
+      }
+
+      const activeSession = {
+        loginSessionId: snapshot.loginSessionId,
+        patientProfileId: snapshot.patientProfileId,
+        patientName: snapshot.patientName,
+      }
+      const currentSession = state.activeSession
+      const unchanged =
+        currentSession !== null &&
+        currentSession.loginSessionId === activeSession.loginSessionId &&
+        currentSession.patientProfileId === activeSession.patientProfileId &&
+        currentSession.patientName === activeSession.patientName &&
+        state.contentActive === snapshot.contentActive &&
+        state.contentType === snapshot.contentType
+
+      if (unchanged) {
+        return {}
+      }
+
+      return {
+        activeSession,
+        contentActive: snapshot.contentActive,
+        contentType: snapshot.contentType,
+        sessionVersion: state.sessionVersion + 1,
+      }
     }),
   reset: () => set({ ...INITIAL_STATE }),
 }))

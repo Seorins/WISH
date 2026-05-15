@@ -74,6 +74,12 @@ public class QuizPresenceInterceptor implements ChannelInterceptor {
         if (!isMember) {
             throw new MessagingException(message, "quiz presence: not a member of room " + roomId);
         }
+
+        // 세션 ↔ userId 매핑 등록 — disconnect 시 자동 leave 를 위함.
+        String sessionId = accessor.getSessionId();
+        if (sessionId != null) {
+            roomRegistry.bindSession(sessionId, principal.userId());
+        }
         return message;
     }
 }

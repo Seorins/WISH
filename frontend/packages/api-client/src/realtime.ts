@@ -70,6 +70,18 @@ export type GamePresenceEvent = {
   occurredAt: string
 }
 
+export type ActiveLiveSessionResponse = {
+  loginSessionId: number
+  patientProfileId: number
+  patientName: string
+  contentActive: boolean
+  contentType: RealtimeContentType | null
+}
+
+type OptionalDataApiResponse<T> = Omit<ApiResponse<T>, 'data'> & {
+  data?: T | null
+}
+
 const KNOWN_EVENT_TYPES: ReadonlySet<RealtimeEvent['type']> = new Set([
   'CONNECTED',
   'GAME_STARTED',
@@ -94,6 +106,18 @@ export async function requestGuardianLivekitToken(loginSessionId: number) {
     `/realtime/login-sessions/${loginSessionId}/guardian-token`,
   )
   return response.data
+}
+
+export async function getActiveLiveSession(options?: {
+  signal?: AbortSignal
+}): Promise<ActiveLiveSessionResponse | null> {
+  const response = await apiClient.get<OptionalDataApiResponse<ActiveLiveSessionResponse>>(
+    '/realtime/active-login-session',
+    {
+      signal: options?.signal,
+    },
+  )
+  return response.data.data ?? null
 }
 
 export async function startContent(loginSessionId: number, request: StartContentRequest) {

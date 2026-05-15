@@ -2,18 +2,17 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, XAxis, YAxis } from 'recharts'
 import { useMyPatientId } from '@/features/auth/hooks/useMyPatientId'
-import {
-  OVERALL_SCORE,
-  RANGE_OF_MOTION,
-  TREND,
-  TREND_RANGE_OPTIONS,
-  type RangeOfMotion,
-  type TrendRangeId,
-} from '../data/mock'
-import { useGymnasticsRangeSummary } from '../hooks'
-import { ArrowUpIcon, ChevronDownIcon, InfoIcon } from './icons'
-import { ScoreRing } from './ScoreRing'
+import { useGymnasticsDashboardSummary, useGymnasticsRangeSummary } from '../hooks'
+import { ChevronDownIcon, InfoIcon } from './icons'
 import styles from './InsightCards.module.css'
+
+const TREND_RANGE_OPTIONS = [
+  { id: 7, label: '최근 7일' },
+  { id: 14, label: '최근 14일' },
+  { id: 30, label: '최근 30일' },
+] as const
+
+type TrendRangeId = (typeof TREND_RANGE_OPTIONS)[number]['id']
 
 function CardTitle({ children, tip }: { children: React.ReactNode; tip?: string }) {
   return (
@@ -31,86 +30,104 @@ function CardTitle({ children, tip }: { children: React.ReactNode; tip?: string 
   )
 }
 
+function formatDurationSec(seconds: number): string {
+  const safeSeconds = Math.max(0, Math.round(seconds))
+  if (safeSeconds < 60) return `${safeSeconds}초`
+
+  const minutes = Math.floor(safeSeconds / 60)
+  const remainingSeconds = safeSeconds % 60
+  if (minutes < 60) {
+    return remainingSeconds === 0 ? `${minutes}분` : `${minutes}분 ${remainingSeconds}초`
+  }
+
+  const hours = Math.floor(minutes / 60)
+  const remainingMinutes = minutes % 60
+  return remainingMinutes === 0 ? `${hours}시간` : `${hours}시간 ${remainingMinutes}분`
+}
+
+function buildMinuteDomain(values: number[]): { domain: [number, number]; ticks: number[] } {
+  const max = Math.max(0, ...values)
+  const upper = max <= 0 ? 10 : Math.max(5, Math.ceil((max * 1.2) / 5) * 5)
+  const step = upper / 4
+  const ticks = [0, 1, 2, 3, 4].map(index => Math.round(step * index))
+  return { domain: [0, upper], ticks }
+}
+
 export function OverallScoreCard() {
   const { data: patientId } = useMyPatientId()
-  const { data: rangeSummary } = useGymnasticsRangeSummary(patientId)
-  const scoreSummary = rangeSummary?.scoreAvailable ? rangeSummary : null
-  const currentScore = scoreSummary ? scoreSummary.averagePercent : OVERALL_SCORE.current
-  const delta = scoreSummary ? scoreSummary.averageDeltaPercent : OVERALL_SCORE.delta
-  const title =
-    scoreSummary && delta !== null && delta < 0
-      ? '조금 쉬어갔어요'
-      : scoreSummary && delta !== null && delta === 0
-        ? '비슷하게 해냈어요'
-        : OVERALL_SCORE.title
-  const subtitle = scoreSummary
-    ? delta === null
-      ? '첫 체조 기록이에요.'
-      : delta >= 0
-        ? '지난 번보다\n더 잘하고 있어요.'
-        : '지난 번보다\n조금 낮아졌어요.'
-    : OVERALL_SCORE.subtitle
+  const { data: summary, isError, isLoading } = useGymnasticsDashboardSummary(patientId, 7)
+  const todaySeconds = summary?.todayGymSeconds ?? 0
+  const completedMotionCount = summary?.todayCompletedMotionCount ?? 0
+  const latestSession = summary?.latestSession ?? null
+  const usageUnavailable = isError || summary?.usageStatsAvailable === false
+  const sessionsUnavailable = isError || summary?.sessionStatsAvailable === false
+
+  const title = isError
+    ? '체조 기록을 불러오지 못했어요'
+    : latestSession
+      ? `${latestSession.exerciseTypeLabel} ${latestSession.completedMotionCount}개 동작 완료`
+      : todaySeconds > 0
+        ? '오늘 체조 활동이 기록됐어요'
+        : '오늘 체조 기록이 없어요'
+  const subtitle = isError
+    ? '네트워크 상태를 확인한 뒤 다시 시도해 주세요.'
+    : sessionsUnavailable
+      ? '세션 기록을 불러오지 못해 사용 시간만 표시합니다.'
+      : latestSession
+        ? `최근 세션 ${formatDurationSec(latestSession.durationSec)} · ${latestSession.shortDate}`
+        : isLoading
+          ? '기록을 확인하는 중입니다.'
+          : '체조방에서 활동하면 이 영역에 실제 기록이 표시됩니다.'
 
   return (
     <article className={styles.card}>
       <header className={styles.cardHead}>
-        <CardTitle tip="오늘 수행한 모든 동작의 가중 평균 점수입니다. 자세 정확도, 관절 각도 도달률, 박자 일치도를 합산해 100점 만점으로 환산했어요.">
-          전체 동작 점수
+        <CardTitle tip="사용량 통계와 체조 세션 기록을 기준으로 오늘의 체조 활동을 보여줍니다. 정확도 점수처럼 신뢰도가 낮은 값은 제외했습니다.">
+          오늘 체조 활동
         </CardTitle>
       </header>
       <div className={styles.scoreBody}>
-        <ScoreRing
-          value={currentScore}
-          size={90}
-          strokeWidth={8}
-          fontSize={26}
-          gradientFrom="#6ddec0"
-          gradientTo="#34c99c"
-        />
+        <div className={styles.timeMetric}>
+          <strong>
+            {isLoading ? '...' : usageUnavailable ? '--' : formatDurationSec(todaySeconds)}
+          </strong>
+          <span>오늘 사용 시간</span>
+        </div>
         <div className={styles.scoreCopy}>
           <span className={styles.scoreTitle}>{title}</span>
           <span className={styles.scoreSubtitle}>{subtitle}</span>
-          {delta !== null && (
-            <span className={`${styles.scoreDelta} ${delta < 0 ? styles.scoreDeltaDown : ''}`}>
-              <ArrowUpIcon className={styles.scoreDeltaIcon} />
-              {delta > 0 ? `+${delta}` : delta}점
-            </span>
-          )}
         </div>
-        <span className={styles.scoreStar} aria-hidden>
-          ⭐
-        </span>
+        <div className={styles.scoreStats} aria-label="오늘 체조 요약">
+          <span>
+            <strong>{sessionsUnavailable ? '-' : completedMotionCount}</strong>
+            완료 동작
+          </span>
+          <span>
+            <strong>{sessionsUnavailable ? '-' : (summary?.todaySessionCount ?? 0)}</strong>
+            세션
+          </span>
+        </div>
       </div>
     </article>
   )
 }
 
-function buildYDomain(values: number[]): { domain: [number, number]; ticks: number[] } {
-  if (values.length === 0) return { domain: [0, 100], ticks: [0, 25, 50, 75, 100] }
-  const min = Math.min(...values)
-  const max = Math.max(...values)
-  const lower = Math.max(0, Math.floor((min - 5) / 10) * 10)
-  const upper = Math.min(100, Math.ceil((max + 5) / 10) * 10)
-  const span = upper - lower
-  const step = span / 4
-  const ticks = [0, 1, 2, 3, 4].map(i => Math.round(lower + step * i))
-  return { domain: [lower, upper], ticks }
-}
-
 export function TrendChartCard() {
-  const [rangeId, setRangeId] = useState<TrendRangeId>(6)
+  const { data: patientId } = useMyPatientId()
+  const [rangeId, setRangeId] = useState<TrendRangeId>(7)
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
+  const { data: summary, isError, isLoading } = useGymnasticsDashboardSummary(patientId, rangeId)
 
   useEffect(() => {
     if (!menuOpen) return
-    const onClick = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+    const onClick = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         setMenuOpen(false)
       }
     }
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setMenuOpen(false)
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMenuOpen(false)
     }
     document.addEventListener('click', onClick)
     document.addEventListener('keydown', onKey)
@@ -120,43 +137,44 @@ export function TrendChartCard() {
     }
   }, [menuOpen])
 
-  const currentRange = TREND_RANGE_OPTIONS.find(r => r.id === rangeId) ?? TREND_RANGE_OPTIONS[0]
-  const data = TREND.slice(-rangeId)
-  const { domain, ticks } = buildYDomain(data.map(t => t.score))
+  const currentRange = TREND_RANGE_OPTIONS.find(option => option.id === rangeId)
+  const data = summary?.trend ?? []
+  const { domain, ticks } = buildMinuteDomain(data.map(point => point.minutes))
+  const usageUnavailable = isError || summary?.usageStatsAvailable === false
 
   return (
     <article className={`${styles.card} ${styles.cardFlex}`}>
       <header className={styles.cardHead}>
-        <CardTitle tip="최근 세션들의 전체 동작 점수를 시간 순으로 보여줍니다. 선이 우상향일수록 꾸준히 좋아지고 있다는 뜻이에요.">
-          동작 추세
+        <CardTitle tip="일별 체조 사용 시간을 분 단위로 보여줍니다. 세션 점수가 아니라 실제 활동 시간 기준입니다.">
+          최근 체조 시간
         </CardTitle>
         <div className={styles.rangeWrap} ref={menuRef}>
           <button
             type="button"
             className={styles.cardAction}
-            onClick={() => setMenuOpen(o => !o)}
+            onClick={() => setMenuOpen(open => !open)}
             aria-haspopup="menu"
             aria-expanded={menuOpen}
           >
-            {currentRange.label}
+            {currentRange?.label ?? '최근 7일'}
             <ChevronDownIcon
               className={`${styles.cardActionChev} ${menuOpen ? styles.cardActionChevOpen : ''}`}
             />
           </button>
           {menuOpen && (
             <div className={styles.rangeMenu} role="menu">
-              {TREND_RANGE_OPTIONS.map(opt => (
+              {TREND_RANGE_OPTIONS.map(option => (
                 <button
-                  key={opt.id}
+                  key={option.id}
                   type="button"
                   role="menuitem"
-                  className={`${styles.rangeItem} ${opt.id === rangeId ? styles.rangeItemActive : ''}`}
+                  className={`${styles.rangeItem} ${option.id === rangeId ? styles.rangeItemActive : ''}`}
                   onClick={() => {
-                    setRangeId(opt.id)
+                    setRangeId(option.id)
                     setMenuOpen(false)
                   }}
                 >
-                  {opt.label}
+                  {option.label}
                 </button>
               ))}
             </div>
@@ -164,100 +182,142 @@ export function TrendChartCard() {
         </div>
       </header>
       <div className={styles.trendBody}>
-        <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={data} margin={{ top: 8, right: 12, left: -8, bottom: 4 }}>
-            <defs>
-              <linearGradient id="trend-line" x1="0" y1="0" x2="1" y2="0">
-                <stop offset="0%" stopColor="#a892ff" />
-                <stop offset="100%" stopColor="#7c5cff" />
-              </linearGradient>
-              <linearGradient id="trend-area" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#a892ff" stopOpacity={0.35} />
-                <stop offset="100%" stopColor="#a892ff" stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid stroke="#ECE9F5" vertical={false} />
-            <XAxis
-              dataKey="date"
-              tick={{ fontSize: 10.5, fill: '#b6b4c8' }}
-              tickLine={false}
-              axisLine={false}
-              padding={{ left: 8, right: 8 }}
-              interval={data.length > 12 ? Math.ceil(data.length / 6) - 1 : 0}
-            />
-            <YAxis
-              ticks={ticks}
-              domain={domain}
-              tick={{ fontSize: 10.5, fill: '#b6b4c8' }}
-              tickLine={false}
-              axisLine={false}
-              width={28}
-            />
-            <Area
-              type="linear"
-              dataKey="score"
-              stroke="url(#trend-line)"
-              strokeWidth={2.5}
-              fill="url(#trend-area)"
-              dot={(props: { cx?: number; cy?: number; index?: number; key?: string | number }) => {
-                const { cx = 0, cy = 0, index = 0, key } = props
-                const isLast = index === data.length - 1
-                const showDot = data.length <= 12 || isLast
-                if (!showDot) {
-                  return <circle key={key ?? `trend-dot-${index}`} cx={cx} cy={cy} r={0} />
-                }
-                return (
-                  <circle
-                    key={key ?? `trend-dot-${index}`}
-                    cx={cx}
-                    cy={cy}
-                    r={isLast ? 5.5 : 3}
-                    fill={isLast ? '#7c5cff' : '#fff'}
-                    stroke={isLast ? '#fff' : '#7c5cff'}
-                    strokeWidth={isLast ? 2.5 : 2}
-                  />
-                )
-              }}
-              activeDot={{ r: 6, fill: '#7c5cff', stroke: '#fff', strokeWidth: 2.5 }}
-            />
-          </AreaChart>
-        </ResponsiveContainer>
+        {usageUnavailable ? (
+          <div className={styles.trendEmpty}>체조 시간 기록을 불러오지 못했습니다.</div>
+        ) : data.length === 0 ? (
+          <div className={styles.trendEmpty}>
+            {isLoading ? '기록을 불러오는 중입니다.' : '표시할 체조 기록이 없습니다.'}
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={data} margin={{ top: 8, right: 12, left: -8, bottom: 4 }}>
+              <defs>
+                <linearGradient id="gymnastics-time-line" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stopColor="#6ddec0" />
+                  <stop offset="100%" stopColor="#7c5cff" />
+                </linearGradient>
+                <linearGradient id="gymnastics-time-area" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#7c5cff" stopOpacity={0.28} />
+                  <stop offset="100%" stopColor="#7c5cff" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid stroke="#ECE9F5" vertical={false} />
+              <XAxis
+                dataKey="label"
+                tick={{ fontSize: 10.5, fill: '#b6b4c8' }}
+                tickLine={false}
+                axisLine={false}
+                padding={{ left: 8, right: 8 }}
+                interval={data.length > 12 ? Math.ceil(data.length / 6) - 1 : 0}
+              />
+              <YAxis
+                ticks={ticks}
+                domain={domain}
+                tick={{ fontSize: 10.5, fill: '#b6b4c8' }}
+                tickLine={false}
+                axisLine={false}
+                width={28}
+              />
+              <Area
+                type="linear"
+                dataKey="minutes"
+                stroke="url(#gymnastics-time-line)"
+                strokeWidth={2.5}
+                fill="url(#gymnastics-time-area)"
+                dot={(props: {
+                  cx?: number
+                  cy?: number
+                  index?: number
+                  key?: string | number
+                }) => {
+                  const { cx = 0, cy = 0, index = 0, key } = props
+                  const isLast = index === data.length - 1
+                  const showDot = data.length <= 14 || isLast
+                  if (!showDot) {
+                    return (
+                      <circle key={key ?? `gymnastics-time-dot-${index}`} cx={cx} cy={cy} r={0} />
+                    )
+                  }
+                  return (
+                    <circle
+                      key={key ?? `gymnastics-time-dot-${index}`}
+                      cx={cx}
+                      cy={cy}
+                      r={isLast ? 5.5 : 3}
+                      fill={isLast ? '#7c5cff' : '#fff'}
+                      stroke={isLast ? '#fff' : '#7c5cff'}
+                      strokeWidth={isLast ? 2.5 : 2}
+                    />
+                  )
+                }}
+                activeDot={{ r: 6, fill: '#7c5cff', stroke: '#fff', strokeWidth: 2.5 }}
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        )}
+      </div>
+      <div className={styles.trendSummary}>
+        <span>
+          {usageUnavailable
+            ? '사용 시간 확인 필요'
+            : `총 ${formatDurationSec(summary?.periodGymSeconds ?? 0)}`}
+        </span>
+        <span>{usageUnavailable ? '-' : (summary?.activeDays ?? 0)}일 참여</span>
       </div>
     </article>
   )
 }
 
-const ROM_TONE_CLASS: Record<RangeOfMotion['tone'], { cell: string; rating: string }> = {
-  mint: { cell: styles.romCellMint, rating: styles.romRatingMint },
-  lavender: { cell: styles.romCellLavender, rating: styles.romRatingLavender },
-  pink: { cell: styles.romCellPink, rating: styles.romRatingPink },
-  cyan: { cell: styles.romCellCyan, rating: styles.romRatingCyan },
-}
+const ROM_TONE_CLASSES = [
+  { cell: styles.romCellMint, rating: styles.romRatingMint },
+  { cell: styles.romCellLavender, rating: styles.romRatingLavender },
+  { cell: styles.romCellPink, rating: styles.romRatingPink },
+  { cell: styles.romCellCyan, rating: styles.romRatingCyan },
+] as const
+
+const ROM_STATUS_LABEL = {
+  new: '신규 기록',
+  improved: '이전보다 증가',
+  steady: '비슷함',
+  lower: '이전보다 감소',
+} as const
 
 export function ROMSummaryCard() {
   const navigate = useNavigate()
+  const { data: patientId } = useMyPatientId()
+  const { data: rangeSummary, isLoading } = useGymnasticsRangeSummary(patientId)
+  const items = rangeSummary?.items.slice(0, 4) ?? []
+
   return (
     <article className={styles.card}>
       <header className={styles.cardHead}>
-        <CardTitle tip="동작 중 각 관절이 도달한 최대 각도를 정상 가동 범위(ROM) 기준으로 환산한 비율입니다. 80% 이상 좋음, 90% 이상이면 우수예요.">
-          관절 가동 범위
+        <CardTitle tip="최근 체조 세션에서 확인된 동작별 수행 범위입니다. 의료적 관절 가동 범위가 아니라 운동 중 움직임 기록으로 봐야 합니다.">
+          운동 중 움직임 범위
         </CardTitle>
         <button type="button" className={styles.cardAction} onClick={() => navigate('/rom')}>
           상세 보기
         </button>
       </header>
-      <div className={styles.romGrid}>
-        {RANGE_OF_MOTION.map(item => {
-          const tone = ROM_TONE_CLASS[item.tone]
-          return (
-            <div key={item.joint} className={`${styles.romCell} ${tone.cell}`}>
-              <span className={styles.romJoint}>{item.joint}</span>
-              <span className={styles.romPercent}>{item.percent}%</span>
-              <span className={`${styles.romRating} ${tone.rating}`}>{item.rating}</span>
-            </div>
-          )
-        })}
-      </div>
+      {items.length === 0 ? (
+        <div className={styles.romEmpty}>
+          {isLoading ? '움직임 기록을 불러오는 중입니다.' : '최근 체조 세션이 생기면 표시됩니다.'}
+        </div>
+      ) : (
+        <div className={styles.romGrid}>
+          {items.map((item, index) => {
+            const tone = ROM_TONE_CLASSES[index % ROM_TONE_CLASSES.length]
+            const value = item.scoreAvailable ? `${item.currentPercent}%` : item.progressLabel
+            const rating = item.scoreAvailable ? ROM_STATUS_LABEL[item.status] : '세션 기록'
+            return (
+              <div key={item.motionResultId} className={`${styles.romCell} ${tone.cell}`}>
+                <span className={styles.romJoint}>{item.motionName}</span>
+                <span className={styles.romPercent}>{value}</span>
+                <span className={`${styles.romRating} ${tone.rating}`}>{rating}</span>
+              </div>
+            )
+          })}
+        </div>
+      )}
     </article>
   )
 }

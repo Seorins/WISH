@@ -36,15 +36,19 @@ class QuizRoomServiceTest {
     private PatientProfileService patientProfileService;
     private QuizBroadcastService broadcastService;
     private QuizRoomRegistry registry;
+    private QuizPromptCatalog promptCatalog;
     private QuizRoomService service;
 
     @BeforeEach
     void setUp() {
         patientProfileService = mock(PatientProfileService.class);
         broadcastService = mock(QuizBroadcastService.class);
+        promptCatalog = new QuizPromptCatalog();
         QuizRealtimeProperties properties = new QuizRealtimeProperties(true, MIN, MAX, 90, 60);
         registry = new QuizRoomRegistry(properties);
-        service = new QuizRoomService(registry, broadcastService, patientProfileService);
+        service =
+                new QuizRoomService(
+                        registry, broadcastService, patientProfileService, promptCatalog);
     }
 
     @Test
@@ -166,6 +170,80 @@ class QuizRoomServiceTest {
         // 멤버 아닌 사용자가 호출해도 예외/broadcast 없이 조용히 지나간다.
         service.leave(999L);
         verify(broadcastService, never()).broadcastEvent(anyString(), any());
+    }
+
+    @Test
+    void startGameByHostTransitionsToPlayingAndBroadcastsAndReturnsPrompt() {
+        stubProfile(1L, 100L, "h");
+        stubProfile(2L, 101L, "g");
+        QuizRoomSnapshot host = service.createRoom(1L);
+        service.joinByCode(2L, host.code());
+
+        com.comong.backend.domain.quiz.dto.QuizGameStartedResponse response =
+                service.startGame(1L, host.roomId());
+
+        assertThat(response.snapshot().status())
+                .isEqualTo(com.comong.backend.domain.quiz.service.QuizRoomStatus.PLAYING);
+        assertThat(response.snapshot().roundNumber()).isEqualTo(1);
+        // 출제자는 joinOrder 0 인 host (= round 1 → index 0).
+        assertThat(response.snapshot().currentDrawerUserId()).isEqualTo(1L);
+        // 호출자가 호스트이므로 제시어 동봉.
+        assertThat(response.prompt()).isNotNull();
+        assertThat(response.prompt().roundNumber()).isEqualTo(1);
+        assertThat(response.prompt().word()).isNotBlank();
+
+        // round_started 토픽 broadcast 1회 (제시어는 비포함).
+        verify(broadcastService, times(1))
+                .broadcastEvent(
+                        eq(host.roomId()),
+                        org.mockito.ArgumentMatchers.argThat(
+                                ev ->
+                                        ev != null
+                                                && "round_started".equals(ev.type())
+                                                && ev.roundNumber() == 1
+                                                && ev.currentDrawerUserId() == 1L));
+        // user queue 로 제시어를 push 하지 않음 — REST 응답에 동봉되므로.
+        verify(broadcastService, never()).sendPromptToUser(anyString(), anyString(), any());
+    }
+
+    @Test
+    void startGameByNonHostIsRejected() {
+        stubProfile(1L, 100L, "h");
+        stubProfile(2L, 101L, "g");
+        QuizRoomSnapshot host = service.createRoom(1L);
+        service.joinByCode(2L, host.code());
+
+        assertThatThrownBy(() -> service.startGame(2L, host.roomId()))
+                .isInstanceOf(
+                        com.comong.backend.domain.quiz.exception.QuizNotRoomHostException.class);
+    }
+
+    @Test
+    void startGameWithBelowMinPlayersIsRejected() {
+        stubProfile(1L, 100L, "h");
+        QuizRoomSnapshot host = service.createRoom(1L);
+
+        assertThatThrownBy(() -> service.startGame(1L, host.roomId()))
+                .isInstanceOf(
+                        com.comong.backend.domain.quiz.exception.QuizRoomNotReadyToStartException
+                                .class);
+    }
+
+    @Test
+    void startGameAdvancesDrawerOnSubsequentRounds() {
+        stubProfile(1L, 100L, "h");
+        stubProfile(2L, 101L, "g");
+        QuizRoomSnapshot host = service.createRoom(1L);
+        service.joinByCode(2L, host.code());
+
+        com.comong.backend.domain.quiz.dto.QuizGameStartedResponse r1 =
+                service.startGame(1L, host.roomId());
+        com.comong.backend.domain.quiz.dto.QuizGameStartedResponse r2 =
+                service.startGame(1L, host.roomId());
+
+        assertThat(r1.snapshot().currentDrawerUserId()).isEqualTo(1L);
+        assertThat(r2.snapshot().currentDrawerUserId()).isEqualTo(2L);
+        assertThat(r2.snapshot().roundNumber()).isEqualTo(2);
     }
 
     private void stubProfile(long userId, long profileId, String nickname) {
