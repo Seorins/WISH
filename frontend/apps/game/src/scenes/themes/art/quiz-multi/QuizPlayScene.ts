@@ -14,19 +14,30 @@ import { addCoverBackground } from '@/game/world/background'
 const FONT_FAMILY =
   '"Pretendard Variable", Pretendard, "Noto Sans KR", -apple-system, BlinkMacSystemFont, sans-serif'
 
-const PANEL_BG = 0x222c42
-const PANEL_BORDER = 0x51607a
+// 톤: 어두운 네이비 → 밝은 미드네이비로 통일. 캔버스 우드 프레임(BOARD_FRAME) 과 어우러지게.
+const PANEL_BG = 0x445d83
+const PANEL_BORDER = 0x91a5c4
 const CANVAS_BG = 0xfdfdfb
 const CANVAS_BORDER = 0x8a5a2f
 const BOARD_FRAME = 0xd7a158
 const BOARD_FRAME_DARK = 0x8f592a
 const PAPER_SHADOW = 0xcbbda5
-const SLOT_BG = 0x2a3850
+const SLOT_BG = 0x5b7398
 const SLOT_BG_ACTIVE = 0xf4b35f
-const SLOT_BG_EMPTY = 0x1b2435
-const TOOLBAR_BG = 0x1d2538
+const SLOT_BG_EMPTY = 0x435a7d
+const TOOLBAR_BG = 0x3d557d
 const CHIP_BG = 0xffe9c2
 const STROKE_THROTTLE_MS = 60
+
+/**
+ * 플레이어 슬롯 아바타로 쓸 동물 이모지 — joinOrder 기준 순환. 닉네임 첫 글자보다 시각적으로 친근하고 캐릭터 느낌.
+ */
+const SLOT_AVATARS = ['🦊', '🐻', '🐼', '🐰']
+
+function slotAvatar(joinOrder: number): string {
+  if (joinOrder < 0) return SLOT_AVATARS[0]
+  return SLOT_AVATARS[joinOrder % SLOT_AVATARS.length]
+}
 
 const BRUSH_COLORS = [
   { label: '빨강', color: '#ff4d4d', value: 0xff4d4d },
@@ -365,25 +376,23 @@ export class QuizPlayScene extends Phaser.Scene {
       return
     }
 
-    const initial = (member.nickname || '?').slice(0, 1)
-    const avatarSize = Math.min(58, w * 0.42)
-    const avatarY = y + Math.max(46, h * 0.32)
+    // 닉네임 첫 글자 → 동물 이모지 아바타 (joinOrder 기준 순환).
+    const avatarSize = Math.min(64, w * 0.46)
+    const avatarY = y + Math.max(48, h * 0.32)
     const avatar = this.add.circle(
       x + w / 2,
       avatarY,
       avatarSize / 2,
-      isDrawer ? 0xffe3a3 : 0x121a2b,
+      isDrawer ? 0xfff2cc : 0xeaf0ff,
       1,
     )
-    avatar.setStrokeStyle(3, isDrawer ? 0x7b461a : 0xffe9c2, 1)
+    avatar.setStrokeStyle(3, isDrawer ? 0x7b461a : 0x91a5c4, 1)
     container.add(avatar)
     container.add(
       this.add
-        .text(x + w / 2, avatarY - 1, initial, {
+        .text(x + w / 2, avatarY, slotAvatar(member.joinOrder), {
           fontFamily: FONT_FAMILY,
-          fontSize: `${Math.floor(avatarSize * 0.52)}px`,
-          color: isDrawer ? '#3a2614' : '#ffe9c2',
-          fontStyle: 'bold',
+          fontSize: `${Math.floor(avatarSize * 0.72)}px`,
         })
         .setOrigin(0.5),
     )
@@ -501,23 +510,6 @@ export class QuizPlayScene extends Phaser.Scene {
     this.drawingGraphics = this.add.graphics()
     container.add(this.drawingGraphics)
     this.redrawStrokes()
-
-    if (this.strokes.length === 0 && !this.roundEnded) {
-      const hint = this.add
-        .text(
-          paperX + paperW / 2,
-          paperY + paperH / 2,
-          this.isDrawer() ? '드래그해서 그림을 그려요' : '출제자의 그림이 여기 나타나요',
-          {
-            fontFamily: FONT_FAMILY,
-            fontSize: '18px',
-            color: '#b5bdca',
-            align: 'center',
-          },
-        )
-        .setOrigin(0.5)
-      container.add(hint)
-    }
   }
 
   private drawBottomBar(
@@ -555,16 +547,6 @@ export class QuizPlayScene extends Phaser.Scene {
   ) {
     const cy = y + h / 2 + 6
     let cx = x
-    container.add(
-      this.add
-        .text(x, y + 20, '그리기 도구', {
-          fontFamily: FONT_FAMILY,
-          fontSize: '15px',
-          color: '#ffe9c2',
-          fontStyle: 'bold',
-        })
-        .setOrigin(0, 0.5),
-    )
     const size = Math.min(46, h * 0.34)
     BRUSH_COLORS.forEach(option => {
       const selected = this.selectedTool === 'brush' && this.brushColor === option.color
@@ -596,15 +578,6 @@ export class QuizPlayScene extends Phaser.Scene {
     )
     container.add(
       this.createToolButton(cx + 164, cy, 112, 48, '전체 삭제', false, () => this.clearCanvas()),
-    )
-    container.add(
-      this.add
-        .text(x, y + h - 24, '크게, 단순하게 그리면 정답자가 더 빨리 맞혀요.', {
-          fontFamily: FONT_FAMILY,
-          fontSize: '13px',
-          color: '#9da8be',
-        })
-        .setOrigin(0, 0.5),
     )
   }
 
