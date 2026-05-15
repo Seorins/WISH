@@ -169,14 +169,13 @@ export function ChatPage() {
       ? undefined
       : SESSION_META.durationLabel
 
-  // 추천 후속 활동: BE daily summary 의 recommendedActivity. 인증 + 데이터 있을 때만 정식, 그 외는 데모 mock.
-  // EmotionPanel 우측 패널에서 자체 카드로 렌더 — ConversationMain (좌측) 에서는 더 이상 표시하지 않는다.
+  // 추천 후속 활동: BE daily summary 우선. 없으면 mock (인증 안 된 데모 케이스 한정).
+  // 좌측 ConversationMain 의 '추천 후속 활동' 카드에 노출.
   const recommendedActivity = hasDailyData
-    ? dailySummary!.recommendedActivity // null 이면 카드 자체 숨김
+    ? (dailySummary!.recommendedActivity ?? '오늘은 아직 추천할 활동이 없어요.')
     : SUMMARY.recommendedActivity
+  const summary: ConversationSummary = { ...SUMMARY, topics, recommendedActivity }
   const recommendedActivitySample = !hasDailyData
-  // ConversationMain 의 summary 는 topics 만 사용 — recommendedActivity 는 더 이상 박지 않음.
-  const summary: ConversationSummary = { ...SUMMARY, topics, recommendedActivity: '' }
 
   const handleSelectCharacter = (id: string) => {
     setSelectedId(id)
@@ -207,6 +206,7 @@ export function ChatPage() {
             partnerImageOffsetX={selected.chatImageOffsetX}
             partnerImageOffsetY={selected.chatImageOffsetY}
             topicsSample={topicsSample}
+            recommendedActivitySample={recommendedActivitySample}
             emptyState={isEmptyForLoggedIn}
             onOpenPast={() => setPastOpen(true)}
             isViewingPast={!!pickedSessionId}
@@ -220,12 +220,10 @@ export function ChatPage() {
             trend={trend}
             signals={signals}
             summaryText={hasDailyData ? (dailySummary?.summaryText ?? null) : null}
-            recommendedActivity={recommendedActivity}
             npcsVisited={hasDailyData ? (dailySummary?.npcsVisited ?? null) : null}
             summarySample={summarySample}
             trendSample={trendSample}
             signalsSample={signalsSample}
-            recommendedActivitySample={recommendedActivitySample}
           />
         }
       />

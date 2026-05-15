@@ -30,12 +30,13 @@ import lombok.RequiredArgsConstructor;
  * 오늘 {NPC}와 {topic} 이야기를 나눴어요.
  * 아이는 "{key_choice}"라고 말했고,
  * {protective_label} 모습을 보였어요.
+ * 함께 해볼 수 있는 활동: {ending_advice}.
  * </pre>
  *
  * <p>비어있는 슬롯은 라인 자체를 생략한다 (어색함 회피).
  *
- * <p>추천 후속 활동 (endingType 기반) 은 본문에 박지 않고 {@link #resolveRecommendedActivity} 로 별도 제공한다 — FE 가 카드로
- * 독립 렌더해서 "함께 해볼 수 있는 활동: …" 같은 라벨 어색함 회피.
+ * <p>추천 후속 활동은 본문에 박는 동시에 {@link #resolveRecommendedActivity} 로도 별도 노출한다 — 보호자 화면의 좌측 (대화 요약 카드) 와
+ * 우측 (정성 관찰 카드) 양쪽에서 일관된 문구를 활용할 수 있도록.
  */
 @Component
 @RequiredArgsConstructor
@@ -53,6 +54,7 @@ public class DialogueSummaryComposer {
         String topic = scriptTitle(session).orElse(null);
         String keyChoice = pickKeyChoiceText(turns).orElse(null);
         String protectiveLabel = pickStrongestProtectiveLabel(turns).orElse(null);
+        ChoiceEndingType endingType = resolveEndingType(turns).orElse(null);
 
         StringBuilder sb = new StringBuilder();
         sb.append("오늘 ").append(npc);
@@ -67,6 +69,7 @@ public class DialogueSummaryComposer {
         if (protectiveLabel != null && !protectiveLabel.isBlank()) {
             sb.append('\n').append(protectiveLabel).append(" 모습을 보였어요.");
         }
+        sb.append('\n').append("함께 해볼 수 있는 활동: ").append(EndingAdvice.adviceOf(endingType));
         return sb.toString();
     }
 
@@ -84,6 +87,7 @@ public class DialogueSummaryComposer {
         Set<String> npcNames = new LinkedHashSet<>();
         Set<String> topics = new LinkedHashSet<>();
         Map<String, Integer> protectiveCount = new HashMap<>();
+        ChoiceEndingType heaviestEnding = null;
 
         for (DialogueSession s : sessions) {
             npcNames.add(npcDisplayName(s));
@@ -95,6 +99,8 @@ public class DialogueSummaryComposer {
                     protectiveCount.merge(f, 1, Integer::sum);
                 }
             }
+            ChoiceEndingType e = resolveEndingType(turns).orElse(null);
+            heaviestEnding = pickHeavier(heaviestEnding, e);
         }
 
         StringBuilder sb = new StringBuilder();
@@ -104,6 +110,7 @@ public class DialogueSummaryComposer {
         }
         Optional<String> topProtective = topProtectiveLabel(protectiveCount);
         topProtective.ifPresent(p -> sb.append('\n').append(p).append(" 모습을 보였어요."));
+        sb.append('\n').append("함께 해볼 수 있는 활동: ").append(EndingAdvice.adviceOf(heaviestEnding));
         return sb.toString();
     }
 
