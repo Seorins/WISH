@@ -176,6 +176,6 @@ describe('GomokuOverlay online room creation', () => {
     fireEvent.click(screen.getByRole('button', { name: RANKING_LABEL }))
 
     expect(await screen.findByText('ranker')).toBeTruthy()
-    expect(screen.getByText('80%')).toBeTruthy()
+    expect(screen.getByText('4승')).toBeTruthy()
   })
 })

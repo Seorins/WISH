@@ -1143,7 +1143,7 @@ function OnlinePanel({
                   <li key={entry.patientProfileId} className={entry.isMe ? 'me' : ''}>
                     <span>{entry.rank}</span>
                     <strong>{entry.nickname}</strong>
-                    <em>{formatPercent(entry.winRate)}</em>
+                    <em>{`${entry.wins}${text.wins}`}</em>
                   </li>
                 ))}
               </ol>

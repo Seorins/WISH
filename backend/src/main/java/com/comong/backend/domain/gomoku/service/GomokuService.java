@@ -408,7 +408,7 @@ public class GomokuService {
                 if (hasOpenThree(board, row, col, stone, direction)) {
                     openThrees += 1;
                 }
-                if (hasOpenContiguousLine(board, row, col, stone, direction, 4, 1)) {
+                if (hasFourThreat(board, row, col, stone, direction)) {
                     fours += 1;
                 }
             }
@@ -462,37 +462,9 @@ public class GomokuService {
         return positions;
     }
 
-    private boolean hasOpenContiguousLine(
-            GomokuStone[][] board,
-            int row,
-            int col,
-            GomokuStone stone,
-            Direction direction,
-            int targetLength,
-            int requiredOpenEnds) {
-        List<Position> forward =
-                collectDirection(board, row, col, stone, direction.dRow(), direction.dCol());
-        List<Position> backward =
-                collectDirection(board, row, col, stone, -direction.dRow(), -direction.dCol());
-        int lineLength = forward.size() + backward.size() + 1;
-        if (lineLength != targetLength) {
-            return false;
-        }
-        int beforeRow = row - direction.dRow() * (backward.size() + 1);
-        int beforeCol = col - direction.dCol() * (backward.size() + 1);
-        int afterRow = row + direction.dRow() * (forward.size() + 1);
-        int afterCol = col + direction.dCol() * (forward.size() + 1);
-        int openEnds =
-                (isInside(beforeRow, beforeCol) && board[beforeRow][beforeCol] == null ? 1 : 0)
-                        + (isInside(afterRow, afterCol) && board[afterRow][afterCol] == null
-                                ? 1
-                                : 0);
-        return openEnds >= requiredOpenEnds;
-    }
-
     private boolean hasOpenThree(
             GomokuStone[][] board, int row, int col, GomokuStone stone, Direction direction) {
-        if (hasOpenContiguousLine(board, row, col, stone, direction, 4, 1)) {
+        if (hasFourThreat(board, row, col, stone, direction)) {
             return false;
         }
 
@@ -501,6 +473,31 @@ public class GomokuService {
         for (String pattern : OPEN_THREE_PATTERNS) {
             if (containsPatternAtOrigin(line, centerIndex, pattern)) {
                 return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean hasFourThreat(
+            GomokuStone[][] board, int row, int col, GomokuStone stone, Direction direction) {
+        for (int offset = -4; offset <= 4; offset += 1) {
+            if (offset == 0) {
+                continue;
+            }
+
+            int targetRow = row + direction.dRow() * offset;
+            int targetCol = col + direction.dCol() * offset;
+            if (!isInside(targetRow, targetCol) || board[targetRow][targetCol] != null) {
+                continue;
+            }
+
+            board[targetRow][targetCol] = stone;
+            try {
+                if (countLine(board, targetRow, targetCol, stone, direction) == 5) {
+                    return true;
+                }
+            } finally {
+                board[targetRow][targetCol] = null;
             }
         }
         return false;
