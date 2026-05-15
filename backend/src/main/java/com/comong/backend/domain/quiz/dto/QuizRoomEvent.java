@@ -1,25 +1,12 @@
 package com.comong.backend.domain.quiz.dto;
 
+import java.util.List;
+
 import com.comong.backend.domain.quiz.service.QuizMember;
 import com.comong.backend.domain.quiz.service.QuizRoomStatus;
 import com.fasterxml.jackson.annotation.JsonInclude;
 
-/**
- * {@code /topic/quiz/<roomId>} 으로 브로드캐스트되는 이벤트.
- *
- * <p>현재 정의된 type:
- *
- * <ul>
- *   <li>{@code member_joined}: type, member
- *   <li>{@code member_left}: type, userId
- *   <li>{@code host_changed}: type, hostUserId
- *   <li>{@code status_changed}: type, status (예: PLAYING / FINISHED)
- *   <li>{@code round_started}: type, status=PLAYING, roundNumber, currentDrawerUserId (제시어는 출제자
- *       user queue 로만 전송)
- * </ul>
- *
- * <p>타입별로 채워지는 필드가 달라 단일 record + {@code @JsonInclude(NON_NULL)} 로 처리한다 (village 와 동일 패턴).
- */
+/** Events broadcast to {@code /topic/quiz/<roomId>}. */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record QuizRoomEvent(
         String type,
@@ -28,26 +15,108 @@ public record QuizRoomEvent(
         Long hostUserId,
         QuizRoomStatus status,
         Integer roundNumber,
-        Long currentDrawerUserId) {
+        Long currentDrawerUserId,
+        Integer wordLength,
+        Long roundEndsAtEpochMillis,
+        Integer totalRounds,
+        QuizStrokeMessage stroke,
+        String message,
+        String nickname,
+        Boolean correct,
+        Long correctUserId,
+        String word,
+        List<QuizMemberDto> members) {
 
     public static QuizRoomEvent memberJoined(QuizMember member, boolean isHost) {
         return new QuizRoomEvent(
-                "member_joined", null, QuizMemberDto.of(member, isHost), null, null, null, null);
+                "member_joined",
+                null,
+                QuizMemberDto.of(member, isHost),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null);
     }
 
     public static QuizRoomEvent memberLeft(long userId) {
-        return new QuizRoomEvent("member_left", userId, null, null, null, null, null);
+        return new QuizRoomEvent(
+                "member_left",
+                userId,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null);
     }
 
     public static QuizRoomEvent hostChanged(long hostUserId) {
-        return new QuizRoomEvent("host_changed", null, null, hostUserId, null, null, null);
+        return new QuizRoomEvent(
+                "host_changed",
+                null,
+                null,
+                hostUserId,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null);
     }
 
     public static QuizRoomEvent statusChanged(QuizRoomStatus status) {
-        return new QuizRoomEvent("status_changed", null, null, null, status, null, null);
+        return new QuizRoomEvent(
+                "status_changed",
+                null,
+                null,
+                null,
+                status,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null);
     }
 
-    public static QuizRoomEvent roundStarted(int roundNumber, long currentDrawerUserId) {
+    public static QuizRoomEvent roundStarted(
+            int roundNumber,
+            long currentDrawerUserId,
+            int wordLength,
+            long roundEndsAtEpochMillis,
+            int totalRounds) {
         return new QuizRoomEvent(
                 "round_started",
                 null,
@@ -55,6 +124,87 @@ public record QuizRoomEvent(
                 null,
                 QuizRoomStatus.PLAYING,
                 roundNumber,
-                currentDrawerUserId);
+                currentDrawerUserId,
+                wordLength,
+                roundEndsAtEpochMillis,
+                totalRounds,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null);
+    }
+
+    public static QuizRoomEvent stroke(long userId, QuizStrokeMessage stroke) {
+        return new QuizRoomEvent(
+                "stroke", userId, null, null, null, null, null, null, null, null, stroke, null,
+                null, null, null, null, null);
+    }
+
+    public static QuizRoomEvent guessSubmitted(
+            long userId, String nickname, String message, boolean correct) {
+        return new QuizRoomEvent(
+                "guess_submitted",
+                userId,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                message,
+                nickname,
+                correct,
+                correct ? userId : null,
+                null,
+                null);
+    }
+
+    public static QuizRoomEvent roundEnded(
+            int roundNumber, Long correctUserId, String word, List<QuizMemberDto> members) {
+        return new QuizRoomEvent(
+                "round_ended",
+                null,
+                null,
+                null,
+                QuizRoomStatus.PLAYING,
+                roundNumber,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                correctUserId,
+                word,
+                members);
+    }
+
+    public static QuizRoomEvent gameFinished(List<QuizMemberDto> members) {
+        return new QuizRoomEvent(
+                "game_finished",
+                null,
+                null,
+                null,
+                QuizRoomStatus.FINISHED,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                members);
     }
 }

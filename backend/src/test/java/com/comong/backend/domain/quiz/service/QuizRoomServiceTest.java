@@ -203,7 +203,7 @@ class QuizRoomServiceTest {
                                                 && ev.roundNumber() == 1
                                                 && ev.currentDrawerUserId() == 1L));
         // user queue 로 제시어를 push 하지 않음 — REST 응답에 동봉되므로.
-        verify(broadcastService, never()).sendPromptToUser(anyString(), anyString(), any());
+        verify(broadcastService, times(1)).sendPromptToUser(eq("1"), eq(host.roomId()), any());
     }
 
     @Test
@@ -238,12 +238,28 @@ class QuizRoomServiceTest {
 
         com.comong.backend.domain.quiz.dto.QuizGameStartedResponse r1 =
                 service.startGame(1L, host.roomId());
+        registry.findById(host.roomId()).orElseThrow().resolveRound(2L);
         com.comong.backend.domain.quiz.dto.QuizGameStartedResponse r2 =
                 service.startGame(1L, host.roomId());
 
         assertThat(r1.snapshot().currentDrawerUserId()).isEqualTo(1L);
         assertThat(r2.snapshot().currentDrawerUserId()).isEqualTo(2L);
         assertThat(r2.snapshot().roundNumber()).isEqualTo(2);
+    }
+
+    @Test
+    void startGameWhileRoundIsInProgressIsRejected() {
+        stubProfile(1L, 100L, "h");
+        stubProfile(2L, 101L, "g");
+        QuizRoomSnapshot host = service.createRoom(1L);
+        service.joinByCode(2L, host.code());
+
+        service.startGame(1L, host.roomId());
+
+        assertThatThrownBy(() -> service.startGame(1L, host.roomId()))
+                .isInstanceOf(
+                        com.comong.backend.domain.quiz.exception.QuizRoomNotReadyToStartException
+                                .class);
     }
 
     private void stubProfile(long userId, long profileId, String nickname) {

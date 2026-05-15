@@ -5,10 +5,7 @@ import java.util.List;
 import com.comong.backend.domain.quiz.service.QuizRoom;
 import com.comong.backend.domain.quiz.service.QuizRoomStatus;
 
-/**
- * 방 전체 상태 스냅샷. REST 응답 또는 STOMP ready 후 1회 push 에 사용. STOMP 토픽 라우팅 키 ({@code quiz.<roomId>}) 도 함께
- * 제공해 FE 가 구독 destination 을 알맞게 구성하도록 한다.
- */
+/** Full room state used by REST responses and the STOMP ready snapshot. */
 public record QuizRoomSnapshot(
         String roomId,
         String code,
@@ -18,9 +15,10 @@ public record QuizRoomSnapshot(
         int maxPlayers,
         List<QuizMemberDto> members,
         String stompRoomKey,
-        // 라운드 진행 상태 — WAITING/FINISHED 일 땐 0/0. PLAYING 일 때만 의미 있음 (M2-2).
         int roundNumber,
-        long currentDrawerUserId) {
+        long currentDrawerUserId,
+        Long roundEndsAtEpochMillis,
+        int totalRounds) {
 
     public static QuizRoomSnapshot of(QuizRoom room) {
         long host = room.hostUserId();
@@ -38,6 +36,8 @@ public record QuizRoomSnapshot(
                 members,
                 room.stompRoomKey(),
                 room.roundNumber(),
-                room.currentDrawerUserId());
+                room.currentDrawerUserId(),
+                room.roundEndsAt() == null ? null : room.roundEndsAt().toEpochMilli(),
+                room.totalRounds());
     }
 }
