@@ -30,19 +30,21 @@ const CHIP_BG = 0xffe9c2
 const STROKE_THROTTLE_MS = 60
 
 /**
- * 플레이어 슬롯 아바타 — 게임 NPC 캐릭터 이미지(themes/art/coloring/*.png) 의 상반신만 원형 마스크로 잘라 표시.
- * joinOrder 로 4명 NPC 순환. 다른 씬 로드와 충돌 안 나게 quiz 전용 키 사용.
+ * 플레이어 슬롯 아바타 — themes/art/ui/char1~4.png 의 상반신만 setCrop 으로 잘라 노출. 원형 배경 없이 그대로 노출.
+ * joinOrder 기준으로 1~4 순환.
  */
-const SLOT_NPCS = ['rumi', 'kongmong', 'gisung', 'seokjae'] as const
+const SLOT_CHAR_NUMBERS = [1, 2, 3, 4] as const
+/** 이미지 상단에서 얼마만큼 잘라 상반신만 보일지 — 헤더/머리/어깨까지 포함. */
+const SLOT_CHAR_CROP_RATIO = 0.55
 
-function slotNpcKey(joinOrder: number): string {
-  const npc = SLOT_NPCS[(joinOrder < 0 ? 0 : joinOrder) % SLOT_NPCS.length]
-  return `quiz-avatar-npc-${npc}`
+function slotCharKey(joinOrder: number): string {
+  const n = SLOT_CHAR_NUMBERS[(joinOrder < 0 ? 0 : joinOrder) % SLOT_CHAR_NUMBERS.length]
+  return `quiz-avatar-char${n}`
 }
 
-function slotNpcPath(joinOrder: number): string {
-  const npc = SLOT_NPCS[(joinOrder < 0 ? 0 : joinOrder) % SLOT_NPCS.length]
-  return `images/themes/art/coloring/${npc}.png`
+function slotCharPath(joinOrder: number): string {
+  const n = SLOT_CHAR_NUMBERS[(joinOrder < 0 ? 0 : joinOrder) % SLOT_CHAR_NUMBERS.length]
+  return `images/themes/art/ui/char${n}.png`
 }
 
 const BRUSH_COLORS = [
@@ -126,11 +128,11 @@ export class QuizPlayScene extends Phaser.Scene {
         assetPath('images/themes/art/background/background.png'),
       )
     }
-    // 슬롯 아바타 — 4명 정원이라 4명 NPC 모두 미리 로드. 단일 이미지 (themes/art/coloring/*.png) 를 원형 마스크로 잘라 사용.
-    SLOT_NPCS.forEach((_, index) => {
-      const key = slotNpcKey(index)
+    // 슬롯 아바타 — char1~4 (art/ui) 를 미리 로드. setCrop 으로 상반신만 노출.
+    SLOT_CHAR_NUMBERS.forEach((_, index) => {
+      const key = slotCharKey(index)
       if (!this.textures.exists(key)) {
-        this.load.image(key, assetPath(slotNpcPath(index)))
+        this.load.image(key, assetPath(slotCharPath(index)))
       }
     })
   }
@@ -389,35 +391,22 @@ export class QuizPlayScene extends Phaser.Scene {
       return
     }
 
-    // NPC 캐릭터(themes/art/coloring/*.png) 의 상반신만 원형 마스크로 잘라 표시.
-    const avatarSize = Math.min(80, w * 0.58)
-    const avatarY = y + Math.max(54, h * 0.34)
-    const avatarBg = this.add.circle(
-      x + w / 2,
-      avatarY,
-      avatarSize / 2,
-      isDrawer ? 0xfff2cc : 0xeaf0ff,
-      1,
-    )
-    avatarBg.setStrokeStyle(3, isDrawer ? 0x7b461a : 0x91a5c4, 1)
-    container.add(avatarBg)
-    const avatarKey = slotNpcKey(member.joinOrder)
+    // 캐릭터(art/ui/char1~4) 의 상반신만 setCrop 으로 잘라 표시. 원형 배경/마스크 없이 그대로 노출.
+    const avatarSize = Math.min(96, w * 0.7)
+    const avatarY = y + Math.max(58, h * 0.34)
+    const avatarKey = slotCharKey(member.joinOrder)
     if (this.textures.exists(avatarKey)) {
       const source = this.textures.get(avatarKey).getSourceImage() as HTMLImageElement
       const srcW = source.width || 1
       const srcH = source.height || 1
-      // 짧은 변 기준으로 1.7배 확대해 캐릭터 머리·상반신이 원 안을 꽉 채우게.
-      const target = avatarSize * 1.7
-      const scale = target / Math.min(srcW, srcH)
+      const cropH = srcH * SLOT_CHAR_CROP_RATIO
+      // 잘린 상반신 영역이 avatarSize 높이를 채우도록 스케일 계산.
+      const scale = avatarSize / cropH
       const npc = this.add.image(x + w / 2, avatarY, avatarKey)
       npc.setScale(scale)
-      // origin (0.5, 0.32) 로 잡으면 캐릭터 머리 부근이 원 중심에 옴 — 상반신만 자연스럽게 노출.
-      npc.setOrigin(0.5, 0.32)
-      const mask = this.make
-        .graphics({ x: 0, y: 0 })
-        .fillStyle(0xffffff, 1)
-        .fillCircle(x + w / 2, avatarY, avatarSize / 2 - 2)
-      npc.setMask(mask.createGeometryMask())
+      // origin y = cropRatio/2 로 잡으면 잘린 영역의 정확한 중심이 avatarY 가 됨 → 상반신이 슬롯 중앙에 정렬.
+      npc.setOrigin(0.5, SLOT_CHAR_CROP_RATIO / 2)
+      npc.setCrop(0, 0, srcW, cropH)
       container.add(npc)
     }
     container.add(
