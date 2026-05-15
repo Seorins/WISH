@@ -276,6 +276,9 @@ function App() {
         onSubmit={text => {
           gameRef.current?.events.emit('quiz-guess:submit', { text })
         }}
+        onLeave={() => {
+          gameRef.current?.events.emit('quiz-guess:leave')
+        }}
       />
     </>
   )

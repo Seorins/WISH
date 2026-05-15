@@ -169,7 +169,9 @@ export class QuizPlayScene extends Phaser.Scene {
     this.input.on(Phaser.Input.Events.POINTER_UP, this.handlePointerUp, this)
     this.input.on(Phaser.Input.Events.POINTER_UP_OUTSIDE, this.handlePointerUp, this)
     // 정답 입력은 HTML 오버레이가 담당 — Phaser 키 입력은 한글 IME 처리 불가라 우회 (S14P31E103-820).
+    // 나가기도 같은 오버레이 안에 두어 input focus 와 Phaser 클릭이 첫 탭에서 꼬이는 문제 해결.
     this.game.events.on('quiz-guess:submit', this.handleGuessOverlaySubmit, this)
+    this.game.events.on('quiz-guess:leave', this.handleLeave, this)
     this.events.once('shutdown', this.handleShutdown, this)
 
     // 진입 시점에 이미 라운드가 진행 중이고 본인이 정답자라면 오버레이 즉시 노출.
@@ -636,6 +638,11 @@ export class QuizPlayScene extends Phaser.Scene {
     w: number,
     h: number,
   ) {
+    // 비-출제자(=정답자) 일 땐 HTML 오버레이가 입력 + 나가기 까지 모두 책임진다 — Phaser 하단 바는 통째로 비움.
+    if (!this.isDrawer()) {
+      return
+    }
+
     const panel = this.add.graphics()
     panel.fillStyle(0x050814, 0.28)
     panel.fillRoundedRect(x + 5, y + 6, w - 10, h, 20)
@@ -647,25 +654,7 @@ export class QuizPlayScene extends Phaser.Scene {
     panel.strokeRoundedRect(x, y, w, h, 20)
     container.add(panel)
 
-    if (this.isDrawer()) {
-      this.drawDrawerTools(container, x + 30, y, h)
-    } else {
-      const hint =
-        this.roundEnded || this.finalMembers
-          ? '라운드가 끝났어요'
-          : '아래 입력창에 정답을 적어주세요'
-      container.add(
-        this.add
-          .text(x + 30, y + h / 2, hint, {
-            fontFamily: FONT_FAMILY,
-            fontSize: '16px',
-            color: '#d8e2f3',
-            fontStyle: 'bold',
-          })
-          .setOrigin(0, 0.5),
-      )
-    }
-
+    this.drawDrawerTools(container, x + 30, y, h)
     this.drawLeaveButton(container, x + w - 30 - 104, y + h / 2 - 24, 104, 48)
   }
 
@@ -1099,6 +1088,7 @@ export class QuizPlayScene extends Phaser.Scene {
     this.input.off(Phaser.Input.Events.POINTER_UP, this.handlePointerUp, this)
     this.input.off(Phaser.Input.Events.POINTER_UP_OUTSIDE, this.handlePointerUp, this)
     this.game.events.off('quiz-guess:submit', this.handleGuessOverlaySubmit, this)
+    this.game.events.off('quiz-guess:leave', this.handleLeave, this)
     this.setGuessOverlay(false)
     this.timerEvent?.remove(false)
     if (!this.isLeaving) {

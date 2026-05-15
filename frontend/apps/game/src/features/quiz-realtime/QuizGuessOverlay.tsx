@@ -6,12 +6,14 @@ import { useEffect, useRef, useState } from 'react'
  * <p>Phaser 자체 키 입력은 한글 IME (composition 이벤트) 처리가 안 돼서 영문/숫자만 들어간다. HTML {@code <input>} 으로
  * 우회 — {@code QuizJoinCodeOverlay} 와 동일 패턴.
  *
- * <p>현 라운드 동안 항상 보이는 sticky 입력 줄. round 종료 / 게임 종료 / leave 시 부모가 {@code open=false} 로 닫는다.
+ * <p>입력 / 입력 버튼 / 나가기 버튼이 한 줄에 같이 있다. 나가기를 같이 두는 이유: Phaser canvas 의 나가기 버튼을
+ * 누르려고 하면 input focus blur 와 Phaser POINTER_DOWN 이 첫 클릭에서 꼬임. HTML 안에 두면 그 충돌 없음.
  */
 
 type QuizGuessOverlayProps = {
   open: boolean
   onSubmit: (text: string) => void
+  onLeave: () => void
 }
 
 const MAX_LENGTH = 40
@@ -20,7 +22,7 @@ const styles = {
   wrapper: {
     position: 'fixed' as const,
     left: '50%',
-    bottom: 36,
+    bottom: 32,
     transform: 'translateX(-50%)',
     zIndex: 1000,
     display: 'flex',
@@ -30,7 +32,7 @@ const styles = {
       '"Pretendard Variable", Pretendard, "Noto Sans KR", -apple-system, BlinkMacSystemFont, sans-serif',
   },
   input: {
-    width: 'min(420px, 70vw)',
+    width: 'min(420px, 60vw)',
     boxSizing: 'border-box' as const,
     padding: '14px 18px',
     fontSize: 18,
@@ -59,9 +61,21 @@ const styles = {
     color: '#cfd6e3',
     cursor: 'not-allowed' as const,
   },
+  leave: {
+    padding: '12px 18px',
+    background: 'rgba(15, 22, 38, 0.85)',
+    color: '#ffe9c2',
+    border: '2px solid #91a5c4',
+    borderRadius: 999,
+    fontSize: 15,
+    fontWeight: 700,
+    cursor: 'pointer' as const,
+    boxShadow: '0 8px 22px rgba(0, 0, 0, 0.4)',
+    fontFamily: 'inherit',
+  },
 }
 
-export function QuizGuessOverlay({ open, onSubmit }: QuizGuessOverlayProps) {
+export function QuizGuessOverlay({ open, onSubmit, onLeave }: QuizGuessOverlayProps) {
   const [value, setValue] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -112,6 +126,9 @@ export function QuizGuessOverlay({ open, onSubmit }: QuizGuessOverlayProps) {
         disabled={!canSubmit}
       >
         입력
+      </button>
+      <button type="button" style={styles.leave} onClick={onLeave} aria-label="방 나가기">
+        나가기
       </button>
     </form>
   )
