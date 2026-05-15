@@ -86,6 +86,16 @@ const GOMOKU_BOARD_INTERACT_RECT = {
   width: 1.36,
   height: 0.9,
 } as const
+const GOMOKU_BOARD_HIGHLIGHT = {
+  color: 0xffd978,
+  widthRatio: 1.04,
+  heightRatio: 0.74,
+  yOffsetRatio: 0.45,
+  lineWidth: 2,
+  minAlpha: 0.16,
+  maxAlpha: 0.38,
+  durationMs: 1600,
+} as const
 const DEFAULT_PLAYER_SPAWN = { xRatio: 0.5, yRatio: 0.3 }
 const MAP_TILE_ROWS = 3
 const MAP_TILE_COLUMNS = 3
@@ -606,6 +616,27 @@ export class VillageScene extends Phaser.Scene {
       .setScale(VILLAGE_GOMOKU_BOARD.scale)
       .setDepth(3)
       .setInteractive({ useHandCursor: true })
+    const highlight = this.add
+      .rectangle(
+        x,
+        y - board.displayHeight * GOMOKU_BOARD_HIGHLIGHT.yOffsetRatio,
+        board.displayWidth * GOMOKU_BOARD_HIGHLIGHT.widthRatio,
+        board.displayHeight * GOMOKU_BOARD_HIGHLIGHT.heightRatio,
+        GOMOKU_BOARD_HIGHLIGHT.color,
+        0,
+      )
+      .setOrigin(0.5)
+      .setDepth(2.9)
+      .setStrokeStyle(GOMOKU_BOARD_HIGHLIGHT.lineWidth, GOMOKU_BOARD_HIGHLIGHT.color, 1)
+      .setAlpha(GOMOKU_BOARD_HIGHLIGHT.minAlpha)
+    this.tweens.add({
+      targets: highlight,
+      alpha: GOMOKU_BOARD_HIGHLIGHT.maxAlpha,
+      duration: GOMOKU_BOARD_HIGHLIGHT.durationMs,
+      ease: 'Sine.easeInOut',
+      yoyo: true,
+      repeat: -1,
+    })
     board.on(
       'pointerdown',
       (
