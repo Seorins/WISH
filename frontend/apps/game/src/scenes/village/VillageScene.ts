@@ -81,9 +81,12 @@ const NURSE_BUNNY_WORLD = {
 const VILLAGE_GOMOKU_BOARD_KEY = 'village-gomoku-board'
 const VILLAGE_GOMOKU_BOARD_PATH = 'images/village/objects/gomoku-board.png'
 const VILLAGE_GOMOKU_BOARD = {
-  xRatio: NURSE_BUNNY_WORLD.xRatio,
-  yRatio: NURSE_BUNNY_WORLD.yRatio - 0.03,
+  xRatio: SEHYUN_NPC_WORLD.xRatio,
+  yRatio: NURSE_BUNNY_WORLD.yRatio - 0.02,
   scale: 0.187,
+} as const
+const GOMOKU_BOARD_POSITION_OFFSET = {
+  xBoardWidthRatio: -0.5,
 } as const
 const GOMOKU_BOARD_INTERACT_RECT = {
   left: 0.72,
@@ -603,14 +606,16 @@ export class VillageScene extends Phaser.Scene {
   }
 
   private createGomokuBoard(worldWidth: number, worldHeight: number) {
-    const x = VILLAGE_GOMOKU_BOARD.xRatio * worldWidth
+    const baseX = VILLAGE_GOMOKU_BOARD.xRatio * worldWidth
     const y = VILLAGE_GOMOKU_BOARD.yRatio * worldHeight
     const board = this.add
-      .image(x, y, VILLAGE_GOMOKU_BOARD_KEY)
+      .image(baseX, y, VILLAGE_GOMOKU_BOARD_KEY)
       .setOrigin(0.5, 1)
       .setScale(VILLAGE_GOMOKU_BOARD.scale)
       .setDepth(3)
       .setInteractive({ useHandCursor: true })
+    const x = baseX + board.displayWidth * GOMOKU_BOARD_POSITION_OFFSET.xBoardWidthRatio
+    board.setX(x)
     board.on(
       'pointerdown',
       (
