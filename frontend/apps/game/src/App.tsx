@@ -138,6 +138,9 @@ function App() {
 
   const handleAuthSuccess = useCallback(() => {
     setShowAuth(false)
+    void resolvePatientProfileIdOrFetch().then(id => {
+      setPatientProfileId(id)
+    })
     gameRef.current?.events.emit('auth:completed')
   }, [])
 
@@ -218,7 +221,21 @@ function App() {
   }
 
   if (debugMode === DEBUG_GOMOKU_MODE) {
-    return <GomokuOverlay open onClose={() => undefined} />
+    return (
+      <>
+        <AuthOverlay
+          open={showAuth}
+          onAuthSuccess={handleAuthSuccess}
+          onCancel={handleAuthCancel}
+        />
+        <GomokuOverlay
+          open
+          onClose={() => undefined}
+          patientProfileId={patientProfileId}
+          onAuthRequired={() => setShowAuth(true)}
+        />
+      </>
+    )
   }
 
   return (
@@ -250,7 +267,12 @@ function App() {
         onClose={handleLighthouseEmotionClose}
         onTextChange={handleLighthouseEmotionTextChange}
       />
-      <GomokuOverlay open={showGomoku} onClose={handleGomokuClose} />
+      <GomokuOverlay
+        open={showGomoku}
+        onClose={handleGomokuClose}
+        patientProfileId={patientProfileId}
+        onAuthRequired={() => setShowAuth(true)}
+      />
       <QueryClientProvider client={queryClient}>
         <ExerciseSessionListOverlay
           open={showExerciseSessions}

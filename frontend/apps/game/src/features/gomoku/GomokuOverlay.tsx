@@ -16,6 +16,8 @@ import {
   type GomokuStats,
   type GomokuStone as ApiGomokuStone,
 } from '@wish/api-client'
+import { hasValidAuthToken } from '../auth'
+import { resolvePatientProfileIdOrFetch } from '../exerciseSessions/patientProfile'
 import {
   GOMOKU_BOARD_SIZE,
   applyMove,
@@ -36,6 +38,8 @@ import './GomokuOverlay.css'
 type GomokuOverlayProps = {
   open: boolean
   onClose: () => void
+  patientProfileId?: number
+  onAuthRequired?: () => void
 }
 
 type GameMode = 'local' | 'computer' | 'online'
@@ -45,6 +49,7 @@ const COMPUTER_STONE: Stone = 'white'
 const DEFAULT_TIMER_SECONDS = 300
 const COMPUTER_THINK_DELAY_MS = 420
 const ONLINE_POLL_INTERVAL_MS = 1500
+const DEMO_AUTH_ENABLED = import.meta.env.VITE_ENABLE_DEMO_AUTH === 'true'
 
 const text = {
   title: '\uAD11\uC7A5 \uC624\uBAA9',
@@ -103,6 +108,12 @@ const text = {
   onlineLoadingFailed:
     '\uC628\uB77C\uC778 \uC815\uBCF4\uB97C \uBD88\uB7EC\uC624\uC9C0 \uBABB\uD588\uC5B4\uC694.',
   onlineActionFailed: '\uC694\uCCAD\uC744 \uCC98\uB9AC\uD558\uC9C0 \uBABB\uD588\uC5B4\uC694.',
+  onlinePreparing:
+    '\uC628\uB77C\uC778 \uB300\uC804\uC744 \uC900\uBE44\uD558\uB294 \uC911\uC774\uC5D0\uC694.',
+  onlineAuthRequired:
+    '\uC628\uB77C\uC778 \uB300\uC804\uC740 \uB85C\uADF8\uC778\uC774 \uD544\uC694\uD574\uC694.',
+  onlineProfileRequired:
+    '\uC628\uB77C\uC778 \uB300\uC804\uC744 \uD558\uB824\uBA74 \uD658\uC790 \uD504\uB85C\uD544\uC774 \uD544\uC694\uD574\uC694.',
   cancelled: '\uBC29\uC774 \uB2EB\uD614\uC5B4\uC694.',
   resigned: '\uAE30\uAD8C\uC73C\uB85C \uB300\uAD6D\uC774 \uB05D\uB0AC\uC5B4\uC694.',
   left: '\uC0C1\uB300\uAC00 \uB098\uAC14\uC5B4\uC694.',
@@ -120,7 +131,12 @@ const timerOptions = [
 
 const starPoints = new Set(['3:3', '3:11', '7:7', '11:3', '11:11'])
 
-export function GomokuOverlay({ open, onClose }: GomokuOverlayProps) {
+export function GomokuOverlay({
+  open,
+  onClose,
+  patientProfileId,
+  onAuthRequired,
+}: GomokuOverlayProps) {
   const [mode, setMode] = useState<GameMode>('computer')
   const [computerLevel, setComputerLevel] = useState<ComputerLevel>('intermediate')
   const [ruleSet, setRuleSet] = useState<RuleSet>('renju-lite')
@@ -142,9 +158,16 @@ export function GomokuOverlay({ open, onClose }: GomokuOverlayProps) {
   const [onlineRanking, setOnlineRanking] = useState<GomokuRanking | null>(null)
   const [onlineBusy, setOnlineBusy] = useState(false)
   const [onlineError, setOnlineError] = useState('')
+  const [resolvedPatientProfileId, setResolvedPatientProfileId] = useState<number | undefined>()
+  const [isResolvingOnlineProfile, setIsResolvingOnlineProfile] = useState(false)
   const [onlineTick, setOnlineTick] = useState(() => Date.now())
   const recordedResultRef = useRef<string | null>(null)
   const syncedOnlineResultRef = useRef<number | null>(null)
+
+  const effectivePatientProfileId = isValidPatientProfileId(patientProfileId)
+    ? patientProfileId
+    : resolvedPatientProfileId
+  const hasOnlinePatientProfile = isValidPatientProfileId(effectivePatientProfileId)
 
   const onlineMoves = useMemo(() => onlineRoom?.moves.map(toLocalMove) ?? [], [onlineRoom])
   const activeMoves = mode === 'online' ? onlineMoves : moves
@@ -178,6 +201,11 @@ export function GomokuOverlay({ open, onClose }: GomokuOverlayProps) {
   const onlineStatusMessage = onlineRoom
     ? getOnlineStatusMessage(onlineRoom, myOnlineStone, currentTurn)
     : ''
+  const onlineProfileNotice = hasOnlinePatientProfile
+    ? ''
+    : isResolvingOnlineProfile
+      ? text.onlinePreparing
+      : getOnlineRequirementMessage()
   const canHumanPlay =
     mode === 'online'
       ? Boolean(
@@ -227,6 +255,10 @@ export function GomokuOverlay({ open, onClose }: GomokuOverlayProps) {
       if (!response.data) {
         throw new Error(text.onlineLoadingFailed)
       }
+      const roomPatientProfileId = getMyPatientProfileIdFromRoom(response.data)
+      if (roomPatientProfileId) {
+        setResolvedPatientProfileId(roomPatientProfileId)
+      }
       setOnlineRoom(response.data)
       setOnlineError('')
     } catch (error) {
@@ -241,15 +273,47 @@ export function GomokuOverlay({ open, onClose }: GomokuOverlayProps) {
     }
   }, [])
 
+  const ensureOnlinePatientProfile = useCallback(async () => {
+    if (hasOnlinePatientProfile) return true
+
+    setIsResolvingOnlineProfile(true)
+    try {
+      const resolvedId = await resolvePatientProfileIdOrFetch()
+      if (isValidPatientProfileId(resolvedId)) {
+        setResolvedPatientProfileId(resolvedId)
+        setOnlineError('')
+        return true
+      }
+
+      if (DEMO_AUTH_ENABLED && !hasValidAuthToken()) {
+        return true
+      }
+
+      const message = getOnlineRequirementMessage()
+      setOnlineError(message)
+      if (!hasValidAuthToken()) {
+        onAuthRequired?.()
+      }
+      return false
+    } finally {
+      setIsResolvingOnlineProfile(false)
+    }
+  }, [hasOnlinePatientProfile, onAuthRequired])
+
   const handleOnlineCreate = useCallback(async () => {
     setOnlineBusy(true)
     try {
+      if (!(await ensureOnlinePatientProfile())) return
       const response = await createGomokuRoom({
         ruleSet: toApiRuleSet(ruleSet),
         timerSeconds,
       })
       if (!response.data) {
         throw new Error(text.onlineActionFailed)
+      }
+      const roomPatientProfileId = getMyPatientProfileIdFromRoom(response.data)
+      if (roomPatientProfileId) {
+        setResolvedPatientProfileId(roomPatientProfileId)
       }
       setOnlineRoom(response.data)
       setOnlineError('')
@@ -259,11 +323,12 @@ export function GomokuOverlay({ open, onClose }: GomokuOverlayProps) {
     } finally {
       setOnlineBusy(false)
     }
-  }, [loadOnlineDashboard, ruleSet, timerSeconds])
+  }, [ensureOnlinePatientProfile, loadOnlineDashboard, ruleSet, timerSeconds])
 
   const handleOnlineRefresh = useCallback(async () => {
     setOnlineBusy(true)
     try {
+      if (!(await ensureOnlinePatientProfile())) return
       await loadOnlineDashboard()
       if (onlineRoomId) {
         await refreshOnlineRoom(onlineRoomId)
@@ -271,15 +336,20 @@ export function GomokuOverlay({ open, onClose }: GomokuOverlayProps) {
     } finally {
       setOnlineBusy(false)
     }
-  }, [loadOnlineDashboard, onlineRoomId, refreshOnlineRoom])
+  }, [ensureOnlinePatientProfile, loadOnlineDashboard, onlineRoomId, refreshOnlineRoom])
 
   const handleOnlineJoin = useCallback(
     async (roomId: number) => {
       setOnlineBusy(true)
       try {
+        if (!(await ensureOnlinePatientProfile())) return
         const response = await joinGomokuRoom(roomId)
         if (!response.data) {
           throw new Error(text.onlineActionFailed)
+        }
+        const roomPatientProfileId = getMyPatientProfileIdFromRoom(response.data)
+        if (roomPatientProfileId) {
+          setResolvedPatientProfileId(roomPatientProfileId)
         }
         setOnlineRoom(response.data)
         setOnlineError('')
@@ -290,7 +360,7 @@ export function GomokuOverlay({ open, onClose }: GomokuOverlayProps) {
         setOnlineBusy(false)
       }
     },
-    [loadOnlineDashboard],
+    [ensureOnlinePatientProfile, loadOnlineDashboard],
   )
 
   const handleOnlineResign = useCallback(async () => {
@@ -462,9 +532,47 @@ export function GomokuOverlay({ open, onClose }: GomokuOverlayProps) {
   }, [mode, resetGame, ruleSet, timerSeconds])
 
   useEffect(() => {
-    if (!open || mode !== 'online') return
+    if (!open || mode !== 'online' || !hasOnlinePatientProfile) return
     void loadOnlineDashboard()
-  }, [loadOnlineDashboard, mode, open])
+  }, [hasOnlinePatientProfile, loadOnlineDashboard, mode, open])
+
+  useEffect(() => {
+    if (!open) {
+      setResolvedPatientProfileId(undefined)
+      setIsResolvingOnlineProfile(false)
+      return
+    }
+
+    if (mode !== 'online' || hasOnlinePatientProfile) {
+      setIsResolvingOnlineProfile(false)
+      return
+    }
+
+    let isCancelled = false
+    setIsResolvingOnlineProfile(true)
+
+    void resolvePatientProfileIdOrFetch()
+      .then(resolvedId => {
+        if (isCancelled) return
+        if (isValidPatientProfileId(resolvedId)) {
+          setResolvedPatientProfileId(resolvedId)
+          setOnlineError('')
+          return
+        }
+        if (!(DEMO_AUTH_ENABLED && !hasValidAuthToken())) {
+          setOnlineError(getOnlineRequirementMessage())
+        }
+      })
+      .finally(() => {
+        if (!isCancelled) {
+          setIsResolvingOnlineProfile(false)
+        }
+      })
+
+    return () => {
+      isCancelled = true
+    }
+  }, [hasOnlinePatientProfile, mode, open])
 
   useEffect(() => {
     if (
@@ -572,7 +680,12 @@ export function GomokuOverlay({ open, onClose }: GomokuOverlayProps) {
               status={effectiveStatus}
               currentTurn={currentTurn}
               isComputerThinking={mode === 'computer' && isComputerThinking}
-              message={mode === 'online' ? onlineError || onlineStatusMessage : statusMessage}
+              message={
+                mode === 'online'
+                  ? onlineError ||
+                    (isResolvingOnlineProfile ? text.onlinePreparing : onlineStatusMessage)
+                  : statusMessage
+              }
             />
             <div className="gomoku-board-wrap">
               <div className="gomoku-board" role="grid" aria-label="15 x 15 gomoku board">
@@ -650,6 +763,7 @@ export function GomokuOverlay({ open, onClose }: GomokuOverlayProps) {
                 stats={onlineStats}
                 ranking={onlineRanking}
                 busy={onlineBusy}
+                profileNotice={onlineProfileNotice}
                 onCreateRoom={handleOnlineCreate}
                 onRefreshRooms={handleOnlineRefresh}
                 onJoinRoom={handleOnlineJoin}
@@ -889,12 +1003,14 @@ function OnlinePanel({
   onCreateRoom,
   onRefreshRooms,
   onJoinRoom,
+  profileNotice,
 }: {
   room: GomokuRoom | null
   waitingRooms: GomokuRoom[]
   stats: GomokuStats | null
   ranking: GomokuRanking | null
   busy: boolean
+  profileNotice: string
   onCreateRoom: () => void
   onRefreshRooms: () => void
   onJoinRoom: (roomId: number) => void
@@ -924,6 +1040,7 @@ function OnlinePanel({
               {text.refresh}
             </button>
           </div>
+          {profileNotice ? <p className="gomoku-online-message">{profileNotice}</p> : null}
 
           <div className="gomoku-room-list" aria-label={text.waitingRooms}>
             <h3>{text.waitingRooms}</h3>
@@ -1046,6 +1163,22 @@ function MoveHistory({ moves }: { moves: GomokuMove[] }) {
       )}
     </section>
   )
+}
+
+function isValidPatientProfileId(value: number | undefined) {
+  return Number.isInteger(value) && (value ?? 0) > 0
+}
+
+function getOnlineRequirementMessage() {
+  if (DEMO_AUTH_ENABLED && !hasValidAuthToken()) return ''
+  if (!hasValidAuthToken() && !DEMO_AUTH_ENABLED) return text.onlineAuthRequired
+  return text.onlineProfileRequired
+}
+
+function getMyPatientProfileIdFromRoom(room: GomokuRoom) {
+  if (room.myStone === 'BLACK') return room.blackPlayer.patientProfileId
+  if (room.myStone === 'WHITE') return room.whitePlayer?.patientProfileId
+  return undefined
 }
 
 function withTimeoutStatus(status: GameStatus, timeoutWinner: Stone | null): GameStatus {
