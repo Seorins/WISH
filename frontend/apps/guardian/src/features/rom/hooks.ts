@@ -272,13 +272,27 @@ export function useRomMovementAnalysis(patientId: number | undefined | null) {
       const results = await Promise.allSettled(
         motionsWithReplay.map(motion => getExerciseMotionMovementAnalysis(motion.id)),
       )
-      const analyses = results
+      const analysisByMotionResultId = new Map<number, ExerciseMotionMovementAnalysisResponse>()
+      let failedMotionCount = 0
+
+      results.forEach((result, index) => {
+        const expectedMotionResultId = motionsWithReplay[index]?.id
+        if (
+          result.status === 'fulfilled' &&
+          typeof expectedMotionResultId === 'number' &&
+          result.value.motionResultId === expectedMotionResultId
+        ) {
+          analysisByMotionResultId.set(expectedMotionResultId, result.value)
+          return
+        }
+        failedMotionCount += 1
+      })
+
+      const analyses = motionsWithReplay
+        .map(motion => analysisByMotionResultId.get(motion.id))
         .filter(
-          (result): result is PromiseFulfilledResult<ExerciseMotionMovementAnalysisResponse> =>
-            result.status === 'fulfilled',
+          (analysis): analysis is ExerciseMotionMovementAnalysisResponse => analysis !== undefined,
         )
-        .map(result => result.value)
-      const failedMotionCount = results.filter(result => result.status === 'rejected').length
 
       return buildView(detail, analyses, failedMotionCount)
     },

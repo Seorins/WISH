@@ -147,18 +147,29 @@ export function ROMDetailPage() {
               description="최근 세션에 replay 좌표가 없거나 confidence가 낮아 관절 움직임 범위를 계산하지 못했습니다."
             />
           ) : (
-            joints.map(joint => (
-              <article
-                key={joint.id}
-                id={`joint-panel-${joint.id}`}
-                data-joint-id={joint.id}
-                className={styles.panel}
-              >
-                <div className={styles.panelInner}>
-                  <ROMAnalysisPanel joint={joint} />
+            <>
+              {analysisView.failedMotionCount > 0 && (
+                <div className={styles.noticeBanner}>
+                  <strong>일부 동작 분석을 불러오지 못했습니다.</strong>
+                  <span>
+                    {analysisView.failedMotionCount}개 동작은 제외하고{' '}
+                    {analysisView.analyzedMotionCount}개 동작 기준으로 표시합니다.
+                  </span>
                 </div>
-              </article>
-            ))
+              )}
+              {joints.map(joint => (
+                <article
+                  key={joint.id}
+                  id={`joint-panel-${joint.id}`}
+                  data-joint-id={joint.id}
+                  className={styles.panel}
+                >
+                  <div className={styles.panelInner}>
+                    <ROMAnalysisPanel joint={joint} />
+                  </div>
+                </article>
+              ))}
+            </>
           )}
         </section>
       </main>
