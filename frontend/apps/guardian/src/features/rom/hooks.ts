@@ -18,6 +18,7 @@ import {
 } from './data/model'
 
 export const ROM_MOVEMENT_ANALYSIS_QUERY_KEY = 'rom-movement-analysis'
+const MOVEMENT_ANALYSIS_QUALITY_WARNING_CONFIDENCE_PERCENT = 60
 
 type MotionJointValue = {
   motionName: string
@@ -67,6 +68,11 @@ function percent(rate: number | null | undefined): number | null {
   return Math.round(Math.min(1, Math.max(0, rate)) * 100)
 }
 
+function displayMotionName(value: MotionJointValue): string {
+  const motionName = value.motionName.trim()
+  return motionName.length > 0 ? motionName : `동작 ${value.routineOrder}`
+}
+
 function findJoint(
   analysis: ExerciseMotionMovementAnalysisResponse,
   jointName: string,
@@ -111,12 +117,15 @@ function resolveMotionJointValue(
 function buildTrend(values: MotionJointValue[]): RomJointTrendPoint[] {
   return values
     .sort((a, b) => a.routineOrder - b.routineOrder)
-    .map(value => ({
-      label: value.motionName.length > 7 ? `${value.motionName.slice(0, 7)}…` : value.motionName,
-      motionName: value.motionName,
-      rangeDeg: value.rangeDeg,
-      confidencePercent: value.confidencePercent,
-    }))
+    .map(value => {
+      const motionName = displayMotionName(value)
+      return {
+        label: motionName.length > 7 ? `${motionName.slice(0, 7)}…` : motionName,
+        motionName,
+        rangeDeg: value.rangeDeg,
+        confidencePercent: value.confidencePercent,
+      }
+    })
 }
 
 function buildExcludedSegments(
@@ -136,7 +145,8 @@ function buildInsight(group: RomJointGroup, detail: RomJointDetail): string {
   if (!detail.analysisAvailable) {
     return `${group.name}은 최근 세션에서 분석 가능한 좌표가 부족합니다. 다음 세션에서 카메라 정면과 전신이 보이도록 기록하면 더 안정적으로 확인할 수 있습니다.`
   }
-  if ((detail.confidencePercent ?? 0) < 60) {
+  // Backend confidenceThreshold decides frame inclusion; this UI threshold only marks guardian-facing quality warnings.
+  if ((detail.confidencePercent ?? 0) < MOVEMENT_ANALYSIS_QUALITY_WARNING_CONFIDENCE_PERCENT) {
     return `${group.name}은 좌표 신뢰도가 낮은 구간이 있어 해석을 보수적으로 봐야 합니다. 분석 제외 시간이 줄어드는지 먼저 확인하세요.`
   }
   if ((detail.coveragePercent ?? 0) < 60) {
@@ -284,6 +294,17 @@ export function useRomMovementAnalysis(patientId: number | undefined | null) {
         ) {
           analysisByMotionResultId.set(expectedMotionResultId, result.value)
           return
+        }
+        if (result.status === 'fulfilled') {
+          console.warn('Movement analysis response motionResultId mismatch.', {
+            expectedMotionResultId,
+            actualMotionResultId: result.value.motionResultId,
+          })
+        } else {
+          console.warn('Movement analysis request failed.', {
+            expectedMotionResultId,
+            reason: result.reason,
+          })
         }
         failedMotionCount += 1
       })
