@@ -80,6 +80,11 @@ const VILLAGE_GOMOKU_BOARD = {
   yRatio: SEHYUN_NPC_WORLD.yRatio + 0.065,
   scale: 0.187,
 } as const
+const GOMOKU_BOARD_POSITION_OFFSET = {
+  xBoardWidthRatio: -0.5,
+  yBorderHeightRatio: 0.05,
+  yBorderCount: 2,
+} as const
 const GOMOKU_BOARD_INTERACT_RECT = {
   left: 0.72,
   top: 1.08,
@@ -608,14 +613,21 @@ export class VillageScene extends Phaser.Scene {
   }
 
   private createGomokuBoard(worldWidth: number, worldHeight: number) {
-    const x = VILLAGE_GOMOKU_BOARD.xRatio * worldWidth
-    const y = VILLAGE_GOMOKU_BOARD.yRatio * worldHeight
+    const baseX = VILLAGE_GOMOKU_BOARD.xRatio * worldWidth
+    const baseY = VILLAGE_GOMOKU_BOARD.yRatio * worldHeight
     const board = this.add
-      .image(x, y, VILLAGE_GOMOKU_BOARD_KEY)
+      .image(baseX, baseY, VILLAGE_GOMOKU_BOARD_KEY)
       .setOrigin(0.5, 1)
       .setScale(VILLAGE_GOMOKU_BOARD.scale)
       .setDepth(3)
       .setInteractive({ useHandCursor: true })
+    const x = baseX + board.displayWidth * GOMOKU_BOARD_POSITION_OFFSET.xBoardWidthRatio
+    const y =
+      baseY +
+      board.displayHeight *
+        GOMOKU_BOARD_POSITION_OFFSET.yBorderHeightRatio *
+        GOMOKU_BOARD_POSITION_OFFSET.yBorderCount
+    board.setPosition(x, y)
     const highlight = this.add
       .rectangle(
         x,
