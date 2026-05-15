@@ -136,11 +136,11 @@
 }
 
 .metricValue {
-  font-size: 22px;
+  font-size: 20px;
   font-weight: 800;
   color: var(--dash-color-text-strong);
   letter-spacing: 0;
-  line-height: 1;
+  line-height: 1.1;
   white-space: nowrap;
 }
 
@@ -149,7 +149,9 @@
   font-size: 11.5px;
   font-weight: 600;
   margin-top: 4px;
-  white-space: nowrap;
+  line-height: 1.35;
+  white-space: normal;
+  word-break: keep-all;
 }
 
 .metricFoot {
@@ -219,11 +221,11 @@
 }
 
 .balanceValue {
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 800;
   color: var(--dash-color-text-strong);
   letter-spacing: 0;
-  line-height: 1;
+  line-height: 1.1;
   white-space: nowrap;
 }
 
@@ -269,10 +271,11 @@
 }
 
 .balanceCenterMeta {
-  font-size: 10.5px;
+  font-size: 9.5px;
   font-weight: 500;
   color: var(--dash-color-text-muted);
   margin-top: 3px;
+  white-space: nowrap;
 }
 
 .insightCard {
