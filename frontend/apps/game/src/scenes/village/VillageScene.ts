@@ -86,7 +86,7 @@ const VILLAGE_GOMOKU_BOARD = {
   scale: 0.187,
 } as const
 const GOMOKU_BOARD_POSITION_OFFSET = {
-  xBoardWidthRatio: -0.5,
+  xBoardWidthRatio: -0.56,
 } as const
 const GOMOKU_BOARD_INTERACT_RECT = {
   left: 0.72,
