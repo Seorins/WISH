@@ -78,6 +78,15 @@ export class QuizLobbyScene extends Phaser.Scene {
   private snapshot: QuizRoomSnapshot | null = null
   private currentUserId: number | null = null
   private realtimeClient: QuizRealtimeClient | null = null
+  /**
+   * BE 가 `/user/queue/quiz/{roomId}/prompt` 로 push 해주는 제시어를 일단 stash.
+   * <p>로비에서 BE 가 startNextRound 를 부르면 (a) roundStarted broadcast (b) sendPromptToUser 를
+   * 거의 동시에 발사한다. WS broadcast 가 호스트의 REST `/start` 응답보다 먼저 도착하면
+   * `transitionToPlayScene(snapshot, null, wordLength)` 가 prompt=null 로 PlayScene 을 띄워버려
+   * 출제자(=호스트, 라운드 1 drawer) 화면이 "제시어 확인 중" 으로 굳어버리던 버그가 있었다.
+   * 여기에 보관한 prompt 는 transitionToPlayScene 의 fallback 으로 사용.
+   */
+  private pendingPrompt: PromptAssignment | null = null
 
   private root!: Phaser.GameObjects.Container
   private backdrop: Phaser.GameObjects.Rectangle | null = null
@@ -404,7 +413,12 @@ export class QuizLobbyScene extends Phaser.Scene {
         this.snapshot = next
         this.drawLobby()
       },
-      onPrompt: () => {},
+      // BE 가 /start 직후 출제자에게 보내는 제시어 push 를 받아 stash. 자세한 사유는
+      // pendingPrompt 필드 주석 참고. 호스트가 본인의 1라운드 drawer 일 때 화면 race
+      // 를 막아주는 핵심 경로.
+      onPrompt: prompt => {
+        this.pendingPrompt = prompt
+      },
       onEvent: event => this.handleRealtimeEvent(event),
       onError: error => this.setStatus(friendlyWsError(error.message)),
       onReady: () => this.setStatus(''),
@@ -461,21 +475,30 @@ export class QuizLobbyScene extends Phaser.Scene {
     this.state = 'transitioningToPlay'
     const realtimeClient = this.realtimeClient
     this.realtimeClient = null
+    // 호스트의 1라운드 race: WS roundStarted 가 REST /start .then() 보다 먼저 도착하면
+    // 본 함수가 prompt=null 로 호출된다. BE 의 sendPromptToUser push 는 그 사이/페이드
+    // 중에도 도착할 수 있으니, onPrompt 는 노옵 하지 말고 stash 를 계속 유지.
     realtimeClient?.setHandlers({
       onSnapshot: () => {},
-      onPrompt: () => {},
+      onPrompt: nextPrompt => {
+        this.pendingPrompt = nextPrompt
+      },
       onEvent: () => {},
       onError: () => {},
     })
-    fadeToScene(this, 'QuizPlayScene', {
-      duration: 220,
-      data: {
+    // 페이드 종료 시점에 prompt 를 한 번 더 resolve — 220ms 페이드 동안 늦게 도착한 push
+    // 까지 픽업한다. fadeToScene 유틸리티는 data 를 호출 시점에 캡처하므로 여기선 수동 전개.
+    const duration = 220
+    this.cameras.main.fadeOut(duration, 0, 0, 0)
+    this.time.delayedCall(duration, () => {
+      const effectivePrompt = prompt ?? this.pendingPrompt
+      this.scene.start('QuizPlayScene', {
         snapshot,
         currentUserId: this.currentUserId,
-        prompt,
-        wordLength: wordLength ?? prompt?.word.length ?? null,
+        prompt: effectivePrompt,
+        wordLength: wordLength ?? effectivePrompt?.word.length ?? null,
         realtimeClient,
-      },
+      })
     })
   }
 
