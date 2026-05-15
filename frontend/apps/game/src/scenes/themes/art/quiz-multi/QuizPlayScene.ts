@@ -30,13 +30,20 @@ const CHIP_BG = 0xffe9c2
 const STROKE_THROTTLE_MS = 60
 
 /**
- * 플레이어 슬롯 아바타로 쓸 동물 이모지 — joinOrder 기준 순환. 닉네임 첫 글자보다 시각적으로 친근하고 캐릭터 느낌.
+ * 플레이어 슬롯 아바타 — 게임 공용 캐릭터 스프라이트(common/player/character_*.png) 의 색상 변형을 joinOrder 로 순환.
+ * 다른 씬(taekwondo) 이 같은 파일을 다른 키로 로드해도 충돌 안 나게 quiz 전용 키 사용.
  */
-const SLOT_AVATARS = ['🦊', '🐻', '🐼', '🐰']
+const SLOT_AVATAR_COLORS = ['blue', 'orange', 'green', 'red'] as const
+const SLOT_AVATAR_FRAME_SIZE = 313
 
-function slotAvatar(joinOrder: number): string {
-  if (joinOrder < 0) return SLOT_AVATARS[0]
-  return SLOT_AVATARS[joinOrder % SLOT_AVATARS.length]
+function slotAvatarKey(joinOrder: number): string {
+  const color = SLOT_AVATAR_COLORS[(joinOrder < 0 ? 0 : joinOrder) % SLOT_AVATAR_COLORS.length]
+  return `quiz-avatar-${color}`
+}
+
+function slotAvatarPath(joinOrder: number): string {
+  const color = SLOT_AVATAR_COLORS[(joinOrder < 0 ? 0 : joinOrder) % SLOT_AVATAR_COLORS.length]
+  return `images/common/player/character_${color}.png`
 }
 
 const BRUSH_COLORS = [
@@ -120,6 +127,16 @@ export class QuizPlayScene extends Phaser.Scene {
         assetPath('images/themes/art/background/background.png'),
       )
     }
+    // 슬롯 아바타 — 4명 정원이라 4색 모두 미리 로드. spritesheet 로 받아서 frame 0 (정면 down 첫 프레임) 만 표시.
+    SLOT_AVATAR_COLORS.forEach((_, index) => {
+      const key = slotAvatarKey(index)
+      if (!this.textures.exists(key)) {
+        this.load.spritesheet(key, assetPath(slotAvatarPath(index)), {
+          frameWidth: SLOT_AVATAR_FRAME_SIZE,
+          frameHeight: SLOT_AVATAR_FRAME_SIZE,
+        })
+      }
+    })
   }
 
   create() {
@@ -376,26 +393,24 @@ export class QuizPlayScene extends Phaser.Scene {
       return
     }
 
-    // 닉네임 첫 글자 → 동물 이모지 아바타 (joinOrder 기준 순환).
-    const avatarSize = Math.min(64, w * 0.46)
-    const avatarY = y + Math.max(48, h * 0.32)
-    const avatar = this.add.circle(
+    // 게임 공용 캐릭터 스프라이트(spritesheet frame 0 = 정면 아래 보는 첫 프레임) 를 아바타로 사용.
+    const avatarSize = Math.min(72, w * 0.52)
+    const avatarY = y + Math.max(52, h * 0.34)
+    const avatarBg = this.add.circle(
       x + w / 2,
       avatarY,
       avatarSize / 2,
       isDrawer ? 0xfff2cc : 0xeaf0ff,
       1,
     )
-    avatar.setStrokeStyle(3, isDrawer ? 0x7b461a : 0x91a5c4, 1)
-    container.add(avatar)
-    container.add(
-      this.add
-        .text(x + w / 2, avatarY, slotAvatar(member.joinOrder), {
-          fontFamily: FONT_FAMILY,
-          fontSize: `${Math.floor(avatarSize * 0.72)}px`,
-        })
-        .setOrigin(0.5),
-    )
+    avatarBg.setStrokeStyle(3, isDrawer ? 0x7b461a : 0x91a5c4, 1)
+    container.add(avatarBg)
+    const avatarKey = slotAvatarKey(member.joinOrder)
+    if (this.textures.exists(avatarKey)) {
+      const sprite = this.add.sprite(x + w / 2, avatarY + avatarSize * 0.06, avatarKey, 0)
+      sprite.setDisplaySize(avatarSize * 1.05, avatarSize * 1.05)
+      container.add(sprite)
+    }
     container.add(
       this.add
         .text(x + w / 2, y + h - 58, member.nickname, {
@@ -547,26 +562,20 @@ export class QuizPlayScene extends Phaser.Scene {
   ) {
     const cy = y + h / 2 + 6
     let cx = x
-    const size = Math.min(46, h * 0.34)
+    // 팔레트 swatch — 어두운 베이스 링 제거하고 색만 꽉 채움. 선택된 swatch 만 두꺼운 cream 보더로 강조.
+    const size = Math.min(52, h * 0.38)
     BRUSH_COLORS.forEach(option => {
       const selected = this.selectedTool === 'brush' && this.brushColor === option.color
-      const base = this.add.circle(cx + size / 2, cy + 3, size / 2 + 6, 0x101827, 1)
-      base.setStrokeStyle(selected ? 4 : 2, selected ? 0xffe9c2 : 0x6b778d, 1)
-      const swatch = this.add.circle(cx + size / 2, cy, size / 2, option.value, 1)
-      swatch.setStrokeStyle(2, 0xffffff, selected ? 1 : 0.65)
+      const radius = size / 2 + (selected ? 4 : 0)
+      const swatch = this.add.circle(cx + size / 2, cy, radius, option.value, 1)
+      swatch.setStrokeStyle(selected ? 4 : 2, selected ? 0xffe9c2 : 0xffffff, selected ? 1 : 0.85)
       swatch.setInteractive({ useHandCursor: true })
       swatch.on(Phaser.Input.Events.POINTER_DOWN, () => {
         this.selectedTool = 'brush'
         this.brushColor = option.color
         this.drawLayout()
       })
-      base.setInteractive({ useHandCursor: true })
-      base.on(Phaser.Input.Events.POINTER_DOWN, () => {
-        this.selectedTool = 'brush'
-        this.brushColor = option.color
-        this.drawLayout()
-      })
-      container.add([base, swatch])
+      container.add(swatch)
       cx += size + 18
     })
 
