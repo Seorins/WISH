@@ -112,6 +112,7 @@ type Props = {
   partnerImageOffsetX?: string
   partnerImageOffsetY?: string
   topicsSample?: boolean
+  recommendedActivitySample?: boolean
   emptyState?: boolean
   onOpenPast?: () => void
   isViewingPast?: boolean
@@ -141,6 +142,7 @@ export function ConversationMain({
   partnerImageOffsetX,
   partnerImageOffsetY,
   topicsSample = false,
+  recommendedActivitySample = false,
   emptyState = false,
   onOpenPast,
   isViewingPast = false,
@@ -219,6 +221,14 @@ export function ConversationMain({
                   </span>
                 ))}
               </div>
+            </div>
+          </div>
+          <div className={styles.summaryCard}>
+            <div className={styles.summaryTitle}>
+              추천 후속 활동 {recommendedActivitySample && <SampleBadge />}
+            </div>
+            <div className={styles.summaryBody}>
+              <div>{summary.recommendedActivity}</div>
             </div>
           </div>
         </div>
