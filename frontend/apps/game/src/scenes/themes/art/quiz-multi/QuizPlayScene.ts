@@ -49,7 +49,9 @@ function slotCharPath(joinOrder: number): string {
   return `images/themes/art/ui/char${n}.png`
 }
 
+// 검정을 맨 앞에 둬서 기본 펜 색으로 사용. 그림 그릴 때 가장 흔하게 쓰는 색.
 const BRUSH_COLORS = [
+  { label: '검정', color: '#1a1a1a', value: 0x1a1a1a },
   { label: '빨강', color: '#ff4d4d', value: 0xff4d4d },
   { label: '주황', color: '#ffa64a', value: 0xffa64a },
   { label: '노랑', color: '#ffd84a', value: 0xffd84a },
@@ -581,8 +583,10 @@ export class QuizPlayScene extends Phaser.Scene {
     const h = this.scale.height
     const cx = w / 2
     const cy = h * 0.34
+    // 씬 최상위에 직접 add — root(depth 1) 안에 넣고 setDepth(100) 해봐야 Phaser Container 는
+    // 자식 자동 depth-sort 를 안 해서 add 순서대로 그려진다. 결과적으로 layoutContainer 가
+    // 배너 위를 덮어 안 보이던 문제. 씬 root display list 는 depth 로 정렬되므로 여기다 둔다.
     const container = this.add.container(cx, cy).setDepth(100)
-    this.root.add(container)
     this.correctBanner = container
 
     // 배경 + 외곽선. 폭은 문구에 맞춰 dynamic, 높이는 고정.
