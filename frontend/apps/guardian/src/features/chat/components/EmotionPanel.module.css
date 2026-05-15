@@ -4,6 +4,23 @@
   gap: 14px;
   height: 100%;
   min-height: 0;
+  overflow-y: auto;
+  /* 스크롤바 가는 회색 (다른 패널 톤과 통일) */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(124, 92, 255, 0.25) transparent;
+  /* 오른쪽 스크롤바와 카드 그림자가 겹치지 않게 살짝 여백 */
+  padding-right: 4px;
+}
+
+.stack::-webkit-scrollbar {
+  width: 6px;
+}
+.stack::-webkit-scrollbar-thumb {
+  background: rgba(124, 92, 255, 0.25);
+  border-radius: 3px;
+}
+.stack::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .card {
@@ -18,8 +35,7 @@
 }
 
 .cardTrend {
-  flex: 1 1 0;
-  min-height: 0;
+  flex: 0 0 auto;
 }
 
 .cardTitle {
@@ -140,8 +156,8 @@
 
 .chartWrap {
   width: 100%;
-  flex: 1 1 0;
-  min-height: 100px;
+  flex: 0 0 auto;
+  min-height: 160px;
 }
 
 .signalList {
