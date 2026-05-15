@@ -102,6 +102,24 @@ const createdRoom: GomokuRoom = {
   finishedAt: null,
 }
 
+const finishedRoom: GomokuRoom = {
+  ...createdRoom,
+  id: 11,
+  roomCode: 'FIN123',
+  status: 'FINISHED',
+  whitePlayer: {
+    patientProfileId: 8,
+    nickname: 'white',
+  },
+  result: 'BLACK_WIN',
+  endReason: 'FIVE',
+  winner: createdRoom.blackPlayer,
+  moveCount: 9,
+  ranked: true,
+  startedAt: '2026-05-15T00:01:00',
+  finishedAt: '2026-05-15T00:05:00',
+}
+
 describe('GomokuOverlay online room creation', () => {
   beforeEach(() => {
     window.localStorage.clear()
@@ -146,6 +164,28 @@ describe('GomokuOverlay online room creation', () => {
     })
     expect(createGomokuRoom).not.toHaveBeenCalled()
     expect(screen.getAllByText(AUTH_REQUIRED_MESSAGE).length).toBeGreaterThan(0)
+  })
+
+  it('allows creating the next online room after a room finishes', async () => {
+    vi.mocked(createGomokuRoom)
+      .mockResolvedValueOnce(apiResponse(finishedRoom))
+      .mockResolvedValueOnce(apiResponse(createdRoom))
+
+    render(<GomokuOverlay open onClose={vi.fn()} patientProfileId={7} />)
+
+    fireEvent.click(screen.getByRole('button', { name: ONLINE_LABEL }))
+    fireEvent.click(screen.getByRole('button', { name: CREATE_ROOM_LABEL }))
+
+    expect(await screen.findByText('FIN123')).toBeTruthy()
+
+    const createNextRoomButton = screen.getByRole('button', { name: CREATE_ROOM_LABEL })
+    expect((createNextRoomButton as HTMLButtonElement).disabled).toBe(false)
+    fireEvent.click(createNextRoomButton)
+
+    await waitFor(() => {
+      expect(createGomokuRoom).toHaveBeenCalledTimes(2)
+    })
+    expect(await screen.findByText('ABC123')).toBeTruthy()
   })
 
   it('shows online ranking on the ranking tab', async () => {

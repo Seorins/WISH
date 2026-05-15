@@ -122,6 +122,8 @@ const text = {
   opponentTurn: '\uC0C1\uB300 \uCC28\uB840',
   ranked: '\uB7AD\uD0B9 \uBC18\uC601',
   emptyRanking: '\uC544\uC9C1 \uB7AD\uD0B9\uC774 \uC5C6\uC5B4\uC694.',
+  finishedRoomNextGame:
+    '\uB300\uAD6D\uC774 \uB05D\uB0AC\uC5B4\uC694. \uB2E4\uC74C\uD310\uC744 \uB9CC\uB4E4\uAC70\uB098 \uB300\uAE30 \uC911\uC778 \uBC29\uC5D0 \uC785\uC7A5\uD574\uBCF4\uC138\uC694.',
 } as const
 
 const timerOptions = [
@@ -1017,6 +1019,7 @@ function OnlinePanel({
   onJoinRoom: (roomId: number) => void
 }) {
   const [activeTab, setActiveTab] = useState<OnlinePanelTab>('rooms')
+  const canChooseNextRoom = !room || isClosedOnlineRoom(room)
 
   return (
     <section className="gomoku-panel gomoku-online-panel">
@@ -1064,12 +1067,13 @@ function OnlinePanel({
 
       <div className="gomoku-online-tab-panel">
         {activeTab === 'rooms' ? (
-          room ? (
+          !canChooseNextRoom && room ? (
             <p className="gomoku-online-message">
               {room.status === 'WAITING' ? text.waitingOpponent : formatRoomStatus(room)}
             </p>
           ) : (
             <>
+              {room ? <p className="gomoku-online-message">{text.finishedRoomNextGame}</p> : null}
               <div className="gomoku-online-actions">
                 <button type="button" onClick={onCreateRoom} disabled={busy}>
                   {text.createRoom}
@@ -1320,6 +1324,10 @@ function formatRoomStatus(room: GomokuRoom) {
   if (room.status === 'CANCELLED') return text.cancelled
   if (room.result === 'DRAW') return text.draw
   return room.winner?.nickname ?? text.five
+}
+
+function isClosedOnlineRoom(room: GomokuRoom) {
+  return room.status === 'FINISHED' || room.status === 'CANCELLED'
 }
 
 function formatRuleSet(rule: RuleSet) {
