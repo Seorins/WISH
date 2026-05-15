@@ -19,11 +19,11 @@ CREATE TABLE gomoku_matches (
     updated_at TIMESTAMP NOT NULL,
     CONSTRAINT uk_gomoku_matches_room_code UNIQUE (room_code),
     CONSTRAINT fk_gomoku_matches_black_patient
-        FOREIGN KEY (black_patient_profile_id) REFERENCES patient_profiles(id),
+        FOREIGN KEY (black_patient_profile_id) REFERENCES patient_profiles(id) ON DELETE CASCADE,
     CONSTRAINT fk_gomoku_matches_white_patient
-        FOREIGN KEY (white_patient_profile_id) REFERENCES patient_profiles(id),
+        FOREIGN KEY (white_patient_profile_id) REFERENCES patient_profiles(id) ON DELETE CASCADE,
     CONSTRAINT fk_gomoku_matches_winner_patient
-        FOREIGN KEY (winner_patient_profile_id) REFERENCES patient_profiles(id)
+        FOREIGN KEY (winner_patient_profile_id) REFERENCES patient_profiles(id) ON DELETE CASCADE
 );
 
 CREATE INDEX idx_gomoku_matches_status_created
