@@ -1,5 +1,22 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
+  createGomokuRoom,
+  getGomokuRanking,
+  getGomokuRoom,
+  getMyGomokuStats,
+  getWaitingGomokuRooms,
+  joinGomokuRoom,
+  leaveGomokuRoom,
+  playGomokuMove,
+  resignGomokuRoom,
+  type GomokuEndReason,
+  type GomokuRanking,
+  type GomokuRoom,
+  type GomokuRuleSet as ApiGomokuRuleSet,
+  type GomokuStats,
+  type GomokuStone as ApiGomokuStone,
+} from '@wish/api-client'
+import {
   GOMOKU_BOARD_SIZE,
   applyMove,
   chooseComputerMove,
@@ -21,12 +38,13 @@ type GomokuOverlayProps = {
   onClose: () => void
 }
 
-type GameMode = 'local' | 'computer'
+type GameMode = 'local' | 'computer' | 'online'
 
 const HUMAN_STONE: Stone = 'black'
 const COMPUTER_STONE: Stone = 'white'
 const DEFAULT_TIMER_SECONDS = 300
 const COMPUTER_THINK_DELAY_MS = 420
+const ONLINE_POLL_INTERVAL_MS = 1500
 
 const text = {
   title: '\uAD11\uC7A5 \uC624\uBAA9',
@@ -35,6 +53,7 @@ const text = {
   mode: '\uB300\uC804',
   local: '2\uC778',
   computer: '\uCEF4\uD4E8\uD130',
+  online: '\uC628\uB77C\uC778',
   computerLevel: '\uCEF4\uD4E8\uD130 \uB09C\uC774\uB3C4',
   beginner: '\uCD08\uAE09',
   intermediate: '\uC911\uAE09',
@@ -54,6 +73,9 @@ const text = {
   current: '\uCC28\uB840',
   wins: '\uC2B9',
   draws: '\uBB34',
+  losses: '\uD328',
+  winRate: '\uC2B9\uB960',
+  totalGames: '\uC804\uC801',
   computerThinking: '\uCEF4\uD4E8\uD130\uAC00 \uC218\uB97C \uACC4\uC0B0\uD558\uB294 \uC911',
   forbidden: '\uAE08\uC218\uC785\uB2C8\uB2E4.',
   emptyHistory: '\uC544\uC9C1 \uB450\uC5B4\uC9C4 \uC218\uAC00 \uC5C6\uC5B4\uC694.',
@@ -63,6 +85,31 @@ const text = {
   playing: '\uB300\uAD6D \uC9C4\uD589 \uC911',
   timeout: '\uC2DC\uAC04\uC774 \uB05D\uB0AC\uC5B4\uC694.',
   five: '5\uBAA9\uC744 \uC644\uC131\uD588\uC5B4\uC694.',
+  lobby: '\uB85C\uBE44',
+  createRoom: '\uBC29 \uB9CC\uB4E4\uAE30',
+  refresh: '\uC0C8\uB85C\uACE0\uCE68',
+  join: '\uC785\uC7A5',
+  leaveRoom: '\uBC29 \uB098\uAC00\uAE30',
+  resign: '\uAE30\uAD8C',
+  waitingRooms: '\uB300\uAE30 \uC911\uC778 \uBC29',
+  waiting: '\uB300\uAE30',
+  waitingOpponent: '\uC0C1\uB300\uB97C \uAE30\uB2E4\uB9AC\uB294 \uC911',
+  noRooms: '\uC785\uC7A5\uD560 \uBC29\uC774 \uC5C6\uC5B4\uC694.',
+  roomCode: '\uBC29 \uCF54\uB4DC',
+  myStats: '\uB0B4 \uC804\uC801',
+  ranking: '\uB7AD\uD0B9',
+  onlineOnlyRanked:
+    '\uC628\uB77C\uC778 \uB300\uAD6D\uB9CC \uB7AD\uD0B9\uC5D0 \uBC18\uC601\uB3FC\uC694.',
+  onlineLoadingFailed:
+    '\uC628\uB77C\uC778 \uC815\uBCF4\uB97C \uBD88\uB7EC\uC624\uC9C0 \uBABB\uD588\uC5B4\uC694.',
+  onlineActionFailed: '\uC694\uCCAD\uC744 \uCC98\uB9AC\uD558\uC9C0 \uBABB\uD588\uC5B4\uC694.',
+  cancelled: '\uBC29\uC774 \uB2EB\uD614\uC5B4\uC694.',
+  resigned: '\uAE30\uAD8C\uC73C\uB85C \uB300\uAD6D\uC774 \uB05D\uB0AC\uC5B4\uC694.',
+  left: '\uC0C1\uB300\uAC00 \uB098\uAC14\uC5B4\uC694.',
+  myTurn: '\uB0B4 \uCC28\uB840',
+  opponentTurn: '\uC0C1\uB300 \uCC28\uB840',
+  ranked: '\uB7AD\uD0B9 \uBC18\uC601',
+  emptyRanking: '\uC544\uC9C1 \uB7AD\uD0B9\uC774 \uC5C6\uC5B4\uC694.',
 } as const
 
 const timerOptions = [
@@ -89,20 +136,64 @@ export function GomokuOverlay({ open, onClose }: GomokuOverlayProps) {
   const [isComputerThinking, setIsComputerThinking] = useState(false)
   const [hintMove, setHintMove] = useState<Position | null>(null)
   const [scoreboard, setScoreboard] = useState({ black: 0, white: 0, draw: 0 })
+  const [onlineRoom, setOnlineRoom] = useState<GomokuRoom | null>(null)
+  const [waitingRooms, setWaitingRooms] = useState<GomokuRoom[]>([])
+  const [onlineStats, setOnlineStats] = useState<GomokuStats | null>(null)
+  const [onlineRanking, setOnlineRanking] = useState<GomokuRanking | null>(null)
+  const [onlineBusy, setOnlineBusy] = useState(false)
+  const [onlineError, setOnlineError] = useState('')
+  const [onlineTick, setOnlineTick] = useState(() => Date.now())
   const recordedResultRef = useRef<string | null>(null)
+  const syncedOnlineResultRef = useRef<number | null>(null)
+
+  const onlineMoves = useMemo(() => onlineRoom?.moves.map(toLocalMove) ?? [], [onlineRoom])
+  const activeMoves = mode === 'online' ? onlineMoves : moves
+  const activeRuleSet =
+    mode === 'online' && onlineRoom ? fromApiRuleSet(onlineRoom.ruleSet) : ruleSet
 
   const { board, status } = useMemo(
-    () => deriveStatusFromMoves(moves, ruleSet, GOMOKU_BOARD_SIZE),
-    [moves, ruleSet],
+    () => deriveStatusFromMoves(activeMoves, activeRuleSet, GOMOKU_BOARD_SIZE),
+    [activeMoves, activeRuleSet],
   )
-  const currentTurn: Stone = moves.length % 2 === 0 ? 'black' : 'white'
-  const lastMove = moves.at(-1)?.position ?? null
+  const currentTurn: Stone =
+    mode === 'online'
+      ? onlineRoom
+        ? fromApiStone(onlineRoom.currentTurn)
+        : 'black'
+      : moves.length % 2 === 0
+        ? 'black'
+        : 'white'
+  const lastMove = activeMoves.at(-1)?.position ?? null
+  const onlineGameStatus = useMemo(
+    () => (onlineRoom ? getOnlineGameStatus(onlineRoom, status) : null),
+    [onlineRoom, status],
+  )
   const effectiveStatus = useMemo(
-    () => withTimeoutStatus(status, timeoutWinner),
-    [status, timeoutWinner],
+    () => onlineGameStatus ?? withTimeoutStatus(status, timeoutWinner),
+    [onlineGameStatus, status, timeoutWinner],
   )
+  const onlineRoomId = onlineRoom?.id ?? null
+  const onlineRoomStatus = onlineRoom?.status ?? null
+  const myOnlineStone = onlineRoom?.myStone ? fromApiStone(onlineRoom.myStone) : null
+  const onlineStatusMessage = onlineRoom
+    ? getOnlineStatusMessage(onlineRoom, myOnlineStone, currentTurn)
+    : ''
   const canHumanPlay =
-    effectiveStatus.phase === 'playing' && (mode === 'local' || currentTurn === HUMAN_STONE)
+    mode === 'online'
+      ? Boolean(
+          onlineRoom &&
+          onlineRoom.status === 'PLAYING' &&
+          myOnlineStone === currentTurn &&
+          effectiveStatus.phase === 'playing',
+        )
+      : effectiveStatus.phase === 'playing' && (mode === 'local' || currentTurn === HUMAN_STONE)
+  const onlineTimers = useMemo(
+    () =>
+      onlineRoom
+        ? calculateOnlineTimers(onlineRoom, onlineTick || Date.now())
+        : { black: timerSeconds, white: timerSeconds },
+    [onlineRoom, onlineTick, timerSeconds],
+  )
 
   const resetGame = useCallback(() => {
     setMoves([])
@@ -113,6 +204,167 @@ export function GomokuOverlay({ open, onClose }: GomokuOverlayProps) {
     setIsComputerThinking(false)
     recordedResultRef.current = null
   }, [timerSeconds])
+
+  const loadOnlineDashboard = useCallback(async () => {
+    try {
+      const [roomsResponse, statsResponse, rankingResponse] = await Promise.all([
+        getWaitingGomokuRooms({ size: 12 }),
+        getMyGomokuStats(),
+        getGomokuRanking(10, 1),
+      ])
+      setWaitingRooms(roomsResponse.data?.content ?? [])
+      setOnlineStats(statsResponse.data ?? null)
+      setOnlineRanking(rankingResponse.data ?? null)
+      setOnlineError('')
+    } catch (error) {
+      setOnlineError(getApiErrorMessage(error, text.onlineLoadingFailed))
+    }
+  }, [])
+
+  const refreshOnlineRoom = useCallback(async (roomId: number) => {
+    try {
+      const response = await getGomokuRoom(roomId)
+      if (!response.data) {
+        throw new Error(text.onlineLoadingFailed)
+      }
+      setOnlineRoom(response.data)
+      setOnlineError('')
+    } catch (error) {
+      setOnlineError(getApiErrorMessage(error, text.onlineLoadingFailed))
+    }
+  }, [])
+
+  const handleModeChange = useCallback((nextMode: GameMode) => {
+    setMode(nextMode)
+    if (nextMode === 'online') {
+      setTimerEnabled(true)
+    }
+  }, [])
+
+  const handleOnlineCreate = useCallback(async () => {
+    setOnlineBusy(true)
+    try {
+      const response = await createGomokuRoom({
+        ruleSet: toApiRuleSet(ruleSet),
+        timerSeconds,
+      })
+      if (!response.data) {
+        throw new Error(text.onlineActionFailed)
+      }
+      setOnlineRoom(response.data)
+      setOnlineError('')
+      await loadOnlineDashboard()
+    } catch (error) {
+      setOnlineError(getApiErrorMessage(error, text.onlineActionFailed))
+    } finally {
+      setOnlineBusy(false)
+    }
+  }, [loadOnlineDashboard, ruleSet, timerSeconds])
+
+  const handleOnlineRefresh = useCallback(async () => {
+    setOnlineBusy(true)
+    try {
+      await loadOnlineDashboard()
+      if (onlineRoomId) {
+        await refreshOnlineRoom(onlineRoomId)
+      }
+    } finally {
+      setOnlineBusy(false)
+    }
+  }, [loadOnlineDashboard, onlineRoomId, refreshOnlineRoom])
+
+  const handleOnlineJoin = useCallback(
+    async (roomId: number) => {
+      setOnlineBusy(true)
+      try {
+        const response = await joinGomokuRoom(roomId)
+        if (!response.data) {
+          throw new Error(text.onlineActionFailed)
+        }
+        setOnlineRoom(response.data)
+        setOnlineError('')
+        await loadOnlineDashboard()
+      } catch (error) {
+        setOnlineError(getApiErrorMessage(error, text.onlineActionFailed))
+      } finally {
+        setOnlineBusy(false)
+      }
+    },
+    [loadOnlineDashboard],
+  )
+
+  const handleOnlineResign = useCallback(async () => {
+    if (!onlineRoomId) return
+    setOnlineBusy(true)
+    try {
+      const response = await resignGomokuRoom(onlineRoomId)
+      if (!response.data) {
+        throw new Error(text.onlineActionFailed)
+      }
+      setOnlineRoom(response.data)
+      setOnlineError('')
+      await loadOnlineDashboard()
+    } catch (error) {
+      setOnlineError(getApiErrorMessage(error, text.onlineActionFailed))
+    } finally {
+      setOnlineBusy(false)
+    }
+  }, [loadOnlineDashboard, onlineRoomId])
+
+  const handleOnlineLeave = useCallback(async () => {
+    if (!onlineRoomId) return
+    if (onlineRoom?.status === 'FINISHED' || onlineRoom?.status === 'CANCELLED') {
+      setOnlineRoom(null)
+      await loadOnlineDashboard()
+      return
+    }
+
+    setOnlineBusy(true)
+    try {
+      const response = await leaveGomokuRoom(onlineRoomId)
+      if (!response.data) {
+        throw new Error(text.onlineActionFailed)
+      }
+      setOnlineRoom(response.data)
+      setOnlineError('')
+      await loadOnlineDashboard()
+    } catch (error) {
+      setOnlineError(getApiErrorMessage(error, text.onlineActionFailed))
+    } finally {
+      setOnlineBusy(false)
+    }
+  }, [loadOnlineDashboard, onlineRoom, onlineRoomId])
+
+  const handleOnlineCellClick = useCallback(
+    async (position: Position) => {
+      if (!onlineRoomId || !canHumanPlay) return
+      if (board[position.row][position.col]) return
+
+      const forbidden = detectForbiddenMove(board, position, currentTurn, activeRuleSet)
+      if (forbidden) {
+        setOnlineError(forbidden.message)
+        return
+      }
+
+      setOnlineBusy(true)
+      try {
+        const response = await playGomokuMove(onlineRoomId, position)
+        if (!response.data) {
+          throw new Error(text.onlineActionFailed)
+        }
+        setOnlineRoom(response.data)
+        setOnlineError('')
+        if (response.data.status === 'FINISHED') {
+          await loadOnlineDashboard()
+        }
+      } catch (error) {
+        setOnlineError(getApiErrorMessage(error, text.onlineActionFailed))
+      } finally {
+        setOnlineBusy(false)
+      }
+    },
+    [activeRuleSet, board, canHumanPlay, currentTurn, loadOnlineDashboard, onlineRoomId],
+  )
 
   useEffect(() => {
     if (!open) return
@@ -130,7 +382,15 @@ export function GomokuOverlay({ open, onClose }: GomokuOverlayProps) {
   }, [onClose, open])
 
   useEffect(() => {
-    if (!open || !timerEnabled || effectiveStatus.phase !== 'playing' || isComputerThinking) return
+    if (
+      !open ||
+      mode === 'online' ||
+      !timerEnabled ||
+      effectiveStatus.phase !== 'playing' ||
+      isComputerThinking
+    ) {
+      return
+    }
 
     const intervalId = window.setInterval(() => {
       setTimers(previous => {
@@ -144,7 +404,7 @@ export function GomokuOverlay({ open, onClose }: GomokuOverlayProps) {
     }, 1000)
 
     return () => window.clearInterval(intervalId)
-  }, [currentTurn, effectiveStatus.phase, isComputerThinking, open, timerEnabled])
+  }, [currentTurn, effectiveStatus.phase, isComputerThinking, mode, open, timerEnabled])
 
   useEffect(() => {
     if (
@@ -173,6 +433,8 @@ export function GomokuOverlay({ open, onClose }: GomokuOverlayProps) {
   }, [board, computerLevel, currentTurn, effectiveStatus.phase, mode, moves.length, open, ruleSet])
 
   useEffect(() => {
+    if (mode === 'online') return
+
     if (effectiveStatus.phase === 'playing') {
       recordedResultRef.current = null
       return
@@ -191,15 +453,64 @@ export function GomokuOverlay({ open, onClose }: GomokuOverlayProps) {
       }
       return { ...previous, [effectiveStatus.winner]: previous[effectiveStatus.winner] + 1 }
     })
-  }, [effectiveStatus, moves.length])
+  }, [effectiveStatus, mode, moves.length])
 
   useEffect(() => {
-    resetGame()
-  }, [mode, ruleSet, timerSeconds, resetGame])
+    if (mode !== 'online') {
+      resetGame()
+    }
+  }, [mode, resetGame, ruleSet, timerSeconds])
+
+  useEffect(() => {
+    if (!open || mode !== 'online') return
+    void loadOnlineDashboard()
+  }, [loadOnlineDashboard, mode, open])
+
+  useEffect(() => {
+    if (
+      !open ||
+      mode !== 'online' ||
+      onlineRoomId === null ||
+      (onlineRoomStatus !== 'WAITING' && onlineRoomStatus !== 'PLAYING')
+    ) {
+      return
+    }
+
+    const intervalId = window.setInterval(() => {
+      void refreshOnlineRoom(onlineRoomId)
+    }, ONLINE_POLL_INTERVAL_MS)
+
+    return () => window.clearInterval(intervalId)
+  }, [mode, onlineRoomId, onlineRoomStatus, open, refreshOnlineRoom])
+
+  useEffect(() => {
+    if (!open || mode !== 'online' || onlineRoomStatus !== 'PLAYING') return
+    setOnlineTick(Date.now())
+    const intervalId = window.setInterval(() => setOnlineTick(Date.now()), 1000)
+    return () => window.clearInterval(intervalId)
+  }, [mode, onlineRoomStatus, open])
+
+  useEffect(() => {
+    if (
+      mode !== 'online' ||
+      onlineRoomId === null ||
+      (onlineRoomStatus !== 'FINISHED' && onlineRoomStatus !== 'CANCELLED') ||
+      syncedOnlineResultRef.current === onlineRoomId
+    ) {
+      return
+    }
+    syncedOnlineResultRef.current = onlineRoomId
+    void loadOnlineDashboard()
+  }, [loadOnlineDashboard, mode, onlineRoomId, onlineRoomStatus])
 
   if (!open) return null
 
   const handleCellClick = (position: Position) => {
+    if (mode === 'online') {
+      void handleOnlineCellClick(position)
+      return
+    }
+
     if (!canHumanPlay) return
     if (board[position.row][position.col]) return
 
@@ -221,6 +532,7 @@ export function GomokuOverlay({ open, onClose }: GomokuOverlayProps) {
   }
 
   const handleUndo = () => {
+    if (mode === 'online') return
     setMoves(previous =>
       previous.slice(0, Math.max(0, previous.length - (mode === 'computer' ? 2 : 1))),
     )
@@ -231,7 +543,7 @@ export function GomokuOverlay({ open, onClose }: GomokuOverlayProps) {
   }
 
   const handleHint = () => {
-    if (effectiveStatus.phase !== 'playing') return
+    if (mode === 'online' || effectiveStatus.phase !== 'playing') return
     const move = chooseComputerMove(board, 'advanced', currentTurn, ruleSet)
     setHintMove(move)
     setStatusMessage(
@@ -259,8 +571,8 @@ export function GomokuOverlay({ open, onClose }: GomokuOverlayProps) {
             <StatusBanner
               status={effectiveStatus}
               currentTurn={currentTurn}
-              isComputerThinking={isComputerThinking}
-              message={statusMessage}
+              isComputerThinking={mode === 'computer' && isComputerThinking}
+              message={mode === 'online' ? onlineError || onlineStatusMessage : statusMessage}
             />
             <div className="gomoku-board-wrap">
               <div className="gomoku-board" role="grid" aria-label="15 x 15 gomoku board">
@@ -271,7 +583,7 @@ export function GomokuOverlay({ open, onClose }: GomokuOverlayProps) {
                       isSamePosition(linePosition, position),
                     )
                     const last = isSamePosition(lastMove, position)
-                    const hinted = isSamePosition(hintMove, position)
+                    const hinted = mode !== 'online' && isSamePosition(hintMove, position)
                     const className = [
                       'gomoku-cell',
                       cell ? `stone-${cell}` : '',
@@ -288,9 +600,15 @@ export function GomokuOverlay({ open, onClose }: GomokuOverlayProps) {
                         key={`${rowIndex}:${colIndex}`}
                         type="button"
                         role="gridcell"
+                        style={{
+                          left: `${(colIndex / (GOMOKU_BOARD_SIZE - 1)) * 100}%`,
+                          top: `${(rowIndex / (GOMOKU_BOARD_SIZE - 1)) * 100}%`,
+                        }}
                         className={className}
                         aria-label={`${rowIndex + 1}, ${colIndex + 1}`}
-                        disabled={!canHumanPlay || Boolean(cell)}
+                        disabled={
+                          !canHumanPlay || Boolean(cell) || (mode === 'online' && onlineBusy)
+                        }
                         onClick={() => handleCellClick(position)}
                       >
                         {cell ? <span className="gomoku-stone" aria-hidden="true" /> : null}
@@ -309,7 +627,7 @@ export function GomokuOverlay({ open, onClose }: GomokuOverlayProps) {
               ruleSet={ruleSet}
               timerEnabled={timerEnabled}
               timerSeconds={timerSeconds}
-              onModeChange={setMode}
+              onModeChange={handleModeChange}
               onComputerLevelChange={setComputerLevel}
               onRuleSetChange={setRuleSet}
               onTimerEnabledChange={setTimerEnabled}
@@ -317,26 +635,64 @@ export function GomokuOverlay({ open, onClose }: GomokuOverlayProps) {
             />
             <MatchPanel
               currentTurn={currentTurn}
-              timers={timers}
-              scoreboard={scoreboard}
-              timerEnabled={timerEnabled}
+              timers={mode === 'online' ? onlineTimers : timers}
+              scoreboard={mode === 'online' ? null : scoreboard}
+              timerEnabled={mode === 'online' || timerEnabled}
+              blackName={mode === 'online' ? onlineRoom?.blackPlayer.nickname : undefined}
+              whiteName={
+                mode === 'online' ? (onlineRoom?.whitePlayer?.nickname ?? text.waiting) : undefined
+              }
             />
-            <div className="gomoku-actions" aria-label="\uB300\uAD6D \uBA85\uB839">
-              <button type="button" onClick={resetGame}>
-                {text.restart}
-              </button>
-              <button type="button" onClick={handleUndo} disabled={moves.length === 0}>
-                {text.undo}
-              </button>
-              <button
-                type="button"
-                onClick={handleHint}
-                disabled={effectiveStatus.phase !== 'playing'}
-              >
-                {text.hint}
-              </button>
-            </div>
-            <MoveHistory moves={moves} />
+            {mode === 'online' ? (
+              <OnlinePanel
+                room={onlineRoom}
+                waitingRooms={waitingRooms}
+                stats={onlineStats}
+                ranking={onlineRanking}
+                busy={onlineBusy}
+                onCreateRoom={handleOnlineCreate}
+                onRefreshRooms={handleOnlineRefresh}
+                onJoinRoom={handleOnlineJoin}
+              />
+            ) : null}
+            {mode === 'online' ? (
+              <div className="gomoku-actions" aria-label="\uB300\uAD6D \uBA85\uB839">
+                <button type="button" onClick={handleOnlineRefresh} disabled={onlineBusy}>
+                  {text.refresh}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleOnlineResign}
+                  disabled={!onlineRoom || onlineRoom.status !== 'PLAYING' || onlineBusy}
+                >
+                  {text.resign}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleOnlineLeave}
+                  disabled={!onlineRoom || onlineBusy}
+                >
+                  {text.leaveRoom}
+                </button>
+              </div>
+            ) : (
+              <div className="gomoku-actions" aria-label="\uB300\uAD6D \uBA85\uB839">
+                <button type="button" onClick={resetGame}>
+                  {text.restart}
+                </button>
+                <button type="button" onClick={handleUndo} disabled={moves.length === 0}>
+                  {text.undo}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleHint}
+                  disabled={effectiveStatus.phase !== 'playing'}
+                >
+                  {text.hint}
+                </button>
+              </div>
+            )}
+            <MoveHistory moves={activeMoves} />
           </aside>
         </main>
       </section>
@@ -385,6 +741,13 @@ function ControlPanel({
             onClick={() => onModeChange('local')}
           >
             {text.local}
+          </button>
+          <button
+            type="button"
+            className={mode === 'online' ? 'active' : ''}
+            onClick={() => onModeChange('online')}
+          >
+            {text.online}
           </button>
         </div>
       </div>
@@ -443,6 +806,7 @@ function ControlPanel({
           <button
             type="button"
             className={!timerEnabled ? 'active' : ''}
+            disabled={mode === 'online'}
             onClick={() => onTimerEnabledChange(false)}
           >
             {text.timerOff}
@@ -472,38 +836,156 @@ function MatchPanel({
   timers,
   scoreboard,
   timerEnabled,
+  blackName,
+  whiteName,
 }: {
   currentTurn: Stone
   timers: Record<Stone, number>
-  scoreboard: Record<Stone, number> & { draw: number }
+  scoreboard: (Record<Stone, number> & { draw: number }) | null
   timerEnabled: boolean
+  blackName?: string
+  whiteName?: string
 }) {
   return (
     <section className="gomoku-panel gomoku-match-panel">
-      <div className="gomoku-player-row active">
+      <div className={`gomoku-player-row ${currentTurn === 'black' ? 'active' : ''}`}>
         <span className="gomoku-player-dot black" />
-        <span>{text.black}</span>
+        <span>{blackName ?? text.black}</span>
         <strong>
-          {scoreboard.black}
-          {text.wins}
+          {scoreboard
+            ? `${scoreboard.black}${text.wins}`
+            : currentTurn === 'black'
+              ? text.current
+              : ''}
         </strong>
         <time>{timerEnabled ? formatTime(timers.black) : '--:--'}</time>
       </div>
-      <div className="gomoku-player-row">
+      <div className={`gomoku-player-row ${currentTurn === 'white' ? 'active' : ''}`}>
         <span className="gomoku-player-dot white" />
-        <span>{text.white}</span>
+        <span>{whiteName ?? text.white}</span>
         <strong>
-          {scoreboard.white}
-          {text.wins}
+          {scoreboard
+            ? `${scoreboard.white}${text.wins}`
+            : currentTurn === 'white'
+              ? text.current
+              : ''}
         </strong>
         <time>{timerEnabled ? formatTime(timers.white) : '--:--'}</time>
       </div>
       <div className="gomoku-current-turn">
         {text.current}: {currentTurn === 'black' ? text.black : text.white}
-        <span>
-          {scoreboard.draw}
-          {text.draw}
-        </span>
+        <span>{scoreboard ? `${scoreboard.draw}${text.draw}` : ''}</span>
+      </div>
+    </section>
+  )
+}
+
+function OnlinePanel({
+  room,
+  waitingRooms,
+  stats,
+  ranking,
+  busy,
+  onCreateRoom,
+  onRefreshRooms,
+  onJoinRoom,
+}: {
+  room: GomokuRoom | null
+  waitingRooms: GomokuRoom[]
+  stats: GomokuStats | null
+  ranking: GomokuRanking | null
+  busy: boolean
+  onCreateRoom: () => void
+  onRefreshRooms: () => void
+  onJoinRoom: (roomId: number) => void
+}) {
+  return (
+    <section className="gomoku-panel gomoku-online-panel">
+      <div className="gomoku-panel-heading">
+        <h2>{text.online}</h2>
+        <span>{text.onlineOnlyRanked}</span>
+      </div>
+
+      {room ? (
+        <div className="gomoku-current-room">
+          <div>
+            <span>{text.roomCode}</span>
+            <strong>{room.roomCode}</strong>
+          </div>
+          <em>{formatRoomStatus(room)}</em>
+        </div>
+      ) : (
+        <>
+          <div className="gomoku-online-actions">
+            <button type="button" onClick={onCreateRoom} disabled={busy}>
+              {text.createRoom}
+            </button>
+            <button type="button" onClick={onRefreshRooms} disabled={busy}>
+              {text.refresh}
+            </button>
+          </div>
+
+          <div className="gomoku-room-list" aria-label={text.waitingRooms}>
+            <h3>{text.waitingRooms}</h3>
+            {waitingRooms.length === 0 ? (
+              <p>{text.noRooms}</p>
+            ) : (
+              waitingRooms.map(waitingRoom => (
+                <div className="gomoku-room-row" key={waitingRoom.id}>
+                  <div>
+                    <strong>{waitingRoom.blackPlayer.nickname}</strong>
+                    <span>
+                      {waitingRoom.roomCode} · {formatRuleSet(fromApiRuleSet(waitingRoom.ruleSet))}
+                    </span>
+                  </div>
+                  <button type="button" onClick={() => onJoinRoom(waitingRoom.id)} disabled={busy}>
+                    {text.join}
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+        </>
+      )}
+
+      <div className="gomoku-stats-grid">
+        <div>
+          <span>{text.totalGames}</span>
+          <strong>{stats?.totalGames ?? 0}</strong>
+        </div>
+        <div>
+          <span>{text.wins}</span>
+          <strong>{stats?.wins ?? 0}</strong>
+        </div>
+        <div>
+          <span>{text.draws}</span>
+          <strong>{stats?.draws ?? 0}</strong>
+        </div>
+        <div>
+          <span>{text.losses}</span>
+          <strong>{stats?.losses ?? 0}</strong>
+        </div>
+        <div>
+          <span>{text.winRate}</span>
+          <strong>{formatPercent(stats?.winRate ?? 0)}</strong>
+        </div>
+      </div>
+
+      <div className="gomoku-ranking">
+        <h3>{text.ranking}</h3>
+        {ranking && ranking.entries.length > 0 ? (
+          <ol>
+            {ranking.entries.map(entry => (
+              <li key={entry.patientProfileId} className={entry.isMe ? 'me' : ''}>
+                <span>{entry.rank}</span>
+                <strong>{entry.nickname}</strong>
+                <em>{formatPercent(entry.winRate)}</em>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p>{text.emptyRanking}</p>
+        )}
       </div>
     </section>
   )
@@ -574,6 +1056,119 @@ function withTimeoutStatus(status: GameStatus, timeoutWinner: Stone | null): Gam
     winningLine: [],
     reason: 'timeout',
   }
+}
+
+function getOnlineGameStatus(room: GomokuRoom, fallback: GameStatus): GameStatus {
+  if (room.status !== 'FINISHED') return room.status === 'PLAYING' ? fallback : { phase: 'playing' }
+  if (room.result === 'DRAW') return { phase: 'draw', reason: 'board-full' }
+
+  const winner: Stone = room.result === 'BLACK_WIN' ? 'black' : 'white'
+  return {
+    phase: 'won',
+    winner,
+    winningLine: fallback.phase === 'won' && fallback.winner === winner ? fallback.winningLine : [],
+    reason: room.endReason === 'TIMEOUT' ? 'timeout' : 'five',
+  }
+}
+
+function getOnlineStatusMessage(room: GomokuRoom, myStone: Stone | null, currentTurn: Stone) {
+  if (room.status === 'WAITING') return text.waitingOpponent
+  if (room.status === 'CANCELLED') return text.cancelled
+  if (room.status === 'FINISHED') return formatEndReason(room.endReason)
+  if (myStone === null) return currentTurn === 'black' ? text.black : text.white
+  return myStone === currentTurn ? text.myTurn : text.opponentTurn
+}
+
+function formatEndReason(reason: GomokuEndReason | null) {
+  if (reason === 'RESIGN') return text.resigned
+  if (reason === 'LEAVE') return text.left
+  if (reason === 'TIMEOUT') return text.timeout
+  if (reason === 'BOARD_FULL') return text.draw
+  return text.five
+}
+
+function calculateOnlineTimers(room: GomokuRoom, now: number): Record<Stone, number> {
+  const timers: Record<Stone, number> = {
+    black: room.timerSeconds,
+    white: room.timerSeconds,
+  }
+  const startedAt = toTimestamp(room.startedAt)
+  if (!startedAt) return timers
+
+  let turnStartedAt = startedAt
+  for (const move of room.moves) {
+    const playedAt = toTimestamp(move.playedAt)
+    if (!playedAt) continue
+    const stone = fromApiStone(move.stone)
+    timers[stone] = Math.max(0, timers[stone] - Math.floor((playedAt - turnStartedAt) / 1000))
+    turnStartedAt = playedAt
+  }
+
+  if (room.status === 'PLAYING') {
+    const current = fromApiStone(room.currentTurn)
+    timers[current] = Math.max(0, timers[current] - Math.floor((now - turnStartedAt) / 1000))
+  }
+
+  return timers
+}
+
+function toLocalMove(move: GomokuRoom['moves'][number]): GomokuMove {
+  return {
+    position: { row: move.row, col: move.col },
+    stone: fromApiStone(move.stone),
+    source: 'human',
+  }
+}
+
+function fromApiStone(stone: ApiGomokuStone): Stone {
+  return stone === 'BLACK' ? 'black' : 'white'
+}
+
+function toApiRuleSet(rule: RuleSet): ApiGomokuRuleSet {
+  return rule === 'renju-lite' ? 'RENJU_LITE' : 'FREESTYLE'
+}
+
+function fromApiRuleSet(rule: ApiGomokuRuleSet): RuleSet {
+  return rule === 'RENJU_LITE' ? 'renju-lite' : 'freestyle'
+}
+
+function formatRoomStatus(room: GomokuRoom) {
+  if (room.status === 'WAITING') return text.waiting
+  if (room.status === 'PLAYING') return text.playing
+  if (room.status === 'CANCELLED') return text.cancelled
+  if (room.result === 'DRAW') return text.draw
+  return room.winner?.nickname ?? text.five
+}
+
+function formatRuleSet(rule: RuleSet) {
+  return rule === 'renju-lite' ? text.renju : text.freestyle
+}
+
+function formatPercent(value: number) {
+  return `${Math.round(value * 100)}%`
+}
+
+function toTimestamp(value: string | null | undefined) {
+  if (!value) return null
+  const time = new Date(value).getTime()
+  return Number.isFinite(time) ? time : null
+}
+
+type ApiErrorShape = {
+  response?: {
+    data?: {
+      message?: string
+    }
+  }
+}
+
+function getApiErrorMessage(error: unknown, fallback: string) {
+  if (typeof error === 'object' && error !== null && 'response' in error) {
+    const response = (error as ApiErrorShape).response
+    if (response?.data?.message) return response.data.message
+  }
+  if (error instanceof Error && error.message) return error.message
+  return fallback
 }
 
 function formatMoveNumber(position: Position) {

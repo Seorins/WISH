@@ -59,6 +59,8 @@ const FORBIDDEN_MESSAGES: Record<ForbiddenMove['type'], string> = {
   'double-three': '\uD751\uC740 3-3 \uAE08\uC218\uC785\uB2C8\uB2E4.',
   'double-four': '\uD751\uC740 4-4 \uAE08\uC218\uC785\uB2C8\uB2E4.',
 }
+const OPEN_THREE_PATTERNS = ['.XXX.', '.XX.X.', '.X.XX.'] as const
+const DIRECTIONAL_PATTERN_RADIUS = 5
 
 export function createEmptyBoard(size = GOMOKU_BOARD_SIZE): Board {
   return Array.from({ length: size }, () => Array<Cell>(size).fill(null))
@@ -165,7 +167,7 @@ export function detectForbiddenMove(
   }
 
   const openThrees = DIRECTIONS.filter(direction =>
-    hasOpenContiguousLine(nextBoard, position, stone, direction, 3, 2),
+    hasOpenThree(nextBoard, position, stone, direction),
   ).length
   if (openThrees >= 2) {
     return { type: 'double-three', message: FORBIDDEN_MESSAGES['double-three'] }
@@ -314,6 +316,56 @@ function hasOpenContiguousLine(
     Number(isInsideBoard(board, after) && board[after.row][after.col] === null)
 
   return openEnds >= requiredOpenEnds
+}
+
+function hasOpenThree(
+  board: Board,
+  origin: Position,
+  stone: Stone,
+  direction: (typeof DIRECTIONS)[number],
+) {
+  const line = getDirectionalPattern(board, origin, stone, direction)
+  const centerIndex = DIRECTIONAL_PATTERN_RADIUS
+
+  return OPEN_THREE_PATTERNS.some(pattern => containsPatternAtOrigin(line, centerIndex, pattern))
+}
+
+function getDirectionalPattern(
+  board: Board,
+  origin: Position,
+  stone: Stone,
+  direction: (typeof DIRECTIONS)[number],
+) {
+  let pattern = ''
+
+  for (
+    let offset = -DIRECTIONAL_PATTERN_RADIUS;
+    offset <= DIRECTIONAL_PATTERN_RADIUS;
+    offset += 1
+  ) {
+    const row = origin.row + direction.dRow * offset
+    const col = origin.col + direction.dCol * offset
+    const position = { row, col }
+    if (!isInsideBoard(board, position)) {
+      pattern += '#'
+    } else if (board[row][col] === null) {
+      pattern += '.'
+    } else {
+      pattern += board[row][col] === stone ? 'X' : '#'
+    }
+  }
+
+  return pattern
+}
+
+function containsPatternAtOrigin(line: string, centerIndex: number, pattern: string) {
+  for (let start = 0; start <= line.length - pattern.length; start += 1) {
+    const end = start + pattern.length
+    if (centerIndex < start || centerIndex >= end) continue
+    if (line.slice(start, end) === pattern) return true
+  }
+
+  return false
 }
 
 function getCandidateMoves(board: Board) {
