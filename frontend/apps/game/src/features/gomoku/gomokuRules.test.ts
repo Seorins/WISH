@@ -79,6 +79,30 @@ describe('gomoku rules', () => {
       type: 'double-four',
     })
   })
+
+  it('blocks broken double-three moves for black in renju-lite mode', () => {
+    const board = withStones(createEmptyBoard(), 'black', [
+      { row: 7, col: 6 },
+      { row: 7, col: 9 },
+      { row: 6, col: 7 },
+      { row: 9, col: 7 },
+    ])
+
+    expect(detectForbiddenMove(board, { row: 7, col: 7 }, 'black', 'renju-lite')).toMatchObject({
+      type: 'double-three',
+    })
+  })
+
+  it('allows the same broken double-three shape outside renju-lite mode', () => {
+    const board = withStones(createEmptyBoard(), 'black', [
+      { row: 7, col: 6 },
+      { row: 7, col: 9 },
+      { row: 6, col: 7 },
+      { row: 9, col: 7 },
+    ])
+
+    expect(detectForbiddenMove(board, { row: 7, col: 7 }, 'black', 'freestyle')).toBeNull()
+  })
 })
 
 describe('gomoku computer opponent', () => {

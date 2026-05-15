@@ -8,13 +8,12 @@
   padding: 0;
   overflow: hidden;
   background:
-    linear-gradient(135deg, rgba(7, 38, 44, 0.88), rgba(24, 48, 40, 0.82)),
-    rgba(13, 21, 20, 0.78);
+    linear-gradient(135deg, rgba(7, 38, 44, 0.88), rgba(24, 48, 40, 0.82)), rgba(13, 21, 20, 0.78);
   color: #17201d;
   font-family:
-    "Pretendard Variable",
+    'Pretendard Variable',
     Pretendard,
-    "Noto Sans KR",
+    'Noto Sans KR',
     -apple-system,
     BlinkMacSystemFont,
     sans-serif;
@@ -29,8 +28,7 @@
   border: 3px solid #315d57;
   border-radius: 8px;
   background:
-    linear-gradient(180deg, rgba(250, 253, 247, 0.98), rgba(234, 240, 224, 0.98)),
-    #f5f8ef;
+    linear-gradient(180deg, rgba(250, 253, 247, 0.98), rgba(234, 240, 224, 0.98)), #f5f8ef;
   box-shadow: 0 24px 60px rgba(4, 13, 15, 0.45);
 }
 
@@ -61,7 +59,9 @@
 .gomoku-close-button,
 .gomoku-actions button,
 .gomoku-segmented button,
-.gomoku-timer-options button {
+.gomoku-timer-options button,
+.gomoku-online-actions button,
+.gomoku-room-row button {
   min-height: 36px;
   border: 2px solid transparent;
   border-radius: 8px;
@@ -127,35 +127,58 @@
 }
 
 .gomoku-board {
+  --gomoku-grid-line: rgba(72, 47, 21, 0.62);
+  --gomoku-grid-line-width: 2px;
+  --gomoku-grid-step: calc(100% / 14);
   box-sizing: border-box;
   width: min(68vh, 100%, 700px);
   aspect-ratio: 1;
-  display: grid;
-  grid-template-columns: repeat(15, 1fr);
-  grid-template-rows: repeat(15, 1fr);
+  position: relative;
+  display: block;
   border: 8px solid #8b602e;
   border-radius: 8px;
-  background:
-    linear-gradient(#6d481f 0 0) 0 0 / 100% 2px no-repeat,
-    linear-gradient(90deg, #6d481f 0 0) 0 0 / 2px 100% no-repeat,
-    linear-gradient(#6d481f 0 0) 100% 100% / 100% 2px no-repeat,
-    linear-gradient(90deg, #6d481f 0 0) 100% 100% / 2px 100% no-repeat,
-    repeating-linear-gradient(0deg, transparent 0 calc((100% - 2px) / 14), rgba(72, 47, 21, 0.62) calc((100% - 2px) / 14) calc((100% - 2px) / 14 + 2px)),
-    repeating-linear-gradient(90deg, transparent 0 calc((100% - 2px) / 14), rgba(72, 47, 21, 0.62) calc((100% - 2px) / 14) calc((100% - 2px) / 14 + 2px)),
-    linear-gradient(135deg, #d8a25a, #efc77a 48%, #bd7d39);
+  overflow: visible;
+  background: linear-gradient(135deg, #d8a25a, #efc77a 48%, #bd7d39);
   box-shadow:
     inset 0 0 0 3px rgba(255, 244, 199, 0.54),
     0 18px 36px rgba(24, 36, 31, 0.25);
 }
 
+.gomoku-board::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(
+      90deg,
+      var(--gomoku-grid-line) 0 var(--gomoku-grid-line-width),
+      transparent var(--gomoku-grid-line-width)
+    ),
+    linear-gradient(
+      180deg,
+      var(--gomoku-grid-line) 0 var(--gomoku-grid-line-width),
+      transparent var(--gomoku-grid-line-width)
+    );
+  background-position:
+    calc(var(--gomoku-grid-line-width) / -2) calc(var(--gomoku-grid-line-width) / -2),
+    calc(var(--gomoku-grid-line-width) / -2) calc(var(--gomoku-grid-line-width) / -2);
+  background-size: var(--gomoku-grid-step) var(--gomoku-grid-step);
+}
+
 .gomoku-cell {
-  position: relative;
+  position: absolute;
   display: grid;
   place-items: center;
+  width: calc(100% / 14);
+  height: calc(100% / 14);
+  transform: translate(-50%, -50%);
   border: 0;
   padding: 0;
   background: transparent;
   cursor: pointer;
+  z-index: 1;
 }
 
 .gomoku-cell:disabled {
@@ -163,7 +186,7 @@
 }
 
 .gomoku-cell.star::before {
-  content: "";
+  content: '';
   width: 8px;
   height: 8px;
   border-radius: 50%;
@@ -173,7 +196,7 @@
 .gomoku-cell.hinted::after,
 .gomoku-cell.last::after,
 .gomoku-cell.winning::after {
-  content: "";
+  content: '';
   position: absolute;
   inset: 15%;
   border-radius: 50%;
@@ -217,8 +240,11 @@
 .gomoku-side {
   min-height: 0;
   display: grid;
-  grid-template-rows: auto auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto auto minmax(0, 1fr);
   gap: 10px;
+  overflow-y: auto;
+  padding-right: 4px;
+  scrollbar-gutter: stable;
 }
 
 .gomoku-panel {
@@ -275,6 +301,17 @@
   font-weight: 900;
 }
 
+.gomoku-player-row.active {
+  color: #0c5f58;
+}
+
+.gomoku-player-row > span:nth-child(2) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .gomoku-player-row time {
   min-width: 48px;
   text-align: right;
@@ -316,6 +353,196 @@
 
 .gomoku-actions button:nth-child(3) {
   background: #0e7280;
+}
+
+.gomoku-panel-heading {
+  display: grid;
+  gap: 3px;
+  margin-bottom: 10px;
+}
+
+.gomoku-panel-heading h2,
+.gomoku-room-list h3,
+.gomoku-ranking h3 {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.2;
+}
+
+.gomoku-panel-heading span,
+.gomoku-room-list p,
+.gomoku-ranking p {
+  margin: 0;
+  color: #61756e;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.35;
+  word-break: keep-all;
+}
+
+.gomoku-online-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.gomoku-online-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.gomoku-online-actions button,
+.gomoku-room-row button {
+  background: #1e5a55;
+  color: #f8fff9;
+}
+
+.gomoku-online-actions button:nth-child(2) {
+  background: #395d57;
+}
+
+.gomoku-online-message {
+  margin: 0;
+  color: #8a3c22;
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1.4;
+  word-break: keep-all;
+}
+
+.gomoku-current-room {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: center;
+  border-radius: 8px;
+  background: #edf5ef;
+  padding: 9px 10px;
+}
+
+.gomoku-current-room div {
+  display: grid;
+  gap: 2px;
+}
+
+.gomoku-current-room span,
+.gomoku-room-row span,
+.gomoku-stats-grid span {
+  color: #61756e;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.gomoku-current-room strong {
+  font-size: 18px;
+  letter-spacing: 0;
+}
+
+.gomoku-current-room em {
+  color: #0e7280;
+  font-style: normal;
+  font-size: 12px;
+  font-weight: 900;
+  text-align: right;
+}
+
+.gomoku-room-list {
+  display: grid;
+  gap: 7px;
+}
+
+.gomoku-room-row {
+  display: grid;
+  grid-template-columns: 1fr 64px;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  border-radius: 8px;
+  background: #eef5ee;
+  padding: 7px;
+}
+
+.gomoku-room-row div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.gomoku-room-row strong,
+.gomoku-room-row span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gomoku-room-row button:disabled,
+.gomoku-online-actions button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.gomoku-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.gomoku-stats-grid div {
+  display: grid;
+  gap: 2px;
+  min-height: 48px;
+  border-radius: 8px;
+  background: #f1f6f2;
+  padding: 7px;
+}
+
+.gomoku-stats-grid strong {
+  color: #17342f;
+  font-size: 16px;
+}
+
+.gomoku-ranking {
+  display: grid;
+  gap: 7px;
+}
+
+.gomoku-ranking ol {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.gomoku-ranking li {
+  display: grid;
+  grid-template-columns: 24px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  border-radius: 7px;
+  background: #eef5ee;
+  padding: 0 8px;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.gomoku-ranking li.me {
+  background: #dceeea;
+  color: #0c5f58;
+}
+
+.gomoku-ranking strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gomoku-ranking em {
+  color: #0e7280;
+  font-style: normal;
 }
 
 .gomoku-history {

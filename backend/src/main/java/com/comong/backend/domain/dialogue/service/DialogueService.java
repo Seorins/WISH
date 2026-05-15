@@ -14,6 +14,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import com.comong.backend.domain.dialogue.catalog.DialogueCatalogService;
 import com.comong.backend.domain.dialogue.catalog.model.ChoiceDefinition;
@@ -59,6 +61,12 @@ public class DialogueService {
 
     /** {@link DialogueTurn} 의 (session_id, step_index) UNIQUE 제약 이름. 마이그레이션과 일치. */
     private static final String UK_DIALOGUE_TURN_SESSION_STEP = "uk_dialogue_turn_session_step";
+
+    /**
+     * 자유 발화(STT) turn 의 표식 — 등대지기 자유 대화에서 catalog 정의가 없는 발화를 의미 (S14P31E103-787 FE 컨트랙트 약속). FE 의
+     * {@code FREE_INPUT_CHOICE_INTENT_ID} 와 정확히 같은 문자열이어야 한다.
+     */
+    private static final String FREE_INPUT_CHOICE_INTENT_ID = "FREE_INPUT";
 
     private final DialogueSessionRepository sessionRepository;
     private final DialogueTurnRepository turnRepository;
@@ -122,28 +130,50 @@ public class DialogueService {
             SubmitTurnRequest request,
             SelectedChoiceRequest choice,
             int stepIndex) {
-        LighthouseIntentCatalog.ChoiceIntentMetadata meta =
-                lighthouseIntentCatalog
-                        .lookup(choice.choiceIntentId())
-                        .orElseThrow(
-                                () ->
-                                        new BusinessException(
-                                                DialogueErrorCode.INVALID_CHOICE_FOR_STEP));
+        boolean isFreeInput = FREE_INPUT_CHOICE_INTENT_ID.equals(choice.choiceIntentId());
+
+        short intensity;
+        List<String> concernFlags;
+        List<String> protectiveFactors;
+        if (isFreeInput) {
+            // 자유 발화는 catalog 정의가 없는 사용자 발화. 의미 메타데이터는 후속 단계에서
+            // RAG/임베딩 기반으로 다루며 여기서는 텍스트만 적재한다.
+            intensity = 0;
+            concernFlags = List.of();
+            protectiveFactors = List.of();
+        } else {
+            LighthouseIntentCatalog.ChoiceIntentMetadata meta =
+                    lighthouseIntentCatalog
+                            .lookup(choice.choiceIntentId())
+                            .orElseThrow(
+                                    () ->
+                                            new BusinessException(
+                                                    DialogueErrorCode.INVALID_CHOICE_FOR_STEP));
+            intensity = meta.intensity();
+            concernFlags = meta.concernFlags();
+            protectiveFactors = meta.protectiveFactors();
+        }
+
         persistTurn(
                 session,
                 stepIndex,
                 request.questionText(),
                 choice.choiceIntentId(),
                 choice.text(),
-                meta.intensity(),
-                meta.concernFlags(),
-                meta.protectiveFactors(),
+                intensity,
+                concernFlags,
+                protectiveFactors,
                 DialogueTurnGeneratedBy.FALLBACK,
                 /* valence */ null,
                 /* tone */ null,
                 /* topicKeywords */ List.of(),
                 /* sentimentWords */ List.of());
         session.incrementStepCount();
+
+        // 자유 발화는 BE 가 다음 scene 을 정의하지 않는다 — FE 가 AI /dialogue/chat 결과로 다음 영철 메시지를 띄움.
+        if (isFreeInput) {
+            return SubmitTurnResponse.of(session, null);
+        }
         SceneResponse nextScene = buildLighthouseNextScene(session, choice.choiceIntentId());
         return SubmitTurnResponse.of(session, nextScene);
     }
@@ -253,11 +283,23 @@ public class DialogueService {
                         : null; // 마을 주민은 catalog ending scene 에서 이미 closingLines 전달
 
         // 세션 종료 후 RAG 임베딩 트리거 — fire-and-forget (S14P31E103-788).
-        // turns 는 @Async 스레드의 트랜잭션 밖에서 lazy 로딩이 끊기므로 미리 fetch.
-        // 실패는 AiDialogueClient 내부에서 swallow — 세션 종료 응답은 정상 처리한다.
+        // 1) lazy 연관(patientProfile) 을 트랜잭션 안에서 미리 unpack — 비동기 스레드에서 LazyInitializationException
+        // 회피.
+        // 2) turns 도 트랜잭션 안에서 fetch.
+        // 3) afterCommit 시점에 호출 — 롤백 시 임베딩이 외부에 새지 않도록 정합성 보장.
+        long patientProfileId = session.getPatientProfile().getId();
+        long sessionIdValue = session.getId();
+        NpcName npcName = session.getNpcName();
         List<DialogueTurn> turns =
-                turnRepository.findAllBySessionIdOrderByStepIndexAsc(session.getId());
-        aiDialogueClient.embedSessionAsync(session, turns);
+                turnRepository.findAllBySessionIdOrderByStepIndexAsc(sessionIdValue);
+        TransactionSynchronizationManager.registerSynchronization(
+                new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        aiDialogueClient.embedSessionAsync(
+                                patientProfileId, sessionIdValue, npcName, turns);
+                    }
+                });
 
         return FinishSessionResponse.of(session, closingLines);
     }

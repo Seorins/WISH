@@ -11,7 +11,13 @@ logger = logging.getLogger(__name__)
 
 GMS_BASE_URL = os.getenv("GMS_ANTHROPIC_BASE_URL", "https://gms.ssafy.io/gmsapi/api.anthropic.com/v1")
 GMS_API_KEY = os.getenv("GMS_KEY", "")
-GMS_MODEL = os.getenv("GMS_ANTHROPIC_MODEL", "claude-sonnet-4-5-20250929")
+# 영철 자유 대화 chat 전용 모델. 응답이 1~2문장으로 짧아 Haiku 로 충분 (토큰/지연 절감).
+# 우선순위: DIALOGUE_CHAT_MODEL → 공용 GMS_ANTHROPIC_MODEL → Haiku 기본값.
+# BE 의 등대지기 LLM scene generation 은 별개로 공용 GMS_ANTHROPIC_MODEL 을 그대로 사용한다.
+GMS_MODEL = os.getenv(
+    "DIALOGUE_CHAT_MODEL",
+    os.getenv("GMS_ANTHROPIC_MODEL", "claude-haiku-4-5-20251001"),
+)
 GMS_VERSION = os.getenv("GMS_ANTHROPIC_VERSION", "2023-06-01")
 GMS_TIMEOUT = int(os.getenv("GMS_ANTHROPIC_TIMEOUT_SECONDS", "5"))
 
