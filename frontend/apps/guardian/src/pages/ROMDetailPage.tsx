@@ -113,7 +113,7 @@ export function ROMDetailPage() {
             <header className={styles.leftHead}>
               <Link to="/" className={styles.backBtn} aria-label="대시보드로 돌아가기">
                 <ChevronLeftIcon className={styles.backIcon} />
-                <span>움직임 범위</span>
+                <span>움직임 기록</span>
               </Link>
             </header>
             <div className={styles.stepNavSlot}>
@@ -129,7 +129,7 @@ export function ROMDetailPage() {
           {isLoading ? (
             <StatePanel
               title="움직임 분석을 불러오는 중입니다"
-              description="최근 체조 세션의 좌표 데이터를 확인하고 관절별 움직임 범위를 계산하고 있습니다."
+              description="최근 체조 세션에서 관절이 얼마나 움직였는지 확인하고 있습니다."
             />
           ) : isError ? (
             <StatePanel
@@ -139,18 +139,18 @@ export function ROMDetailPage() {
           ) : !analysisView ? (
             <StatePanel
               title="최근 체조 세션이 없습니다"
-              description="체조 세션이 저장되면 이 화면에서 관절별 움직임 범위를 확인할 수 있습니다."
+              description="체조 세션이 저장되면 이 화면에서 관절별 움직임 기록을 확인할 수 있습니다."
             />
           ) : !hasAnalyzedMotion ? (
             <StatePanel
-              title="분석 가능한 좌표 데이터가 없습니다"
-              description="최근 세션에 replay 좌표가 없거나 confidence가 낮아 관절 움직임 범위를 계산하지 못했습니다."
+              title="확인할 수 있는 움직임 기록이 없습니다"
+              description="최근 세션에서 관절 위치가 충분히 잡히지 않아 움직임을 확인하지 못했습니다."
             />
           ) : (
             <>
               {analysisView.failedMotionCount > 0 && (
                 <div className={styles.noticeBanner}>
-                  <strong>일부 동작 분석을 불러오지 못했습니다.</strong>
+                  <strong>일부 동작 기록을 불러오지 못했습니다.</strong>
                   <span>
                     {analysisView.failedMotionCount}개 동작은 제외하고{' '}
                     {analysisView.analyzedMotionCount}개 동작 기준으로 표시합니다.
