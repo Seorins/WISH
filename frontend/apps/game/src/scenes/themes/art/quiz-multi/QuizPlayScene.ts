@@ -208,6 +208,13 @@ export class QuizPlayScene extends Phaser.Scene {
     const canvasAreaBottom = h - padding - bottomBarH - padding
     const canvasAreaH = canvasAreaBottom - canvasAreaTop
 
+    // 캔버스/하단 도구바 먼저 그리고, 슬롯(=말풍선 포함) 을 나중에 그려 z-order 우위 확보.
+    // 게스트가 보낸 추측 말풍선은 슬롯 옆으로 펼쳐져 캔버스 영역과 겹치는데, 슬롯이 캔버스보다
+    // 먼저 add 되면 캔버스가 위에 덮어 말풍선이 가려진다.
+    const canvasX = padding + sidebarW + padding
+    const canvasW = w - padding - sidebarW - padding - padding - sidebarW - padding
+    this.drawCanvasArea(container, canvasX, canvasAreaTop, canvasW, canvasAreaH)
+    this.drawBottomBar(container, padding, h - padding - bottomBarH, w - padding * 2, bottomBarH)
     this.drawTopBar(container, padding, padding, w - padding * 2, topBarH)
     this.drawSidebar(container, padding, canvasAreaTop, sidebarW, canvasAreaH, [0, 2], 'left')
     this.drawSidebar(
@@ -219,11 +226,6 @@ export class QuizPlayScene extends Phaser.Scene {
       [1, 3],
       'right',
     )
-
-    const canvasX = padding + sidebarW + padding
-    const canvasW = w - padding - sidebarW - padding - padding - sidebarW - padding
-    this.drawCanvasArea(container, canvasX, canvasAreaTop, canvasW, canvasAreaH)
-    this.drawBottomBar(container, padding, h - padding - bottomBarH, w - padding * 2, bottomBarH)
 
     if (this.finalMembers) {
       this.drawResultModal(container)
