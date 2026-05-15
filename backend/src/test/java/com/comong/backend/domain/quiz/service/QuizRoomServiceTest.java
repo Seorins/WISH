@@ -262,6 +262,41 @@ class QuizRoomServiceTest {
                                 .class);
     }
 
+    @Test
+    void roundTimeoutAutomaticallyStartsNextRound() throws InterruptedException {
+        QuizRealtimeProperties fastProperties = new QuizRealtimeProperties(true, MIN, MAX, 1, 60);
+        QuizRoomRegistry fastRegistry = new QuizRoomRegistry(fastProperties);
+        QuizRoomService fastService =
+                new QuizRoomService(
+                        fastRegistry, broadcastService, patientProfileService, promptCatalog);
+        stubProfile(1L, 100L, "h");
+        stubProfile(2L, 101L, "g");
+
+        try {
+            QuizRoomSnapshot host = fastService.createRoom(1L);
+            fastService.joinByCode(2L, host.code());
+            fastService.startGame(1L, host.roomId());
+
+            Thread.sleep(3_700L);
+
+            QuizRoom room = fastRegistry.findById(host.roomId()).orElseThrow();
+            assertThat(room.roundNumber()).isEqualTo(2);
+            assertThat(room.roundResolved()).isFalse();
+            verify(broadcastService, times(2))
+                    .broadcastEvent(
+                            eq(host.roomId()),
+                            org.mockito.ArgumentMatchers.argThat(
+                                    ev -> ev != null && "round_started".equals(ev.type())));
+            verify(broadcastService, times(1))
+                    .broadcastEvent(
+                            eq(host.roomId()),
+                            org.mockito.ArgumentMatchers.argThat(
+                                    ev -> ev != null && "round_ended".equals(ev.type())));
+        } finally {
+            fastService.shutdownScheduler();
+        }
+    }
+
     private void stubProfile(long userId, long profileId, String nickname) {
         PatientProfile profile = mock(PatientProfile.class);
         when(profile.getId()).thenReturn(profileId);
