@@ -1010,6 +1010,19 @@ export class QuizPlayScene extends Phaser.Scene {
         })),
       }
       this.drawLayout()
+    } else if (event.type === 'room_reset') {
+      this.returnToLobby(
+        {
+          ...this.snapshot,
+          status: event.status,
+          hostUserId: event.hostUserId,
+          members: event.members,
+          roundNumber: event.roundNumber,
+          currentDrawerUserId: event.currentDrawerUserId,
+          roundEndsAtEpochMillis: null,
+        },
+        event.message ?? '게임이 중단되어 로비로 돌아왔어요.',
+      )
     } else if (event.type === 'round_started') {
       this.snapshot = {
         ...this.snapshot,
@@ -1022,6 +1035,7 @@ export class QuizPlayScene extends Phaser.Scene {
       this.prompt = null
       this.wordLength = event.wordLength
       this.roundEnded = false
+      this.finalMembers = null
       this.roundEndedAt = null
       this.strokes = []
       this.remoteLastPoints.clear()
@@ -1224,11 +1238,16 @@ export class QuizPlayScene extends Phaser.Scene {
         return
       }
       // 라운드 번호가 앞서갔다 — round_ended/round_started 를 놓친 상태
+      if (fresh.status === 'WAITING' && this.snapshot.status === 'PLAYING') {
+        this.returnToLobby(fresh, '게임이 중단되어 로비로 돌아왔어요.')
+        return
+      }
       if (fresh.roundNumber > this.snapshot.roundNumber) {
         this.snapshot = fresh
         this.prompt = null
         this.wordLength = null
         this.roundEnded = false
+        this.finalMembers = null
         this.strokes = []
         this.remoteLastPoints.clear()
         this.setGuessOverlay(!this.isDrawer())
@@ -1272,6 +1291,21 @@ export class QuizPlayScene extends Phaser.Scene {
     return this.isDrawer() && !this.roundEnded && !this.finalMembers
   }
 
+  private returnToLobby(snapshot: QuizRoomSnapshot, statusMessage: string) {
+    if (this.isLeaving) return
+    const client = this.realtimeClient
+    this.realtimeClient = null
+    this.isLeaving = true
+    this.activeBubbles.clear()
+    this.setGuessOverlay(false)
+    this.scene.start('QuizLobbyScene', {
+      snapshot,
+      currentUserId: this.currentUserId,
+      realtimeClient: client,
+      statusMessage,
+    })
+  }
+
   private async handleLeave() {
     if (this.isLeaving) return
     this.isLeaving = true
@@ -1282,8 +1316,23 @@ export class QuizPlayScene extends Phaser.Scene {
   private async restart() {
     if (this.isLeaving) return
     this.isLeaving = true
-    await this.disconnectAndLeave()
-    fadeToScene(this, 'QuizLobbyScene', { duration: 220 })
+    const client = this.realtimeClient
+    this.realtimeClient = null
+    this.activeBubbles.clear()
+    this.setGuessOverlay(false)
+    try {
+      const snapshot = await getQuizRoom(this.snapshot.roomId)
+      this.scene.start('QuizLobbyScene', {
+        snapshot,
+        currentUserId: this.currentUserId,
+        realtimeClient: client,
+        statusMessage: '같은 방에서 한 판 더 준비해요.',
+      })
+    } catch {
+      this.realtimeClient = client
+      this.isLeaving = false
+      await this.handleLeave()
+    }
   }
 
   private async disconnectAndLeave() {

@@ -22,6 +22,7 @@ export {
   type QuizRoomSnapshot,
   type QuizRoomStatus,
   type QuizStrokeMessage,
+  type StartQuizRoomRequest,
 } from './quiz'
 export {
   createPhotoBooth,

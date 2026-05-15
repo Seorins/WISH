@@ -47,6 +47,15 @@ type LobbyState =
   | 'transitioningToPlay'
   | 'leaving'
 
+export interface QuizLobbySceneInit {
+  snapshot: QuizRoomSnapshot
+  currentUserId: number | null
+  realtimeClient: QuizRealtimeClient | null
+  statusMessage?: string
+}
+
+const ROUND_OPTIONS = [3, 6, 9] as const
+const DEFAULT_SELECTED_ROUNDS = 3
 const PALETTE_DANGER = CUTE_CARD_PALETTES.rose
 
 // 카드 팔레트 — 채도 톤다운된 코디네이션 페어. 이전엔 #f4a64a/#6aaa64/#4a8fc4 가 너무 쨍해서 산만했음.
@@ -78,6 +87,8 @@ export class QuizLobbyScene extends Phaser.Scene {
   private snapshot: QuizRoomSnapshot | null = null
   private currentUserId: number | null = null
   private realtimeClient: QuizRealtimeClient | null = null
+  private initialLobbyData: QuizLobbySceneInit | null = null
+  private selectedTotalRounds: (typeof ROUND_OPTIONS)[number] = DEFAULT_SELECTED_ROUNDS
   /**
    * BE 가 `/user/queue/quiz/{roomId}/prompt` 로 push 해주는 제시어를 일단 stash.
    * <p>로비에서 BE 가 startNextRound 를 부르면 (a) roundStarted broadcast (b) sendPromptToUser 를
@@ -97,6 +108,27 @@ export class QuizLobbyScene extends Phaser.Scene {
 
   constructor() {
     super('QuizLobbyScene')
+  }
+
+  init(data: Partial<QuizLobbySceneInit> = {}) {
+    this.state = 'modeSelect'
+    this.snapshot = null
+    this.currentUserId = null
+    this.realtimeClient = null
+    this.pendingPrompt = null
+    this.selectedTotalRounds = data.snapshot
+      ? normalizeRoundOption(data.snapshot.totalRounds)
+      : DEFAULT_SELECTED_ROUNDS
+    this.menuContainer = null
+    this.lobbyContainer = null
+    this.initialLobbyData = data.snapshot
+      ? {
+          snapshot: data.snapshot,
+          currentUserId: data.currentUserId ?? null,
+          realtimeClient: data.realtimeClient ?? null,
+          statusMessage: data.statusMessage ?? '',
+        }
+      : null
   }
 
   preload() {
@@ -142,7 +174,11 @@ export class QuizLobbyScene extends Phaser.Scene {
     this.game.events.on('quiz-join-code:submitted', this.handleCodeSubmitted, this)
     this.game.events.on('quiz-join-code:cancelled', this.handleCodeCancelled, this)
 
-    this.showModeSelect()
+    if (this.initialLobbyData) {
+      this.enterTransferredLobby(this.initialLobbyData)
+    } else {
+      this.showModeSelect()
+    }
   }
 
   private layout() {
@@ -393,10 +429,34 @@ export class QuizLobbyScene extends Phaser.Scene {
   private async enterLobby(snapshot: QuizRoomSnapshot) {
     this.snapshot = snapshot
     this.currentUserId = await this.resolveCurrentUserId()
+    this.selectedTotalRounds = normalizeRoundOption(snapshot.totalRounds)
     this.state = 'lobby'
     this.setStatus('')
     this.connectRealtime(snapshot)
     this.drawLobby()
+  }
+
+  private enterTransferredLobby(data: QuizLobbySceneInit) {
+    this.snapshot = data.snapshot
+    this.currentUserId = data.currentUserId
+    this.realtimeClient = data.realtimeClient
+    this.selectedTotalRounds = normalizeRoundOption(data.snapshot.totalRounds)
+    this.state = 'lobby'
+    this.pendingPrompt = null
+    if (this.realtimeClient) {
+      this.attachRealtimeHandlers(this.realtimeClient)
+    } else {
+      this.connectRealtime(data.snapshot)
+    }
+    this.drawLobby()
+    this.setStatus(data.statusMessage ?? '')
+    if (this.currentUserId === null) {
+      void this.resolveCurrentUserId().then(userId => {
+        if (this.state !== 'lobby') return
+        this.currentUserId = userId
+        this.drawLobby()
+      })
+    }
   }
 
   private async resolveCurrentUserId(): Promise<number | null> {
@@ -426,6 +486,28 @@ export class QuizLobbyScene extends Phaser.Scene {
     this.realtimeClient.connect()
   }
 
+  private attachRealtimeHandlers(client: QuizRealtimeClient) {
+    client.setHandlers(this.createRealtimeHandlers())
+  }
+
+  private createRealtimeHandlers() {
+    return {
+      onSnapshot: (next: QuizRoomSnapshot) => {
+        this.snapshot = next
+        if (next.status === 'WAITING') {
+          this.selectedTotalRounds = normalizeRoundOption(next.totalRounds)
+        }
+        this.drawLobby()
+      },
+      onPrompt: (prompt: PromptAssignment) => {
+        this.pendingPrompt = prompt
+      },
+      onEvent: (event: QuizRoomEvent) => this.handleRealtimeEvent(event),
+      onError: (error: Error) => this.setStatus(friendlyWsError(error.message)),
+      onReady: () => this.setStatus(''),
+    }
+  }
+
   private handleRealtimeEvent(event: QuizRoomEvent) {
     if (!this.snapshot) return
     if (event.type === 'member_joined') {
@@ -449,6 +531,20 @@ export class QuizLobbyScene extends Phaser.Scene {
       }
     } else if (event.type === 'status_changed') {
       this.snapshot = { ...this.snapshot, status: event.status }
+    } else if (event.type === 'room_reset') {
+      this.snapshot = {
+        ...this.snapshot,
+        status: event.status,
+        hostUserId: event.hostUserId,
+        members: event.members,
+        roundNumber: event.roundNumber,
+        currentDrawerUserId: event.currentDrawerUserId,
+        roundEndsAtEpochMillis: null,
+      }
+      this.pendingPrompt = null
+      this.selectedTotalRounds = normalizeRoundOption(this.snapshot.totalRounds)
+      this.state = 'lobby'
+      this.setStatus(event.message ?? '')
     } else if (event.type === 'round_started') {
       // 게스트 진입 경로: 호스트가 /start 호출 → BE broadcast → 여기서 플레이 씬 전이.
       // 호스트는 REST 응답 핸들러에서 직접 전이하므로(이미 state=transitioningToPlay), 중복 호출 안 됨.
@@ -548,9 +644,10 @@ export class QuizLobbyScene extends Phaser.Scene {
     // 액션 버튼 — 시작은 큰 게임 버튼, 나가기는 pill.
     const isHost = this.snapshot.hostUserId === this.currentUserId
     const canStart = isHost && this.snapshot.members.length >= this.snapshot.minPlayers
-    const buttonY = h - 110
+    const buttonY = h - 92
 
     if (isHost) {
+      this.drawRoundSelector(container, w / 2, buttonY - 74)
       this.drawStartButton(container, w / 2, buttonY, '게임 시작', canStart)
     } else {
       const waitText = this.add
@@ -701,6 +798,59 @@ export class QuizLobbyScene extends Phaser.Scene {
     hit.on(Phaser.Input.Events.POINTER_OUT, () => draw(false))
     hit.on(Phaser.Input.Events.POINTER_DOWN, onClick)
     return container
+  }
+
+  private drawRoundSelector(container: Phaser.GameObjects.Container, cx: number, cy: number) {
+    const optionW = 56
+    const optionH = 40
+    const gap = 10
+    const labelW = 86
+    const panelW = labelW + ROUND_OPTIONS.length * optionW + (ROUND_OPTIONS.length - 1) * gap + 28
+    const panelH = 54
+
+    const panel = this.add.graphics()
+    panel.fillStyle(0x1a2230, 0.92)
+    panel.fillRoundedRect(cx - panelW / 2, cy - panelH / 2, panelW, panelH, 16)
+    panel.lineStyle(2, 0xffe9c2, 0.35)
+    panel.strokeRoundedRect(cx - panelW / 2, cy - panelH / 2, panelW, panelH, 16)
+    container.add(panel)
+
+    container.add(
+      this.add
+        .text(cx - panelW / 2 + 18, cy, '라운드', {
+          fontFamily: FONT_FAMILY,
+          fontSize: '17px',
+          color: '#ffe9c2',
+          fontStyle: 'bold',
+        })
+        .setOrigin(0, 0.5),
+    )
+
+    let x = cx - panelW / 2 + labelW + optionW / 2
+    ROUND_OPTIONS.forEach(rounds => {
+      const selected = rounds === this.selectedTotalRounds
+      const button = this.add.graphics()
+      button.fillStyle(selected ? 0xffc45f : 0x34445e, 1)
+      button.fillRoundedRect(x - optionW / 2, cy - optionH / 2, optionW, optionH, 12)
+      button.lineStyle(2, selected ? 0xfff3c4 : 0x7d8aa3, 1)
+      button.strokeRoundedRect(x - optionW / 2, cy - optionH / 2, optionW, optionH, 12)
+      const hit = this.add.rectangle(x, cy, optionW, optionH, 0xffffff, 0.001).setOrigin(0.5)
+      hit.setInteractive({ useHandCursor: true })
+      hit.on(Phaser.Input.Events.POINTER_DOWN, () => {
+        this.selectedTotalRounds = rounds
+        this.drawLobby()
+      })
+      const text = this.add
+        .text(x, cy, `${rounds}R`, {
+          fontFamily: FONT_FAMILY,
+          fontSize: '16px',
+          color: selected ? '#3a2614' : '#ffffff',
+          fontStyle: 'bold',
+        })
+        .setOrigin(0.5)
+      container.add([button, hit, text])
+      x += optionW + gap
+    })
   }
 
   private drawStartButton(
@@ -891,7 +1041,7 @@ export class QuizLobbyScene extends Phaser.Scene {
     const roomId = this.snapshot.roomId
     this.state = 'starting'
     this.setStatus('게임 시작 중…')
-    void startQuizRoom(roomId)
+    void startQuizRoom(roomId, { totalRounds: this.selectedTotalRounds })
       .then(response => {
         // 호스트 진입 경로: REST 응답에 prompt 동봉. 토픽의 round_started 가 비슷한 시점에 도착하지만,
         // transitionToPlayScene 가 상태 가드로 중복 전이를 막는다.
@@ -1122,6 +1272,12 @@ function isAlreadyInRoomError(error: unknown): boolean {
   if (!error || typeof error !== 'object' || !('response' in error)) return false
   const response = (error as { response?: { status?: number; data?: { code?: string } } }).response
   return response?.status === 409 && response?.data?.code === 'Q-004'
+}
+
+function normalizeRoundOption(value: number | null | undefined) {
+  return ROUND_OPTIONS.includes(value as (typeof ROUND_OPTIONS)[number])
+    ? (value as (typeof ROUND_OPTIONS)[number])
+    : DEFAULT_SELECTED_ROUNDS
 }
 
 /**
