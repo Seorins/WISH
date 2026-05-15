@@ -48,7 +48,6 @@ type LobbyState =
   | 'leaving'
 
 const PALETTE_DANGER = CUTE_CARD_PALETTES.rose
-const QUIZ_UI_PREVIEW_ENABLED = import.meta.env.DEV
 
 // 게임 느낌 큰 버튼 컬러 — 채도 높여서 카드 톤과 분리.
 const COLOR_SOLO = 0xf4a64a
@@ -183,63 +182,12 @@ export class QuizLobbyScene extends Phaser.Scene {
         this.backToArtRoom(),
       ),
     )
-
-    if (QUIZ_UI_PREVIEW_ENABLED) {
-      container.add(
-        this.createPillButton(
-          w - 350,
-          h - 90,
-          200,
-          56,
-          '출제자 UI 보기',
-          CUTE_CARD_PALETTES.sage,
-          () => this.startUiPreview('drawer'),
-        ),
-      )
-      container.add(
-        this.createPillButton(
-          w - 130,
-          h - 90,
-          200,
-          56,
-          '정답자 UI 보기',
-          CUTE_CARD_PALETTES.butter,
-          () => this.startUiPreview('guesser'),
-        ),
-      )
-    }
   }
 
   private startSingleplayer() {
     if (this.state !== 'modeSelect') return
     // 혼자 모드는 기존 ArtFreeDrawingScene 단독 플로우. 본 로비/멀티 리소스는 정리하지 않아도 다음 씬에서 재초기화됨.
     fadeToScene(this, 'ArtFreeDrawingScene', { duration: 220 })
-  }
-
-  private startUiPreview(role: 'drawer' | 'guesser') {
-    const currentUserId = role === 'drawer' ? 1 : 2
-    const snapshot: QuizRoomSnapshot = {
-      roomId: 'quiz-ui-preview',
-      code: 'PREVIEW',
-      status: 'PLAYING',
-      hostUserId: 1,
-      minPlayers: 2,
-      maxPlayers: 4,
-      members: [
-        { userId: 1, nickname: '나', joinOrder: 0, score: 1, isHost: true },
-        { userId: 2, nickname: '친구', joinOrder: 1, score: 2, isHost: false },
-        { userId: 3, nickname: '민수', joinOrder: 2, score: 0, isHost: false },
-        { userId: 4, nickname: '지우', joinOrder: 3, score: 0, isHost: false },
-      ],
-      stompRoomKey: 'quiz.preview',
-      roundNumber: 1,
-      currentDrawerUserId: 1,
-      roundEndsAtEpochMillis: Date.now() + 90_000,
-      totalRounds: 4,
-    }
-    const prompt = role === 'drawer' ? { roundNumber: 1, word: '사과' } : null
-    this.currentUserId = currentUserId
-    this.transitionToPlayScene(snapshot, prompt, 2)
   }
 
   // ─────────────────────────────────────────────────────────────────────────
