@@ -324,6 +324,10 @@ function hasOpenThree(
   stone: Stone,
   direction: (typeof DIRECTIONS)[number],
 ) {
+  if (hasOpenContiguousLine(board, origin, stone, direction, 4, 1)) {
+    return false
+  }
+
   const line = getDirectionalPattern(board, origin, stone, direction)
   const centerIndex = DIRECTIONAL_PATTERN_RADIUS
 
