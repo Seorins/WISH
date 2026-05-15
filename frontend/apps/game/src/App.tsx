@@ -17,6 +17,7 @@ import SquatDebugPage from './debug/SquatDebugPage'
 import { AuthOverlay } from './features/auth'
 import { ExerciseSessionListOverlay } from './features/exerciseSessions'
 import { GomokuOverlay } from './features/gomoku'
+import { PhotoGalleryOverlay } from './features/photoGallery'
 import { QuizGuessOverlay, QuizJoinCodeOverlay } from './features/quiz-realtime'
 import { LighthouseEmotionController } from './features/lighthouse-emotion/components/LighthouseEmotionController'
 import { VillagerDialogueController } from './features/village-dialogue/components/VillagerDialogueController'
@@ -51,6 +52,7 @@ function App() {
   const [showAuth, setShowAuth] = useState(false)
   const [showExerciseSessions, setShowExerciseSessions] = useState(false)
   const [showGomoku, setShowGomoku] = useState(false)
+  const [showPhotoGallery, setShowPhotoGallery] = useState(false)
   const [showQuizJoinCode, setShowQuizJoinCode] = useState(false)
   const [showQuizGuess, setShowQuizGuess] = useState(false)
   const [villagerNpcId, setVillagerNpcId] = useState<VillagerNpcId | null>(null)
@@ -101,6 +103,7 @@ function App() {
     })
     game.events.on('exercise-sessions:open', () => setShowExerciseSessions(true))
     game.events.on('gomoku:open', () => setShowGomoku(true))
+    game.events.on('photo-gallery:open', () => setShowPhotoGallery(true))
     game.events.on('quiz-join-code:open', () => setShowQuizJoinCode(true))
     game.events.on('quiz-guess:open', () => setShowQuizGuess(true))
     game.events.on('quiz-guess:close', () => setShowQuizGuess(false))
@@ -173,6 +176,11 @@ function App() {
   const handleGomokuClose = useCallback(() => {
     setShowGomoku(false)
     gameRef.current?.events.emit('gomoku:closed')
+  }, [])
+
+  const handlePhotoGalleryClose = useCallback(() => {
+    setShowPhotoGallery(false)
+    gameRef.current?.events.emit('photo-gallery:closed')
   }, [])
 
   if (debugMode === DEBUG_MARCH_MODE) {
@@ -281,6 +289,7 @@ function App() {
           open={showExerciseSessions}
           onClose={() => setShowExerciseSessions(false)}
         />
+        <PhotoGalleryOverlay open={showPhotoGallery} onClose={handlePhotoGalleryClose} />
       </QueryClientProvider>
       <QuizJoinCodeOverlay
         open={showQuizJoinCode}
