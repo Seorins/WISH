@@ -43,6 +43,7 @@ type GomokuOverlayProps = {
 }
 
 type GameMode = 'local' | 'computer' | 'online'
+type OnlinePanelTab = 'rooms' | 'stats' | 'ranking'
 
 const HUMAN_STONE: Stone = 'black'
 const COMPUTER_STONE: Stone = 'white'
@@ -1015,6 +1016,8 @@ function OnlinePanel({
   onRefreshRooms: () => void
   onJoinRoom: (roomId: number) => void
 }) {
+  const [activeTab, setActiveTab] = useState<OnlinePanelTab>('rooms')
+
   return (
     <section className="gomoku-panel gomoku-online-panel">
       <div className="gomoku-panel-heading">
@@ -1030,79 +1033,125 @@ function OnlinePanel({
           </div>
           <em>{formatRoomStatus(room)}</em>
         </div>
-      ) : (
-        <>
-          <div className="gomoku-online-actions">
-            <button type="button" onClick={onCreateRoom} disabled={busy}>
-              {text.createRoom}
-            </button>
-            <button type="button" onClick={onRefreshRooms} disabled={busy}>
-              {text.refresh}
-            </button>
-          </div>
-          {profileNotice ? <p className="gomoku-online-message">{profileNotice}</p> : null}
+      ) : null}
 
-          <div className="gomoku-room-list" aria-label={text.waitingRooms}>
-            <h3>{text.waitingRooms}</h3>
-            {waitingRooms.length === 0 ? (
-              <p>{text.noRooms}</p>
-            ) : (
-              waitingRooms.map(waitingRoom => (
-                <div className="gomoku-room-row" key={waitingRoom.id}>
-                  <div>
-                    <strong>{waitingRoom.blackPlayer.nickname}</strong>
-                    <span>
-                      {waitingRoom.roomCode} · {formatRuleSet(fromApiRuleSet(waitingRoom.ruleSet))}
-                    </span>
-                  </div>
-                  <button type="button" onClick={() => onJoinRoom(waitingRoom.id)} disabled={busy}>
-                    {text.join}
-                  </button>
-                </div>
-              ))
-            )}
-          </div>
-        </>
-      )}
-
-      <div className="gomoku-stats-grid">
-        <div>
-          <span>{text.totalGames}</span>
-          <strong>{stats?.totalGames ?? 0}</strong>
-        </div>
-        <div>
-          <span>{text.wins}</span>
-          <strong>{stats?.wins ?? 0}</strong>
-        </div>
-        <div>
-          <span>{text.draws}</span>
-          <strong>{stats?.draws ?? 0}</strong>
-        </div>
-        <div>
-          <span>{text.losses}</span>
-          <strong>{stats?.losses ?? 0}</strong>
-        </div>
-        <div>
-          <span>{text.winRate}</span>
-          <strong>{formatPercent(stats?.winRate ?? 0)}</strong>
-        </div>
+      <div className="gomoku-online-tabs" role="tablist" aria-label={text.online}>
+        <button
+          type="button"
+          className={activeTab === 'rooms' ? 'active' : ''}
+          aria-pressed={activeTab === 'rooms'}
+          onClick={() => setActiveTab('rooms')}
+        >
+          {text.lobby}
+        </button>
+        <button
+          type="button"
+          className={activeTab === 'stats' ? 'active' : ''}
+          aria-pressed={activeTab === 'stats'}
+          onClick={() => setActiveTab('stats')}
+        >
+          {text.myStats}
+        </button>
+        <button
+          type="button"
+          className={activeTab === 'ranking' ? 'active' : ''}
+          aria-pressed={activeTab === 'ranking'}
+          onClick={() => setActiveTab('ranking')}
+        >
+          {text.ranking}
+        </button>
       </div>
 
-      <div className="gomoku-ranking">
-        <h3>{text.ranking}</h3>
-        {ranking && ranking.entries.length > 0 ? (
-          <ol>
-            {ranking.entries.map(entry => (
-              <li key={entry.patientProfileId} className={entry.isMe ? 'me' : ''}>
-                <span>{entry.rank}</span>
-                <strong>{entry.nickname}</strong>
-                <em>{formatPercent(entry.winRate)}</em>
-              </li>
-            ))}
-          </ol>
-        ) : (
-          <p>{text.emptyRanking}</p>
-        )}
+      <div className="gomoku-online-tab-panel">
+        {activeTab === 'rooms' ? (
+          room ? (
+            <p className="gomoku-online-message">
+              {room.status === 'WAITING' ? text.waitingOpponent : formatRoomStatus(room)}
+            </p>
+          ) : (
+            <>
+              <div className="gomoku-online-actions">
+                <button type="button" onClick={onCreateRoom} disabled={busy}>
+                  {text.createRoom}
+                </button>
+                <button type="button" onClick={onRefreshRooms} disabled={busy}>
+                  {text.refresh}
+                </button>
+              </div>
+              {profileNotice ? <p className="gomoku-online-message">{profileNotice}</p> : null}
+
+              <div className="gomoku-room-list" aria-label={text.waitingRooms}>
+                <h3>{text.waitingRooms}</h3>
+                {waitingRooms.length === 0 ? (
+                  <p>{text.noRooms}</p>
+                ) : (
+                  waitingRooms.map(waitingRoom => (
+                    <div className="gomoku-room-row" key={waitingRoom.id}>
+                      <div>
+                        <strong>{waitingRoom.blackPlayer.nickname}</strong>
+                        <span>
+                          {waitingRoom.roomCode} ·{' '}
+                          {formatRuleSet(fromApiRuleSet(waitingRoom.ruleSet))}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => onJoinRoom(waitingRoom.id)}
+                        disabled={busy}
+                      >
+                        {text.join}
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </>
+          )
+        ) : null}
+
+        {activeTab === 'stats' ? (
+          <div className="gomoku-stats-grid">
+            <div>
+              <span>{text.totalGames}</span>
+              <strong>{stats?.totalGames ?? 0}</strong>
+            </div>
+            <div>
+              <span>{text.wins}</span>
+              <strong>{stats?.wins ?? 0}</strong>
+            </div>
+            <div>
+              <span>{text.draws}</span>
+              <strong>{stats?.draws ?? 0}</strong>
+            </div>
+            <div>
+              <span>{text.losses}</span>
+              <strong>{stats?.losses ?? 0}</strong>
+            </div>
+            <div>
+              <span>{text.winRate}</span>
+              <strong>{formatPercent(stats?.winRate ?? 0)}</strong>
+            </div>
+          </div>
+        ) : null}
+
+        {activeTab === 'ranking' ? (
+          <div className="gomoku-ranking">
+            <h3>{text.ranking}</h3>
+            {ranking && ranking.entries.length > 0 ? (
+              <ol>
+                {ranking.entries.map(entry => (
+                  <li key={entry.patientProfileId} className={entry.isMe ? 'me' : ''}>
+                    <span>{entry.rank}</span>
+                    <strong>{entry.nickname}</strong>
+                    <em>{formatPercent(entry.winRate)}</em>
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <p>{text.emptyRanking}</p>
+            )}
+          </div>
+        ) : null}
       </div>
     </section>
   )
