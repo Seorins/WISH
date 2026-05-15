@@ -2,7 +2,6 @@ package com.comong.backend.domain.dialogue.service;
 
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.when;
 
 import java.util.List;
 
@@ -11,8 +10,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.web.client.RestClient;
 
 import com.comong.backend.domain.dialogue.config.AiDialogueProperties;
-import com.comong.backend.domain.dialogue.entity.DialogueSession;
 import com.comong.backend.domain.dialogue.entity.DialogueTurn;
+import com.comong.backend.domain.dialogue.entity.NpcName;
 
 /**
  * {@link AiDialogueClient} 단위 테스트. RestClient 자체의 HTTP 호출은 통합 테스트에서 다루며, 본 테스트는 호출 자체를 스킵하는 가드 두
@@ -27,7 +26,7 @@ class AiDialogueClientTest {
     void skipsWhenBaseUrlEmpty() {
         AiDialogueClient client = new AiDialogueClient(restClient, new AiDialogueProperties("", 5));
 
-        client.embedSessionAsync(mock(DialogueSession.class), List.of(mock(DialogueTurn.class)));
+        client.embedSessionAsync(7L, 42L, NpcName.YEONGCHEOL, List.of(mock(DialogueTurn.class)));
 
         verifyNoInteractions(restClient);
     }
@@ -38,10 +37,8 @@ class AiDialogueClientTest {
         AiDialogueClient client =
                 new AiDialogueClient(
                         restClient, new AiDialogueProperties("http://ai-test:8001/api/v1", 5));
-        DialogueSession session = mock(DialogueSession.class);
-        when(session.getId()).thenReturn(42L);
 
-        client.embedSessionAsync(session, List.of());
+        client.embedSessionAsync(7L, 42L, NpcName.YEONGCHEOL, List.of());
 
         verifyNoInteractions(restClient);
     }
@@ -52,10 +49,8 @@ class AiDialogueClientTest {
         AiDialogueClient client =
                 new AiDialogueClient(
                         restClient, new AiDialogueProperties("http://ai-test:8001/api/v1", 5));
-        DialogueSession session = mock(DialogueSession.class);
-        when(session.getId()).thenReturn(7L);
 
-        client.embedSessionAsync(session, null);
+        client.embedSessionAsync(7L, 7L, NpcName.JOEUN, null);
 
         verifyNoInteractions(restClient);
     }

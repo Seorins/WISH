@@ -14,6 +14,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import com.comong.backend.domain.dialogue.catalog.DialogueCatalogService;
 import com.comong.backend.domain.dialogue.catalog.model.ChoiceDefinition;
@@ -253,11 +255,23 @@ public class DialogueService {
                         : null; // 마을 주민은 catalog ending scene 에서 이미 closingLines 전달
 
         // 세션 종료 후 RAG 임베딩 트리거 — fire-and-forget (S14P31E103-788).
-        // turns 는 @Async 스레드의 트랜잭션 밖에서 lazy 로딩이 끊기므로 미리 fetch.
-        // 실패는 AiDialogueClient 내부에서 swallow — 세션 종료 응답은 정상 처리한다.
+        // 1) lazy 연관(patientProfile) 을 트랜잭션 안에서 미리 unpack — 비동기 스레드에서 LazyInitializationException
+        // 회피.
+        // 2) turns 도 트랜잭션 안에서 fetch.
+        // 3) afterCommit 시점에 호출 — 롤백 시 임베딩이 외부에 새지 않도록 정합성 보장.
+        long patientProfileId = session.getPatientProfile().getId();
+        long sessionIdValue = session.getId();
+        NpcName npcName = session.getNpcName();
         List<DialogueTurn> turns =
-                turnRepository.findAllBySessionIdOrderByStepIndexAsc(session.getId());
-        aiDialogueClient.embedSessionAsync(session, turns);
+                turnRepository.findAllBySessionIdOrderByStepIndexAsc(sessionIdValue);
+        TransactionSynchronizationManager.registerSynchronization(
+                new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        aiDialogueClient.embedSessionAsync(
+                                patientProfileId, sessionIdValue, npcName, turns);
+                    }
+                });
 
         return FinishSessionResponse.of(session, closingLines);
     }
