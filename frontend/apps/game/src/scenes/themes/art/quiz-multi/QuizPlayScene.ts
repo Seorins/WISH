@@ -30,20 +30,19 @@ const CHIP_BG = 0xffe9c2
 const STROKE_THROTTLE_MS = 60
 
 /**
- * 플레이어 슬롯 아바타 — 게임 공용 캐릭터 스프라이트(common/player/character_*.png) 의 색상 변형을 joinOrder 로 순환.
- * 다른 씬(taekwondo) 이 같은 파일을 다른 키로 로드해도 충돌 안 나게 quiz 전용 키 사용.
+ * 플레이어 슬롯 아바타 — 게임 NPC 캐릭터 이미지(themes/art/coloring/*.png) 의 상반신만 원형 마스크로 잘라 표시.
+ * joinOrder 로 4명 NPC 순환. 다른 씬 로드와 충돌 안 나게 quiz 전용 키 사용.
  */
-const SLOT_AVATAR_COLORS = ['blue', 'orange', 'green', 'red'] as const
-const SLOT_AVATAR_FRAME_SIZE = 313
+const SLOT_NPCS = ['rumi', 'kongmong', 'gisung', 'seokjae'] as const
 
-function slotAvatarKey(joinOrder: number): string {
-  const color = SLOT_AVATAR_COLORS[(joinOrder < 0 ? 0 : joinOrder) % SLOT_AVATAR_COLORS.length]
-  return `quiz-avatar-${color}`
+function slotNpcKey(joinOrder: number): string {
+  const npc = SLOT_NPCS[(joinOrder < 0 ? 0 : joinOrder) % SLOT_NPCS.length]
+  return `quiz-avatar-npc-${npc}`
 }
 
-function slotAvatarPath(joinOrder: number): string {
-  const color = SLOT_AVATAR_COLORS[(joinOrder < 0 ? 0 : joinOrder) % SLOT_AVATAR_COLORS.length]
-  return `images/common/player/character_${color}.png`
+function slotNpcPath(joinOrder: number): string {
+  const npc = SLOT_NPCS[(joinOrder < 0 ? 0 : joinOrder) % SLOT_NPCS.length]
+  return `images/themes/art/coloring/${npc}.png`
 }
 
 const BRUSH_COLORS = [
@@ -127,14 +126,11 @@ export class QuizPlayScene extends Phaser.Scene {
         assetPath('images/themes/art/background/background.png'),
       )
     }
-    // 슬롯 아바타 — 4명 정원이라 4색 모두 미리 로드. spritesheet 로 받아서 frame 0 (정면 down 첫 프레임) 만 표시.
-    SLOT_AVATAR_COLORS.forEach((_, index) => {
-      const key = slotAvatarKey(index)
+    // 슬롯 아바타 — 4명 정원이라 4명 NPC 모두 미리 로드. 단일 이미지 (themes/art/coloring/*.png) 를 원형 마스크로 잘라 사용.
+    SLOT_NPCS.forEach((_, index) => {
+      const key = slotNpcKey(index)
       if (!this.textures.exists(key)) {
-        this.load.spritesheet(key, assetPath(slotAvatarPath(index)), {
-          frameWidth: SLOT_AVATAR_FRAME_SIZE,
-          frameHeight: SLOT_AVATAR_FRAME_SIZE,
-        })
+        this.load.image(key, assetPath(slotNpcPath(index)))
       }
     })
   }
@@ -393,9 +389,9 @@ export class QuizPlayScene extends Phaser.Scene {
       return
     }
 
-    // 게임 공용 캐릭터 스프라이트(spritesheet frame 0 = 정면 아래 보는 첫 프레임) 를 아바타로 사용.
-    const avatarSize = Math.min(72, w * 0.52)
-    const avatarY = y + Math.max(52, h * 0.34)
+    // NPC 캐릭터(themes/art/coloring/*.png) 의 상반신만 원형 마스크로 잘라 표시.
+    const avatarSize = Math.min(80, w * 0.58)
+    const avatarY = y + Math.max(54, h * 0.34)
     const avatarBg = this.add.circle(
       x + w / 2,
       avatarY,
@@ -405,11 +401,24 @@ export class QuizPlayScene extends Phaser.Scene {
     )
     avatarBg.setStrokeStyle(3, isDrawer ? 0x7b461a : 0x91a5c4, 1)
     container.add(avatarBg)
-    const avatarKey = slotAvatarKey(member.joinOrder)
+    const avatarKey = slotNpcKey(member.joinOrder)
     if (this.textures.exists(avatarKey)) {
-      const sprite = this.add.sprite(x + w / 2, avatarY + avatarSize * 0.06, avatarKey, 0)
-      sprite.setDisplaySize(avatarSize * 1.05, avatarSize * 1.05)
-      container.add(sprite)
+      const source = this.textures.get(avatarKey).getSourceImage() as HTMLImageElement
+      const srcW = source.width || 1
+      const srcH = source.height || 1
+      // 짧은 변 기준으로 1.7배 확대해 캐릭터 머리·상반신이 원 안을 꽉 채우게.
+      const target = avatarSize * 1.7
+      const scale = target / Math.min(srcW, srcH)
+      const npc = this.add.image(x + w / 2, avatarY, avatarKey)
+      npc.setScale(scale)
+      // origin (0.5, 0.32) 로 잡으면 캐릭터 머리 부근이 원 중심에 옴 — 상반신만 자연스럽게 노출.
+      npc.setOrigin(0.5, 0.32)
+      const mask = this.make
+        .graphics({ x: 0, y: 0 })
+        .fillStyle(0xffffff, 1)
+        .fillCircle(x + w / 2, avatarY, avatarSize / 2 - 2)
+      npc.setMask(mask.createGeometryMask())
+      container.add(npc)
     }
     container.add(
       this.add
