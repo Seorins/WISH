@@ -136,6 +136,28 @@ export class QuizPlayScene extends Phaser.Scene {
     this.prompt = data.prompt ?? null
     this.wordLength = data.wordLength ?? data.prompt?.word.length ?? null
     this.realtimeClient = data.realtimeClient ?? null
+    // Phaser Scene 인스턴스는 scene.start 마다 재사용되어 클래스 필드가 살아남는다.
+    // 이전 게임의 strokes / 결과 모달 / 라운드 종료 플래그 등이 그대로 남아 새 게임
+    // 캔버스에 옛 선이 그려지거나 결과 모달이 튀어나오던 버그. init 에서 일괄 리셋.
+    this.strokes = []
+    this.remoteLastPoints.clear()
+    this.activeBubbles.clear()
+    this.activePointerId = null
+    this.activeStrokeId = null
+    this.activeLastPoint = null
+    this.lastStrokeSendAt = 0
+    this.roundEnded = false
+    this.finalMembers = null
+    this.isLeaving = false
+    this.guessOverlayOpen = false
+    this.correctBanner?.destroy()
+    this.correctBanner = null
+    this.timerExpiredAt = null
+    this.lastReconcileAt = 0
+    this.reconcileInFlight = false
+    this.brushColor = BRUSH_COLORS[0].color
+    this.selectedTool = 'brush'
+    this.brushSize = 6
   }
 
   preload() {
@@ -973,6 +995,9 @@ export class QuizPlayScene extends Phaser.Scene {
         ...this.snapshot,
         members: this.snapshot.members.filter(member => member.userId !== event.userId),
       }
+      // 떠난 멤버를 슬롯 / 버블 / 결과 모달에서 즉시 제거하려면 레이아웃 재그리기 필수.
+      this.activeBubbles.delete(event.userId)
+      this.drawLayout()
     } else if (event.type === 'host_changed') {
       this.snapshot = {
         ...this.snapshot,
@@ -982,6 +1007,7 @@ export class QuizPlayScene extends Phaser.Scene {
           isHost: member.userId === event.hostUserId,
         })),
       }
+      this.drawLayout()
     } else if (event.type === 'round_started') {
       this.snapshot = {
         ...this.snapshot,
