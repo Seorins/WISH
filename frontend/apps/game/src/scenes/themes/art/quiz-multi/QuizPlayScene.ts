@@ -28,6 +28,8 @@ const SLOT_BG_EMPTY = 0x435a7d
 const TOOLBAR_BG = 0x3d557d
 const CHIP_BG = 0xffe9c2
 const STROKE_THROTTLE_MS = 60
+/** 추측 말풍선 표시 시간 — 정답/오답 동일. 너무 길면 화면 혼잡, 너무 짧으면 못 봄. */
+const BUBBLE_TTL_MS = 3200
 
 /**
  * 플레이어 슬롯 아바타 — themes/art/ui/char1~4.png 의 상반신만 setCrop 으로 잘라 노출. 원형 배경 없이 그대로 노출.
@@ -64,7 +66,6 @@ type DrawSegment = {
   eraser: boolean
 }
 type Tool = 'brush' | 'eraser'
-type QuizMessage = { id: number; kind: 'chat' | 'system' | 'correct'; text: string }
 
 export interface QuizPlaySceneInit {
   snapshot: QuizRoomSnapshot
@@ -100,8 +101,11 @@ export class QuizPlayScene extends Phaser.Scene {
   private selectedTool: Tool = 'brush'
   private brushSize = 6
   private guessOverlayOpen = false
-  private messageSeq = 0
-  private messages: QuizMessage[] = []
+  /**
+   * 추측 메시지를 슬롯 옆 말풍선으로 잠깐 띄우기 위한 상태. userId → 말풍선 데이터.
+   * BUBBLE_TTL_MS 가 지나면 timer 가 청소.
+   */
+  private activeBubbles = new Map<number, { text: string; correct: boolean; expiresAt: number }>()
   private roundEnded = false
   private finalMembers: QuizMember[] | null = null
   private isLeaving = false
@@ -156,7 +160,7 @@ export class QuizPlayScene extends Phaser.Scene {
         this.drawLayout()
       },
       onEvent: event => this.handleRealtimeEvent(event),
-      onError: error => this.addMessage('system', friendlyWsError(error.message)),
+      onError: error => console.warn('[quiz-realtime]', friendlyWsError(error.message)),
     })
 
     this.scale.on('resize', this.layout, this)
@@ -203,7 +207,7 @@ export class QuizPlayScene extends Phaser.Scene {
     const canvasAreaH = canvasAreaBottom - canvasAreaTop
 
     this.drawTopBar(container, padding, padding, w - padding * 2, topBarH)
-    this.drawSidebar(container, padding, canvasAreaTop, sidebarW, canvasAreaH, [0, 2])
+    this.drawSidebar(container, padding, canvasAreaTop, sidebarW, canvasAreaH, [0, 2], 'left')
     this.drawSidebar(
       container,
       w - padding - sidebarW,
@@ -211,6 +215,7 @@ export class QuizPlayScene extends Phaser.Scene {
       sidebarW,
       canvasAreaH,
       [1, 3],
+      'right',
     )
 
     const canvasX = padding + sidebarW + padding
@@ -333,11 +338,12 @@ export class QuizPlayScene extends Phaser.Scene {
     w: number,
     h: number,
     slotIndices: number[],
+    side: 'left' | 'right',
   ) {
     const gap = 12
     const slotH = (h - gap * (slotIndices.length - 1)) / slotIndices.length
     slotIndices.forEach((index, i) => {
-      this.drawPlayerSlot(container, x, y + i * (slotH + gap), w, slotH, index)
+      this.drawPlayerSlot(container, x, y + i * (slotH + gap), w, slotH, index, side)
     })
   }
 
@@ -348,6 +354,7 @@ export class QuizPlayScene extends Phaser.Scene {
     w: number,
     h: number,
     slotIndex: number,
+    side: 'left' | 'right',
   ) {
     const member = this.snapshot.members[slotIndex] ?? null
     const isMyself = !!member && member.userId === this.currentUserId
@@ -486,6 +493,103 @@ export class QuizPlayScene extends Phaser.Scene {
           .setOrigin(0.5),
       )
     }
+
+    const bubble = this.activeBubbles.get(member.userId)
+    if (bubble) {
+      this.drawSpeechBubble(container, x, y, w, h, side, bubble.text, bubble.correct)
+    }
+  }
+
+  /**
+   * 슬롯 옆에 잠깐 떠 있는 말풍선. 좌측 슬롯은 오른쪽으로 / 우측 슬롯은 왼쪽으로 펼쳐서 캔버스 쪽을 향한다.
+   * 정답은 초록, 오답/일반 chat 은 흰 배경. text 가 길면 ellipsis.
+   */
+  private drawSpeechBubble(
+    container: Phaser.GameObjects.Container,
+    slotX: number,
+    slotY: number,
+    slotW: number,
+    slotH: number,
+    side: 'left' | 'right',
+    rawText: string,
+    correct: boolean,
+  ) {
+    const text = rawText.length > 14 ? `${rawText.slice(0, 13)}…` : rawText
+    const fontSize = 14
+    const paddingX = 12
+    const paddingY = 8
+    const tempText = this.add.text(0, 0, text, {
+      fontFamily: FONT_FAMILY,
+      fontSize: `${fontSize}px`,
+      color: correct ? '#1a4d20' : '#1a0e05',
+      fontStyle: 'bold',
+    })
+    const tw = tempText.width
+    const th = tempText.height
+    tempText.destroy()
+
+    const bw = tw + paddingX * 2
+    const bh = th + paddingY * 2
+    const gap = 10
+    const cy = slotY + Math.max(54, slotH * 0.34)
+    const bx = side === 'left' ? slotX + slotW + gap : slotX - gap - bw
+    const by = cy - bh / 2
+
+    const fillColor = correct ? 0xdcf6c4 : 0xffffff
+    const borderColor = correct ? 0x4d8a2a : 0xc4a87a
+
+    const g = this.add.graphics()
+    // soft drop shadow
+    g.fillStyle(0x000000, 0.18)
+    g.fillRoundedRect(bx + 2, by + 3, bw, bh, 12)
+    g.fillStyle(fillColor, 1)
+    g.fillRoundedRect(bx, by, bw, bh, 12)
+    g.lineStyle(2, borderColor, 1)
+    g.strokeRoundedRect(bx, by, bw, bh, 12)
+
+    // pointer triangle toward the slot
+    const tipY = by + bh / 2
+    g.fillStyle(fillColor, 1)
+    g.lineStyle(2, borderColor, 1)
+    if (side === 'left') {
+      g.beginPath()
+      g.moveTo(bx, tipY - 7)
+      g.lineTo(bx - 10, tipY)
+      g.lineTo(bx, tipY + 7)
+      g.closePath()
+      g.fillPath()
+      // 외곽선은 비스듬한 두 변만 — 풍선 본체와 만나는 변은 가림.
+      g.beginPath()
+      g.moveTo(bx, tipY - 7)
+      g.lineTo(bx - 10, tipY)
+      g.lineTo(bx, tipY + 7)
+      g.strokePath()
+    } else {
+      const rx = bx + bw
+      g.beginPath()
+      g.moveTo(rx, tipY - 7)
+      g.lineTo(rx + 10, tipY)
+      g.lineTo(rx, tipY + 7)
+      g.closePath()
+      g.fillPath()
+      g.beginPath()
+      g.moveTo(rx, tipY - 7)
+      g.lineTo(rx + 10, tipY)
+      g.lineTo(rx, tipY + 7)
+      g.strokePath()
+    }
+    container.add(g)
+
+    container.add(
+      this.add
+        .text(bx + bw / 2, by + bh / 2, text, {
+          fontFamily: FONT_FAMILY,
+          fontSize: `${fontSize}px`,
+          color: correct ? '#1a4d20' : '#1a0e05',
+          fontStyle: 'bold',
+        })
+        .setOrigin(0.5),
+    )
   }
 
   private drawCanvasArea(
@@ -546,7 +650,20 @@ export class QuizPlayScene extends Phaser.Scene {
     if (this.isDrawer()) {
       this.drawDrawerTools(container, x + 30, y, h)
     } else {
-      this.drawGuessPanel(container, x + 30, y + 14, w - 182, h - 28)
+      const hint =
+        this.roundEnded || this.finalMembers
+          ? '라운드가 끝났어요'
+          : '아래 입력창에 정답을 적어주세요'
+      container.add(
+        this.add
+          .text(x + 30, y + h / 2, hint, {
+            fontFamily: FONT_FAMILY,
+            fontSize: '16px',
+            color: '#d8e2f3',
+            fontStyle: 'bold',
+          })
+          .setOrigin(0, 0.5),
+      )
     }
 
     this.drawLeaveButton(container, x + w - 30 - 104, y + h / 2 - 24, 104, 48)
@@ -585,63 +702,6 @@ export class QuizPlayScene extends Phaser.Scene {
     )
     container.add(
       this.createToolButton(cx + 164, cy, 112, 48, '전체 삭제', false, () => this.clearCanvas()),
-    )
-  }
-
-  private drawGuessPanel(
-    container: Phaser.GameObjects.Container,
-    x: number,
-    y: number,
-    w: number,
-    h: number,
-  ) {
-    const messageH = Math.max(58, h - 54)
-    const board = this.add.graphics()
-    board.fillStyle(0x101827, 0.82)
-    board.fillRoundedRect(x, y, w, messageH - 4, 14)
-    board.lineStyle(2, 0x3b4864, 0.9)
-    board.strokeRoundedRect(x, y, w, messageH - 4, 14)
-    container.add(board)
-    container.add(
-      this.add
-        .text(x + 14, y + 14, '채팅 / 정답 흐름', {
-          fontFamily: FONT_FAMILY,
-          fontSize: '13px',
-          color: '#ffe9c2',
-          fontStyle: 'bold',
-        })
-        .setOrigin(0, 0.5),
-    )
-    const visible = this.messages.slice(-4)
-    visible.forEach((message, i) => {
-      const color =
-        message.kind === 'correct' ? '#7ee08b' : message.kind === 'system' ? '#ffe9c2' : '#d8e2f3'
-      container.add(
-        this.add
-          .text(x + 16, y + 34 + i * 20, message.text, {
-            fontFamily: FONT_FAMILY,
-            fontSize: '14px',
-            color,
-            wordWrap: { width: w - 32 },
-          })
-          .setOrigin(0, 0),
-      )
-    })
-
-    // 정답 입력은 HTML 오버레이(QuizGuessOverlay) 가 캔버스 아래 sticky 로 띄운다 — Phaser 키 입력은 한글 IME 가 안 됨.
-    // 여기엔 입력 영역만큼의 placeholder 만 남겨 둠 (시각적 균형). 입력 활성/비활성은 오버레이의 open 상태가 책임.
-    const inputY = y + messageH
-    const inputH = 42
-    const hintText =
-      this.roundEnded || this.finalMembers ? '라운드가 끝났어요' : '아래 입력창에 정답을 적어주세요'
-    container.add(
-      this.add
-        .text(x + 14, inputY + inputH / 2, hintText, {
-          fontFamily: FONT_FAMILY,
-          fontSize: '14px',
-          color: '#9da8be',
-        })
-        .setOrigin(0, 0.5),
     )
   }
 
@@ -806,7 +866,6 @@ export class QuizPlayScene extends Phaser.Scene {
         ...this.snapshot,
         members: this.snapshot.members.filter(member => member.userId !== event.userId),
       }
-      this.addMessage('system', '참여자가 나갔어요.')
     } else if (event.type === 'host_changed') {
       this.snapshot = {
         ...this.snapshot,
@@ -830,7 +889,6 @@ export class QuizPlayScene extends Phaser.Scene {
       this.roundEnded = false
       this.strokes = []
       this.remoteLastPoints.clear()
-      this.addMessage('system', `라운드 ${event.roundNumber} 시작`)
       // 정답자(=출제자 아님) 한정으로 정답 입력 오버레이 노출.
       this.setGuessOverlay(!this.isDrawer())
       this.drawLayout()
@@ -839,20 +897,24 @@ export class QuizPlayScene extends Phaser.Scene {
         this.applyRemoteStroke(event.stroke)
       }
     } else if (event.type === 'guess_submitted') {
-      this.addMessage(
-        event.correct ? 'correct' : 'chat',
-        event.correct ? `${event.nickname} 정답!` : `${event.nickname}: ${event.message}`,
-      )
+      // 추측은 더 이상 중앙 패널이 아니라 슬롯 옆 말풍선으로 잠깐만 뜸.
+      this.activeBubbles.set(event.userId, {
+        text: event.correct ? '정답!' : event.message,
+        correct: event.correct,
+        expiresAt: Date.now() + BUBBLE_TTL_MS,
+      })
+      this.drawLayout()
     } else if (event.type === 'round_ended') {
       this.roundEnded = true
       this.snapshot = { ...this.snapshot, members: event.members }
-      this.addMessage('system', `정답은 "${event.word}"`)
-      // 라운드 종료 시 정답 입력 닫음 — 다음 라운드 시작 이벤트에서 다시 열림.
+      // 라운드 종료 시 잔여 말풍선 모두 정리 (정답자 말풍선은 그대로 두고 싶다면 정답자 user 만 유지하도록 변경 가능).
+      this.activeBubbles.clear()
       this.setGuessOverlay(false)
       this.drawLayout()
     } else if (event.type === 'game_finished') {
       this.finalMembers = event.members
       this.snapshot = { ...this.snapshot, status: 'FINISHED', members: event.members }
+      this.activeBubbles.clear()
       this.setGuessOverlay(false)
       this.drawLayout()
     }
@@ -951,6 +1013,19 @@ export class QuizPlayScene extends Phaser.Scene {
   }
 
   private updateTimerText() {
+    // 만료된 말풍선 청소 — 변경 있으면 레이아웃 재그리기.
+    if (this.activeBubbles.size > 0) {
+      const now = Date.now()
+      let changed = false
+      this.activeBubbles.forEach((bubble, userId) => {
+        if (bubble.expiresAt <= now) {
+          this.activeBubbles.delete(userId)
+          changed = true
+        }
+      })
+      if (changed) this.drawLayout()
+    }
+
     if (!this.timerText) return
     if (this.roundEnded) {
       this.timerText.setText('결과 확인')
@@ -988,12 +1063,6 @@ export class QuizPlayScene extends Phaser.Scene {
 
   private canDraw() {
     return this.isDrawer() && !this.roundEnded && !this.finalMembers
-  }
-
-  private addMessage(kind: QuizMessage['kind'], text: string) {
-    this.messages.push({ id: ++this.messageSeq, kind, text })
-    this.messages = this.messages.slice(-8)
-    this.drawLayout()
   }
 
   private async handleLeave() {
