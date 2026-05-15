@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -82,18 +83,8 @@ class DialogueSummaryComposerTest {
         // turn 의 protective 가 [verbal_expression, support_need_named, family_support_preference]
         // 모두 빈도 1 — 첫 번째 마주친 키 (HashMap 순서) — 어떤 라벨이든 라벨 매핑은 제공돼야 함
         assertThat(summary).contains("모습을 보였어요");
-        assertThat(summary).contains("함께 해볼 수 있는 활동: 옆에 있어달라는 마음을 들어주세요.");
-    }
-
-    @Test
-    void endingTypeAdviceFromCatalog_REST_ONLY() {
-        DialogueSession session = villageSession("monkey_injection_fear");
-        // mky_inj_just_go → REST_ONLY
-        DialogueTurn turn = villageTurn(session, 0, "mky_inj_just_go", "그냥 가서 손 잡을래요");
-
-        String summary = composer.composeSessionSummary(session, List.of(turn));
-
-        assertThat(summary).contains("함께 해볼 수 있는 활동: 잠시 옆에 함께 머물러주세요.");
+        // 추천 활동은 FE 가 별도 카드로 렌더 — summaryText 본문엔 박지 않음
+        assertThat(summary).doesNotContain("함께 해볼 수 있는 활동");
     }
 
     @Test
@@ -107,8 +98,8 @@ class DialogueSummaryComposerTest {
         String summary = composer.composeSessionSummary(session, List.of(t1, t2));
 
         assertThat(summary).contains("\"「손 잡고 있어줘」라고 할래요\"");
-        // 마지막 turn 의 endingType (ASK_ADULT_FIRST)
-        assertThat(summary).contains("옆에 있어달라는 마음을 들어주세요.");
+        // 추천 활동은 본문에 없음
+        assertThat(summary).doesNotContain("함께 해볼 수 있는 활동");
     }
 
     @Test
@@ -119,7 +110,7 @@ class DialogueSummaryComposerTest {
     }
 
     @Test
-    void dailySummary_singleSession_includesNpcAndTopicAndAdvice() {
+    void dailySummary_singleSession_includesNpcAndTopic() {
         DialogueSession session = villageSession("monkey_injection_fear");
         DialogueTurn turn = villageTurn(session, 0, "mky_inj_say_hold", "「손 잡고 있어줘」라고 할래요");
         DialogueSession spy = withId(session, 1L);
@@ -129,14 +120,25 @@ class DialogueSummaryComposerTest {
 
         assertThat(summary).startsWith("오늘 코몽");
         assertThat(summary).contains("시술 무서움");
-        // ASK_ADULT_FIRST advice
-        assertThat(summary).contains("옆에 있어달라는 마음을 들어주세요.");
+        // 추천 활동은 본문에 박지 않음 — resolveRecommendedActivity 에서 별도 제공
+        assertThat(summary).doesNotContain("함께 해볼 수 있는 활동");
     }
 
     @Test
-    void dailySummary_multipleSessions_picksHeaviestEndingAdvice() {
-        // 두 세션: 하나는 ASK_MEDICAL_FIRST (weight 100), 다른 하나는 REST_ONLY (weight 40)
-        // 더 무거운 것 (의료) 의 advice 가 선택돼야 함
+    void resolveRecommendedActivity_singleSession_returnsAdviceFromCatalog() {
+        DialogueSession session = villageSession("monkey_injection_fear");
+        DialogueTurn turn = villageTurn(session, 0, "mky_inj_say_hold", "「손 잡고 있어줘」라고 할래요");
+        DialogueSession spy = withId(session, 1L);
+
+        Optional<String> advice =
+                composer.resolveRecommendedActivity(
+                        List.of(spy), Map.of(spy.getId(), List.of(turn)));
+
+        assertThat(advice).contains("옆에 있어달라는 마음을 들어주세요.");
+    }
+
+    @Test
+    void resolveRecommendedActivity_multipleSessions_picksHeaviestEndingAdvice() {
         DialogueSession s1 = villageSession("monkey_injection_fear");
         DialogueSession s2 = villageSession("monkey_play");
         DialogueTurn t1 =
@@ -148,20 +150,22 @@ class DialogueSummaryComposerTest {
         Map<Long, List<DialogueTurn>> turnMap =
                 Map.of(spy1.getId(), List.of(t1), spy2.getId(), List.of(t2));
 
-        String summary = composer.composeDailySummary(List.of(spy1, spy2), turnMap);
+        Optional<String> advice = composer.resolveRecommendedActivity(List.of(spy1, spy2), turnMap);
 
-        assertThat(summary).contains("다음 진료 때 함께 짧게 이야기해보세요.");
+        assertThat(advice).contains("다음 진료 때 함께 짧게 이야기해보세요.");
     }
 
     @Test
-    void unknownEndingType_fallsBackToNoPressureMessage() {
-        // catalog 에 없는 choiceIntentId — endingType resolve 실패 → NO_PRESSURE default
+    void resolveRecommendedActivity_unknownChoiceFallsBackToNoPressureAdvice() {
         DialogueSession session = villageSession("monkey_injection_fear");
         DialogueTurn t = villageTurn(session, 0, "ghost_choice_id", "유령 선택지");
+        DialogueSession spy = withId(session, 1L);
 
-        String summary = composer.composeSessionSummary(session, List.of(t));
+        Optional<String> advice =
+                composer.resolveRecommendedActivity(List.of(spy), Map.of(spy.getId(), List.of(t)));
 
-        assertThat(summary).contains("함께 해볼 수 있는 활동: 오늘은 아이의 속도에 맞춰주세요.");
+        // endingType resolve 실패 → null → resolveRecommendedActivity 는 Optional.empty
+        assertThat(advice).isEmpty();
     }
 
     // ===== helpers =====
