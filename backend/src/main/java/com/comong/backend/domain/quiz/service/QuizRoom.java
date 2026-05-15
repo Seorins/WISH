@@ -16,7 +16,7 @@ import com.comong.backend.domain.quiz.exception.QuizRoomNotReadyToStartException
 /** In-memory room state for the multiplayer drawing quiz. */
 public class QuizRoom {
 
-    private static final int TOTAL_ROUNDS = 4;
+    private static final int TOTAL_ROUNDS = 3;
 
     private final String roomId;
     private final String code;
