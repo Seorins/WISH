@@ -7,7 +7,13 @@
   background-attachment: fixed;
   color: var(--dash-color-text);
   font-family:
-    'Pretendard', 'Inter', 'Noto Sans KR', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    'Pretendard',
+    'Inter',
+    'Noto Sans KR',
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
 }
 
 /* ROM 페이지에서만 body 가로 스크롤 차단 + 세로 스크롤바 시각 숨김 + 부위 단위 snap */
@@ -150,6 +156,37 @@
   flex-direction: column;
   gap: var(--dash-space-4);
   min-width: 0;
+}
+
+.statePanel {
+  min-height: calc(100vh - var(--dash-header-height) - var(--dash-space-3) - var(--dash-space-5));
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 10px;
+  padding: var(--dash-space-6);
+  border-radius: var(--dash-radius-card);
+  background: var(--dash-color-surface);
+  box-shadow: var(--dash-shadow-card);
+}
+
+.stateTitle {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--dash-color-text-strong);
+  letter-spacing: 0;
+}
+
+.stateText {
+  margin: 0;
+  max-width: 520px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.6;
+  color: var(--dash-color-text-muted);
+  letter-spacing: 0;
+  word-break: keep-all;
 }
 
 @media (max-width: 1024px) {

@@ -1,20 +1,36 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { HeaderBar } from '@/features/dashboard/components/HeaderBar'
 import { ChevronLeftIcon } from '@/features/dashboard/components/icons'
+import { useMyPatientId } from '@/features/auth/hooks/useMyPatientId'
 import { JointStepNav } from '@/features/rom/components/JointStepNav'
 import { ROMAnalysisPanel } from '@/features/rom/components/ROMAnalysisPanel'
 import { ROMCharacter3D } from '@/features/rom/components/ROMCharacter3D'
-import { JOINT_ROM_DETAILS, type JointId } from '@/features/rom/data/mock'
+import { ROM_JOINT_GROUPS, type RomJointId } from '@/features/rom/data/model'
+import { useRomMovementAnalysis } from '@/features/rom/hooks'
 import '@/features/dashboard/tokens.css'
 import styles from './ROMDetailPage.module.css'
 
+function StatePanel({ title, description }: { title: string; description: string }) {
+  return (
+    <article className={styles.statePanel}>
+      <h2 className={styles.stateTitle}>{title}</h2>
+      <p className={styles.stateText}>{description}</p>
+    </article>
+  )
+}
+
 export function ROMDetailPage() {
-  const [activeId, setActiveId] = useState<JointId>('shoulder')
+  const { data: patientId } = useMyPatientId()
+  const { data: analysisView, isError, isLoading } = useRomMovementAnalysis(patientId)
+  const [activeId, setActiveId] = useState<RomJointId>('elbow')
   const isProgrammaticScrollRef = useRef(false)
   const programmaticScrollTimerRef = useRef<number | null>(null)
 
-  // ROM 상세 페이지에서만 가로 스크롤 차단 + 세로 스크롤바 시각 숨김
+  const joints = useMemo(() => analysisView?.joints ?? [], [analysisView?.joints])
+  const navItems = useMemo(() => (joints.length > 0 ? joints : ROM_JOINT_GROUPS), [joints])
+  const hasAnalyzedMotion = (analysisView?.analyzedMotionCount ?? 0) > 0
+
   useEffect(() => {
     document.body.classList.add('rom-no-scrollbar')
     return () => {
@@ -23,17 +39,21 @@ export function ROMDetailPage() {
   }, [])
 
   useEffect(() => {
-    const panels = JOINT_ROM_DETAILS.map(j =>
-      document.getElementById(`joint-panel-${j.id}`),
-    ).filter((el): el is HTMLElement => Boolean(el))
+    if (navItems.some(joint => joint.id === activeId)) return
+    setActiveId(navItems[0]?.id ?? 'elbow')
+  }, [activeId, navItems])
+
+  useEffect(() => {
+    const panels = joints
+      .map(joint => document.getElementById(`joint-panel-${joint.id}`))
+      .filter((el): el is HTMLElement => Boolean(el))
     if (panels.length === 0) return
 
     let rafId = 0
     const updateActive = () => {
       if (isProgrammaticScrollRef.current) return
-      // 뷰포트 중앙선과 가장 가까운 패널을 활성으로
       const center = window.innerHeight * 0.45
-      let bestId: JointId | null = null
+      let bestId: RomJointId | null = null
       let bestDistance = Infinity
       for (const panel of panels) {
         const rect = panel.getBoundingClientRect()
@@ -41,7 +61,7 @@ export function ROMDetailPage() {
         const distance = Math.abs(panelCenter - center)
         if (distance < bestDistance) {
           bestDistance = distance
-          bestId = panel.getAttribute('data-joint-id') as JointId | null
+          bestId = panel.getAttribute('data-joint-id') as RomJointId | null
         }
       }
       if (bestId) {
@@ -65,9 +85,9 @@ export function ROMDetailPage() {
       window.removeEventListener('resize', onScroll)
       if (rafId) window.cancelAnimationFrame(rafId)
     }
-  }, [])
+  }, [joints])
 
-  const handleSelect = useCallback((id: JointId) => {
+  const handleSelect = useCallback((id: RomJointId) => {
     setActiveId(id)
     const target = document.getElementById(`joint-panel-${id}`)
     if (!target) return
@@ -93,11 +113,11 @@ export function ROMDetailPage() {
             <header className={styles.leftHead}>
               <Link to="/" className={styles.backBtn} aria-label="대시보드로 돌아가기">
                 <ChevronLeftIcon className={styles.backIcon} />
-                <span>관절 가동 범위</span>
+                <span>움직임 범위</span>
               </Link>
             </header>
             <div className={styles.stepNavSlot}>
-              <JointStepNav activeId={activeId} onSelect={handleSelect} />
+              <JointStepNav items={navItems} activeId={activeId} onSelect={handleSelect} />
             </div>
             <div className={styles.characterSlot}>
               <ROMCharacter3D focusJoint={activeId} />
@@ -106,18 +126,40 @@ export function ROMDetailPage() {
         </aside>
 
         <section className={styles.rightCol}>
-          {JOINT_ROM_DETAILS.map(joint => (
-            <article
-              key={joint.id}
-              id={`joint-panel-${joint.id}`}
-              data-joint-id={joint.id}
-              className={styles.panel}
-            >
-              <div className={styles.panelInner}>
-                <ROMAnalysisPanel joint={joint} />
-              </div>
-            </article>
-          ))}
+          {isLoading ? (
+            <StatePanel
+              title="움직임 분석을 불러오는 중입니다"
+              description="최근 체조 세션의 좌표 데이터를 확인하고 관절별 움직임 범위를 계산하고 있습니다."
+            />
+          ) : isError ? (
+            <StatePanel
+              title="움직임 분석을 불러오지 못했습니다"
+              description="네트워크 상태를 확인한 뒤 잠시 후 다시 시도해 주세요."
+            />
+          ) : !analysisView ? (
+            <StatePanel
+              title="최근 체조 세션이 없습니다"
+              description="체조 세션이 저장되면 이 화면에서 관절별 움직임 범위를 확인할 수 있습니다."
+            />
+          ) : !hasAnalyzedMotion ? (
+            <StatePanel
+              title="분석 가능한 좌표 데이터가 없습니다"
+              description="최근 세션에 replay 좌표가 없거나 confidence가 낮아 관절 움직임 범위를 계산하지 못했습니다."
+            />
+          ) : (
+            joints.map(joint => (
+              <article
+                key={joint.id}
+                id={`joint-panel-${joint.id}`}
+                data-joint-id={joint.id}
+                className={styles.panel}
+              >
+                <div className={styles.panelInner}>
+                  <ROMAnalysisPanel joint={joint} />
+                </div>
+              </article>
+            ))
+          )}
         </section>
       </main>
     </div>
