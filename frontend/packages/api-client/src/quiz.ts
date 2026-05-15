@@ -48,6 +48,10 @@ export type QuizGameStartedResponse = {
   prompt: PromptAssignment
 }
 
+export type StartQuizRoomRequest = {
+  totalRounds?: 3 | 6 | 9
+}
+
 export async function createQuizRoom(): Promise<QuizRoomSnapshot> {
   const response = await apiClient.post<ApiResponse<QuizRoomSnapshot>>('/quiz/rooms')
   return response.data.data
@@ -71,9 +75,13 @@ export async function getQuizRoom(roomId: string): Promise<QuizRoomSnapshot> {
   return response.data.data
 }
 
-export async function startQuizRoom(roomId: string): Promise<QuizGameStartedResponse> {
+export async function startQuizRoom(
+  roomId: string,
+  request: StartQuizRoomRequest = {},
+): Promise<QuizGameStartedResponse> {
   const response = await apiClient.post<ApiResponse<QuizGameStartedResponse>>(
     `/quiz/rooms/${encodeURIComponent(roomId)}/start`,
+    request,
   )
   return response.data.data
 }

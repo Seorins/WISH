@@ -28,6 +28,16 @@ export interface QuizStatusChangedEvent {
   status: QuizRoomStatus
 }
 
+export interface QuizRoomResetEvent {
+  type: 'room_reset'
+  status: 'WAITING'
+  hostUserId: number
+  roundNumber: number
+  currentDrawerUserId: number
+  message?: string
+  members: QuizMember[]
+}
+
 export interface QuizRoundStartedEvent {
   type: 'round_started'
   status: QuizRoomStatus
@@ -73,6 +83,7 @@ export type QuizRoomEvent =
   | QuizMemberLeftEvent
   | QuizHostChangedEvent
   | QuizStatusChangedEvent
+  | QuizRoomResetEvent
   | QuizRoundStartedEvent
   | QuizStrokeEvent
   | QuizGuessSubmittedEvent

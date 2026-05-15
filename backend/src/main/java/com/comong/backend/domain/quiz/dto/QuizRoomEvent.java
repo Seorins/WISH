@@ -111,6 +111,28 @@ public record QuizRoomEvent(
                 null);
     }
 
+    public static QuizRoomEvent roomReset(
+            long hostUserId, String message, List<QuizMemberDto> members) {
+        return new QuizRoomEvent(
+                "room_reset",
+                null,
+                null,
+                hostUserId,
+                QuizRoomStatus.WAITING,
+                0,
+                0L,
+                null,
+                null,
+                null,
+                null,
+                message,
+                null,
+                null,
+                null,
+                null,
+                members);
+    }
+
     public static QuizRoomEvent roundStarted(
             int roundNumber,
             long currentDrawerUserId,

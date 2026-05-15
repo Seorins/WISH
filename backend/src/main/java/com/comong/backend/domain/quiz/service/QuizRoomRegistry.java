@@ -211,14 +211,16 @@ public class QuizRoomRegistry {
      * @param prompt 본 라운드 제시어
      * @return 변경 후 룸 (lock 해제 후 snapshot 용)
      */
-    public QuizRoom startNextRound(String roomId, DrawingPrompt prompt, Instant startedAt) {
+    public QuizRoom startNextRound(
+            String roomId, DrawingPrompt prompt, Instant startedAt, Integer totalRounds) {
         RoomEntry entry = rooms.get(roomId);
         if (entry == null) {
             throw new com.comong.backend.domain.quiz.exception.QuizRoomNotFoundException();
         }
         entry.lock.lock();
         try {
-            entry.room.startNextRound(prompt, startedAt, properties.roundDurationSeconds());
+            entry.room.startNextRound(
+                    prompt, startedAt, properties.roundDurationSeconds(), totalRounds);
             return entry.room;
         } finally {
             entry.lock.unlock();

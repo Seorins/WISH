@@ -10,6 +10,7 @@ export type {
   QuizGameFinishedEvent,
   QuizGuessSubmittedEvent,
   QuizRoomEvent,
+  QuizRoomResetEvent,
   QuizRoomSnapshot,
   QuizRoomStatus,
   QuizRoundEndedEvent,
