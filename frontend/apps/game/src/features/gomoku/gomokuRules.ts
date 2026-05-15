@@ -174,7 +174,7 @@ export function detectForbiddenMove(
   }
 
   const fours = DIRECTIONS.filter(direction =>
-    hasOpenContiguousLine(nextBoard, position, stone, direction, 4, 1),
+    hasFourThreat(nextBoard, position, stone, direction),
   ).length
   if (fours >= 2) {
     return { type: 'double-four', message: FORBIDDEN_MESSAGES['double-four'] }
@@ -290,41 +290,13 @@ function collectDirection(
   return positions
 }
 
-function hasOpenContiguousLine(
-  board: Board,
-  origin: Position,
-  stone: Stone,
-  direction: (typeof DIRECTIONS)[number],
-  targetLength: number,
-  requiredOpenEnds: number,
-) {
-  const forward = collectDirection(board, origin, stone, direction.dRow, direction.dCol)
-  const backward = collectDirection(board, origin, stone, -direction.dRow, -direction.dCol)
-  const lineLength = forward.length + backward.length + 1
-  if (lineLength !== targetLength) return false
-
-  const before = {
-    row: origin.row - direction.dRow * (backward.length + 1),
-    col: origin.col - direction.dCol * (backward.length + 1),
-  }
-  const after = {
-    row: origin.row + direction.dRow * (forward.length + 1),
-    col: origin.col + direction.dCol * (forward.length + 1),
-  }
-  const openEnds =
-    Number(isInsideBoard(board, before) && board[before.row][before.col] === null) +
-    Number(isInsideBoard(board, after) && board[after.row][after.col] === null)
-
-  return openEnds >= requiredOpenEnds
-}
-
 function hasOpenThree(
   board: Board,
   origin: Position,
   stone: Stone,
   direction: (typeof DIRECTIONS)[number],
 ) {
-  if (hasOpenContiguousLine(board, origin, stone, direction, 4, 1)) {
+  if (hasFourThreat(board, origin, stone, direction)) {
     return false
   }
 
@@ -332,6 +304,32 @@ function hasOpenThree(
   const centerIndex = DIRECTIONAL_PATTERN_RADIUS
 
   return OPEN_THREE_PATTERNS.some(pattern => containsPatternAtOrigin(line, centerIndex, pattern))
+}
+
+function hasFourThreat(
+  board: Board,
+  origin: Position,
+  stone: Stone,
+  direction: (typeof DIRECTIONS)[number],
+) {
+  for (let offset = -4; offset <= 4; offset += 1) {
+    if (offset === 0) continue
+
+    const candidate = {
+      row: origin.row + direction.dRow * offset,
+      col: origin.col + direction.dCol * offset,
+    }
+    if (!isInsideBoard(board, candidate) || board[candidate.row][candidate.col]) continue
+
+    const nextBoard = applyMove(board, candidate, stone)
+    const lineLength =
+      collectDirection(nextBoard, candidate, stone, direction.dRow, direction.dCol).length +
+      collectDirection(nextBoard, candidate, stone, -direction.dRow, -direction.dCol).length +
+      1
+    if (lineLength === 5) return true
+  }
+
+  return false
 }
 
 function getDirectionalPattern(
