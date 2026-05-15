@@ -107,6 +107,8 @@ export class QuizPlayScene extends Phaser.Scene {
    */
   private activeBubbles = new Map<number, { text: string; correct: boolean; expiresAt: number }>()
   private roundEnded = false
+  /** 정답 발표 배너 — guess_submitted(correct=true) 도착 시 화면 중앙에 짧게 뜬다. */
+  private correctBanner: Phaser.GameObjects.Container | null = null
   private finalMembers: QuizMember[] | null = null
   private isLeaving = false
 
@@ -505,8 +507,12 @@ export class QuizPlayScene extends Phaser.Scene {
   }
 
   /**
-   * 슬롯 옆에 잠깐 떠 있는 말풍선. 좌측 슬롯은 오른쪽으로 / 우측 슬롯은 왼쪽으로 펼쳐서 캔버스 쪽을 향한다.
-   * 정답은 초록, 오답/일반 chat 은 흰 배경. text 가 길면 ellipsis.
+   * 슬롯 옆에 잠깐 떠 있는 말풍선 — pill 형태(둥근 캡슐). 좌측 슬롯은 오른쪽으로 /
+   * 우측 슬롯은 왼쪽으로 띄운다.
+   *
+   * <p>이전엔 삼각형 포인터를 본체에 붙였는데, fillPath + strokePath 가 본체 외곽선과 만나는
+   * 부분에서 두께 차이 때문에 이음매가 자연스럽지 않았다. 포인터 자체를 빼고 캡슐만 띄우는
+   * 형태로 단순화 — 슬롯과의 연결은 위치만으로 충분히 읽힘.
    */
   private drawSpeechBubble(
     container: Phaser.GameObjects.Container,
@@ -519,9 +525,9 @@ export class QuizPlayScene extends Phaser.Scene {
     correct: boolean,
   ) {
     const text = rawText.length > 14 ? `${rawText.slice(0, 13)}…` : rawText
-    const fontSize = 14
-    const paddingX = 12
-    const paddingY = 8
+    const fontSize = 18
+    const paddingX = 22
+    const paddingY = 12
     const tempText = this.add.text(0, 0, text, {
       fontFamily: FONT_FAMILY,
       fontSize: `${fontSize}px`,
@@ -532,9 +538,10 @@ export class QuizPlayScene extends Phaser.Scene {
     const th = tempText.height
     tempText.destroy()
 
-    const bw = tw + paddingX * 2
+    const bw = Math.max(tw + paddingX * 2, 80)
     const bh = th + paddingY * 2
-    const gap = 10
+    const radius = bh / 2 // pill = 캡슐
+    const gap = 14
     const cy = slotY + Math.max(54, slotH * 0.34)
     const bx = side === 'left' ? slotX + slotW + gap : slotX - gap - bw
     const by = cy - bh / 2
@@ -544,44 +551,12 @@ export class QuizPlayScene extends Phaser.Scene {
 
     const g = this.add.graphics()
     // soft drop shadow
-    g.fillStyle(0x000000, 0.18)
-    g.fillRoundedRect(bx + 2, by + 3, bw, bh, 12)
+    g.fillStyle(0x000000, 0.22)
+    g.fillRoundedRect(bx + 2, by + 4, bw, bh, radius)
     g.fillStyle(fillColor, 1)
-    g.fillRoundedRect(bx, by, bw, bh, 12)
-    g.lineStyle(2, borderColor, 1)
-    g.strokeRoundedRect(bx, by, bw, bh, 12)
-
-    // pointer triangle toward the slot
-    const tipY = by + bh / 2
-    g.fillStyle(fillColor, 1)
-    g.lineStyle(2, borderColor, 1)
-    if (side === 'left') {
-      g.beginPath()
-      g.moveTo(bx, tipY - 7)
-      g.lineTo(bx - 10, tipY)
-      g.lineTo(bx, tipY + 7)
-      g.closePath()
-      g.fillPath()
-      // 외곽선은 비스듬한 두 변만 — 풍선 본체와 만나는 변은 가림.
-      g.beginPath()
-      g.moveTo(bx, tipY - 7)
-      g.lineTo(bx - 10, tipY)
-      g.lineTo(bx, tipY + 7)
-      g.strokePath()
-    } else {
-      const rx = bx + bw
-      g.beginPath()
-      g.moveTo(rx, tipY - 7)
-      g.lineTo(rx + 10, tipY)
-      g.lineTo(rx, tipY + 7)
-      g.closePath()
-      g.fillPath()
-      g.beginPath()
-      g.moveTo(rx, tipY - 7)
-      g.lineTo(rx + 10, tipY)
-      g.lineTo(rx, tipY + 7)
-      g.strokePath()
-    }
+    g.fillRoundedRect(bx, by, bw, bh, radius)
+    g.lineStyle(2.5, borderColor, 1)
+    g.strokeRoundedRect(bx, by, bw, bh, radius)
     container.add(g)
 
     container.add(
@@ -594,6 +569,72 @@ export class QuizPlayScene extends Phaser.Scene {
         })
         .setOrigin(0.5),
     )
+  }
+
+  /**
+   * 누군가 정답을 맞췄을 때 캔버스 중앙 위쪽에 큼지막한 배너로 알림. 자동으로 2.4s 뒤 사라짐.
+   * 슬롯 말풍선 "정답!" 하나만으론 출제자/다른 정답자가 놓치기 쉬워서 배너로 보강한다.
+   */
+  private showCorrectBanner(nickname: string) {
+    this.correctBanner?.destroy()
+    const w = this.scale.width
+    const h = this.scale.height
+    const cx = w / 2
+    const cy = h * 0.34
+    const container = this.add.container(cx, cy).setDepth(100)
+    this.root.add(container)
+    this.correctBanner = container
+
+    // 배경 + 외곽선. 폭은 문구에 맞춰 dynamic, 높이는 고정.
+    const label = `정답!  ${nickname} 님이 맞췄어요`
+    const text = this.add
+      .text(0, 0, label, {
+        fontFamily: FONT_FAMILY,
+        fontSize: '36px',
+        color: '#1a4d20',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5)
+    const paddingX = 44
+    const paddingY = 24
+    const bw = text.width + paddingX * 2
+    const bh = text.height + paddingY * 2
+    const radius = bh / 2
+
+    const g = this.add.graphics()
+    g.fillStyle(0x000000, 0.28)
+    g.fillRoundedRect(-bw / 2 + 4, -bh / 2 + 8, bw, bh, radius)
+    g.fillStyle(0xdcf6c4, 1)
+    g.fillRoundedRect(-bw / 2, -bh / 2, bw, bh, radius)
+    g.lineStyle(4, 0x4d8a2a, 1)
+    g.strokeRoundedRect(-bw / 2, -bh / 2, bw, bh, radius)
+    container.add([g, text])
+
+    // 등장: 위에서 살짝 내려오며 페이드 인 → 잠깐 머무름 → 페이드 아웃.
+    // 동일 타겟에 alpha 트윈 두 개를 동시에 add 하면 같은 프레임에서 서로 덮어써 alpha 가
+    // 0 으로 고정되는 버그가 있다. 페이드 아웃은 delayedCall 로 분리.
+    container.setAlpha(0)
+    container.setY(cy - 20)
+    this.tweens.add({
+      targets: container,
+      alpha: 1,
+      y: cy,
+      duration: 220,
+      ease: 'Back.out',
+    })
+    this.time.delayedCall(2200, () => {
+      if (!container.active) return
+      this.tweens.add({
+        targets: container,
+        alpha: 0,
+        duration: 320,
+        ease: 'Sine.in',
+        onComplete: () => {
+          container.destroy()
+          if (this.correctBanner === container) this.correctBanner = null
+        },
+      })
+    })
   }
 
   private drawCanvasArea(
@@ -748,54 +789,116 @@ export class QuizPlayScene extends Phaser.Scene {
     const h = this.scale.height
     const overlay = this.add.rectangle(w / 2, h / 2, w, h, 0x000000, 0.55)
     container.add(overlay)
-    const panelW = 520
-    const panelH = 390
+
+    // 패널 사이즈는 인원수에 따라 가변. 행 높이 56 + gap 14 기준으로 정확히 맞춰 잡는다.
+    const members = [...(this.finalMembers ?? [])].sort((a, b) => b.score - a.score)
+    const rowH = 56
+    const rowGap = 14
+    const headerH = 96
+    const buttonsH = 96
+    const verticalPadding = 36
+    const panelW = 560
+    const panelH =
+      headerH +
+      members.length * rowH +
+      Math.max(0, members.length - 1) * rowGap +
+      buttonsH +
+      verticalPadding
+    const cx = w / 2
+    const cy = h / 2
+    const panelTop = cy - panelH / 2
+
     const panel = this.add.graphics()
-    panel.fillStyle(0x050814, 0.35)
-    panel.fillRoundedRect(w / 2 - panelW / 2 + 8, h / 2 - panelH / 2 + 10, panelW, panelH, 24)
-    panel.fillStyle(0x243049, 1)
-    panel.fillRoundedRect(w / 2 - panelW / 2, h / 2 - panelH / 2, panelW, panelH, 24)
-    panel.fillStyle(0xffd36b, 1)
-    panel.fillRoundedRect(w / 2 - 150, h / 2 - panelH / 2 - 18, 300, 56, 24)
-    panel.lineStyle(4, 0xffe9c2, 1)
-    panel.strokeRoundedRect(w / 2 - panelW / 2, h / 2 - panelH / 2, panelW, panelH, 24)
+    // 부드러운 ground shadow
+    panel.fillStyle(0x000000, 0.32)
+    panel.fillRoundedRect(cx - panelW / 2 + 6, panelTop + 14, panelW, panelH, 28)
+    // 본체
+    panel.fillStyle(0x2c3a55, 1)
+    panel.fillRoundedRect(cx - panelW / 2, panelTop, panelW, panelH, 28)
+    // 상단 하이라이트 — 다크 패널 톤을 부드럽게
+    panel.fillStyle(0xffffff, 0.05)
+    panel.fillRoundedRect(cx - panelW / 2 + 14, panelTop + 14, panelW - 28, 60, 18)
+    panel.lineStyle(2, 0xffe9c2, 0.55)
+    panel.strokeRoundedRect(cx - panelW / 2, panelTop, panelW, panelH, 28)
     container.add(panel)
+
+    // 헤더 — 칩 없이 글자만, 옅은 금색
     container.add(
       this.add
-        .text(w / 2, h / 2 - 164, '최종 결과', {
+        .text(cx, panelTop + 50, '최종 결과', {
           fontFamily: FONT_FAMILY,
-          fontSize: '32px',
-          color: '#3a2614',
+          fontSize: '34px',
+          color: '#ffe9c2',
           fontStyle: 'bold',
+          stroke: '#1a0e05',
+          strokeThickness: 4,
         })
         .setOrigin(0.5),
     )
-    const members = [...(this.finalMembers ?? [])].sort((a, b) => b.score - a.score)
+
+    // 랭크 행. 1위는 금색 강조 + 왕관 prefix, 나머지는 차분한 톤.
+    const rowsTop = panelTop + headerH
     members.forEach((member, i) => {
+      const isWinner = i === 0
+      const rowY = rowsTop + i * (rowH + rowGap)
       const row = this.add.graphics()
-      row.fillStyle(i === 0 ? 0x3d2f1d : 0x121a2b, i === 0 ? 0.92 : 0.78)
-      row.fillRoundedRect(w / 2 - 190, h / 2 - 106 + i * 42, 380, 34, 14)
-      row.lineStyle(1.5, i === 0 ? 0xffd36b : 0x3b4864, 0.9)
-      row.strokeRoundedRect(w / 2 - 190, h / 2 - 106 + i * 42, 380, 34, 14)
+      // 부드러운 행 그림자
+      row.fillStyle(0x000000, 0.22)
+      row.fillRoundedRect(cx - 220, rowY + 4, 440, rowH, 18)
+      row.fillStyle(isWinner ? 0xffd36b : 0x1c2840, 1)
+      row.fillRoundedRect(cx - 220, rowY, 440, rowH, 18)
+      if (isWinner) {
+        // 상단 글로스 — 1위만
+        row.fillStyle(0xffffff, 0.18)
+        row.fillRoundedRect(cx - 212, rowY + 6, 424, rowH * 0.42, 14)
+      }
+      row.lineStyle(2, isWinner ? 0xb47a1f : 0x3b4864, 0.95)
+      row.strokeRoundedRect(cx - 220, rowY, 440, rowH, 18)
       container.add(row)
+
+      // 순위 chip (좌)
+      const rankText = isWinner ? '👑' : `${i + 1}`
       container.add(
         this.add
-          .text(w / 2, h / 2 - 89 + i * 42, `${i + 1}위  ${member.nickname}   ${member.score}점`, {
+          .text(cx - 188, rowY + rowH / 2, rankText, {
             fontFamily: FONT_FAMILY,
-            fontSize: '20px',
-            color: i === 0 ? '#ffd96b' : '#d8e2f3',
-            fontStyle: i === 0 ? 'bold' : 'normal',
+            fontSize: isWinner ? '30px' : '22px',
+            color: isWinner ? '#1a0e05' : '#ffe9c2',
+            fontStyle: 'bold',
           })
           .setOrigin(0.5),
       )
+      // 닉네임 (가운데 정렬, 좌측 chip 우측에서 시작)
+      container.add(
+        this.add
+          .text(cx - 150, rowY + rowH / 2, member.nickname, {
+            fontFamily: FONT_FAMILY,
+            fontSize: '22px',
+            color: isWinner ? '#1a0e05' : '#ffffff',
+            fontStyle: 'bold',
+          })
+          .setOrigin(0, 0.5),
+      )
+      // 점수 (우)
+      container.add(
+        this.add
+          .text(cx + 200, rowY + rowH / 2, `${member.score}점`, {
+            fontFamily: FONT_FAMILY,
+            fontSize: '22px',
+            color: isWinner ? '#1a0e05' : '#ffd96b',
+            fontStyle: 'bold',
+          })
+          .setOrigin(1, 0.5),
+      )
     })
+
+    // 버튼 영역
+    const buttonsCy = panelTop + panelH - buttonsH / 2
     container.add(
-      this.createToolButton(w / 2 - 90, h / 2 + 140, 150, 48, '한 판 더', false, () =>
-        this.restart(),
-      ),
+      this.createToolButton(cx - 100, buttonsCy, 170, 56, '한 판 더', false, () => this.restart()),
     )
     container.add(
-      this.createToolButton(w / 2 + 90, h / 2 + 140, 150, 48, '아트룸으로', false, () =>
+      this.createToolButton(cx + 100, buttonsCy, 170, 56, '아트룸으로', false, () =>
         this.handleLeave(),
       ),
     )
@@ -894,6 +997,9 @@ export class QuizPlayScene extends Phaser.Scene {
         correct: event.correct,
         expiresAt: Date.now() + BUBBLE_TTL_MS,
       })
+      if (event.correct) {
+        this.showCorrectBanner(event.nickname)
+      }
       this.drawLayout()
     } else if (event.type === 'round_ended') {
       this.roundEnded = true
