@@ -130,11 +130,11 @@
   box-sizing: border-box;
   width: min(68vh, 100%, 700px);
   aspect-ratio: 1;
-  display: grid;
-  grid-template-columns: repeat(15, 1fr);
-  grid-template-rows: repeat(15, 1fr);
+  position: relative;
+  display: block;
   border: 8px solid #8b602e;
   border-radius: 8px;
+  overflow: visible;
   background:
     linear-gradient(#6d481f 0 0) 0 0 / 100% 2px no-repeat,
     linear-gradient(90deg, #6d481f 0 0) 0 0 / 2px 100% no-repeat,
@@ -157,13 +157,17 @@
 }
 
 .gomoku-cell {
-  position: relative;
+  position: absolute;
   display: grid;
   place-items: center;
+  width: calc(100% / 14);
+  height: calc(100% / 14);
+  transform: translate(-50%, -50%);
   border: 0;
   padding: 0;
   background: transparent;
   cursor: pointer;
+  z-index: 1;
 }
 
 .gomoku-cell:disabled {

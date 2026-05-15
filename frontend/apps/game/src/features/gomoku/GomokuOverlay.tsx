@@ -600,6 +600,10 @@ export function GomokuOverlay({ open, onClose }: GomokuOverlayProps) {
                         key={`${rowIndex}:${colIndex}`}
                         type="button"
                         role="gridcell"
+                        style={{
+                          left: `${(colIndex / (GOMOKU_BOARD_SIZE - 1)) * 100}%`,
+                          top: `${(rowIndex / (GOMOKU_BOARD_SIZE - 1)) * 100}%`,
+                        }}
                         className={className}
                         aria-label={`${rowIndex + 1}, ${colIndex + 1}`}
                         disabled={

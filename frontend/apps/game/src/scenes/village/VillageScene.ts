@@ -71,8 +71,8 @@ const VILLAGE_PHOTO_BOOTH = {
 const VILLAGE_GOMOKU_BOARD_KEY = 'village-gomoku-board'
 const VILLAGE_GOMOKU_BOARD_PATH = 'images/village/objects/gomoku-board.png'
 const VILLAGE_GOMOKU_BOARD = {
-  xRatio: VILLAGE_PHOTO_BOOTH.xRatio + 0.012,
-  yRatio: 0.392,
+  xRatio: VILLAGE_PHOTO_BOOTH.xRatio,
+  yRatio: 0.398,
   scale: 0.187,
 } as const
 const GOMOKU_BOARD_INTERACT_RECT = {
