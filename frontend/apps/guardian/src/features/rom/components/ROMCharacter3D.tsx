@@ -3,7 +3,7 @@ import { Canvas, useFrame } from '@react-three/fiber'
 import { Html, useGLTF } from '@react-three/drei'
 import { Vector3, type Group } from 'three'
 import wishGlbUrl from '@/assets/wish.glb?url'
-import type { JointId } from '../data/mock'
+import type { RomJointId } from '../data/model'
 import styles from './ROMCharacter3D.module.css'
 
 useGLTF.preload(wishGlbUrl)
@@ -26,11 +26,11 @@ const MODEL_OFFSET_X = 0
  * - distance 작게 = 캐릭터 크게 보임 (카드 가장자리까지 채우게)
  * - targetY는 해당 관절 ± 가시 영역의 중앙. 머리/발 잘림 안 되게 약간 보정.
  */
-const JOINT_FOCUS: Record<JointId, { targetY: number; distance: number }> = {
+const JOINT_FOCUS: Record<RomJointId, { targetY: number; distance: number }> = {
+  elbow: { targetY: 0.35, distance: 1.85 },
   shoulder: { targetY: 0.5, distance: 1.85 },
   hip: { targetY: -0.05, distance: 1.85 },
   knee: { targetY: -0.5, distance: 1.85 },
-  ankle: { targetY: -0.9, distance: 1.55 },
 }
 
 /**
@@ -41,7 +41,11 @@ const JOINT_FOCUS: Record<JointId, { targetY: number; distance: number }> = {
  *  - 무릎: 무릎 캡
  *  - 발목: 복숭아뼈(양말 윗부분)
  */
-const JOINT_MARKERS: Record<JointId, [[number, number, number], [number, number, number]]> = {
+const JOINT_MARKERS: Record<RomJointId, [[number, number, number], [number, number, number]]> = {
+  elbow: [
+    [-0.31, 1.03, 0.07],
+    [0.31, 1.03, 0.07],
+  ],
   shoulder: [
     [-0.16, 1.34, 0.06],
     [0.16, 1.34, 0.06],
@@ -53,10 +57,6 @@ const JOINT_MARKERS: Record<JointId, [[number, number, number], [number, number,
   knee: [
     [-0.13, 0.5, 0.06],
     [0.13, 0.5, 0.06],
-  ],
-  ankle: [
-    [-0.13, 0.25, 0.06],
-    [0.13, 0.25, 0.06],
   ],
 }
 
@@ -70,7 +70,7 @@ function CharacterModel() {
   )
 }
 
-function FocusMarkers({ focusJoint }: { focusJoint: JointId }) {
+function FocusMarkers({ focusJoint }: { focusJoint: RomJointId }) {
   const positions = JOINT_MARKERS[focusJoint]
   return (
     <group position={[MODEL_OFFSET_X, MODEL_OFFSET_Y, 0]}>
@@ -86,7 +86,7 @@ function FocusMarkers({ focusJoint }: { focusJoint: JointId }) {
 }
 
 type CameraRigProps = {
-  focusJoint: JointId
+  focusJoint: RomJointId
 }
 
 /**
@@ -115,7 +115,7 @@ function CameraRig({ focusJoint }: CameraRigProps) {
 }
 
 type Props = {
-  focusJoint: JointId
+  focusJoint: RomJointId
 }
 
 export function ROMCharacter3D({ focusJoint }: Props) {

@@ -78,6 +78,44 @@ export type ExerciseMotionReplayResponse = {
   compactReplay?: ExerciseMotionReplayClip | null
 }
 
+export type ExerciseMotionMovementAnalysisJointRange = {
+  jointName: string
+  label: string
+  analysisAvailable: boolean
+  validFrameCount: number
+  coverageRate: number
+  minAngleDeg: number | null
+  maxAngleDeg: number | null
+  rangeDeg: number | null
+  averageConfidence: number | null
+}
+
+export type ExerciseMotionMovementAnalysisSegment = {
+  startMs: number | null
+  endMs: number | null
+  reason: string | null
+}
+
+export type ExerciseMotionMovementAnalysisResponse = {
+  motionResultId: number
+  exerciseMotionId: number
+  motionName: string
+  routineOrder: number
+  analysisAvailable: boolean
+  replaySource: 'RAW' | 'COMPACT' | 'NONE' | string
+  durationMs: number | null
+  totalFrameCount: number
+  analyzedFrameCount: number
+  excludedFrameCount: number
+  analyzedDurationMs: number | null
+  excludedDurationMs: number | null
+  confidenceThreshold: number
+  averageConfidence: number | null
+  joints: ExerciseMotionMovementAnalysisJointRange[]
+  excludedSegments: ExerciseMotionMovementAnalysisSegment[]
+  representativeSegment: ExerciseMotionMovementAnalysisSegment | null
+}
+
 export type CreateExerciseSessionRequest = {
   patientProfileId: number
   exerciseType: ExerciseSessionType
@@ -125,6 +163,9 @@ export const EXERCISE_SESSION_DETAIL_ERROR_MESSAGE =
 export const EXERCISE_MOTION_REPLAY_ERROR_MESSAGE =
   '\uCCB4\uC870 \uB3D9\uC791 \uB9AC\uD50C\uB808\uC774\uB97C \uBD88\uB7EC\uC624\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4. \uC7A0\uC2DC \uD6C4 \uB2E4\uC2DC \uC2DC\uB3C4\uD574\uC8FC\uC138\uC694.'
 
+export const EXERCISE_MOTION_MOVEMENT_ANALYSIS_ERROR_MESSAGE =
+  '\uCCB4\uC870 \uB3D9\uC791 \uC6C0\uC9C1\uC784 \uBD84\uC11D\uC744 \uBD88\uB7EC\uC624\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4. \uC7A0\uC2DC \uD6C4 \uB2E4\uC2DC \uC2DC\uB3C4\uD574\uC8FC\uC138\uC694.'
+
 const INVALID_PATIENT_PROFILE_ID_MESSAGE =
   'patientProfileId\uAC00 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.'
 const INVALID_EXERCISE_SESSION_ID_MESSAGE =
@@ -145,6 +186,8 @@ const INVALID_DETAIL_RESPONSE_MESSAGE =
   '\uCCB4\uC870 \uC138\uC158 \uC0C1\uC138 \uC751\uB2F5\uC774 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.'
 const INVALID_REPLAY_RESPONSE_MESSAGE =
   '\uCCB4\uC870 \uB3D9\uC791 \uB9AC\uD50C\uB808\uC774 \uC751\uB2F5\uC774 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.'
+const INVALID_MOVEMENT_ANALYSIS_RESPONSE_MESSAGE =
+  '\uCCB4\uC870 \uB3D9\uC791 \uC6C0\uC9C1\uC784 \uBD84\uC11D \uC751\uB2F5\uC774 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.'
 const INVALID_POSE_REPLAY_MESSAGE =
   '\uC88C\uD45C \uB9AC\uD50C\uB808\uC774 \uB370\uC774\uD130\uAC00 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.'
 
@@ -721,5 +764,37 @@ export async function getExerciseMotionReplay(
       throw error
     }
     throw new Error(EXERCISE_MOTION_REPLAY_ERROR_MESSAGE)
+  }
+}
+
+export async function getExerciseMotionMovementAnalysis(
+  motionResultId: number,
+  client: AxiosInstance = apiClient,
+): Promise<ExerciseMotionMovementAnalysisResponse> {
+  assertValidExerciseMotionResultId(motionResultId)
+
+  try {
+    const response = await client.get<ApiResponse<ExerciseMotionMovementAnalysisResponse | null>>(
+      `/exercise-sessions/motions/${motionResultId}/movement-analysis`,
+      {
+        headers: { Accept: 'application/json' },
+      },
+    )
+
+    const body = response.data
+    if (body.errors && Object.keys(body.errors).length > 0) {
+      throw new Error(EXERCISE_MOTION_MOVEMENT_ANALYSIS_ERROR_MESSAGE)
+    }
+
+    if (!body.data) {
+      throw new Error(INVALID_MOVEMENT_ANALYSIS_RESPONSE_MESSAGE)
+    }
+
+    return body.data
+  } catch (error) {
+    if (error instanceof Error && error.message === INVALID_MOVEMENT_ANALYSIS_RESPONSE_MESSAGE) {
+      throw error
+    }
+    throw new Error(EXERCISE_MOTION_MOVEMENT_ANALYSIS_ERROR_MESSAGE)
   }
 }
