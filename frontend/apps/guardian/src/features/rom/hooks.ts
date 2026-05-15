@@ -153,7 +153,7 @@ function buildInsight(group: RomJointGroup, detail: RomJointDetail): string {
   }
   // Backend confidenceThreshold decides frame inclusion; this UI threshold only marks guardian-facing quality warnings.
   if ((detail.confidencePercent ?? 0) < MOVEMENT_ANALYSIS_QUALITY_WARNING_CONFIDENCE_PERCENT) {
-    return `${group.name}은 카메라가 관절 위치를 놓친 구간이 있어 참고용으로만 보는 것이 좋습니다. 확인 제외 시간이 줄어드는지 먼저 봐 주세요.`
+    return `${group.name}은 카메라가 관절 위치를 놓친 구간이 있어 참고용으로만 보는 것이 좋습니다. 잘 안 보인 시간이 줄어드는지 먼저 봐 주세요.`
   }
   if ((detail.coveragePercent ?? 0) < MOVEMENT_ANALYSIS_QUALITY_WARNING_COVERAGE_PERCENT) {
     return `${group.name}은 화면에 안정적으로 잡힌 시간이 적습니다. 움직임 크기보다 촬영 위치와 조명 상태를 먼저 확인하는 것이 좋습니다.`
