@@ -28,6 +28,7 @@ vi.mock('@wish/api-client', () => ({
 
 const ONLINE_LABEL = '\uC628\uB77C\uC778'
 const CREATE_ROOM_LABEL = '\uBC29 \uB9CC\uB4E4\uAE30'
+const RANKING_LABEL = '\uB7AD\uD0B9'
 const AUTH_REQUIRED_MESSAGE =
   '\uC628\uB77C\uC778 \uB300\uC804\uC740 \uB85C\uADF8\uC778\uC774 \uD544\uC694\uD574\uC694.'
 
@@ -145,5 +146,36 @@ describe('GomokuOverlay online room creation', () => {
     })
     expect(createGomokuRoom).not.toHaveBeenCalled()
     expect(screen.getAllByText(AUTH_REQUIRED_MESSAGE).length).toBeGreaterThan(0)
+  })
+
+  it('shows online ranking on the ranking tab', async () => {
+    vi.mocked(getGomokuRanking).mockResolvedValue(
+      apiResponse({
+        ...emptyRanking,
+        totalPlayers: 1,
+        entries: [
+          {
+            rank: 1,
+            patientProfileId: 9,
+            nickname: 'ranker',
+            totalGames: 5,
+            wins: 4,
+            draws: 0,
+            losses: 1,
+            winRate: 0.8,
+            lastPlayedAt: '2026-05-15T00:00:00',
+            isMe: false,
+          },
+        ],
+      }),
+    )
+
+    render(<GomokuOverlay open onClose={vi.fn()} patientProfileId={7} />)
+
+    fireEvent.click(screen.getByRole('button', { name: ONLINE_LABEL }))
+    fireEvent.click(screen.getByRole('button', { name: RANKING_LABEL }))
+
+    expect(await screen.findByText('ranker')).toBeTruthy()
+    expect(screen.getByText('80%')).toBeTruthy()
   })
 })

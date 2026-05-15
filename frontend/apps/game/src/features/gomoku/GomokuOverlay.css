@@ -60,6 +60,7 @@
 .gomoku-actions button,
 .gomoku-segmented button,
 .gomoku-timer-options button,
+.gomoku-online-tabs button,
 .gomoku-online-actions button,
 .gomoku-room-row button {
   min-height: 36px;
@@ -239,12 +240,16 @@
 
 .gomoku-side {
   min-height: 0;
-  display: grid;
-  grid-template-rows: auto auto auto auto minmax(0, 1fr);
+  display: flex;
+  flex-direction: column;
   gap: 10px;
   overflow-y: auto;
   padding-right: 4px;
   scrollbar-gutter: stable;
+}
+
+.gomoku-side > * {
+  flex: 0 0 auto;
 }
 
 .gomoku-panel {
@@ -270,14 +275,16 @@
 
 .gomoku-segmented,
 .gomoku-timer-options,
-.gomoku-actions {
+.gomoku-actions,
+.gomoku-online-tabs {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
 }
 
 .gomoku-segmented button.active,
-.gomoku-timer-options button.active {
+.gomoku-timer-options button.active,
+.gomoku-online-tabs button.active {
   border-color: #1e5a55;
   background: #1e5a55;
   color: #f8fff9;
@@ -285,7 +292,8 @@
 
 .gomoku-segmented button:disabled,
 .gomoku-timer-options button:disabled,
-.gomoku-actions button:disabled {
+.gomoku-actions button:disabled,
+.gomoku-online-tabs button:disabled {
   opacity: 0.45;
   cursor: not-allowed;
 }
@@ -383,6 +391,19 @@
 .gomoku-online-panel {
   display: grid;
   gap: 10px;
+}
+
+.gomoku-online-tabs button {
+  background: #e8f1ed;
+}
+
+.gomoku-online-tab-panel {
+  min-height: 112px;
+  max-height: 260px;
+  overflow: auto;
+  display: grid;
+  gap: 10px;
+  padding-right: 2px;
 }
 
 .gomoku-online-actions {
@@ -546,7 +567,8 @@
 }
 
 .gomoku-history {
-  min-height: 0;
+  flex: 1 0 180px;
+  min-height: 180px;
   overflow: auto;
 }
 

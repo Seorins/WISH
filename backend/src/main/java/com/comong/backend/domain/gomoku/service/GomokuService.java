@@ -492,6 +492,10 @@ public class GomokuService {
 
     private boolean hasOpenThree(
             GomokuStone[][] board, int row, int col, GomokuStone stone, Direction direction) {
+        if (hasOpenContiguousLine(board, row, col, stone, direction, 4, 1)) {
+            return false;
+        }
+
         String line = getDirectionalPattern(board, row, col, stone, direction);
         int centerIndex = DIRECTIONAL_PATTERN_RADIUS;
         for (String pattern : OPEN_THREE_PATTERNS) {

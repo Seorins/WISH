@@ -200,6 +200,59 @@ class GomokuControllerIntegrationTest extends IntegrationTestSupport {
                 .andExpect(jsonPath("$.code").value("GM-005"));
     }
 
+    @Test
+    void renjuLite_allowsBlackFourThreeMove() throws Exception {
+        TestUser black =
+                setupUserWithProfile(
+                        "gomoku-four-three-black@example.com",
+                        "gomoku-four-three-black",
+                        "four-three-black");
+        TestUser white =
+                setupUserWithProfile(
+                        "gomoku-four-three-white@example.com",
+                        "gomoku-four-three-white",
+                        "four-three-white");
+
+        long roomId =
+                objectMapper
+                        .readTree(
+                                mockMvc.perform(
+                                                post("/gomoku/rooms")
+                                                        .header(
+                                                                "Authorization",
+                                                                "Bearer " + black.token())
+                                                        .contentType(MediaType.APPLICATION_JSON)
+                                                        .content(createRoomRequest("RENJU_LITE")))
+                                        .andExpect(status().isCreated())
+                                        .andReturn()
+                                        .getResponse()
+                                        .getContentAsString())
+                        .get("data")
+                        .get("id")
+                        .asLong();
+
+        mockMvc.perform(
+                        post("/gomoku/rooms/{roomId}/join", roomId)
+                                .header("Authorization", "Bearer " + white.token()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("PLAYING"));
+
+        play(black.token(), roomId, 7, 5);
+        play(white.token(), roomId, 0, 0);
+        play(black.token(), roomId, 7, 6);
+        play(white.token(), roomId, 0, 2);
+        play(black.token(), roomId, 7, 8);
+        play(white.token(), roomId, 0, 4);
+        play(black.token(), roomId, 6, 7);
+        play(white.token(), roomId, 1, 0);
+        play(black.token(), roomId, 8, 7);
+        play(white.token(), roomId, 1, 2);
+
+        play(black.token(), roomId, 7, 7)
+                .andExpect(jsonPath("$.data.status").value("PLAYING"))
+                .andExpect(jsonPath("$.data.moveCount").value(11));
+    }
+
     private org.springframework.test.web.servlet.ResultActions play(
             String token, long roomId, int row, int col) throws Exception {
         return attemptPlay(token, roomId, row, col).andExpect(status().isOk());
