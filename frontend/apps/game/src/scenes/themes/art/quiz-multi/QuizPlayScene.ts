@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
 import {
+  getQuizRoom,
   leaveQuizRoom,
   type PromptAssignment,
   type QuizMember,
@@ -111,6 +112,14 @@ export class QuizPlayScene extends Phaser.Scene {
   private roundEnded = false
   /** 정답 발표 배너 — guess_submitted(correct=true) 도착 시 화면 중앙에 짧게 뜬다. */
   private correctBanner: Phaser.GameObjects.Container | null = null
+  /**
+   * 라운드 타임아웃 후 BE 가 round_ended/game_finished 를 못 보냈을 때를 대비한 reconcile.
+   * 타이머가 0 이 된 시각 + 마지막 시도 시각 을 기억해 4초마다 1회씩 REST 로 룸 상태를 끌어와
+   * 적용. BE 스케줄 silent fail / WS 일시 단절로 굳어버린 화면을 자가 복구.
+   */
+  private timerExpiredAt: number | null = null
+  private lastReconcileAt = 0
+  private reconcileInFlight = false
   private finalMembers: QuizMember[] | null = null
   private isLeaving = false
 
@@ -1011,12 +1020,14 @@ export class QuizPlayScene extends Phaser.Scene {
       // 라운드 종료 시 잔여 말풍선 모두 정리 (정답자 말풍선은 그대로 두고 싶다면 정답자 user 만 유지하도록 변경 가능).
       this.activeBubbles.clear()
       this.setGuessOverlay(false)
+      this.timerExpiredAt = null
       this.drawLayout()
     } else if (event.type === 'game_finished') {
       this.finalMembers = event.members
       this.snapshot = { ...this.snapshot, status: 'FINISHED', members: event.members }
       this.activeBubbles.clear()
       this.setGuessOverlay(false)
+      this.timerExpiredAt = null
       this.drawLayout()
     }
   }
@@ -1141,6 +1152,59 @@ export class QuizPlayScene extends Phaser.Scene {
     const mm = String(Math.floor(remaining / 60)).padStart(2, '0')
     const ss = String(remaining % 60).padStart(2, '0')
     this.timerText.setText(`${mm}:${ss}`)
+
+    // 라운드 자가 복구 — 타이머가 0 이 됐는데도 round_ended 가 안 오면 BE 스케줄 / WS
+    // 어디선가 막힌 상황. 4s 마다 REST 로 룸 상태 끌어와 강제 반영.
+    if (remaining === 0 && !this.roundEnded && !this.finalMembers) {
+      const now = Date.now()
+      if (this.timerExpiredAt === null) this.timerExpiredAt = now
+      if (now - this.timerExpiredAt >= 4000 && now - this.lastReconcileAt >= 4000) {
+        this.lastReconcileAt = now
+        void this.reconcileRoomState()
+      }
+    } else if (remaining > 0) {
+      this.timerExpiredAt = null
+    }
+  }
+
+  /** REST 로 룸 스냅샷을 받아 로컬과 차이가 있으면 상태/이벤트 핸들러로 흘려보낸다. */
+  private async reconcileRoomState() {
+    if (this.reconcileInFlight || this.isLeaving) return
+    this.reconcileInFlight = true
+    try {
+      const fresh = await getQuizRoom(this.snapshot.roomId)
+      // 게임 종료 — 결과 모달 띄움
+      if (fresh.status === 'FINISHED' && !this.finalMembers) {
+        this.finalMembers = fresh.members
+        this.snapshot = fresh
+        this.activeBubbles.clear()
+        this.setGuessOverlay(false)
+        this.drawLayout()
+        return
+      }
+      // 라운드 번호가 앞서갔다 — round_ended/round_started 를 놓친 상태
+      if (fresh.roundNumber > this.snapshot.roundNumber) {
+        this.snapshot = fresh
+        this.prompt = null
+        this.wordLength = null
+        this.roundEnded = false
+        this.strokes = []
+        this.remoteLastPoints.clear()
+        this.setGuessOverlay(!this.isDrawer())
+        this.timerExpiredAt = null
+        this.drawLayout()
+        return
+      }
+      // 같은 라운드라도 endsAt 이 갱신됐을 수 있음 (BE 가 라운드를 새로 시작했을 때 등)
+      if (fresh.roundEndsAtEpochMillis !== this.snapshot.roundEndsAtEpochMillis) {
+        this.snapshot = fresh
+        this.drawLayout()
+      }
+    } catch (err) {
+      console.warn('[quiz-realtime] reconcile failed', err)
+    } finally {
+      this.reconcileInFlight = false
+    }
   }
 
   private pointerToCanvasPoint(pointer: Phaser.Input.Pointer): Point | null {
