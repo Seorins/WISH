@@ -18,7 +18,7 @@ import { AuthOverlay } from './features/auth'
 import { ExerciseSessionListOverlay } from './features/exerciseSessions'
 import { GomokuOverlay } from './features/gomoku'
 import { PhotoGalleryOverlay } from './features/photoGallery'
-import { QuizJoinCodeOverlay } from './features/quiz-realtime'
+import { QuizGuessOverlay, QuizJoinCodeOverlay } from './features/quiz-realtime'
 import { LighthouseEmotionController } from './features/lighthouse-emotion/components/LighthouseEmotionController'
 import { VillagerDialogueController } from './features/village-dialogue/components/VillagerDialogueController'
 import type { VillagerDialogueOpenPayload, VillagerNpcId } from './features/village-dialogue/types'
@@ -54,6 +54,7 @@ function App() {
   const [showGomoku, setShowGomoku] = useState(false)
   const [showPhotoGallery, setShowPhotoGallery] = useState(false)
   const [showQuizJoinCode, setShowQuizJoinCode] = useState(false)
+  const [showQuizGuess, setShowQuizGuess] = useState(false)
   const [villagerNpcId, setVillagerNpcId] = useState<VillagerNpcId | null>(null)
   const [isLighthouseEmotionOpen, setIsLighthouseEmotionOpen] = useState(false)
   const [patientProfileId, setPatientProfileId] = useState<number | undefined>(undefined)
@@ -104,6 +105,8 @@ function App() {
     game.events.on('gomoku:open', () => setShowGomoku(true))
     game.events.on('photo-gallery:open', () => setShowPhotoGallery(true))
     game.events.on('quiz-join-code:open', () => setShowQuizJoinCode(true))
+    game.events.on('quiz-guess:open', () => setShowQuizGuess(true))
+    game.events.on('quiz-guess:close', () => setShowQuizGuess(false))
     game.events.on('villager-dialogue:open', ({ npcId }: VillagerDialogueOpenPayload) => {
       setVillagerNpcId(npcId)
     })
@@ -297,6 +300,15 @@ function App() {
         onCancel={() => {
           setShowQuizJoinCode(false)
           gameRef.current?.events.emit('quiz-join-code:cancelled')
+        }}
+      />
+      <QuizGuessOverlay
+        open={showQuizGuess}
+        onSubmit={text => {
+          gameRef.current?.events.emit('quiz-guess:submit', { text })
+        }}
+        onLeave={() => {
+          gameRef.current?.events.emit('quiz-guess:leave')
         }}
       />
     </>

@@ -139,7 +139,7 @@ public interface GomokuMatchRepository extends JpaRepository<GomokuMatch, Long> 
                             + "JOIN patient_profiles p ON p.id = s.patient_profile_id "
                             + "GROUP BY s.patient_profile_id, p.nickname "
                             + "HAVING COUNT(*) >= :minGames "
-                            + "ORDER BY winRate DESC, wins DESC, totalGames DESC, lastPlayedAt DESC "
+                            + "ORDER BY wins DESC, winRate DESC, totalGames DESC, lastPlayedAt DESC "
                             + "LIMIT :limit",
             nativeQuery = true)
     List<GomokuRankingProjection> findRanking(

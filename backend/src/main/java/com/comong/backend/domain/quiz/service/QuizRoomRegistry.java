@@ -2,6 +2,7 @@ package com.comong.backend.domain.quiz.service;
 
 import java.security.SecureRandom;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -210,14 +211,14 @@ public class QuizRoomRegistry {
      * @param prompt 본 라운드 제시어
      * @return 변경 후 룸 (lock 해제 후 snapshot 용)
      */
-    public QuizRoom startNextRound(String roomId, DrawingPrompt prompt) {
+    public QuizRoom startNextRound(String roomId, DrawingPrompt prompt, Instant startedAt) {
         RoomEntry entry = rooms.get(roomId);
         if (entry == null) {
             throw new com.comong.backend.domain.quiz.exception.QuizRoomNotFoundException();
         }
         entry.lock.lock();
         try {
-            entry.room.startNextRound(prompt);
+            entry.room.startNextRound(prompt, startedAt, properties.roundDurationSeconds());
             return entry.room;
         } finally {
             entry.lock.unlock();
@@ -227,6 +228,10 @@ public class QuizRoomRegistry {
     /** 등록된 방 수 — 메트릭/디버깅용. */
     public int roomCount() {
         return rooms.size();
+    }
+
+    public List<String> roomIds() {
+        return List.copyOf(rooms.keySet());
     }
 
     private String generateUniqueCode() {

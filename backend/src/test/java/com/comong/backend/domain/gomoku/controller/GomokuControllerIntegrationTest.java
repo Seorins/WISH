@@ -154,6 +154,32 @@ class GomokuControllerIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
+    void ranking_ordersByWinsBeforeWinRate() throws Exception {
+        TestUser alpha =
+                setupUserWithProfile("gomoku-rank-alpha@example.com", "rank-alpha", "alpha");
+        TestUser beta = setupUserWithProfile("gomoku-rank-beta@example.com", "rank-beta", "beta");
+        TestUser gamma =
+                setupUserWithProfile("gomoku-rank-gamma@example.com", "rank-gamma", "gamma");
+
+        finishBlackWin(alpha, gamma);
+        finishBlackWin(alpha, gamma);
+        finishBlackWin(gamma, alpha);
+        finishBlackWin(beta, gamma);
+
+        mockMvc.perform(
+                        get("/gomoku/ranking")
+                                .param("limit", "10")
+                                .param("minGames", "1")
+                                .header("Authorization", "Bearer " + alpha.token()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalPlayers").value(3))
+                .andExpect(jsonPath("$.data.entries[0].nickname").value("alpha"))
+                .andExpect(jsonPath("$.data.entries[0].wins").value(2))
+                .andExpect(jsonPath("$.data.entries[1].nickname").value("beta"))
+                .andExpect(jsonPath("$.data.entries[1].wins").value(1));
+    }
+
+    @Test
     void renjuLite_rejectsBrokenDoubleThreeMove() throws Exception {
         TestUser black =
                 setupUserWithProfile(
@@ -251,6 +277,77 @@ class GomokuControllerIntegrationTest extends IntegrationTestSupport {
         play(black.token(), roomId, 7, 7)
                 .andExpect(jsonPath("$.data.status").value("PLAYING"))
                 .andExpect(jsonPath("$.data.moveCount").value(11));
+    }
+
+    @Test
+    void renjuLite_allowsBlackBrokenDiagonalFourThreeMove() throws Exception {
+        TestUser black =
+                setupUserWithProfile(
+                        "gomoku-broken-four-three-black@example.com",
+                        "gomoku-broken-four-three-black",
+                        "broken-four-three-black");
+        TestUser white =
+                setupUserWithProfile(
+                        "gomoku-broken-four-three-white@example.com",
+                        "gomoku-broken-four-three-white",
+                        "broken-four-three-white");
+
+        long roomId = createJoinedRoom(black, white, "RENJU_LITE");
+
+        play(black.token(), roomId, 4, 4);
+        play(white.token(), roomId, 0, 0);
+        play(black.token(), roomId, 5, 5);
+        play(white.token(), roomId, 0, 2);
+        play(black.token(), roomId, 8, 8);
+        play(white.token(), roomId, 0, 4);
+        play(black.token(), roomId, 7, 5);
+        play(white.token(), roomId, 1, 0);
+        play(black.token(), roomId, 7, 6);
+        play(white.token(), roomId, 1, 2);
+
+        play(black.token(), roomId, 7, 7)
+                .andExpect(jsonPath("$.data.status").value("PLAYING"))
+                .andExpect(jsonPath("$.data.moveCount").value(11));
+    }
+
+    private void finishBlackWin(TestUser black, TestUser white) throws Exception {
+        long roomId = createJoinedRoom(black, white, "FREESTYLE");
+        play(black.token(), roomId, 7, 7);
+        play(white.token(), roomId, 0, 0);
+        play(black.token(), roomId, 7, 8);
+        play(white.token(), roomId, 0, 1);
+        play(black.token(), roomId, 7, 9);
+        play(white.token(), roomId, 0, 2);
+        play(black.token(), roomId, 7, 10);
+        play(white.token(), roomId, 0, 3);
+        play(black.token(), roomId, 7, 11).andExpect(jsonPath("$.data.status").value("FINISHED"));
+    }
+
+    private long createJoinedRoom(TestUser black, TestUser white, String ruleSet) throws Exception {
+        long roomId =
+                objectMapper
+                        .readTree(
+                                mockMvc.perform(
+                                                post("/gomoku/rooms")
+                                                        .header(
+                                                                "Authorization",
+                                                                "Bearer " + black.token())
+                                                        .contentType(MediaType.APPLICATION_JSON)
+                                                        .content(createRoomRequest(ruleSet)))
+                                        .andExpect(status().isCreated())
+                                        .andReturn()
+                                        .getResponse()
+                                        .getContentAsString())
+                        .get("data")
+                        .get("id")
+                        .asLong();
+
+        mockMvc.perform(
+                        post("/gomoku/rooms/{roomId}/join", roomId)
+                                .header("Authorization", "Bearer " + white.token()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("PLAYING"));
+        return roomId;
     }
 
     private org.springframework.test.web.servlet.ResultActions play(

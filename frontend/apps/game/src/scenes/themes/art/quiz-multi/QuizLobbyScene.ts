@@ -49,15 +49,14 @@ type LobbyState =
 
 const PALETTE_DANGER = CUTE_CARD_PALETTES.rose
 
-// 게임 느낌 큰 버튼 컬러 — 채도 높여서 카드 톤과 분리.
-const COLOR_SOLO = 0xf4a64a
-const COLOR_SOLO_DARK = 0xc77a1f
-const COLOR_MULTI = 0x6aaa64
-const COLOR_MULTI_DARK = 0x447f3e
-const COLOR_CREATE = 0xf4a64a
-const COLOR_CREATE_DARK = 0xc77a1f
-const COLOR_JOIN = 0x4a8fc4
-const COLOR_JOIN_DARK = 0x2e6592
+// 카드 팔레트 — 채도 톤다운된 코디네이션 페어. 이전엔 #f4a64a/#6aaa64/#4a8fc4 가 너무 쨍해서 산만했음.
+// 같은 채도/명도 패밀리에서 따뜻함(피치/테라코타) ↔ 차분함(세이지/슬레이트) 으로만 갈라줌.
+const COLOR_WARM = 0xe89865
+const COLOR_WARM_DARK = 0xb06840
+const COLOR_COOL = 0x82b596
+const COLOR_COOL_DARK = 0x517e64
+const COLOR_SLATE = 0x7c9bc0
+const COLOR_SLATE_DARK = 0x4f6c91
 
 export class QuizLobbyScene extends Phaser.Scene {
   private state: LobbyState = 'modeSelect'
@@ -160,8 +159,8 @@ export class QuizLobbyScene extends Phaser.Scene {
         icon: '🎨',
         title: '솔로 모드',
         desc: 'AI 랑 둘이서\n제시어 그림 퀴즈',
-        fill: COLOR_SOLO,
-        shadow: COLOR_SOLO_DARK,
+        fill: COLOR_WARM,
+        shadow: COLOR_WARM_DARK,
         onClick: () => this.startSingleplayer(),
       }),
     )
@@ -171,8 +170,8 @@ export class QuizLobbyScene extends Phaser.Scene {
         icon: '👥',
         title: '멀티 모드',
         desc: '친구들이랑 같이\n그리고 맞춰봐',
-        fill: COLOR_MULTI,
-        shadow: COLOR_MULTI_DARK,
+        fill: COLOR_COOL,
+        shadow: COLOR_COOL_DARK,
         onClick: () => this.showMultiMethod(),
       }),
     )
@@ -225,8 +224,8 @@ export class QuizLobbyScene extends Phaser.Scene {
         icon: '🏠',
         title: '방 만들기',
         desc: '코드를 받아서\n친구를 초대해',
-        fill: COLOR_CREATE,
-        shadow: COLOR_CREATE_DARK,
+        fill: COLOR_WARM,
+        shadow: COLOR_WARM_DARK,
         onClick: () => this.startCreate(),
       }),
     )
@@ -236,8 +235,8 @@ export class QuizLobbyScene extends Phaser.Scene {
         icon: '🔑',
         title: '코드로 입장',
         desc: '친구가 알려준\n방 코드를 입력',
-        fill: COLOR_JOIN,
-        shadow: COLOR_JOIN_DARK,
+        fill: COLOR_SLATE,
+        shadow: COLOR_SLATE_DARK,
         onClick: () => this.startJoinByCode(),
       }),
     )
@@ -383,6 +382,7 @@ export class QuizLobbyScene extends Phaser.Scene {
         this.snapshot = next
         this.drawLobby()
       },
+      onPrompt: () => {},
       onEvent: event => this.handleRealtimeEvent(event),
       onError: error => this.setStatus(friendlyWsError(error.message)),
       onReady: () => this.setStatus(''),
@@ -421,22 +421,38 @@ export class QuizLobbyScene extends Phaser.Scene {
         status: event.status,
         roundNumber: event.roundNumber,
         currentDrawerUserId: event.currentDrawerUserId,
+        roundEndsAtEpochMillis: event.roundEndsAtEpochMillis,
+        totalRounds: event.totalRounds,
       }
-      this.transitionToPlayScene(this.snapshot, null)
+      this.transitionToPlayScene(this.snapshot, null, event.wordLength)
       return
     }
     this.drawLobby()
   }
 
-  private transitionToPlayScene(snapshot: QuizRoomSnapshot, prompt: PromptAssignment | null) {
+  private transitionToPlayScene(
+    snapshot: QuizRoomSnapshot,
+    prompt: PromptAssignment | null,
+    wordLength?: number,
+  ) {
     if (this.state === 'transitioningToPlay' || this.state === 'leaving') return
     this.state = 'transitioningToPlay'
+    const realtimeClient = this.realtimeClient
+    this.realtimeClient = null
+    realtimeClient?.setHandlers({
+      onSnapshot: () => {},
+      onPrompt: () => {},
+      onEvent: () => {},
+      onError: () => {},
+    })
     fadeToScene(this, 'QuizPlayScene', {
       duration: 220,
       data: {
         snapshot,
         currentUserId: this.currentUserId,
         prompt,
+        wordLength: wordLength ?? prompt?.word.length ?? null,
+        realtimeClient,
       },
     })
   }
@@ -719,7 +735,7 @@ export class QuizLobbyScene extends Phaser.Scene {
       .then(response => {
         // 호스트 진입 경로: REST 응답에 prompt 동봉. 토픽의 round_started 가 비슷한 시점에 도착하지만,
         // transitionToPlayScene 가 상태 가드로 중복 전이를 막는다.
-        this.transitionToPlayScene(response.snapshot, response.prompt)
+        this.transitionToPlayScene(response.snapshot, response.prompt, response.prompt.word.length)
       })
       .catch(error => {
         this.setStatus(extractMessage(error, '시작에 실패했어요. 잠시 후 다시 시도해줘.'))
@@ -808,7 +824,6 @@ export class QuizLobbyScene extends Phaser.Scene {
     const dropOffset = 8
     const liftAmount = 4
 
-    // hit zone = 외곽 그림자까지 포함한 전체 시각 영역. Phaser Rectangle 은 alpha=0 이면 hit 도 안 받아서 0.001 로.
     const hitW = w + 4
     const hitH = h + thickness + dropOffset + 4
     const hitY = (thickness + dropOffset) / 2 - 2
@@ -819,7 +834,6 @@ export class QuizLobbyScene extends Phaser.Scene {
     const faceG = this.add.graphics()
     const drawButton = (lifted: boolean) => {
       const lift = lifted ? liftAmount : 0
-      // 부드러운 외부 드롭섀도우 — 한 번에 어두운 한 겹보단 여러 겹 알파로 깔면 자연스러움.
       shadowG.clear()
       const shadowSteps = 5
       for (let i = 0; i < shadowSteps; i++) {
@@ -835,13 +849,10 @@ export class QuizLobbyScene extends Phaser.Scene {
       }
 
       faceG.clear()
-      // 하단 두께 면 (3D)
       faceG.fillStyle(shadow, 1)
       faceG.fillRoundedRect(-w / 2, -h / 2 - lift, w, h + thickness, radius)
-      // 윗 면 (메인 컬러)
       faceG.fillStyle(fill, 1)
       faceG.fillRoundedRect(-w / 2, -h / 2 - lift, w, h, radius)
-      // 같은 색 진한 톤으로 1px 안쪽 보더 — 흰 외곽선 대신 차분한 윤곽 정의
       faceG.lineStyle(2, shadow, 0.7)
       faceG.strokeRoundedRect(-w / 2 + 1, -h / 2 - lift + 1, w - 2, h - 2, radius - 1)
     }

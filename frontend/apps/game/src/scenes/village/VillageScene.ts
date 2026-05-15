@@ -77,11 +77,16 @@ const VILLAGE_PHOTO_GALLERY = {
   yRatio: 0.3285,
   scale: 0.14,
 } as const
+const SEHYUN_NPC_WORLD = {
+  xRatio: 0.38,
+  yRatio: 0.3,
+  scale: 0.38,
+} as const
 const VILLAGE_GOMOKU_BOARD_KEY = 'village-gomoku-board'
 const VILLAGE_GOMOKU_BOARD_PATH = 'images/village/objects/gomoku-board.png'
 const VILLAGE_GOMOKU_BOARD = {
-  xRatio: VILLAGE_PHOTO_BOOTH.xRatio,
-  yRatio: 0.398,
+  xRatio: SEHYUN_NPC_WORLD.xRatio,
+  yRatio: SEHYUN_NPC_WORLD.yRatio + 0.065,
   scale: 0.187,
 } as const
 const GOMOKU_BOARD_INTERACT_RECT = {
@@ -89,6 +94,16 @@ const GOMOKU_BOARD_INTERACT_RECT = {
   top: 1.08,
   width: 1.36,
   height: 0.9,
+} as const
+const GOMOKU_BOARD_HIGHLIGHT = {
+  color: 0xffd978,
+  widthRatio: 1.04,
+  heightRatio: 0.74,
+  yOffsetRatio: 0.45,
+  lineWidth: 2,
+  minAlpha: 0.16,
+  maxAlpha: 0.38,
+  durationMs: 1600,
 } as const
 const DEFAULT_PLAYER_SPAWN = { xRatio: 0.5, yRatio: 0.3 }
 const MAP_TILE_ROWS = 3
@@ -361,8 +376,10 @@ export class VillageScene extends Phaser.Scene {
       frameRate: 3,
       repeat: -1,
     })
-    this.sehyunNpc = this.add.sprite(0.38 * W, 0.3 * H, 'sehyun').setDepth(4)
-    this.sehyunNpc.setScale(0.38)
+    this.sehyunNpc = this.add
+      .sprite(SEHYUN_NPC_WORLD.xRatio * W, SEHYUN_NPC_WORLD.yRatio * H, 'sehyun')
+      .setDepth(4)
+    this.sehyunNpc.setScale(SEHYUN_NPC_WORLD.scale)
     this.sehyunNpc.setInteractive({ useHandCursor: true })
     this.sehyunNpc.on(
       'pointerdown',
@@ -670,6 +687,27 @@ export class VillageScene extends Phaser.Scene {
       .setScale(VILLAGE_GOMOKU_BOARD.scale)
       .setDepth(3)
       .setInteractive({ useHandCursor: true })
+    const highlight = this.add
+      .rectangle(
+        x,
+        y - board.displayHeight * GOMOKU_BOARD_HIGHLIGHT.yOffsetRatio,
+        board.displayWidth * GOMOKU_BOARD_HIGHLIGHT.widthRatio,
+        board.displayHeight * GOMOKU_BOARD_HIGHLIGHT.heightRatio,
+        GOMOKU_BOARD_HIGHLIGHT.color,
+        0,
+      )
+      .setOrigin(0.5)
+      .setDepth(2.9)
+      .setStrokeStyle(GOMOKU_BOARD_HIGHLIGHT.lineWidth, GOMOKU_BOARD_HIGHLIGHT.color, 1)
+      .setAlpha(GOMOKU_BOARD_HIGHLIGHT.minAlpha)
+    this.tweens.add({
+      targets: highlight,
+      alpha: GOMOKU_BOARD_HIGHLIGHT.maxAlpha,
+      duration: GOMOKU_BOARD_HIGHLIGHT.durationMs,
+      ease: 'Sine.easeInOut',
+      yoyo: true,
+      repeat: -1,
+    })
     board.on(
       'pointerdown',
       (
