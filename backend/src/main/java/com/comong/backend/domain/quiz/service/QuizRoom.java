@@ -187,8 +187,9 @@ public class QuizRoom {
         }
         roundResolved = true;
         if (correctUserId != null) {
+            // 정답자만 점수. 이전엔 출제자도 +1 을 줬는데, 정답자만 보상하는 쪽이
+            // 룰이 단순하고 정답자 보상 체감이 커진다.
             addScore(correctUserId, 2);
-            addScore(currentDrawerUserId, 1);
         }
     }
 
