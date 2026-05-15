@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
 import {
+  getQuizRoom,
   leaveQuizRoom,
   type PromptAssignment,
   type QuizMember,
@@ -49,7 +50,9 @@ function slotCharPath(joinOrder: number): string {
   return `images/themes/art/ui/char${n}.png`
 }
 
+// 검정을 맨 앞에 둬서 기본 펜 색으로 사용. 그림 그릴 때 가장 흔하게 쓰는 색.
 const BRUSH_COLORS = [
+  { label: '검정', color: '#1a1a1a', value: 0x1a1a1a },
   { label: '빨강', color: '#ff4d4d', value: 0xff4d4d },
   { label: '주황', color: '#ffa64a', value: 0xffa64a },
   { label: '노랑', color: '#ffd84a', value: 0xffd84a },
@@ -109,6 +112,14 @@ export class QuizPlayScene extends Phaser.Scene {
   private roundEnded = false
   /** 정답 발표 배너 — guess_submitted(correct=true) 도착 시 화면 중앙에 짧게 뜬다. */
   private correctBanner: Phaser.GameObjects.Container | null = null
+  /**
+   * 라운드 타임아웃 후 BE 가 round_ended/game_finished 를 못 보냈을 때를 대비한 reconcile.
+   * 타이머가 0 이 된 시각 + 마지막 시도 시각 을 기억해 4초마다 1회씩 REST 로 룸 상태를 끌어와
+   * 적용. BE 스케줄 silent fail / WS 일시 단절로 굳어버린 화면을 자가 복구.
+   */
+  private timerExpiredAt: number | null = null
+  private lastReconcileAt = 0
+  private reconcileInFlight = false
   private finalMembers: QuizMember[] | null = null
   private isLeaving = false
 
@@ -125,6 +136,28 @@ export class QuizPlayScene extends Phaser.Scene {
     this.prompt = data.prompt ?? null
     this.wordLength = data.wordLength ?? data.prompt?.word.length ?? null
     this.realtimeClient = data.realtimeClient ?? null
+    // Phaser Scene 인스턴스는 scene.start 마다 재사용되어 클래스 필드가 살아남는다.
+    // 이전 게임의 strokes / 결과 모달 / 라운드 종료 플래그 등이 그대로 남아 새 게임
+    // 캔버스에 옛 선이 그려지거나 결과 모달이 튀어나오던 버그. init 에서 일괄 리셋.
+    this.strokes = []
+    this.remoteLastPoints.clear()
+    this.activeBubbles.clear()
+    this.activePointerId = null
+    this.activeStrokeId = null
+    this.activeLastPoint = null
+    this.lastStrokeSendAt = 0
+    this.roundEnded = false
+    this.finalMembers = null
+    this.isLeaving = false
+    this.guessOverlayOpen = false
+    this.correctBanner?.destroy()
+    this.correctBanner = null
+    this.timerExpiredAt = null
+    this.lastReconcileAt = 0
+    this.reconcileInFlight = false
+    this.brushColor = BRUSH_COLORS[0].color
+    this.selectedTool = 'brush'
+    this.brushSize = 6
   }
 
   preload() {
@@ -581,8 +614,10 @@ export class QuizPlayScene extends Phaser.Scene {
     const h = this.scale.height
     const cx = w / 2
     const cy = h * 0.34
+    // 씬 최상위에 직접 add — root(depth 1) 안에 넣고 setDepth(100) 해봐야 Phaser Container 는
+    // 자식 자동 depth-sort 를 안 해서 add 순서대로 그려진다. 결과적으로 layoutContainer 가
+    // 배너 위를 덮어 안 보이던 문제. 씬 root display list 는 depth 로 정렬되므로 여기다 둔다.
     const container = this.add.container(cx, cy).setDepth(100)
-    this.root.add(container)
     this.correctBanner = container
 
     // 배경 + 외곽선. 폭은 문구에 맞춰 dynamic, 높이는 고정.
@@ -960,6 +995,9 @@ export class QuizPlayScene extends Phaser.Scene {
         ...this.snapshot,
         members: this.snapshot.members.filter(member => member.userId !== event.userId),
       }
+      // 떠난 멤버를 슬롯 / 버블 / 결과 모달에서 즉시 제거하려면 레이아웃 재그리기 필수.
+      this.activeBubbles.delete(event.userId)
+      this.drawLayout()
     } else if (event.type === 'host_changed') {
       this.snapshot = {
         ...this.snapshot,
@@ -969,6 +1007,7 @@ export class QuizPlayScene extends Phaser.Scene {
           isHost: member.userId === event.hostUserId,
         })),
       }
+      this.drawLayout()
     } else if (event.type === 'round_started') {
       this.snapshot = {
         ...this.snapshot,
@@ -1007,12 +1046,14 @@ export class QuizPlayScene extends Phaser.Scene {
       // 라운드 종료 시 잔여 말풍선 모두 정리 (정답자 말풍선은 그대로 두고 싶다면 정답자 user 만 유지하도록 변경 가능).
       this.activeBubbles.clear()
       this.setGuessOverlay(false)
+      this.timerExpiredAt = null
       this.drawLayout()
     } else if (event.type === 'game_finished') {
       this.finalMembers = event.members
       this.snapshot = { ...this.snapshot, status: 'FINISHED', members: event.members }
       this.activeBubbles.clear()
       this.setGuessOverlay(false)
+      this.timerExpiredAt = null
       this.drawLayout()
     }
   }
@@ -1137,6 +1178,59 @@ export class QuizPlayScene extends Phaser.Scene {
     const mm = String(Math.floor(remaining / 60)).padStart(2, '0')
     const ss = String(remaining % 60).padStart(2, '0')
     this.timerText.setText(`${mm}:${ss}`)
+
+    // 라운드 자가 복구 — 타이머가 0 이 됐는데도 round_ended 가 안 오면 BE 스케줄 / WS
+    // 어디선가 막힌 상황. 4s 마다 REST 로 룸 상태 끌어와 강제 반영.
+    if (remaining === 0 && !this.roundEnded && !this.finalMembers) {
+      const now = Date.now()
+      if (this.timerExpiredAt === null) this.timerExpiredAt = now
+      if (now - this.timerExpiredAt >= 4000 && now - this.lastReconcileAt >= 4000) {
+        this.lastReconcileAt = now
+        void this.reconcileRoomState()
+      }
+    } else if (remaining > 0) {
+      this.timerExpiredAt = null
+    }
+  }
+
+  /** REST 로 룸 스냅샷을 받아 로컬과 차이가 있으면 상태/이벤트 핸들러로 흘려보낸다. */
+  private async reconcileRoomState() {
+    if (this.reconcileInFlight || this.isLeaving) return
+    this.reconcileInFlight = true
+    try {
+      const fresh = await getQuizRoom(this.snapshot.roomId)
+      // 게임 종료 — 결과 모달 띄움
+      if (fresh.status === 'FINISHED' && !this.finalMembers) {
+        this.finalMembers = fresh.members
+        this.snapshot = fresh
+        this.activeBubbles.clear()
+        this.setGuessOverlay(false)
+        this.drawLayout()
+        return
+      }
+      // 라운드 번호가 앞서갔다 — round_ended/round_started 를 놓친 상태
+      if (fresh.roundNumber > this.snapshot.roundNumber) {
+        this.snapshot = fresh
+        this.prompt = null
+        this.wordLength = null
+        this.roundEnded = false
+        this.strokes = []
+        this.remoteLastPoints.clear()
+        this.setGuessOverlay(!this.isDrawer())
+        this.timerExpiredAt = null
+        this.drawLayout()
+        return
+      }
+      // 같은 라운드라도 endsAt 이 갱신됐을 수 있음 (BE 가 라운드를 새로 시작했을 때 등)
+      if (fresh.roundEndsAtEpochMillis !== this.snapshot.roundEndsAtEpochMillis) {
+        this.snapshot = fresh
+        this.drawLayout()
+      }
+    } catch (err) {
+      console.warn('[quiz-realtime] reconcile failed', err)
+    } finally {
+      this.reconcileInFlight = false
+    }
   }
 
   private pointerToCanvasPoint(pointer: Phaser.Input.Pointer): Point | null {

@@ -29,8 +29,10 @@ import com.comong.backend.domain.quiz.exception.QuizPatientProfileMissingExcepti
 import com.comong.backend.domain.quiz.exception.QuizRoomNotFoundException;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /** Application service for multiplayer drawing quiz rooms and rounds. */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -217,6 +219,7 @@ public class QuizRoomService {
     }
 
     private void handleRoundTimeout(String roomId, int roundNumber) {
+        log.info("quiz round timeout fired room={} round={}", roomId, roundNumber);
         TimeoutResult result =
                 roomRegistry.withRoom(
                         roomId,
@@ -225,6 +228,13 @@ public class QuizRoomService {
                                     || room.roundNumber() != roundNumber
                                     || room.roundResolved()
                                     || room.currentPrompt() == null) {
+                                log.info(
+                                        "quiz round timeout no-op room={} round={} status={} stored={} resolved={}",
+                                        roomId,
+                                        roundNumber,
+                                        room.status(),
+                                        room.roundNumber(),
+                                        room.roundResolved());
                                 return null;
                             }
                             String word = room.currentPrompt().word();
@@ -238,16 +248,39 @@ public class QuizRoomService {
                 roomId,
                 QuizRoomEvent.roundEnded(
                         result.roundNumber(), null, result.word(), result.members()));
+        log.info(
+                "quiz round timeout resolved room={} round={} word={}",
+                roomId,
+                result.roundNumber(),
+                result.word());
         scheduleAdvance(roomId, result.roundNumber());
     }
 
     private void scheduleRoundTimeout(String roomId, int roundNumber, Instant endsAt) {
         cancelRoundTimer(roomId);
         long delay = Math.max(0L, Duration.between(Instant.now(), endsAt).toMillis());
+        log.info(
+                "quiz schedule round timeout room={} round={} delayMs={}",
+                roomId,
+                roundNumber,
+                delay);
+        // 스케줄된 task 에서 발생한 RuntimeException 은 ScheduledExecutorService 가
+        // 조용히 삼키므로 (Future.get 안 부르면 영영 못 봄), try/catch 로 감싸 로깅.
+        // 이걸 안 하면 라운드 자동 종료 자체가 silent fail 해 FE 가 무한 대기 상태로 굳는다.
         roundTimers.put(
                 roomId,
                 roundScheduler.schedule(
-                        () -> handleRoundTimeout(roomId, roundNumber),
+                        () -> {
+                            try {
+                                handleRoundTimeout(roomId, roundNumber);
+                            } catch (Exception ex) {
+                                log.error(
+                                        "quiz round timeout handler crashed room={} round={}",
+                                        roomId,
+                                        roundNumber,
+                                        ex);
+                            }
+                        },
                         delay,
                         TimeUnit.MILLISECONDS));
     }
@@ -257,7 +290,17 @@ public class QuizRoomService {
         advanceTimers.put(
                 roomId,
                 roundScheduler.schedule(
-                        () -> advanceAfterRound(roomId, endedRoundNumber),
+                        () -> {
+                            try {
+                                advanceAfterRound(roomId, endedRoundNumber);
+                            } catch (Exception ex) {
+                                log.error(
+                                        "quiz round advance handler crashed room={} endedRound={}",
+                                        roomId,
+                                        endedRoundNumber,
+                                        ex);
+                            }
+                        },
                         NEXT_ROUND_DELAY_MILLIS,
                         TimeUnit.MILLISECONDS));
     }
