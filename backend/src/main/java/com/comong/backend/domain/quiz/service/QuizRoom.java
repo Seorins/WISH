@@ -16,7 +16,9 @@ import com.comong.backend.domain.quiz.exception.QuizRoomNotReadyToStartException
 /** In-memory room state for the multiplayer drawing quiz. */
 public class QuizRoom {
 
-    private static final int TOTAL_ROUNDS = 3;
+    static final int DEFAULT_TOTAL_ROUNDS = 3;
+    static final int MIN_TOTAL_ROUNDS = 3;
+    static final int MAX_TOTAL_ROUNDS = 9;
 
     private final String roomId;
     private final String code;
@@ -30,6 +32,7 @@ public class QuizRoom {
     private int joinCounter = 0;
 
     private int roundNumber = 0;
+    private int totalRounds = DEFAULT_TOTAL_ROUNDS;
     private long currentDrawerUserId = 0L;
     private DrawingPrompt currentPrompt = null;
     private Instant roundStartedAt = null;
@@ -61,7 +64,7 @@ public class QuizRoom {
     }
 
     public int totalRounds() {
-        return TOTAL_ROUNDS;
+        return totalRounds;
     }
 
     public Instant createdAt() {
@@ -129,8 +132,12 @@ public class QuizRoom {
         return members.isEmpty();
     }
 
-    void startNextRound(DrawingPrompt prompt, Instant startedAt, int roundDurationSeconds) {
-        if (status == QuizRoomStatus.FINISHED || roundNumber >= TOTAL_ROUNDS) {
+    void startNextRound(
+            DrawingPrompt prompt,
+            Instant startedAt,
+            int roundDurationSeconds,
+            Integer requestedTotalRounds) {
+        if (status == QuizRoomStatus.FINISHED || roundNumber >= totalRounds) {
             throw new QuizRoomNotReadyToStartException();
         }
         if (status == QuizRoomStatus.PLAYING && !roundResolved) {
@@ -139,6 +146,10 @@ public class QuizRoom {
         if (members.size() < minPlayers) {
             throw new QuizRoomNotReadyToStartException();
         }
+        if (status == QuizRoomStatus.WAITING) {
+            totalRounds = normalizeTotalRounds(requestedTotalRounds);
+            members.replaceAll((userId, member) -> member.withScore(0));
+        }
         status = QuizRoomStatus.PLAYING;
         roundNumber += 1;
         currentPrompt = prompt;
@@ -146,6 +157,16 @@ public class QuizRoom {
         roundStartedAt = startedAt;
         roundEndsAt = startedAt.plusSeconds(roundDurationSeconds);
         roundResolved = false;
+    }
+
+    private int normalizeTotalRounds(Integer requestedTotalRounds) {
+        if (requestedTotalRounds == null) {
+            return DEFAULT_TOTAL_ROUNDS;
+        }
+        if (requestedTotalRounds != 3 && requestedTotalRounds != 6 && requestedTotalRounds != 9) {
+            throw new QuizRoomNotReadyToStartException();
+        }
+        return requestedTotalRounds;
     }
 
     private long pickDrawerForRound(int round) {
@@ -207,6 +228,17 @@ public class QuizRoom {
         roundStartedAt = null;
         roundEndsAt = null;
         roundResolved = true;
+    }
+
+    void resetToWaiting() {
+        status = QuizRoomStatus.WAITING;
+        roundNumber = 0;
+        currentPrompt = null;
+        currentDrawerUserId = 0L;
+        roundStartedAt = null;
+        roundEndsAt = null;
+        roundResolved = false;
+        members.replaceAll((userId, member) -> member.withScore(0));
     }
 
     public QuizMember requireMember(long userId) {

@@ -44,7 +44,7 @@ class QuizRoomServiceTest {
         patientProfileService = mock(PatientProfileService.class);
         broadcastService = mock(QuizBroadcastService.class);
         promptCatalog = new QuizPromptCatalog();
-        QuizRealtimeProperties properties = new QuizRealtimeProperties(true, MIN, MAX, 90, 60);
+        QuizRealtimeProperties properties = new QuizRealtimeProperties(true, MIN, MAX, 60, 60);
         registry = new QuizRoomRegistry(properties);
         service =
                 new QuizRoomService(
@@ -166,6 +166,87 @@ class QuizRoomServiceTest {
     }
 
     @Test
+    void drawerLeavingDuringGameReturnsRoomToWaiting() {
+        stubProfile(1L, 100L, "h");
+        stubProfile(2L, 101L, "g1");
+        stubProfile(3L, 102L, "g2");
+
+        QuizRoomSnapshot host = service.createRoom(1L);
+        service.joinByCode(2L, host.code());
+        service.joinByCode(3L, host.code());
+        service.startGame(1L, host.roomId());
+
+        service.leave(1L);
+
+        QuizRoom room = registry.findById(host.roomId()).orElseThrow();
+        assertThat(room.status()).isEqualTo(QuizRoomStatus.WAITING);
+        assertThat(room.roundNumber()).isZero();
+        assertThat(room.currentDrawerUserId()).isZero();
+        assertThat(room.roundEndsAt()).isNull();
+        assertThat(room.hostUserId()).isEqualTo(2L);
+        assertThat(room.members()).allMatch(member -> member.score() == 0);
+        verify(broadcastService, atLeastOnce())
+                .broadcastEvent(
+                        eq(host.roomId()),
+                        org.mockito.ArgumentMatchers.argThat(
+                                ev ->
+                                        ev != null
+                                                && "room_reset".equals(ev.type())
+                                                && ev.status() == QuizRoomStatus.WAITING
+                                                && ev.hostUserId() == 2L));
+    }
+
+    @Test
+    void guestLeavingBelowMinimumDuringGameReturnsRoomToWaiting() {
+        stubProfile(1L, 100L, "h");
+        stubProfile(2L, 101L, "g");
+
+        QuizRoomSnapshot host = service.createRoom(1L);
+        service.joinByCode(2L, host.code());
+        service.startGame(1L, host.roomId());
+
+        service.leave(2L);
+
+        QuizRoom room = registry.findById(host.roomId()).orElseThrow();
+        assertThat(room.status()).isEqualTo(QuizRoomStatus.WAITING);
+        assertThat(room.roundNumber()).isZero();
+        assertThat(room.currentDrawerUserId()).isZero();
+        assertThat(room.roundEndsAt()).isNull();
+        verify(broadcastService, atLeastOnce())
+                .broadcastEvent(
+                        eq(host.roomId()),
+                        org.mockito.ArgumentMatchers.argThat(
+                                ev ->
+                                        ev != null
+                                                && "room_reset".equals(ev.type())
+                                                && "인원이 부족해서 로비로 돌아왔어요.".equals(ev.message())));
+    }
+
+    @Test
+    void nonDrawerLeavingWithEnoughPlayersKeepsRoundPlaying() {
+        stubProfile(1L, 100L, "h");
+        stubProfile(2L, 101L, "g1");
+        stubProfile(3L, 102L, "g2");
+
+        QuizRoomSnapshot host = service.createRoom(1L);
+        service.joinByCode(2L, host.code());
+        service.joinByCode(3L, host.code());
+        service.startGame(1L, host.roomId());
+
+        service.leave(2L);
+
+        QuizRoom room = registry.findById(host.roomId()).orElseThrow();
+        assertThat(room.status()).isEqualTo(QuizRoomStatus.PLAYING);
+        assertThat(room.roundNumber()).isEqualTo(1);
+        assertThat(room.currentDrawerUserId()).isEqualTo(1L);
+        verify(broadcastService, never())
+                .broadcastEvent(
+                        eq(host.roomId()),
+                        org.mockito.ArgumentMatchers.argThat(
+                                ev -> ev != null && "room_reset".equals(ev.type())));
+    }
+
+    @Test
     void leaveWithoutRoomIsNoop() {
         // 멤버 아닌 사용자가 호출해도 예외/broadcast 없이 조용히 지나간다.
         service.leave(999L);
@@ -204,6 +285,33 @@ class QuizRoomServiceTest {
                                                 && ev.currentDrawerUserId() == 1L));
         // user queue 로 제시어를 push 하지 않음 — REST 응답에 동봉되므로.
         verify(broadcastService, times(1)).sendPromptToUser(eq("1"), eq(host.roomId()), any());
+    }
+
+    @Test
+    void startGameUsesSelectedTotalRounds() {
+        stubProfile(1L, 100L, "h");
+        stubProfile(2L, 101L, "g");
+        QuizRoomSnapshot host = service.createRoom(1L);
+        service.joinByCode(2L, host.code());
+
+        com.comong.backend.domain.quiz.dto.QuizGameStartedResponse response =
+                service.startGame(1L, host.roomId(), 6);
+
+        assertThat(response.snapshot().totalRounds()).isEqualTo(6);
+        assertThat(registry.findById(host.roomId()).orElseThrow().totalRounds()).isEqualTo(6);
+    }
+
+    @Test
+    void startGameRejectsUnsupportedTotalRounds() {
+        stubProfile(1L, 100L, "h");
+        stubProfile(2L, 101L, "g");
+        QuizRoomSnapshot host = service.createRoom(1L);
+        service.joinByCode(2L, host.code());
+
+        assertThatThrownBy(() -> service.startGame(1L, host.roomId(), 4))
+                .isInstanceOf(
+                        com.comong.backend.domain.quiz.exception.QuizRoomNotReadyToStartException
+                                .class);
     }
 
     @Test
@@ -260,6 +368,43 @@ class QuizRoomServiceTest {
                 .isInstanceOf(
                         com.comong.backend.domain.quiz.exception.QuizRoomNotReadyToStartException
                                 .class);
+    }
+
+    @Test
+    void gameFinishBroadcastsFinalScoresAndReturnsRoomToWaiting() throws InterruptedException {
+        stubProfile(1L, 100L, "h");
+        stubProfile(2L, 101L, "g");
+        QuizRoomSnapshot host = service.createRoom(1L);
+        service.joinByCode(2L, host.code());
+
+        service.startGame(1L, host.roomId(), 3);
+        for (int i = 0; i < 3; i++) {
+            QuizRoom current = registry.findById(host.roomId()).orElseThrow();
+            long guesser = current.currentDrawerUserId() == 1L ? 2L : 1L;
+            service.submitGuess(guesser, host.roomId(), current.currentPrompt().word());
+            Thread.sleep(2_700L);
+        }
+
+        QuizRoom room = registry.findById(host.roomId()).orElseThrow();
+        assertThat(room.status()).isEqualTo(QuizRoomStatus.WAITING);
+        assertThat(room.roundNumber()).isZero();
+        assertThat(room.currentDrawerUserId()).isZero();
+        assertThat(room.roundEndsAt()).isNull();
+        assertThat(room.members()).allMatch(member -> member.score() == 0);
+        verify(broadcastService, atLeastOnce())
+                .broadcastEvent(
+                        eq(host.roomId()),
+                        org.mockito.ArgumentMatchers.argThat(
+                                ev ->
+                                        ev != null
+                                                && "game_finished".equals(ev.type())
+                                                && ev.members() != null
+                                                && ev.members().stream()
+                                                        .anyMatch(
+                                                                member ->
+                                                                        member.userId() == 2L
+                                                                                && member.score()
+                                                                                        == 4)));
     }
 
     @Test

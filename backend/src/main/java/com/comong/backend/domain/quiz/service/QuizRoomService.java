@@ -27,6 +27,7 @@ import com.comong.backend.domain.quiz.dto.QuizStrokeMessage;
 import com.comong.backend.domain.quiz.exception.QuizNotRoomHostException;
 import com.comong.backend.domain.quiz.exception.QuizPatientProfileMissingException;
 import com.comong.backend.domain.quiz.exception.QuizRoomNotFoundException;
+import com.comong.backend.domain.quiz.service.QuizRoomRegistry.LeaveResult;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -75,43 +76,52 @@ public class QuizRoomService {
     }
 
     public void leave(long userId) {
-        roomRegistry
-                .leave(userId)
-                .ifPresent(
-                        result -> {
-                            String roomId = result.room().roomId();
-                            long leftUserId = result.member().userId();
-                            if (result.closed()) {
-                                cancelRoomTasks(roomId);
-                            }
-                            broadcastService.broadcastEvent(
-                                    roomId, QuizRoomEvent.memberLeft(leftUserId));
-                            if (!result.closed() && result.room().hostUserId() != 0L) {
-                                broadcastService.broadcastEvent(
-                                        roomId,
-                                        QuizRoomEvent.hostChanged(result.room().hostUserId()));
-                            }
-                        });
+        roomRegistry.leave(userId).ifPresent(this::handleLeaveResult);
     }
 
     public void leaveBySession(String sessionId) {
-        roomRegistry
-                .leaveBySession(sessionId)
-                .ifPresent(
-                        result -> {
-                            String roomId = result.room().roomId();
-                            long leftUserId = result.member().userId();
-                            if (result.closed()) {
-                                cancelRoomTasks(roomId);
-                            }
-                            broadcastService.broadcastEvent(
-                                    roomId, QuizRoomEvent.memberLeft(leftUserId));
-                            if (!result.closed() && result.room().hostUserId() != 0L) {
-                                broadcastService.broadcastEvent(
-                                        roomId,
-                                        QuizRoomEvent.hostChanged(result.room().hostUserId()));
-                            }
-                        });
+        roomRegistry.leaveBySession(sessionId).ifPresent(this::handleLeaveResult);
+    }
+
+    private void handleLeaveResult(LeaveResult result) {
+        String roomId = result.room().roomId();
+        long leftUserId = result.member().userId();
+        if (result.closed()) {
+            cancelRoomTasks(roomId);
+        }
+        broadcastService.broadcastEvent(roomId, QuizRoomEvent.memberLeft(leftUserId));
+        if (result.closed()) {
+            return;
+        }
+        if (result.room().hostUserId() != 0L) {
+            broadcastService.broadcastEvent(
+                    roomId, QuizRoomEvent.hostChanged(result.room().hostUserId()));
+        }
+        RoomReset reset = resetPlayingRoomIfInterrupted(roomId);
+        if (reset != null) {
+            cancelRoomTasks(roomId);
+            broadcastService.broadcastEvent(
+                    roomId,
+                    QuizRoomEvent.roomReset(reset.hostUserId(), reset.message(), reset.members()));
+        }
+    }
+
+    private RoomReset resetPlayingRoomIfInterrupted(String roomId) {
+        return roomRegistry.withRoom(
+                roomId,
+                room -> {
+                    if (room.status() != QuizRoomStatus.PLAYING) {
+                        return null;
+                    }
+                    boolean drawerLeft = !room.hasMember(room.currentDrawerUserId());
+                    boolean belowMinimum = room.memberCount() < room.minPlayers();
+                    if (!drawerLeft && !belowMinimum) {
+                        return null;
+                    }
+                    String message = drawerLeft ? "출제자가 나가서 로비로 돌아왔어요." : "인원이 부족해서 로비로 돌아왔어요.";
+                    room.resetToWaiting();
+                    return new RoomReset(room.hostUserId(), message, membersOf(room));
+                });
     }
 
     public QuizRoomSnapshot snapshot(String roomId) {
@@ -122,13 +132,17 @@ public class QuizRoomService {
     }
 
     public QuizGameStartedResponse startGame(long userId, String roomId) {
+        return startGame(userId, roomId, null);
+    }
+
+    public QuizGameStartedResponse startGame(long userId, String roomId, Integer totalRounds) {
         QuizRoom roomSnapshot =
                 roomRegistry.findById(roomId).orElseThrow(QuizRoomNotFoundException::new);
         if (roomSnapshot.hostUserId() != userId) {
             throw new QuizNotRoomHostException();
         }
 
-        RoundStart start = startNextRound(roomId);
+        RoundStart start = startNextRound(roomId, totalRounds);
         return new QuizGameStartedResponse(
                 QuizRoomSnapshot.of(start.room()),
                 new PromptAssignment(start.room().roundNumber(), start.prompt().word()));
@@ -198,10 +212,14 @@ public class QuizRoomService {
     }
 
     private RoundStart startNextRound(String roomId) {
+        return startNextRound(roomId, null);
+    }
+
+    private RoundStart startNextRound(String roomId, Integer totalRounds) {
         QuizRoom before = roomRegistry.findById(roomId).orElseThrow(QuizRoomNotFoundException::new);
         String previousWord = before.currentPrompt() == null ? null : before.currentPrompt().word();
         DrawingPrompt prompt = promptCatalog.pickRandom(previousWord);
-        QuizRoom updated = roomRegistry.startNextRound(roomId, prompt, Instant.now());
+        QuizRoom updated = roomRegistry.startNextRound(roomId, prompt, Instant.now(), totalRounds);
         PromptAssignment assignment = new PromptAssignment(updated.roundNumber(), prompt.word());
 
         broadcastService.broadcastEvent(
@@ -306,7 +324,7 @@ public class QuizRoomService {
     }
 
     private void advanceAfterRound(String roomId, int endedRoundNumber) {
-        Boolean shouldFinish =
+        RoundAdvance advance =
                 roomRegistry.withRoom(
                         roomId,
                         room -> {
@@ -316,20 +334,18 @@ public class QuizRoomService {
                                 return null;
                             }
                             if (room.roundNumber() >= room.totalRounds()) {
-                                room.finish();
-                                return true;
+                                List<QuizMemberDto> finalMembers = membersOf(room);
+                                room.resetToWaiting();
+                                return new RoundAdvance(true, finalMembers);
                             }
-                            return false;
+                            return new RoundAdvance(false, null);
                         });
-        if (shouldFinish == null) {
+        if (advance == null) {
             return;
         }
-        if (shouldFinish) {
+        if (advance.shouldFinish()) {
             cancelRoomTasks(roomId);
-            QuizRoom finished =
-                    roomRegistry.findById(roomId).orElseThrow(QuizRoomNotFoundException::new);
-            broadcastService.broadcastEvent(
-                    roomId, QuizRoomEvent.gameFinished(membersOf(finished)));
+            broadcastService.broadcastEvent(roomId, QuizRoomEvent.gameFinished(advance.members()));
             return;
         }
         startNextRound(roomId);
@@ -393,4 +409,8 @@ public class QuizRoomService {
             int roundNumber) {}
 
     private record TimeoutResult(int roundNumber, String word, List<QuizMemberDto> members) {}
+
+    private record RoomReset(long hostUserId, String message, List<QuizMemberDto> members) {}
+
+    private record RoundAdvance(boolean shouldFinish, List<QuizMemberDto> members) {}
 }

@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.comong.backend.domain.quiz.dto.JoinRoomRequest;
+import com.comong.backend.domain.quiz.dto.QuizGameStartRequest;
 import com.comong.backend.domain.quiz.dto.QuizGameStartedResponse;
 import com.comong.backend.domain.quiz.dto.QuizRoomSnapshot;
 import com.comong.backend.domain.quiz.service.QuizRoomService;
@@ -117,8 +118,14 @@ public class QuizRoomController {
     })
     @PostMapping("/{roomId}/start")
     public ResponseEntity<ApiResponse<QuizGameStartedResponse>> start(
-            @AuthenticationPrincipal AuthenticatedUser currentUser, @PathVariable String roomId) {
-        QuizGameStartedResponse response = quizRoomService.startGame(currentUser.userId(), roomId);
+            @AuthenticationPrincipal AuthenticatedUser currentUser,
+            @PathVariable String roomId,
+            @Valid @RequestBody(required = false) QuizGameStartRequest request) {
+        QuizGameStartedResponse response =
+                quizRoomService.startGame(
+                        currentUser.userId(),
+                        roomId,
+                        request == null ? null : request.totalRounds());
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 }
