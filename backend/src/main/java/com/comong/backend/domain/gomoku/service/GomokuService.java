@@ -50,6 +50,8 @@ public class GomokuService {
     private static final Direction[] DIRECTIONS = {
         new Direction(0, 1), new Direction(1, 0), new Direction(1, 1), new Direction(1, -1)
     };
+    private static final String[] OPEN_THREE_PATTERNS = {".XXX.", ".XX.X.", ".X.XX."};
+    private static final int DIRECTIONAL_PATTERN_RADIUS = 5;
 
     private final GomokuMatchRepository gomokuMatchRepository;
     private final PatientProfileService patientProfileService;
@@ -403,7 +405,7 @@ public class GomokuService {
             for (Direction direction : DIRECTIONS) {
                 int length = countLine(board, row, col, stone, direction);
                 maxLine = Math.max(maxLine, length);
-                if (hasOpenContiguousLine(board, row, col, stone, direction, 3, 2)) {
+                if (hasOpenThree(board, row, col, stone, direction)) {
                     openThrees += 1;
                 }
                 if (hasOpenContiguousLine(board, row, col, stone, direction, 4, 1)) {
@@ -486,6 +488,50 @@ public class GomokuService {
                                 ? 1
                                 : 0);
         return openEnds >= requiredOpenEnds;
+    }
+
+    private boolean hasOpenThree(
+            GomokuStone[][] board, int row, int col, GomokuStone stone, Direction direction) {
+        String line = getDirectionalPattern(board, row, col, stone, direction);
+        int centerIndex = DIRECTIONAL_PATTERN_RADIUS;
+        for (String pattern : OPEN_THREE_PATTERNS) {
+            if (containsPatternAtOrigin(line, centerIndex, pattern)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private String getDirectionalPattern(
+            GomokuStone[][] board, int row, int col, GomokuStone stone, Direction direction) {
+        StringBuilder pattern = new StringBuilder(DIRECTIONAL_PATTERN_RADIUS * 2 + 1);
+        for (int offset = -DIRECTIONAL_PATTERN_RADIUS;
+                offset <= DIRECTIONAL_PATTERN_RADIUS;
+                offset += 1) {
+            int targetRow = row + direction.dRow() * offset;
+            int targetCol = col + direction.dCol() * offset;
+            if (!isInside(targetRow, targetCol)) {
+                pattern.append('#');
+            } else if (board[targetRow][targetCol] == null) {
+                pattern.append('.');
+            } else {
+                pattern.append(board[targetRow][targetCol] == stone ? 'X' : '#');
+            }
+        }
+        return pattern.toString();
+    }
+
+    private boolean containsPatternAtOrigin(String line, int centerIndex, String pattern) {
+        for (int start = 0; start <= line.length() - pattern.length(); start += 1) {
+            int end = start + pattern.length();
+            if (centerIndex < start || centerIndex >= end) {
+                continue;
+            }
+            if (line.substring(start, end).equals(pattern)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private boolean isInside(int row, int col) {

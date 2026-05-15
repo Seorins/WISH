@@ -143,14 +143,65 @@ class GomokuControllerIntegrationTest extends IntegrationTestSupport {
                 .andExpect(jsonPath("$.code").value("GM-007"));
     }
 
+    @Test
+    void renjuLite_rejectsBrokenDoubleThreeMove() throws Exception {
+        TestUser black =
+                setupUserWithProfile(
+                        "gomoku-renju-black@example.com", "gomoku-renju-black", "renju-black");
+        TestUser white =
+                setupUserWithProfile(
+                        "gomoku-renju-white@example.com", "gomoku-renju-white", "renju-white");
+
+        long roomId =
+                objectMapper
+                        .readTree(
+                                mockMvc.perform(
+                                                post("/gomoku/rooms")
+                                                        .header(
+                                                                "Authorization",
+                                                                "Bearer " + black.token())
+                                                        .contentType(MediaType.APPLICATION_JSON)
+                                                        .content(createRoomRequest("RENJU_LITE")))
+                                        .andExpect(status().isCreated())
+                                        .andReturn()
+                                        .getResponse()
+                                        .getContentAsString())
+                        .get("data")
+                        .get("id")
+                        .asLong();
+
+        mockMvc.perform(
+                        post("/gomoku/rooms/{roomId}/join", roomId)
+                                .header("Authorization", "Bearer " + white.token()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("PLAYING"));
+
+        play(black.token(), roomId, 7, 6);
+        play(white.token(), roomId, 0, 0);
+        play(black.token(), roomId, 7, 9);
+        play(white.token(), roomId, 0, 1);
+        play(black.token(), roomId, 6, 7);
+        play(white.token(), roomId, 0, 2);
+        play(black.token(), roomId, 9, 7);
+        play(white.token(), roomId, 0, 3);
+
+        attemptPlay(black.token(), roomId, 7, 7)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("GM-005"));
+    }
+
     private org.springframework.test.web.servlet.ResultActions play(
             String token, long roomId, int row, int col) throws Exception {
+        return attemptPlay(token, roomId, row, col).andExpect(status().isOk());
+    }
+
+    private org.springframework.test.web.servlet.ResultActions attemptPlay(
+            String token, long roomId, int row, int col) throws Exception {
         return mockMvc.perform(
-                        post("/gomoku/rooms/{roomId}/moves", roomId)
-                                .header("Authorization", "Bearer " + token)
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content("{\"row\":" + row + ",\"col\":" + col + "}"))
-                .andExpect(status().isOk());
+                post("/gomoku/rooms/{roomId}/moves", roomId)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"row\":" + row + ",\"col\":" + col + "}"));
     }
 
     private TestUser setupUserWithProfile(String email, String nickname, String patientNickname)
@@ -213,7 +264,11 @@ class GomokuControllerIntegrationTest extends IntegrationTestSupport {
     }
 
     private String createRoomRequest() {
-        return "{\"ruleSet\":\"FREESTYLE\",\"timerSeconds\":300}";
+        return createRoomRequest("FREESTYLE");
+    }
+
+    private String createRoomRequest(String ruleSet) {
+        return "{\"ruleSet\":\"" + ruleSet + "\",\"timerSeconds\":300}";
     }
 
     private record TestUser(String token, Long patientProfileId) {}
