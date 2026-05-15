@@ -68,11 +68,16 @@ const VILLAGE_PHOTO_BOOTH = {
   yRatio: 0.31,
   scale: 0.145,
 } as const
+const SEHYUN_NPC_WORLD = {
+  xRatio: 0.38,
+  yRatio: 0.3,
+  scale: 0.38,
+} as const
 const VILLAGE_GOMOKU_BOARD_KEY = 'village-gomoku-board'
 const VILLAGE_GOMOKU_BOARD_PATH = 'images/village/objects/gomoku-board.png'
 const VILLAGE_GOMOKU_BOARD = {
-  xRatio: VILLAGE_PHOTO_BOOTH.xRatio,
-  yRatio: 0.398,
+  xRatio: SEHYUN_NPC_WORLD.xRatio,
+  yRatio: SEHYUN_NPC_WORLD.yRatio + 0.065,
   scale: 0.187,
 } as const
 const GOMOKU_BOARD_INTERACT_RECT = {
@@ -345,8 +350,10 @@ export class VillageScene extends Phaser.Scene {
       frameRate: 3,
       repeat: -1,
     })
-    this.sehyunNpc = this.add.sprite(0.38 * W, 0.3 * H, 'sehyun').setDepth(4)
-    this.sehyunNpc.setScale(0.38)
+    this.sehyunNpc = this.add
+      .sprite(SEHYUN_NPC_WORLD.xRatio * W, SEHYUN_NPC_WORLD.yRatio * H, 'sehyun')
+      .setDepth(4)
+    this.sehyunNpc.setScale(SEHYUN_NPC_WORLD.scale)
     this.sehyunNpc.setInteractive({ useHandCursor: true })
     this.sehyunNpc.on(
       'pointerdown',
