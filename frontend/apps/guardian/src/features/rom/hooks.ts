@@ -19,6 +19,7 @@ import {
 
 export const ROM_MOVEMENT_ANALYSIS_QUERY_KEY = 'rom-movement-analysis'
 const MOVEMENT_ANALYSIS_QUALITY_WARNING_CONFIDENCE_PERCENT = 60
+const MOVEMENT_ANALYSIS_QUALITY_WARNING_COVERAGE_PERCENT = 60
 
 type MotionJointValue = {
   motionName: string
@@ -70,7 +71,12 @@ function percent(rate: number | null | undefined): number | null {
 
 function displayMotionName(value: MotionJointValue): string {
   const motionName = value.motionName.trim()
-  return motionName.length > 0 ? motionName : `동작 ${value.routineOrder}`
+  if (motionName.length > 0) return motionName
+
+  console.warn('Movement analysis response has empty motionName.', {
+    routineOrder: value.routineOrder,
+  })
+  return `동작 ${value.routineOrder}`
 }
 
 function findJoint(
@@ -149,7 +155,7 @@ function buildInsight(group: RomJointGroup, detail: RomJointDetail): string {
   if ((detail.confidencePercent ?? 0) < MOVEMENT_ANALYSIS_QUALITY_WARNING_CONFIDENCE_PERCENT) {
     return `${group.name}은 좌표 신뢰도가 낮은 구간이 있어 해석을 보수적으로 봐야 합니다. 분석 제외 시간이 줄어드는지 먼저 확인하세요.`
   }
-  if ((detail.coveragePercent ?? 0) < 60) {
+  if ((detail.coveragePercent ?? 0) < MOVEMENT_ANALYSIS_QUALITY_WARNING_COVERAGE_PERCENT) {
     return `${group.name}은 전체 세션 중 분석에 사용된 프레임 비율이 낮습니다. 움직임 범위보다 기록 품질을 먼저 확인하는 것이 좋습니다.`
   }
   const left = detail.leftRangeDeg
