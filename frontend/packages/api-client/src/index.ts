@@ -21,6 +21,7 @@ export {
   type QuizMember,
   type QuizRoomSnapshot,
   type QuizRoomStatus,
+  type QuizStrokeMessage,
 } from './quiz'
 export {
   createPhotoBooth,
