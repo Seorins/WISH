@@ -49,15 +49,14 @@ type LobbyState =
 
 const PALETTE_DANGER = CUTE_CARD_PALETTES.rose
 
-// 게임 느낌 큰 버튼 컬러 — 채도 높여서 카드 톤과 분리.
-const COLOR_SOLO = 0xf4a64a
-const COLOR_SOLO_DARK = 0xc77a1f
-const COLOR_MULTI = 0x6aaa64
-const COLOR_MULTI_DARK = 0x447f3e
-const COLOR_CREATE = 0xf4a64a
-const COLOR_CREATE_DARK = 0xc77a1f
-const COLOR_JOIN = 0x4a8fc4
-const COLOR_JOIN_DARK = 0x2e6592
+// 리듬게임풍 카드 팔레트 — 다크 네이비 + 가는 네온 라인. 두 카드 모두 동일 베이스, 모드 구분은
+// 아이콘 + 타이틀 텍스트만으로. (이전엔 카드마다 색이 달라 시각적으로 산만했음)
+const CARD_BODY = 0x1f2640
+const CARD_BODY_DARK = 0x12172b
+const CARD_INNER = 0x161d36
+const CARD_BORDER = 0x3a456a
+const CARD_ACCENT = 0x5fd7f0
+const CARD_ACCENT_SOFT = 0x3aa2c0
 
 export class QuizLobbyScene extends Phaser.Scene {
   private state: LobbyState = 'modeSelect'
@@ -160,8 +159,6 @@ export class QuizLobbyScene extends Phaser.Scene {
         icon: '🎨',
         title: '솔로 모드',
         desc: 'AI 랑 둘이서\n제시어 그림 퀴즈',
-        fill: COLOR_SOLO,
-        shadow: COLOR_SOLO_DARK,
         onClick: () => this.startSingleplayer(),
       }),
     )
@@ -171,8 +168,6 @@ export class QuizLobbyScene extends Phaser.Scene {
         icon: '👥',
         title: '멀티 모드',
         desc: '친구들이랑 같이\n그리고 맞춰봐',
-        fill: COLOR_MULTI,
-        shadow: COLOR_MULTI_DARK,
         onClick: () => this.showMultiMethod(),
       }),
     )
@@ -225,8 +220,6 @@ export class QuizLobbyScene extends Phaser.Scene {
         icon: '🏠',
         title: '방 만들기',
         desc: '코드를 받아서\n친구를 초대해',
-        fill: COLOR_CREATE,
-        shadow: COLOR_CREATE_DARK,
         onClick: () => this.startCreate(),
       }),
     )
@@ -236,8 +229,6 @@ export class QuizLobbyScene extends Phaser.Scene {
         icon: '🔑',
         title: '코드로 입장',
         desc: '친구가 알려준\n방 코드를 입력',
-        fill: COLOR_JOIN,
-        shadow: COLOR_JOIN_DARK,
         onClick: () => this.startJoinByCode(),
       }),
     )
@@ -813,97 +804,104 @@ export class QuizLobbyScene extends Phaser.Scene {
       icon: string
       title: string
       desc: string
-      fill: number
-      shadow: number
       onClick: () => void
     },
   ) {
-    const { icon, title, desc, fill, shadow, onClick } = config
+    const { icon, title, desc, onClick } = config
     const container = this.add.container(cx, cy)
-    const radius = 28
-    const thickness = 12
-    const dropOffset = 8
+    const radius = 22
     const liftAmount = 4
 
-    // hit zone = 외곽 그림자까지 포함한 전체 시각 영역. Phaser Rectangle 은 alpha=0 이면 hit 도 안 받아서 0.001 로.
-    const hitW = w + 4
-    const hitH = h + thickness + dropOffset + 4
-    const hitY = (thickness + dropOffset) / 2 - 2
-    const hit = this.add.rectangle(0, hitY, hitW, hitH, 0xffffff, 0.001).setOrigin(0.5)
+    // hit zone — 외곽 글로우까지 포함해서 잡아준다.
+    const hit = this.add.rectangle(0, 0, w + 8, h + 16, 0xffffff, 0.001).setOrigin(0.5)
     hit.setInteractive({ useHandCursor: true })
 
-    const shadowG = this.add.graphics()
-    const faceG = this.add.graphics()
+    const glowG = this.add.graphics()
+    const bodyG = this.add.graphics()
     const drawButton = (lifted: boolean) => {
       const lift = lifted ? liftAmount : 0
-      // 부드러운 외부 드롭섀도우 — 한 번에 어두운 한 겹보단 여러 겹 알파로 깔면 자연스러움.
-      shadowG.clear()
-      const shadowSteps = 5
-      for (let i = 0; i < shadowSteps; i++) {
-        const spread = i * 2
-        shadowG.fillStyle(0x000000, 0.06)
-        shadowG.fillRoundedRect(
+      glowG.clear()
+      // 네온 글로우 — 호버 시 진하게.
+      const glowSteps = 4
+      for (let i = 0; i < glowSteps; i++) {
+        const spread = i * 3 + (lifted ? 3 : 0)
+        const alpha = (lifted ? 0.14 : 0.08) * (1 - i / glowSteps)
+        glowG.fillStyle(CARD_ACCENT, alpha)
+        glowG.fillRoundedRect(
           -w / 2 - spread,
-          -h / 2 + dropOffset - lift * 0.5 + spread * 0.6,
+          -h / 2 - lift - spread,
           w + spread * 2,
-          h + thickness + spread,
+          h + spread * 2,
           radius + spread,
         )
       }
 
-      faceG.clear()
-      // 하단 두께 면 (3D)
-      faceG.fillStyle(shadow, 1)
-      faceG.fillRoundedRect(-w / 2, -h / 2 - lift, w, h + thickness, radius)
-      // 윗 면 (메인 컬러)
-      faceG.fillStyle(fill, 1)
-      faceG.fillRoundedRect(-w / 2, -h / 2 - lift, w, h, radius)
-      // 같은 색 진한 톤으로 1px 안쪽 보더 — 흰 외곽선 대신 차분한 윤곽 정의
-      faceG.lineStyle(2, shadow, 0.7)
-      faceG.strokeRoundedRect(-w / 2 + 1, -h / 2 - lift + 1, w - 2, h - 2, radius - 1)
+      bodyG.clear()
+      // 베이스 다크 패널 + 살짝 어두운 바닥 (얇은 깊이감).
+      bodyG.fillStyle(CARD_BODY_DARK, 1)
+      bodyG.fillRoundedRect(-w / 2, -h / 2 - lift + 3, w, h, radius)
+      bodyG.fillStyle(CARD_BODY, 1)
+      bodyG.fillRoundedRect(-w / 2, -h / 2 - lift, w, h, radius)
+      // 외곽 라인 — 차분한 네이비, 호버 시 네온으로 강조.
+      bodyG.lineStyle(2, lifted ? CARD_ACCENT : CARD_BORDER, 1)
+      bodyG.strokeRoundedRect(-w / 2 + 1, -h / 2 - lift + 1, w - 2, h - 2, radius - 1)
+      // 상단 네온 스트립 — 리듬게임 메뉴 카드의 시그너처.
+      bodyG.fillStyle(CARD_ACCENT, 1)
+      bodyG.fillRoundedRect(-w / 2 + 18, -h / 2 - lift + 8, w - 36, 4, 2)
+      bodyG.fillStyle(CARD_ACCENT_SOFT, 0.55)
+      bodyG.fillRoundedRect(-w / 2 + 32, -h / 2 - lift + 14, w - 64, 2, 1)
+      // 아이콘 영역 인셋 — 어두운 패널 위에 아이콘만 살짝 도드라지게.
+      bodyG.fillStyle(CARD_INNER, 1)
+      bodyG.fillRoundedRect(-72, -h / 2 - lift + 38, 144, 144, 20)
+      bodyG.lineStyle(1, CARD_ACCENT, 0.35)
+      bodyG.strokeRoundedRect(-72, -h / 2 - lift + 38, 144, 144, 20)
     }
     drawButton(false)
-    container.add([hit, shadowG, faceG])
+    container.add([hit, glowG, bodyG])
 
     const iconText = this.add
-      .text(0, -h / 2 + 96, icon, {
+      .text(0, -h / 2 + 110, icon, {
         fontFamily: FONT_FAMILY,
-        fontSize: '88px',
+        fontSize: '80px',
       })
       .setOrigin(0.5)
     const titleText = this.add
-      .text(0, -h / 2 + 192, title, {
+      .text(0, -h / 2 + 220, title, {
         fontFamily: FONT_FAMILY,
-        fontSize: '34px',
+        fontSize: '32px',
         color: '#ffffff',
         fontStyle: 'bold',
-        stroke: '#1a0e05',
-        strokeThickness: 5,
       })
       .setOrigin(0.5)
     const descText = this.add
-      .text(0, -h / 2 + 240, desc, {
+      .text(0, -h / 2 + 262, desc, {
         fontFamily: FONT_FAMILY,
-        fontSize: '17px',
-        color: '#fff4dc',
+        fontSize: '15px',
+        color: '#9aa9c8',
         align: 'center',
-        wordWrap: { width: w - 40 },
+        wordWrap: { width: w - 48 },
+        lineSpacing: 4,
       })
       .setOrigin(0.5, 0)
     container.add([iconText, titleText, descText])
 
+    const baseYs = {
+      icon: -h / 2 + 110,
+      title: -h / 2 + 220,
+      desc: -h / 2 + 262,
+    }
     hit.on(Phaser.Input.Events.POINTER_DOWN, onClick)
     hit.on(Phaser.Input.Events.POINTER_OVER, () => {
       drawButton(true)
-      iconText.y = -h / 2 + 96 - liftAmount
-      titleText.y = -h / 2 + 192 - liftAmount
-      descText.y = -h / 2 + 240 - liftAmount
+      iconText.y = baseYs.icon - liftAmount
+      titleText.y = baseYs.title - liftAmount
+      descText.y = baseYs.desc - liftAmount
     })
     hit.on(Phaser.Input.Events.POINTER_OUT, () => {
       drawButton(false)
-      iconText.y = -h / 2 + 96
-      titleText.y = -h / 2 + 192
-      descText.y = -h / 2 + 240
+      iconText.y = baseYs.icon
+      titleText.y = baseYs.title
+      descText.y = baseYs.desc
     })
     return container
   }
