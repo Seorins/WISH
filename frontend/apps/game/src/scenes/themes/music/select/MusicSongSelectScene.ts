@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { playSceneBgm } from '@/game/systems/sceneBgm'
 import { getMyBestMusicResults, type MusicBestResult } from '@wish/api-client'
 import { assetPath } from '@/game/assets/assetPath'
 import { fadeToScene } from '@/game/systems/sceneTransition'
@@ -77,6 +78,7 @@ export class MusicSongSelectScene extends Phaser.Scene {
   }
 
   create() {
+    playSceneBgm(this)
     this.cards = []
     this.selectedIndex = 0
     this.hoveredIndex = null

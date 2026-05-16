@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { playSceneBgm } from '@/game/systems/sceneBgm'
 import { assetPath } from '@/game/assets/assetPath'
 import { createSceneWeatherLayer } from '@/features/weather/phaserWeatherLayer'
 import { coloringOptions, type ColoringOption } from './coloringOptions'
@@ -43,6 +44,7 @@ export class ArtColoringSelectScene extends Phaser.Scene {
   }
 
   create(data: ArtColoringSelectSceneData = {}) {
+    playSceneBgm(this)
     this.isTransitioning = false
     this.suppressIntroDialog = Boolean(data.suppressIntroDialog)
     this.currentIndex = 0

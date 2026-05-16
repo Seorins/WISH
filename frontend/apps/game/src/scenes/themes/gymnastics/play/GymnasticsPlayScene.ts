@@ -1,4 +1,5 @@
 ﻿import Phaser from 'phaser'
+import { playSceneBgm } from '@/game/systems/sceneBgm'
 import {
   calculateAverageCompletionRate,
   createExerciseSession,
@@ -663,6 +664,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
   }
 
   create() {
+    playSceneBgm(this)
     const { width: vw, height: vh } = this.scale
     this.phase = 'GUIDE_PREVIEW'
     this.motionIndex = 0

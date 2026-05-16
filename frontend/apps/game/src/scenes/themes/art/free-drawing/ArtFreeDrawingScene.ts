@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { playSceneBgm } from '@/game/systems/sceneBgm'
 import {
   createArtwork,
   submitDrawingGuess,
@@ -319,6 +320,7 @@ export class ArtFreeDrawingScene extends Phaser.Scene {
   }
 
   create(data: ArtFreeDrawingSceneData = {}) {
+    playSceneBgm(this)
     const { width: vw, height: vh } = this.scale
     this.editingArtwork = data.editArtwork ?? null
     this.isQuizMode = !this.editingArtwork

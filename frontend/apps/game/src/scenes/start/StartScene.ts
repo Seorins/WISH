@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { playSceneBgm } from '@/game/systems/sceneBgm'
 import { assetPath } from '@/game/assets/assetPath'
 import { hasValidAuthToken } from '@/features/auth'
 
@@ -14,6 +15,7 @@ export class StartScene extends Phaser.Scene {
   }
 
   create() {
+    playSceneBgm(this)
     const { width, height } = this.scale
 
     // 배경

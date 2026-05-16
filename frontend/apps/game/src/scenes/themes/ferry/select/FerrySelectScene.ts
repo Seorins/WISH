@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { playSceneBgm } from '@/game/systems/sceneBgm'
 import { consumeFuel, getFuelInbox, getFuelStatus, type FuelInboxEvent } from '@wish/api-client'
 import { assetPath } from '@/game/assets/assetPath'
 import {
@@ -162,6 +163,7 @@ export class FerrySelectScene extends Phaser.Scene {
   }
 
   create(data: FerrySelectSceneData = {}) {
+    playSceneBgm(this)
     const { width: vw, height: vh } = this.scale
     this.isTransitioning = false
     this.target = null

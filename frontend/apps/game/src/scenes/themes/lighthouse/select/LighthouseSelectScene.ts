@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { playSceneBgm } from '@/game/systems/sceneBgm'
 import { assetPath } from '@/game/assets/assetPath'
 import {
   createClickTargetMarker,
@@ -304,6 +305,7 @@ export class LighthouseSelectScene extends Phaser.Scene {
   }
 
   create(data: LighthouseSelectSceneData = {}) {
+    playSceneBgm(this)
     const { width: vw, height: vh } = this.scale
     this.cameras.main.resetFX()
     this.cameras.main.setAlpha(1)

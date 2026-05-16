@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { playSceneBgm } from '@/game/systems/sceneBgm'
 import { assetPath } from '@/game/assets/assetPath'
 import { addCoverBackground } from '@/game/world/background'
 import { fadeToScene } from '@/game/systems/sceneTransition'
@@ -50,6 +51,7 @@ export class YouTubeSearchScene extends Phaser.Scene {
   }
 
   create() {
+    playSceneBgm(this)
     this.isLeaving = false
     this.selected = null
     this.difficulty = 'normal'

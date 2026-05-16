@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { playSceneBgm } from '@/game/systems/sceneBgm'
 import { useAuthStore } from '@/features/auth/store'
 import { assetPath } from '@/game/assets/assetPath'
 import {
@@ -256,6 +257,7 @@ export class VillageScene extends Phaser.Scene {
   }
 
   create(data: VillageSceneData = {}) {
+    playSceneBgm(this)
     const { width: vw, height: vh } = this.scale
     this.isTransitioning = false
     this.target = null
