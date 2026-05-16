@@ -7,17 +7,20 @@ import {
   getMyMusicResults,
   getMyTaekwondoSessions,
   getUsageAverages,
+  getUsageRankings,
   type DailyUsageStatsParams,
   type GetMyArtworksParams,
   type GetMyExerciseSessionsParams,
   type GetMyMusicResultsParams,
   type GetMyTaekwondoSessionsParams,
   type UsageAveragesParams,
+  type UsageRankingsParams,
 } from '@wish/api-client'
 
 export const USAGE_STATS_DAILY_QUERY_KEY = 'usage-stats-daily'
 export const USAGE_STATS_CUMULATIVE_QUERY_KEY = 'usage-stats-cumulative'
 export const USAGE_STATS_AVERAGES_QUERY_KEY = 'usage-stats-averages'
+export const USAGE_STATS_RANKINGS_QUERY_KEY = 'usage-stats-rankings'
 export const MY_ARTWORKS_QUERY_KEY = 'artworks-me'
 export const MY_MUSIC_RESULTS_QUERY_KEY = 'music-results-me'
 export const MY_TAEKWONDO_SESSIONS_QUERY_KEY = 'taekwondo-sessions-me'
@@ -31,6 +34,16 @@ export function useUsageAverages(params: UsageAveragesParams = {}) {
     queryKey: [USAGE_STATS_AVERAGES_QUERY_KEY, params.from, params.to],
     queryFn: async () => {
       const response = await getUsageAverages(params)
+      return response.data
+    },
+  })
+}
+
+export function useUsageRankings(params: UsageRankingsParams = {}) {
+  return useQuery({
+    queryKey: [USAGE_STATS_RANKINGS_QUERY_KEY, params.from, params.to],
+    queryFn: async () => {
+      const response = await getUsageRankings(params)
       return response.data
     },
   })

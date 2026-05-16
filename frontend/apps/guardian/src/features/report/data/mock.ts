@@ -106,12 +106,20 @@ const PSEUDONYM_PEERS: ReadonlyArray<{ name: string; minutes: number }> = [
 ]
 
 export function buildUsageRanking(selfName: string, selfMinutes: number): UsageRankEntry[] {
-  const entries: UsageRankEntry[] = [
+  const entries: Array<Omit<UsageRankEntry, 'rank'>> = [
     ...PSEUDONYM_PEERS.map(p => ({ name: p.name, minutes: p.minutes, isMe: false })),
     { name: selfName, minutes: selfMinutes, isMe: true },
   ]
   entries.sort((a, b) => b.minutes - a.minutes)
-  return entries
+  // 표준 경기 순위(1, 2, 2, 4 …) — 동률은 같은 rank, 그 다음은 건너뛴 rank.
+  let previousMinutes = Number.NaN
+  let previousRank = 0
+  return entries.map((entry, i) => {
+    const rank = entry.minutes === previousMinutes ? previousRank : i + 1
+    previousMinutes = entry.minutes
+    previousRank = rank
+    return { ...entry, rank }
+  })
 }
 
 function buildAchievements(): GameAchievement[] {

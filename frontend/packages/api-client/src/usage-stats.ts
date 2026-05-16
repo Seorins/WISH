@@ -54,6 +54,24 @@ export type UsageAveragesParams = {
   to?: string
 }
 
+export type UsageRankingEntry = {
+  rank: number
+  patientProfileId: number
+  nickname: string
+  totalSeconds: number
+}
+
+export type UsageRankings = {
+  from: string | null
+  to: string
+  rankings: UsageRankingEntry[]
+}
+
+export type UsageRankingsParams = {
+  from?: string
+  to?: string
+}
+
 export async function getDailyUsageStats(patientId: number, params: DailyUsageStatsParams = {}) {
   const response = await apiClient.get<ApiResponse<DailyUsageStats>>(
     `/patients/${patientId}/usage-stats/daily`,
@@ -71,6 +89,13 @@ export async function getCumulativeUsageStats(patientId: number) {
 
 export async function getUsageAverages(params: UsageAveragesParams = {}) {
   const response = await apiClient.get<ApiResponse<UsageAverages>>('/usage-stats/period-averages', {
+    params,
+  })
+  return response.data
+}
+
+export async function getUsageRankings(params: UsageRankingsParams = {}) {
+  const response = await apiClient.get<ApiResponse<UsageRankings>>('/usage-stats/period-rankings', {
     params,
   })
   return response.data

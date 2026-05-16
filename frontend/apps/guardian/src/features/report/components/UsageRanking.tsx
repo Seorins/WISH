@@ -1,4 +1,4 @@
-import type { UsageCompare, UsageRankEntry } from '../data/types'
+import type { UsageCompare } from '../data/types'
 import styles from './Sections.module.css'
 
 type Props = {
@@ -12,16 +12,14 @@ function formatMinutes(min: number): string {
   return m === 0 ? `${h}시간` : `${h}시간 ${m}분`
 }
 
-type RankRow = UsageRankEntry & { rank: number }
-
 export function UsageRanking({ usage }: Props) {
-  const myRank = usage.ranking.findIndex(r => r.isMe) + 1
+  const meIndex = usage.ranking.findIndex(r => r.isMe)
   const topFive = usage.ranking.slice(0, 5)
   const meInTop = topFive.some(r => r.isMe)
 
-  const rankRows: RankRow[] = topFive.map((r, i) => ({ ...r, rank: i + 1 }))
-  if (!meInTop && myRank > 0) {
-    rankRows.push({ ...usage.ranking[myRank - 1], rank: myRank })
+  const rankRows = [...topFive]
+  if (!meInTop && meIndex >= 0) {
+    rankRows.push(usage.ranking[meIndex])
   }
 
   const rankMax = Math.max(...usage.ranking.map(r => r.minutes), usage.othersAverageMinutes, 1)

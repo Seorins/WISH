@@ -97,7 +97,12 @@ export {
   subscribeRealtimeEvents,
   subscribeWatching,
 } from './realtime'
-export { getCumulativeUsageStats, getDailyUsageStats, getUsageAverages } from './usage-stats'
+export {
+  getCumulativeUsageStats,
+  getDailyUsageStats,
+  getUsageAverages,
+  getUsageRankings,
+} from './usage-stats'
 export {
   createTaekwondoMotion,
   deleteTaekwondoMotion,
@@ -299,6 +304,9 @@ export type {
   UsageAverage,
   UsageAverages,
   UsageAveragesParams,
+  UsageRankingEntry,
+  UsageRankings,
+  UsageRankingsParams,
 } from './usage-stats'
 export type {
   CreateTaekwondoMotionParams,
