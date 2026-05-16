@@ -2,9 +2,13 @@ import Phaser from 'phaser'
 import {
   ensurePlayerWalkAnimations,
   getPlayerOutfitTextureKey,
+  getPlayerOutfits,
+  getSelectedPlayerCharacterId,
   getSelectedPlayerOutfitId,
-  PLAYER_OUTFITS,
+  PLAYER_CHARACTERS,
+  setSelectedPlayerCharacterId,
   setSelectedPlayerOutfitId,
+  type PlayerCharacterId,
   type PlayerOutfitId,
   type PlayerSprite,
 } from '@/game/entities/player'
@@ -47,26 +51,26 @@ const FONT_FAMILY = "'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif"
 const PANEL_RADIUS = 8
 
 const COLORS = {
-  dim: 0x17211d,
-  panel: 0xf7faf6,
-  panelBorder: 0x9bb7ac,
-  panelShadow: 0x0b1411,
-  surface: 0xffffff,
-  surfaceBorder: 0xd8e3df,
-  title: 0x24312d,
-  text: 0x283631,
-  mutedText: 0x66756f,
-  accent: 0x5f8f7a,
-  accentDark: 0x426b5b,
-  accentSoft: 0xe9f1ee,
-  warm: 0xbfd6b8,
-  warmDark: 0x789b72,
-  danger: 0xc9806d,
-  dangerDark: 0x9b5d4f,
-  disabled: 0xdfe7e4,
-  disabledText: 0x7d8c86,
-  track: 0xd9e4e0,
-  trackFill: 0x5f8f7a,
+  dim: 0x211b15,
+  panel: 0xfffbf3,
+  panelBorder: 0xc8b89d,
+  panelShadow: 0x1c130b,
+  surface: 0xfffdf8,
+  surfaceBorder: 0xe5d9c7,
+  title: 0x3b3026,
+  text: 0x3b332b,
+  mutedText: 0x7b7063,
+  accent: 0x8a775d,
+  accentDark: 0x5f4f3d,
+  accentSoft: 0xf3eadc,
+  warm: 0xddc59d,
+  warmDark: 0xa98454,
+  danger: 0xc8846f,
+  dangerDark: 0x9a5d4a,
+  disabled: 0xe7dfd3,
+  disabledText: 0x8b8174,
+  track: 0xe7ddce,
+  trackFill: 0x9b876b,
 } as const
 
 const LABELS = {
@@ -87,8 +91,9 @@ export function createSettingsMenu(
   { onLogout, onClose, getPlayer }: SettingsMenuOptions,
 ): SettingsMenu {
   let settings = getGameSettings()
-  let selectedOutfitId = getSelectedPlayerOutfitId()
-  let outfitCarouselIndex = getOutfitIndex(selectedOutfitId)
+  let selectedCharacterId = getSelectedPlayerCharacterId()
+  let selectedOutfitId = getSelectedPlayerOutfitId(selectedCharacterId)
+  let outfitCarouselIndex = getOutfitIndex(selectedCharacterId, selectedOutfitId)
   let backdrop: Phaser.GameObjects.Rectangle | null = null
   let modal: Phaser.GameObjects.Container | null = null
   let clickZones: ClickZone[] = []
@@ -164,7 +169,8 @@ export function createSettingsMenu(
 
   function openSettings() {
     settings = getGameSettings()
-    selectedOutfitId = getSelectedPlayerOutfitId()
+    selectedCharacterId = getSelectedPlayerCharacterId()
+    selectedOutfitId = getSelectedPlayerOutfitId(selectedCharacterId)
 
     const container = createOverlay()
     const { width, height } = scene.scale
@@ -218,7 +224,7 @@ export function createSettingsMenu(
 
     container.add(createOutfitRow(scene, contentLeft, outfitY, contentW, rowH))
     addClickZone(contentLeft + contentW / 2, outfitY, contentW, rowH, () => {
-      openOutfitPicker(getOutfitIndex(selectedOutfitId))
+      openOutfitPicker(getOutfitIndex(selectedCharacterId, selectedOutfitId), selectedCharacterId)
     })
 
     const logoutW = Math.min(184, panelW * 0.34)
@@ -234,9 +240,12 @@ export function createSettingsMenu(
     addClickZone(panelX, logoutY, logoutW, logoutH, onLogout)
   }
 
-  function openOutfitPicker(index = outfitCarouselIndex) {
-    selectedOutfitId = getSelectedPlayerOutfitId()
-    outfitCarouselIndex = wrapOutfitIndex(index)
+  function openOutfitPicker(index = outfitCarouselIndex, characterId = selectedCharacterId) {
+    selectedCharacterId = characterId
+    selectedOutfitId = getSelectedPlayerOutfitId(selectedCharacterId)
+
+    const outfits = getPlayerOutfits(selectedCharacterId)
+    outfitCarouselIndex = wrapOutfitIndex(index, outfits)
 
     const container = createOverlay()
     const { width, height } = scene.scale
@@ -249,15 +258,20 @@ export function createSettingsMenu(
     const closeY = panelTop + 34
     const backX = panelLeft + 34
     const backY = closeY
-    const previewY = panelTop + panelH * 0.5
+    const characterSwitchY = panelTop + 104
+    const previewY = panelTop + panelH * 0.55
     const arrowY = previewY
     const arrowOffset = Math.min(214, panelW * 0.36)
-    const outfit = PLAYER_OUTFITS[outfitCarouselIndex]
+    const outfit = outfits[outfitCarouselIndex]
     const isSelected = outfit.id === selectedOutfitId
     const selectY = panelTop + panelH - 54
 
     container.add(createPanel(scene, panelX, panelY, panelW, panelH))
     container.add(createHeader(scene, panelX, panelTop + 48, LABELS.outfitTitle))
+    container.add(
+      createCharacterSwitch(scene, panelX, characterSwitchY, panelW, selectedCharacterId),
+    )
+    addCharacterSwitchClickZones(panelX, characterSwitchY, panelW)
 
     container.add(
       createTextButton(scene, backX, backY, 34, 34, '\u2039', {
@@ -304,7 +318,9 @@ export function createSettingsMenu(
       openOutfitPicker(outfitCarouselIndex + 1)
     })
 
-    container.add(createCarouselDots(scene, panelX, previewY + 132, outfitCarouselIndex))
+    container.add(
+      createCarouselDots(scene, panelX, previewY + 122, outfitCarouselIndex, outfits.length),
+    )
 
     const selectW = 150
     const selectFill = isSelected ? COLORS.disabled : COLORS.warm
@@ -329,9 +345,10 @@ export function createSettingsMenu(
 
     if (!isSelected) {
       addClickZone(panelX, selectY, selectW, 44, () => {
-        selectedOutfitId = setSelectedPlayerOutfitId(outfit.id)
+        selectedCharacterId = setSelectedPlayerCharacterId(outfit.characterId)
+        selectedOutfitId = setSelectedPlayerOutfitId(outfit.id, selectedCharacterId)
         applyOutfitToPlayer(selectedOutfitId)
-        openOutfitPicker(outfitCarouselIndex)
+        openOutfitPicker(outfitCarouselIndex, selectedCharacterId)
       })
     }
   }
@@ -376,6 +393,20 @@ export function createSettingsMenu(
       addClickZone(startX + index * (buttonW + gap), y, buttonW, buttonH, () => {
         settings = updateGameSettings({ moveSpeedMultiplier: value })
         openSettings()
+      })
+    })
+  }
+
+  function addCharacterSwitchClickZones(x: number, y: number, panelW: number) {
+    const { switchW, buttonW, gap } = getCharacterSwitchLayout(panelW)
+
+    PLAYER_CHARACTERS.forEach((character, index) => {
+      addClickZone(x - switchW / 2 + buttonW / 2 + index * (buttonW + gap), y, buttonW, 38, () => {
+        selectedCharacterId = setSelectedPlayerCharacterId(character.id)
+        selectedOutfitId = getSelectedPlayerOutfitId(selectedCharacterId)
+        outfitCarouselIndex = getOutfitIndex(selectedCharacterId, selectedOutfitId)
+        applyOutfitToPlayer(selectedOutfitId)
+        openOutfitPicker(outfitCarouselIndex, selectedCharacterId)
       })
     })
   }
@@ -592,6 +623,33 @@ function createOutfitRow(scene: Phaser.Scene, x: number, y: number, width: numbe
   return container
 }
 
+function createCharacterSwitch(
+  scene: Phaser.Scene,
+  x: number,
+  y: number,
+  panelW: number,
+  selectedCharacterId: PlayerCharacterId,
+) {
+  const container = scene.add.container(0, 0)
+  const { switchW, buttonW, gap } = getCharacterSwitchLayout(panelW)
+  const buttonH = 38
+
+  PLAYER_CHARACTERS.forEach((character, index) => {
+    const selected = character.id === selectedCharacterId
+    const buttonX = x - switchW / 2 + buttonW / 2 + index * (buttonW + gap)
+    container.add(
+      createTextButton(scene, buttonX, y, buttonW, buttonH, character.label, {
+        fillColor: selected ? COLORS.accent : COLORS.accentSoft,
+        borderColor: selected ? COLORS.accentDark : COLORS.surfaceBorder,
+        textColor: selected ? 0xffffff : COLORS.accentDark,
+        fontSize: 16,
+      }),
+    )
+  })
+
+  return container
+}
+
 function createCarouselPreview(
   scene: Phaser.Scene,
   x: number,
@@ -610,13 +668,18 @@ function createCarouselPreview(
   return container
 }
 
-function createCarouselDots(scene: Phaser.Scene, x: number, y: number, activeIndex: number) {
+function createCarouselDots(
+  scene: Phaser.Scene,
+  x: number,
+  y: number,
+  activeIndex: number,
+  count: number,
+) {
   const container = scene.add.container(0, 0)
-  const count = PLAYER_OUTFITS.length
   const gap = 13
   const startX = x - ((count - 1) * gap) / 2
 
-  PLAYER_OUTFITS.forEach((_, index) => {
+  Array.from({ length: count }).forEach((_, index) => {
     const active = index === activeIndex
     container.add(
       scene.add.circle(
@@ -710,13 +773,23 @@ function isPointInZone(
   )
 }
 
-function getOutfitIndex(outfitId: PlayerOutfitId) {
-  const index = PLAYER_OUTFITS.findIndex(outfit => outfit.id === outfitId)
+function getCharacterSwitchLayout(panelW: number) {
+  const switchW = Math.min(220, panelW * 0.44)
+  const gap = 12
+  return {
+    switchW,
+    gap,
+    buttonW: (switchW - gap * (PLAYER_CHARACTERS.length - 1)) / PLAYER_CHARACTERS.length,
+  }
+}
+
+function getOutfitIndex(characterId: PlayerCharacterId, outfitId: PlayerOutfitId) {
+  const index = getPlayerOutfits(characterId).findIndex(outfit => outfit.id === outfitId)
   return index >= 0 ? index : 0
 }
 
-function wrapOutfitIndex(index: number) {
-  const count = PLAYER_OUTFITS.length
+function wrapOutfitIndex(index: number, outfits: Array<{ id: PlayerOutfitId }>) {
+  const count = outfits.length
   return ((index % count) + count) % count
 }
 
