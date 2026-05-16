@@ -4,10 +4,8 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,6 +27,8 @@ import lombok.RequiredArgsConstructor;
  *
  * <p>LOGIN(로비/메뉴 포함) 은 실제 활동성을 부풀리므로 제외하고 컨텐츠 4종(ART/MUSIC/TAEKWONDO/GYMNASTICS) 합으로 집계한다. {@link
  * UsageAverageService} 와 동일한 기간 산정 + 캐시(과거) + 라이브(today) 패턴이지만 환자별 합산이 필요해 별도 누적기로 모은다.
+ *
+ * <p>활동 0초 환자도 응답에 포함된다 — 본인이 한 번도 안 했어도 공동 꼴등으로 표시되도록. 동률은 표준 경기 순위 (1, 2, 2, 4) 로 같은 rank 를 부여한다.
  */
 @Service
 @RequiredArgsConstructor
@@ -48,6 +48,11 @@ public class UsageRankingService {
 
         Map<Long, Accumulator> byPatient = new HashMap<>();
 
+        // 0. 모든 환자 baseline — 활동 0초 환자도 공동 꼴등으로 표시되도록 미리 등록
+        for (PatientProfile profile : patientProfileRepository.findAll()) {
+            byPatient.put(profile.getId(), new Accumulator(profile.getNickname()));
+        }
+
         // 1. 캐시된 daily 행 — today 와 LOGIN 은 제외
         List<DailyUsageStat> cachedRows =
                 from != null
@@ -62,10 +67,10 @@ public class UsageRankingService {
             if (row.getContentType() == ContentType.LOGIN) {
                 continue;
             }
-            PatientProfile profile = row.getPatientProfile();
-            byPatient
-                    .computeIfAbsent(profile.getId(), id -> new Accumulator(profile.getNickname()))
-                    .add(row.getTotalSeconds());
+            Accumulator accumulator = byPatient.get(row.getPatientProfile().getId());
+            if (accumulator != null) {
+                accumulator.add(row.getTotalSeconds());
+            }
         }
 
         // 2. today 분 — range 포함 시 라이브 계산
@@ -73,19 +78,6 @@ public class UsageRankingService {
                 (from == null || !today.isBefore(from)) && !today.isAfter(effectiveTo);
         if (includesToday) {
             Map<Long, Long> todayLive = computeContentLiveForDate(today);
-            // 캐시에 없던 환자(오늘 첫 활동) 의 닉네임을 보충 lookup
-            Set<Long> missingIds = new HashSet<>();
-            for (Long id : todayLive.keySet()) {
-                if (!byPatient.containsKey(id)) {
-                    missingIds.add(id);
-                }
-            }
-            if (!missingIds.isEmpty()) {
-                for (PatientProfile profile : patientProfileRepository.findAllById(missingIds)) {
-                    byPatient.computeIfAbsent(
-                            profile.getId(), id -> new Accumulator(profile.getNickname()));
-                }
-            }
             for (Map.Entry<Long, Long> entry : todayLive.entrySet()) {
                 Accumulator accumulator = byPatient.get(entry.getKey());
                 if (accumulator != null && entry.getValue() > 0) {
@@ -94,20 +86,28 @@ public class UsageRankingService {
             }
         }
 
-        List<UsageRankingResponse.RankingEntry> rankings = new ArrayList<>();
-        byPatient.entrySet().stream()
-                .sorted(
-                        Comparator.<Map.Entry<Long, Accumulator>>comparingLong(
-                                        e -> -e.getValue().totalSeconds)
-                                .thenComparing(e -> e.getValue().nickname))
-                .forEach(
-                        e ->
-                                rankings.add(
-                                        new UsageRankingResponse.RankingEntry(
-                                                rankings.size() + 1,
-                                                e.getKey(),
-                                                e.getValue().nickname,
-                                                e.getValue().totalSeconds)));
+        // 정렬 후 표준 경기 순위(1, 2, 2, 4 …) 부여 — 동률은 같은 rank
+        List<Map.Entry<Long, Accumulator>> sorted =
+                byPatient.entrySet().stream()
+                        .sorted(
+                                Comparator.<Map.Entry<Long, Accumulator>>comparingLong(
+                                                e -> -e.getValue().totalSeconds)
+                                        .thenComparing(e -> e.getValue().nickname))
+                        .toList();
+
+        List<UsageRankingResponse.RankingEntry> rankings = new ArrayList<>(sorted.size());
+        long previousSeconds = Long.MIN_VALUE;
+        int previousRank = 0;
+        for (int i = 0; i < sorted.size(); i++) {
+            Map.Entry<Long, Accumulator> entry = sorted.get(i);
+            long seconds = entry.getValue().totalSeconds;
+            int rank = (seconds == previousSeconds) ? previousRank : i + 1;
+            rankings.add(
+                    new UsageRankingResponse.RankingEntry(
+                            rank, entry.getKey(), entry.getValue().nickname, seconds));
+            previousSeconds = seconds;
+            previousRank = rank;
+        }
 
         return new UsageRankingResponse(from, effectiveTo, rankings);
     }
