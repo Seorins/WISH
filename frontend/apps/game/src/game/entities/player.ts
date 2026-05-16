@@ -7,9 +7,29 @@ export const PLAYER_FRAME_SIZE = 313
 export const PLAYER_WALK_SPEED = 180
 export const PLAYER_TEXTURE_KEY = 'character'
 
+const PLAYER_OUTFIT_STORAGE_KEY = 'wish_player_outfit'
+
 export type PlayerDirection = 'down' | 'left' | 'right' | 'up'
 export type RatioPoint = { xRatio: number; yRatio: number }
 export type PlayerSprite = Phaser.Types.Physics.Arcade.SpriteWithDynamicBody
+export type PlayerOutfitId =
+  | 'default'
+  | 'man1'
+  | 'man2'
+  | 'man3'
+  | 'man4'
+  | 'man5'
+  | 'man6'
+  | 'man7'
+  | 'man8'
+  | 'man9'
+
+export type PlayerOutfit = {
+  id: PlayerOutfitId
+  label: string
+  textureKey: string
+  sheetPath: string
+}
 
 type CreatePlayerOptions = {
   textureKey?: string
@@ -34,6 +54,23 @@ type PlayerMovementResult = {
 }
 
 const CHARACTER_SHEET_PATH = assetPath('images/common/player/character_sheet.png')
+export const PLAYER_OUTFITS: PlayerOutfit[] = [
+  {
+    id: 'default',
+    label: '\uAE30\uBCF8',
+    textureKey: PLAYER_TEXTURE_KEY,
+    sheetPath: CHARACTER_SHEET_PATH,
+  },
+  ...Array.from({ length: 9 }, (_, index) => {
+    const number = index + 1
+    return {
+      id: `man${number}` as PlayerOutfitId,
+      label: `\uBCF5\uC7A5 ${number}`,
+      textureKey: `character-outfit-man${number}`,
+      sheetPath: assetPath(`images/common/player/outfit/man${number}.png`),
+    }
+  }),
+]
 const TAEKWONDO_BELT_PLAYER_SHEET_PATHS: Record<TaekwondoBeltColor, string> = {
   WHITE: assetPath('images/common/player/character_white.png'),
   YELLOW: assetPath('images/common/player/character_yellow.png'),
@@ -80,16 +117,64 @@ export function getTaekwondoBeltPlayerTextureKey(beltColor: TaekwondoBeltColor) 
   return TAEKWONDO_BELT_PLAYER_TEXTURE_KEYS[beltColor]
 }
 
+export function getPlayerOutfit(outfitId: PlayerOutfitId) {
+  return PLAYER_OUTFITS.find(outfit => outfit.id === outfitId) ?? PLAYER_OUTFITS[0]
+}
+
+export function getSelectedPlayerOutfitId(): PlayerOutfitId {
+  if (typeof window === 'undefined') {
+    return 'default'
+  }
+
+  try {
+    return normalizePlayerOutfitId(window.localStorage.getItem(PLAYER_OUTFIT_STORAGE_KEY))
+  } catch {
+    return 'default'
+  }
+}
+
+export function setSelectedPlayerOutfitId(outfitId: PlayerOutfitId) {
+  const next = normalizePlayerOutfitId(outfitId)
+
+  if (typeof window !== 'undefined') {
+    try {
+      window.localStorage.setItem(PLAYER_OUTFIT_STORAGE_KEY, next)
+    } catch {
+      // localStorage can be unavailable in private mode; the in-memory sprite still updates.
+    }
+  }
+
+  return next
+}
+
+export function getSelectedPlayerTextureKey() {
+  return getPlayerOutfit(getSelectedPlayerOutfitId()).textureKey
+}
+
+export function getPlayerOutfitTextureKey(outfitId: PlayerOutfitId) {
+  return getPlayerOutfit(outfitId).textureKey
+}
+
 export function loadPlayerSpritesheet(
   scene: Phaser.Scene,
   textureKey = PLAYER_TEXTURE_KEY,
   sheetPath = CHARACTER_SHEET_PATH,
 ) {
+  if (scene.textures.exists(textureKey)) {
+    return
+  }
+
   scene.load.spritesheet(textureKey, sheetPath, {
     frameWidth: PLAYER_FRAME_SIZE,
     frameHeight: PLAYER_FRAME_SIZE,
     margin: 0,
     spacing: 0,
+  })
+}
+
+export function loadPlayerSpritesheets(scene: Phaser.Scene) {
+  PLAYER_OUTFITS.forEach(outfit => {
+    loadPlayerSpritesheet(scene, outfit.textureKey, outfit.sheetPath)
   })
 }
 
@@ -126,12 +211,13 @@ export function createPlayer(
   x: number,
   y: number,
   {
-    textureKey = PLAYER_TEXTURE_KEY,
+    textureKey = getSelectedPlayerTextureKey(),
     frame = 0,
     scale = 0.55,
     depth = 10,
   }: CreatePlayerOptions = {},
 ) {
+  ensurePlayerWalkAnimations(scene, textureKey)
   const player = scene.physics.add.sprite(x, y, textureKey, frame)
   player.setScale(scale).setDepth(depth)
   player.setCollideWorldBounds(true)
@@ -139,6 +225,10 @@ export function createPlayer(
   player.body.setOffset(PLAYER_FRAME_SIZE * 0.33, PLAYER_FRAME_SIZE * 0.65)
 
   return player
+}
+
+function normalizePlayerOutfitId(value: unknown): PlayerOutfitId {
+  return PLAYER_OUTFITS.some(outfit => outfit.id === value) ? (value as PlayerOutfitId) : 'default'
 }
 
 export function updatePlayerMovement({

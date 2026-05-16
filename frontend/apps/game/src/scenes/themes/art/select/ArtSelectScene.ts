@@ -4,7 +4,7 @@ import {
   createClickTargetMarker,
   createPlayer,
   ensurePlayerWalkAnimations,
-  loadPlayerSpritesheet,
+  loadPlayerSpritesheets,
   type PlayerDirection,
   type PlayerSprite,
   type RatioPoint,
@@ -265,7 +265,7 @@ export class ArtSelectScene extends Phaser.Scene {
     this.load.image('art-rumi-character', assetPath('images/themes/art/ui/rumi.png'))
     this.load.image('art-card-free', assetPath('images/themes/art/ui/free.png'))
     this.load.image('art-card-paint', assetPath('images/themes/art/ui/paint.png'))
-    loadPlayerSpritesheet(this)
+    loadPlayerSpritesheets(this)
   }
 
   create(data: ArtSelectSceneData = {}) {

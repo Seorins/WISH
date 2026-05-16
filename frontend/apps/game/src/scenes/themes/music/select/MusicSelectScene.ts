@@ -4,7 +4,7 @@ import {
   createClickTargetMarker,
   createPlayer,
   ensurePlayerWalkAnimations,
-  loadPlayerSpritesheet,
+  loadPlayerSpritesheets,
   type PlayerDirection,
   type PlayerSprite,
   type RatioPoint,
@@ -220,7 +220,7 @@ export class MusicSelectScene extends Phaser.Scene {
     )
     loadInteractionIcons(this)
     this.load.image('gisung-dialog-frame', assetPath('images/npcs/gisung/dialog-frame.png'))
-    loadPlayerSpritesheet(this)
+    loadPlayerSpritesheets(this)
   }
 
   create(data: MusicSelectSceneData = {}) {

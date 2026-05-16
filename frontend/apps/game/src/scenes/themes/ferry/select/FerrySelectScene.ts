@@ -5,7 +5,7 @@ import {
   createClickTargetMarker,
   createPlayer,
   ensurePlayerWalkAnimations,
-  loadPlayerSpritesheet,
+  loadPlayerSpritesheets,
   type PlayerDirection,
   type PlayerSprite,
   type RatioPoint,
@@ -158,7 +158,7 @@ export class FerrySelectScene extends Phaser.Scene {
     )
     this.load.image(FERRY_FRAME_KEY, assetPath('images/themes/ferry/ui/ferryframe.png'))
     this.load.image(STAR_FRAME_KEY, assetPath('images/themes/ferry/ui/starframe.png'))
-    loadPlayerSpritesheet(this)
+    loadPlayerSpritesheets(this)
   }
 
   create(data: FerrySelectSceneData = {}) {

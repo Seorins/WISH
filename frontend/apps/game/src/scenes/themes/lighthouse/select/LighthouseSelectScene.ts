@@ -4,7 +4,7 @@ import {
   createClickTargetMarker,
   createPlayer,
   ensurePlayerWalkAnimations,
-  loadPlayerSpritesheet,
+  loadPlayerSpritesheets,
   type PlayerDirection,
   type PlayerSprite,
   type RatioPoint,
@@ -300,7 +300,7 @@ export class LighthouseSelectScene extends Phaser.Scene {
       assetPath('images/themes/lighthouse/ui/youngcheol_dialogframe.png'),
     )
     loadInteractionIcons(this)
-    loadPlayerSpritesheet(this)
+    loadPlayerSpritesheets(this)
   }
 
   create(data: LighthouseSelectSceneData = {}) {
