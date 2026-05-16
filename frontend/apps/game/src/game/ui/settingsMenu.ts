@@ -61,9 +61,17 @@ const COLORS = {
   title: 0x3b3026,
   text: 0x3b332b,
   mutedText: 0x7b7063,
-  accent: 0x8a775d,
-  accentDark: 0x5f4f3d,
+  accent: 0x7f715d,
+  accentDark: 0x665743,
   accentSoft: 0xf3eadc,
+  control: 0xf6f0e7,
+  controlBorder: 0xe0d5c4,
+  controlActive: 0x82745f,
+  controlActiveBorder: 0x665844,
+  primary: 0x8b7a61,
+  primaryBorder: 0x6c5c46,
+  iconButton: 0x7d715e,
+  iconButtonBorder: 0x625643,
   warm: 0xddc59d,
   warmDark: 0xa98454,
   danger: 0xc8846f,
@@ -196,8 +204,8 @@ export function createSettingsMenu(
     container.add(createHeader(scene, panelX, panelTop + 48, LABELS.title))
     container.add(
       createTextButton(scene, closeX, closeY, 34, 34, LABELS.close, {
-        fillColor: COLORS.accent,
-        borderColor: COLORS.accentDark,
+        fillColor: COLORS.iconButton,
+        borderColor: COLORS.iconButtonBorder,
         textColor: 0xffffff,
         fontSize: 19,
       }),
@@ -276,8 +284,8 @@ export function createSettingsMenu(
 
     container.add(
       createTextButton(scene, backX, backY, 34, 34, '\u2039', {
-        fillColor: COLORS.accent,
-        borderColor: COLORS.accentDark,
+        fillColor: COLORS.iconButton,
+        borderColor: COLORS.iconButtonBorder,
         textColor: 0xffffff,
         fontSize: 22,
       }),
@@ -286,8 +294,8 @@ export function createSettingsMenu(
 
     container.add(
       createTextButton(scene, closeX, closeY, 34, 34, LABELS.close, {
-        fillColor: COLORS.accent,
-        borderColor: COLORS.accentDark,
+        fillColor: COLORS.iconButton,
+        borderColor: COLORS.iconButtonBorder,
         textColor: 0xffffff,
         fontSize: 19,
       }),
@@ -297,8 +305,8 @@ export function createSettingsMenu(
     container.add(createCarouselPreview(scene, panelX, previewY, outfit.id))
     container.add(
       createTextButton(scene, panelX - arrowOffset, arrowY, 48, 48, '\u2039', {
-        fillColor: COLORS.accentSoft,
-        borderColor: COLORS.surfaceBorder,
+        fillColor: COLORS.control,
+        borderColor: COLORS.controlBorder,
         textColor: COLORS.accentDark,
         fontSize: 30,
       }),
@@ -309,8 +317,8 @@ export function createSettingsMenu(
 
     container.add(
       createTextButton(scene, panelX + arrowOffset, arrowY, 48, 48, '\u203A', {
-        fillColor: COLORS.accentSoft,
-        borderColor: COLORS.surfaceBorder,
+        fillColor: COLORS.control,
+        borderColor: COLORS.controlBorder,
         textColor: COLORS.accentDark,
         fontSize: 30,
       }),
@@ -324,9 +332,9 @@ export function createSettingsMenu(
     )
 
     const selectW = 150
-    const selectFill = isSelected ? COLORS.disabled : COLORS.warm
-    const selectBorder = isSelected ? COLORS.surfaceBorder : COLORS.warmDark
-    const selectText = isSelected ? COLORS.disabledText : COLORS.text
+    const selectFill = isSelected ? COLORS.disabled : COLORS.primary
+    const selectBorder = isSelected ? COLORS.surfaceBorder : COLORS.primaryBorder
+    const selectText = isSelected ? COLORS.disabledText : 0xffffff
     container.add(
       createTextButton(
         scene,
@@ -476,8 +484,7 @@ function createHeader(scene: Phaser.Scene, x: number, y: number, title: string) 
       fontStyle: 'bold',
     })
     .setOrigin(0.5)
-  const underline = scene.add.rectangle(x, y + 26, 72, 4, COLORS.warm, 1)
-  container.add([titleText, underline])
+  container.add(titleText)
   return container
 }
 
@@ -587,9 +594,9 @@ function createSpeedRow(
     const selected = settings.moveSpeedMultiplier === value
     container.add(
       createTextButton(scene, startX + index * (buttonW + gap), y, buttonW, buttonH, `${value}x`, {
-        fillColor: selected ? COLORS.warm : COLORS.accentSoft,
-        borderColor: selected ? COLORS.warmDark : COLORS.surfaceBorder,
-        textColor: selected ? COLORS.text : COLORS.accentDark,
+        fillColor: selected ? COLORS.controlActive : COLORS.control,
+        borderColor: selected ? COLORS.controlActiveBorder : COLORS.controlBorder,
+        textColor: selected ? 0xffffff : COLORS.accentDark,
         fontSize: 16,
       }),
     )
@@ -615,8 +622,8 @@ function createOutfitRow(scene: Phaser.Scene, x: number, y: number, width: numbe
   )
   container.add(
     createTextButton(scene, x + width - buttonW / 2 - 16, y, buttonW, buttonH, LABELS.change, {
-      fillColor: COLORS.accent,
-      borderColor: COLORS.accentDark,
+      fillColor: COLORS.primary,
+      borderColor: COLORS.primaryBorder,
       textColor: 0xffffff,
       fontSize: 16,
     }),
@@ -640,8 +647,8 @@ function createCharacterSwitch(
     const buttonX = x - switchW / 2 + buttonW / 2 + index * (buttonW + gap)
     container.add(
       createTextButton(scene, buttonX, y, buttonW, buttonH, character.label, {
-        fillColor: selected ? COLORS.accent : COLORS.accentSoft,
-        borderColor: selected ? COLORS.accentDark : COLORS.surfaceBorder,
+        fillColor: selected ? COLORS.controlActive : COLORS.control,
+        borderColor: selected ? COLORS.controlActiveBorder : COLORS.controlBorder,
         textColor: selected ? 0xffffff : COLORS.accentDark,
         fontSize: 16,
       }),
@@ -731,12 +738,21 @@ function createTextButton(
 ) {
   const container = scene.add.container(x, y)
   const bg = scene.add.graphics()
-  bg.fillStyle(0x000000, 0.12)
-  bg.fillRoundedRect(-width / 2 + 3, -height / 2 + 4, width, height, PANEL_RADIUS)
+  const radius = Math.min(9, height / 3)
+  bg.fillStyle(0x000000, 0.08)
+  bg.fillRoundedRect(-width / 2 + 2, -height / 2 + 3, width, height, radius)
   bg.fillStyle(fillColor, 1)
-  bg.fillRoundedRect(-width / 2, -height / 2, width, height, PANEL_RADIUS)
-  bg.lineStyle(2, borderColor, 1)
-  bg.strokeRoundedRect(-width / 2, -height / 2, width, height, PANEL_RADIUS)
+  bg.fillRoundedRect(-width / 2, -height / 2, width, height, radius)
+  bg.lineStyle(1.5, borderColor, 1)
+  bg.strokeRoundedRect(-width / 2, -height / 2, width, height, radius)
+  bg.lineStyle(1, 0xffffff, 0.18)
+  bg.strokeRoundedRect(
+    -width / 2 + 2,
+    -height / 2 + 2,
+    width - 4,
+    height - 4,
+    Math.max(2, radius - 2),
+  )
   const text = scene.add
     .text(0, 0, label, {
       fontFamily: FONT_FAMILY,

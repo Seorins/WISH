@@ -8,6 +8,7 @@ export interface PositionPacket {
   y: number
   dir: PlayerDirection
   moving: boolean
+  textureKey: string
 }
 
 export interface VillageJoinEvent {
@@ -23,6 +24,7 @@ export interface VillageJoinEvent {
 export interface VillageMoveEvent {
   type: 'move'
   userId: number
+  textureKey?: string
   x: number
   y: number
   dir: PlayerDirection
