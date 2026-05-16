@@ -246,7 +246,6 @@ export class VillageScene extends Phaser.Scene {
     this.load.image(VILLAGE_PHOTO_BOOTH_KEY, assetPath(VILLAGE_PHOTO_BOOTH_PATH))
     this.load.image(VILLAGE_PHOTO_GALLERY_KEY, assetPath(VILLAGE_PHOTO_GALLERY_PATH))
     this.load.image(VILLAGE_GOMOKU_BOARD_KEY, assetPath(VILLAGE_GOMOKU_BOARD_PATH))
-    this.load.image('profile', assetPath('images/common/profile.png'))
     this.load.spritesheet('sehyun', assetPath('images/npcs/sehyun/sprite.png'), {
       frameWidth: 313,
       frameHeight: 313,
@@ -421,14 +420,6 @@ export class VillageScene extends Phaser.Scene {
         SEHYUN_NPC.portraitScale,
       ),
     )
-
-    const profileSize = Math.min(vw * 0.16, 180)
-    const profile = this.add.image(0, 0, 'profile')
-    profile.setDisplaySize(profileSize, profileSize)
-    profile.setDepth(20)
-    profile.setScrollFactor(0)
-    profile.x = profileSize / 2 + 12
-    profile.y = profileSize / 2 + 12
 
     const spawn = data.spawn ?? DEFAULT_PLAYER_SPAWN
     this.player = createPlayer(this, W * spawn.xRatio, H * spawn.yRatio, { depth: 5 })
