@@ -140,6 +140,7 @@ function buildUsageCompare(
   let ranking
   if (rankings) {
     ranking = rankings.rankings.map(r => ({
+      rank: r.rank,
       name: r.nickname,
       minutes: Math.round(r.totalSeconds / 60),
       isMe: selfPatientId !== undefined && r.patientProfileId === selfPatientId,
