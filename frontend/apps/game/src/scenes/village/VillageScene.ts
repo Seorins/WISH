@@ -48,6 +48,7 @@ const NPC_DIALOG_DISTANCE = 28
 const PHOTO_BOOTH_INTERACT_DISTANCE = 40
 const PHOTO_GALLERY_INTERACT_DISTANCE = 40
 const GOMOKU_BOARD_INTERACT_DISTANCE = 56
+const WORLD_INTERACTION_REOPEN_COOLDOWN_MS = 350
 const DIALOG_TEXT_BOX = { x: 585, y: 260, width: 1230, height: 250 }
 const DIALOG_NAME_BOX = { x: 490, y: 130, width: 350, height: 72 }
 const DIALOG_PORTRAIT_BOX = { x: 120, y: 100, width: 320, height: 400 }
@@ -206,6 +207,7 @@ export class VillageScene extends Phaser.Scene {
   private dialogs = new Map<VillagerNpcId, SimpleDialogUi>()
   private villageNpcs: VillageNpcInstance[] = []
   private portalCooldownUntil = 0
+  private worldInteractionCooldownUntil = 0
   private portals = new Map<VillagePortalKey, Phaser.Geom.Rectangle>()
   private playerWasInPortal = createInitialVillagePortalState()
   private isTransitioning = false
@@ -272,6 +274,7 @@ export class VillageScene extends Phaser.Scene {
     this.activeDialogNpcId = null
     this.nearestNpcId = null
     this.portalCooldownUntil = this.time.now + (data.portalCooldownMs ?? 0)
+    this.worldInteractionCooldownUntil = this.time.now + (data.portalCooldownMs ?? 0)
 
     const firstTile = this.textures.get(MAP_TILE_KEYS[0].key).getSourceImage() as HTMLImageElement
     const rawTileW = firstTile.width
@@ -357,6 +360,7 @@ export class VillageScene extends Phaser.Scene {
         event: Phaser.Types.Input.EventData,
       ) => {
         event.stopPropagation()
+        if (!this.canStartWorldInteraction()) return
         this.enterPhotoBoothScene()
       },
     )
@@ -439,6 +443,7 @@ export class VillageScene extends Phaser.Scene {
     this.cursors = this.input.keyboard!.createCursorKeys()
     this.settingsMenu = createSettingsMenu(this, {
       onLogout: () => this.logout(),
+      onClose: () => this.blockWorldInteractionBriefly(),
     })
     this.interactionHint = new NpcInteractionHintUi(this)
 
@@ -540,6 +545,7 @@ export class VillageScene extends Phaser.Scene {
     // 안 풀면 update 의 transitioning 가드에 걸려 입력이 죽음.
     this.events.on(Phaser.Scenes.Events.RESUME, () => {
       this.isTransitioning = false
+      this.blockWorldInteractionBriefly()
     })
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.events.off(Phaser.Scenes.Events.RESUME)
@@ -724,13 +730,12 @@ export class VillageScene extends Phaser.Scene {
   }
 
   private readonly handleNpcInteract = (event?: KeyboardEvent) => {
-    if (
-      !this.isVillagerDialogueOpen &&
-      !this.settingsMenu.isOpen() &&
-      !this.isGomokuOpen &&
-      !this.isPhotoGalleryOpen &&
-      !this.dialogDismissed
-    ) {
+    if (!this.canStartWorldInteraction()) {
+      event?.preventDefault()
+      return
+    }
+
+    if (!this.dialogDismissed) {
       if (this.isPhotoBoothInRange) {
         event?.preventDefault()
         this.enterPhotoBoothScene()
@@ -875,8 +880,36 @@ export class VillageScene extends Phaser.Scene {
     )
   }
 
+  private blockWorldInteractionBriefly(durationMs = WORLD_INTERACTION_REOPEN_COOLDOWN_MS) {
+    this.worldInteractionCooldownUntil = Math.max(
+      this.worldInteractionCooldownUntil,
+      this.time.now + durationMs,
+    )
+  }
+
+  private isWorldInteractionCooldownActive() {
+    return this.time.now < this.worldInteractionCooldownUntil
+  }
+
+  private hasBlockingOverlayOpen() {
+    return (
+      this.isVillagerDialogueOpen ||
+      this.settingsMenu.isOpen() ||
+      this.isGomokuOpen ||
+      this.isPhotoGalleryOpen
+    )
+  }
+
+  private canStartWorldInteraction() {
+    return (
+      !this.isTransitioning &&
+      !this.hasBlockingOverlayOpen() &&
+      !this.isWorldInteractionCooldownActive()
+    )
+  }
+
   private tryOpenNpcDialogue(npcId: VillagerNpcId) {
-    if (this.isVillagerDialogueOpen || this.settingsMenu.isOpen() || this.dialogDismissed) return
+    if (!this.canStartWorldInteraction() || this.dialogDismissed) return
 
     const npc = this.villageNpcs.find(candidate => candidate.id === npcId)
     if (!npc) return
@@ -893,7 +926,7 @@ export class VillageScene extends Phaser.Scene {
   }
 
   private tryOpenGomokuGame() {
-    if (this.isVillagerDialogueOpen || this.settingsMenu.isOpen() || this.isGomokuOpen) return
+    if (!this.canStartWorldInteraction()) return
     if (this.getGomokuBoardDistance() > GOMOKU_BOARD_INTERACT_DISTANCE) return
     this.enterGomokuGame()
   }
@@ -914,6 +947,7 @@ export class VillageScene extends Phaser.Scene {
 
   private hideDialog(markDismissed: boolean, notifyReact = true) {
     const dialog = this.getActiveDialog()
+    const wasOpen = this.isVillagerDialogueOpen
     if (this.isVillagerDialogueOpen && notifyReact) {
       this.game.events.emit('villager-dialogue:force-close')
     }
@@ -923,6 +957,10 @@ export class VillageScene extends Phaser.Scene {
 
     if (dialog) {
       fadeSimpleDialog(this, dialog, 0, 200)
+    }
+
+    if (wasOpen && markDismissed) {
+      this.blockWorldInteractionBriefly()
     }
   }
 
@@ -938,17 +976,11 @@ export class VillageScene extends Phaser.Scene {
 
   private handleGomokuClosed() {
     this.isGomokuOpen = false
+    this.blockWorldInteractionBriefly()
   }
 
   private openPhotoGallery() {
-    if (
-      this.isPhotoGalleryOpen ||
-      this.isVillagerDialogueOpen ||
-      this.settingsMenu.isOpen() ||
-      this.isGomokuOpen
-    ) {
-      return
-    }
+    if (!this.canStartWorldInteraction()) return
     this.isPhotoGalleryOpen = true
     this.target = null
     this.player.setVelocity(0, 0)
@@ -958,6 +990,7 @@ export class VillageScene extends Phaser.Scene {
 
   private handlePhotoGalleryClosed = () => {
     this.isPhotoGalleryOpen = false
+    this.blockWorldInteractionBriefly()
   }
 
   private updateInteractionHint(nearestNpc: VillageNpcInstance | null) {
@@ -965,7 +998,8 @@ export class VillageScene extends Phaser.Scene {
       this.isVillagerDialogueOpen ||
       this.settingsMenu.isOpen() ||
       this.isGomokuOpen ||
-      this.isPhotoGalleryOpen
+      this.isPhotoGalleryOpen ||
+      this.isWorldInteractionCooldownActive()
     ) {
       this.interactionHint.hide()
       return
@@ -1066,6 +1100,7 @@ export class VillageScene extends Phaser.Scene {
   }
 
   private enterGomokuGame() {
+    if (!this.canStartWorldInteraction()) return
     this.isGomokuOpen = true
     this.target = null
     this.player.setVelocity(0, 0)
@@ -1077,7 +1112,7 @@ export class VillageScene extends Phaser.Scene {
   }
 
   private enterPhotoBoothScene() {
-    if (this.isTransitioning) return
+    if (!this.canStartWorldInteraction()) return
     this.isTransitioning = true
     this.target = null
     this.player.setVelocity(0, 0)

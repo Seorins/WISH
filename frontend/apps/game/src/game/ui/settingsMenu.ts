@@ -13,6 +13,7 @@ type SettingsMenu = {
 
 type SettingsMenuOptions = {
   onLogout: () => void
+  onClose?: () => void
 }
 
 type ClickZone = {
@@ -87,7 +88,7 @@ const LABELS = {
 
 export function createSettingsMenu(
   scene: Phaser.Scene,
-  { onLogout }: SettingsMenuOptions,
+  { onLogout, onClose }: SettingsMenuOptions,
 ): SettingsMenu {
   const { width, height } = scene.scale
   let settings = getGameSettings()
@@ -107,16 +108,18 @@ export function createSettingsMenu(
     openMenu()
   }
 
-  function close() {
+  function close({ notify = true }: { notify?: boolean } = {}) {
+    const wasOpen = Boolean(modal)
     modal?.destroy()
     modal = null
     clickZones = []
     sliderZones = []
     activeSlider = null
+    if (wasOpen && notify) onClose?.()
   }
 
   function createOverlay() {
-    close()
+    close({ notify: false })
     const container = scene.add.container(0, 0).setDepth(OVERLAY_DEPTH).setScrollFactor(0)
     const dim = scene.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.42)
     container.add(dim)
