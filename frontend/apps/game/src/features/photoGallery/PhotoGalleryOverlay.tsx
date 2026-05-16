@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from 'react'
+import { useEffect, useState, type CSSProperties } from 'react'
 import type { PublicPhotoBooth } from '@wish/api-client'
 import { usePublicPhotoBooths } from './hooks'
 
@@ -189,6 +189,31 @@ function formatDate(iso: string) {
 export function PhotoGalleryOverlay({ open, onClose }: PhotoGalleryOverlayProps) {
   const [selected, setSelected] = useState<PublicPhotoBooth | null>(null)
   const { data, isLoading, isError, refetch } = usePublicPhotoBooths({ page: 0, size: 36 })
+
+  useEffect(() => {
+    if (!open) {
+      setSelected(null)
+      return
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+
+      event.preventDefault()
+      event.stopPropagation()
+      event.stopImmediatePropagation()
+
+      if (selected) {
+        setSelected(null)
+        return
+      }
+
+      onClose()
+    }
+
+    window.addEventListener('keydown', handleKeyDown, { capture: true })
+    return () => window.removeEventListener('keydown', handleKeyDown, { capture: true })
+  }, [onClose, open, selected])
 
   if (!open) return null
 

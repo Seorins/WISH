@@ -443,6 +443,7 @@ export class VillageScene extends Phaser.Scene {
         this.hideDialog(true)
         return
       }
+      if (this.isPhotoGalleryOpen) return
       this.settingsMenu.toggleButton()
     })
 
