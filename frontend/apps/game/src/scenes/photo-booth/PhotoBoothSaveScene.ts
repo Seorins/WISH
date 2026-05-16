@@ -3,10 +3,10 @@ import { createPhotoBooth } from '@wish/api-client'
 import { assetPath } from '@/game/assets/assetPath'
 import { fadeToScene } from '@/game/systems/sceneTransition'
 import { PHOTO_BOOTH_FRAMES, type PhotoFrame } from './frames'
+import { exitPhotoBoothToVillage, PHOTO_BOOTH_RETURN_SPAWN } from './navigation'
 import { createRoundedButton, drawRoundedCard } from './roundedUi'
 
 const FONT = "'Jua', 'Apple SD Gothic Neo', sans-serif"
-const PHOTO_BOOTH_RETURN_SPAWN = { xRatio: 0.515, yRatio: 0.345 }
 const RIGHT_PANEL_W = 320
 const HORIZ_MARGIN = 80
 const TITLE_TOP = 70
@@ -230,7 +230,7 @@ export class PhotoBoothSaveScene extends Phaser.Scene {
       onClick: () => this.confirm(),
     })
 
-    this.input.keyboard?.on('keydown-ESC', () => this.backToFilter())
+    this.input.keyboard?.on('keydown-ESC', () => this.exitToVillage())
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.cleanupTextures())
 
     document.fonts
@@ -412,5 +412,11 @@ export class PhotoBoothSaveScene extends Phaser.Scene {
       duration: 250,
       data: { spawn: PHOTO_BOOTH_RETURN_SPAWN, portalCooldownMs: 250 },
     })
+  }
+
+  private exitToVillage() {
+    if (this.isTransitioning) return
+    this.isTransitioning = true
+    exitPhotoBoothToVillage(this)
   }
 }
