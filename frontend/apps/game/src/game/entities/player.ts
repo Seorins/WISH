@@ -81,7 +81,7 @@ const BOY_OUTFITS: PlayerOutfit[] = [
     textureKey: PLAYER_TEXTURE_KEY,
     sheetPath: CHARACTER_SHEET_PATH,
   },
-  ...Array.from({ length: 9 }, (_, index) => {
+  ...Array.from({ length: 9 }, (_, index): PlayerOutfit => {
     const number = index + 1
     return {
       id: `man${number}` as PlayerOutfitId,
@@ -93,7 +93,7 @@ const BOY_OUTFITS: PlayerOutfit[] = [
   }),
 ]
 
-const GIRL_OUTFITS: PlayerOutfit[] = Array.from({ length: 9 }, (_, index) => {
+const GIRL_OUTFITS: PlayerOutfit[] = Array.from({ length: 9 }, (_, index): PlayerOutfit => {
   const number = index + 1
   return {
     id: `girl${number}` as PlayerOutfitId,
