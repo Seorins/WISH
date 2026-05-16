@@ -1,5 +1,14 @@
 import Phaser from 'phaser'
 import {
+  ensurePlayerWalkAnimations,
+  getPlayerOutfitTextureKey,
+  getSelectedPlayerOutfitId,
+  PLAYER_OUTFITS,
+  setSelectedPlayerOutfitId,
+  type PlayerOutfitId,
+  type PlayerSprite,
+} from '@/game/entities/player'
+import {
   getGameSettings,
   type MoveSpeedMultiplier,
   updateGameSettings,
@@ -14,6 +23,7 @@ type SettingsMenu = {
 type SettingsMenuOptions = {
   onLogout: () => void
   onClose?: () => void
+  getPlayer?: () => PlayerSprite | null
 }
 
 type ClickZone = {
@@ -33,166 +43,166 @@ type SliderZone = {
 }
 
 const OVERLAY_DEPTH = 1000
-const MENU_FRAME_KEY = 'menu-frame'
-const SETTING_FRAME_KEY = 'setting-frame'
-const SETTINGS_BUTTON_KEY = 'settings-button'
-const EXIT_BUTTON_KEY = 'exit-button'
-const MENU_FRAME_VISIBLE = 'menu-frame-visible'
-const SETTINGS_BUTTON_FRAME = 'settings-button-visible'
-const EXIT_BUTTON_FRAME = 'exit-button-visible'
-const MENU_FRAME_BOUNDS = {
-  frame: MENU_FRAME_VISIBLE,
-  x: 100,
-  y: 285,
-  width: 828,
-  height: 887,
-} as const
-const BUTTON_VISIBLE_FRAMES = {
-  [SETTINGS_BUTTON_KEY]: {
-    frame: SETTINGS_BUTTON_FRAME,
-    x: 184,
-    y: 128,
-    width: 1637,
-    height: 415,
-  },
-  [EXIT_BUTTON_KEY]: {
-    frame: EXIT_BUTTON_FRAME,
-    x: 245,
-    y: 131,
-    width: 1513,
-    height: 406,
-  },
-} as const
-const SETTING_FRAME_SLICES = {
-  top: 'setting-frame-top',
-  middle: 'setting-frame-middle',
-  bottom: 'setting-frame-bottom',
-  source: {
-    x: 102,
-    y: 282,
-    width: 830,
-    height: 885,
-  },
-  topHeight: 300,
-  middleHeight: 120,
-  bottomHeight: 260,
+const FONT_FAMILY = "'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif"
+const PANEL_RADIUS = 8
+
+const COLORS = {
+  dim: 0x17211d,
+  panel: 0xf7faf6,
+  panelBorder: 0x9bb7ac,
+  panelShadow: 0x0b1411,
+  surface: 0xffffff,
+  surfaceBorder: 0xd8e3df,
+  title: 0x24312d,
+  text: 0x283631,
+  mutedText: 0x66756f,
+  accent: 0x5f8f7a,
+  accentDark: 0x426b5b,
+  accentSoft: 0xe9f1ee,
+  warm: 0xbfd6b8,
+  warmDark: 0x789b72,
+  danger: 0xc9806d,
+  dangerDark: 0x9b5d4f,
+  disabled: 0xdfe7e4,
+  disabledText: 0x7d8c86,
+  track: 0xd9e4e0,
+  trackFill: 0x5f8f7a,
 } as const
 
 const LABELS = {
-  settings: '\uC124\uC815\uCC3D',
-  quit: '\uC885\uB8CC\uD558\uAE30',
+  title: '\uC124\uC815',
   sound: '\uC0AC\uC6B4\uB4DC',
-  effect: '\uD6A8\uACFC\uC74C',
   speed: '\uC774\uB3D9 \uBC30\uC18D',
+  profileOutfit: '\uD504\uB85C\uD544 / \uBCF5\uC7A5',
+  change: '\uBCC0\uACBD',
+  outfitTitle: '\uBCF5\uC7A5 \uC120\uD0DD',
+  select: '\uC120\uD0DD',
+  selected: '\uC120\uD0DD\uB428',
+  close: 'X',
+  logout: '\uB85C\uADF8\uC544\uC6C3',
 }
 
 export function createSettingsMenu(
   scene: Phaser.Scene,
-  { onLogout, onClose }: SettingsMenuOptions,
+  { onLogout, onClose, getPlayer }: SettingsMenuOptions,
 ): SettingsMenu {
-  const { width, height } = scene.scale
   let settings = getGameSettings()
+  let selectedOutfitId = getSelectedPlayerOutfitId()
+  let outfitCarouselIndex = getOutfitIndex(selectedOutfitId)
+  let backdrop: Phaser.GameObjects.Rectangle | null = null
   let modal: Phaser.GameObjects.Container | null = null
   let clickZones: ClickZone[] = []
   let sliderZones: SliderZone[] = []
   let activeSlider: SliderZone | null = null
-  ensureMenuFrame(scene)
-  ensureButtonVisibleFrames(scene)
-  ensureSettingFrameSlices(scene)
+  let previousTopOnly: boolean | null = null
 
   function toggleButton() {
     if (modal) {
       close()
       return
     }
-    openMenu()
+    openSettings()
   }
 
   function close({ notify = true }: { notify?: boolean } = {}) {
     const wasOpen = Boolean(modal)
+    backdrop?.destroy()
     modal?.destroy()
+    backdrop = null
     modal = null
     clickZones = []
     sliderZones = []
     activeSlider = null
+
+    if (previousTopOnly !== null) {
+      scene.input.setTopOnly(previousTopOnly)
+      previousTopOnly = null
+    }
+
     if (wasOpen && notify) onClose?.()
   }
 
   function createOverlay() {
     close({ notify: false })
-    const container = scene.add.container(0, 0).setDepth(OVERLAY_DEPTH).setScrollFactor(0)
-    const dim = scene.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.42)
-    container.add(dim)
+
+    const { width, height } = scene.scale
+    previousTopOnly = scene.input.topOnly
+    scene.input.setTopOnly(true)
+
+    backdrop = scene.add
+      .rectangle(width / 2, height / 2, width, height, COLORS.dim, 0.42)
+      .setDepth(OVERLAY_DEPTH)
+      .setScrollFactor(0)
+      .setInteractive()
+    backdrop.on(
+      'pointerdown',
+      (
+        pointer: Phaser.Input.Pointer,
+        _localX: number,
+        _localY: number,
+        event: Phaser.Types.Input.EventData,
+      ) => {
+        event.stopPropagation()
+        handlePointerDown(pointer)
+      },
+    )
+    backdrop.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+      handlePointerMove(pointer)
+    })
+    backdrop.on('pointerup', () => {
+      handlePointerUp()
+    })
+
+    const container = scene.add
+      .container(0, 0)
+      .setDepth(OVERLAY_DEPTH + 1)
+      .setScrollFactor(0)
     modal = container
+
     return container
   }
 
-  function openMenu() {
-    const container = createOverlay()
-    const { frameW, frameH } = getMenuFrameSize(scene, 0.48, 0.62, 400)
-    const panelX = width / 2
-    const panelY = height / 2
-    const buttonW = Math.min(270, width * 0.25)
-    const buttonH = buttonW * 0.255
-    const buttonGap = frameH * 0.09
-    const groupCenterY = panelY + frameH * 0.04
-    const settingY = groupCenterY - buttonH / 2 - buttonGap / 2
-    const exitY = groupCenterY + buttonH / 2 + buttonGap / 2
-
-    container.add(createMenuFrame(scene, panelX, panelY, frameW, frameH))
-    container.add(
-      createImageButton(
-        scene,
-        panelX,
-        settingY,
-        SETTINGS_BUTTON_KEY,
-        SETTINGS_BUTTON_FRAME,
-        buttonW,
-        buttonH,
-        () => openSettings(),
-      ),
-    )
-    addClickZone(panelX, settingY, buttonW, buttonH, () => openSettings())
-    container.add(
-      createImageButton(
-        scene,
-        panelX,
-        exitY,
-        EXIT_BUTTON_KEY,
-        EXIT_BUTTON_FRAME,
-        buttonW,
-        buttonH,
-        onLogout,
-      ),
-    )
-    addClickZone(panelX, exitY, buttonW, buttonH, onLogout)
-  }
-
   function openSettings() {
+    settings = getGameSettings()
+    selectedOutfitId = getSelectedPlayerOutfitId()
+
     const container = createOverlay()
-    const { frameW: panelW, frameH: panelH } = getSettingsFrameSize(scene)
+    const { width, height } = scene.scale
+    const { panelW, panelH } = getPanelSize(scene, 'settings')
     const panelX = width / 2
     const panelY = height / 2
-    const contentLeft = panelX - panelW * 0.29
-    const contentRight = panelX + panelW * 0.29
-    const labelW = panelW * 0.17
-    const valueW = panelW * 0.06
-    const sliderW = contentRight - contentLeft - labelW - valueW
-    const closeX = panelX + panelW * 0.285
-    const closeY = panelY - panelH * 0.285
-    const rowGap = panelH * 0.12
-    const sliderStartY = panelY - panelH * 0.145
-    const speedY = sliderStartY + rowGap * 2
+    const panelLeft = panelX - panelW / 2
+    const panelTop = panelY - panelH / 2
+    const contentLeft = panelLeft + 44
+    const contentW = panelW - 88
+    const labelW = Math.min(132, contentW * 0.28)
+    const rowH = 58
+    const rowGap = 18
+    const soundY = panelTop + 124
+    const speedY = soundY + rowH + rowGap
+    const outfitY = speedY + rowH + rowGap
+    const logoutY = panelTop + panelH - 52
+    const closeX = panelLeft + panelW - 34
+    const closeY = panelTop + 34
 
-    container.add(createSettingFrame(scene, panelX, panelY, panelW, panelH))
-    container.add(createSmallButton(scene, closeX, closeY, 42, 36, 'X', () => openMenu()))
-    addClickZone(closeX, closeY, 42, 36, () => openMenu())
+    container.add(createPanel(scene, panelX, panelY, panelW, panelH))
+    container.add(createHeader(scene, panelX, panelTop + 48, LABELS.title))
+    container.add(
+      createTextButton(scene, closeX, closeY, 34, 34, LABELS.close, {
+        fillColor: COLORS.accent,
+        borderColor: COLORS.accentDark,
+        textColor: 0xffffff,
+        fontSize: 19,
+      }),
+    )
+    addClickZone(closeX, closeY, 34, 34, close)
 
     const masterSlider = createSlider(scene, {
       x: contentLeft,
-      y: sliderStartY,
+      y: soundY,
+      width: contentW,
+      height: rowH,
       labelWidth: labelW,
-      sliderWidth: sliderW,
       label: LABELS.sound,
       value: settings.masterVolume,
       onChange: value => {
@@ -203,83 +213,140 @@ export function createSettingsMenu(
     container.add(masterSlider.container)
     addSliderZone(masterSlider)
 
-    const effectSlider = createSlider(scene, {
-      x: contentLeft,
-      y: sliderStartY + rowGap,
-      labelWidth: labelW,
-      sliderWidth: sliderW,
-      label: LABELS.effect,
-      value: settings.effectVolume,
-      onChange: value => {
-        settings = updateGameSettings({ effectVolume: value })
-      },
+    container.add(createSpeedRow(scene, contentLeft, speedY, contentW, rowH, labelW, settings))
+    addSpeedClickZones(contentLeft, speedY, contentW, rowH, labelW)
+
+    container.add(createOutfitRow(scene, contentLeft, outfitY, contentW, rowH))
+    addClickZone(contentLeft + contentW / 2, outfitY, contentW, rowH, () => {
+      openOutfitPicker(getOutfitIndex(selectedOutfitId))
     })
-    container.add(effectSlider.container)
-    addSliderZone(effectSlider)
+
+    const logoutW = Math.min(184, panelW * 0.34)
+    const logoutH = 44
+    container.add(
+      createTextButton(scene, panelX, logoutY, logoutW, logoutH, LABELS.logout, {
+        fillColor: COLORS.danger,
+        borderColor: COLORS.dangerDark,
+        textColor: 0xffffff,
+        fontSize: 17,
+      }),
+    )
+    addClickZone(panelX, logoutY, logoutW, logoutH, onLogout)
+  }
+
+  function openOutfitPicker(index = outfitCarouselIndex) {
+    selectedOutfitId = getSelectedPlayerOutfitId()
+    outfitCarouselIndex = wrapOutfitIndex(index)
+
+    const container = createOverlay()
+    const { width, height } = scene.scale
+    const { panelW, panelH } = getPanelSize(scene, 'outfits')
+    const panelX = width / 2
+    const panelY = height / 2
+    const panelLeft = panelX - panelW / 2
+    const panelTop = panelY - panelH / 2
+    const closeX = panelLeft + panelW - 34
+    const closeY = panelTop + 34
+    const backX = panelLeft + 34
+    const backY = closeY
+    const previewY = panelTop + panelH * 0.5
+    const arrowY = previewY
+    const arrowOffset = Math.min(214, panelW * 0.36)
+    const outfit = PLAYER_OUTFITS[outfitCarouselIndex]
+    const isSelected = outfit.id === selectedOutfitId
+    const selectY = panelTop + panelH - 54
+
+    container.add(createPanel(scene, panelX, panelY, panelW, panelH))
+    container.add(createHeader(scene, panelX, panelTop + 48, LABELS.outfitTitle))
 
     container.add(
-      scene.add
-        .text(contentLeft, speedY, LABELS.speed, {
-          fontFamily: 'sans-serif',
-          fontSize: '19px',
-          color: '#5c3213',
-          fontStyle: 'bold',
-        })
-        .setOrigin(0, 0.5),
+      createTextButton(scene, backX, backY, 34, 34, '\u2039', {
+        fillColor: COLORS.accent,
+        borderColor: COLORS.accentDark,
+        textColor: 0xffffff,
+        fontSize: 22,
+      }),
+    )
+    addClickZone(backX, backY, 34, 34, openSettings)
+
+    container.add(
+      createTextButton(scene, closeX, closeY, 34, 34, LABELS.close, {
+        fillColor: COLORS.accent,
+        borderColor: COLORS.accentDark,
+        textColor: 0xffffff,
+        fontSize: 19,
+      }),
+    )
+    addClickZone(closeX, closeY, 34, 34, close)
+
+    container.add(createCarouselPreview(scene, panelX, previewY, outfit.id))
+    container.add(
+      createTextButton(scene, panelX - arrowOffset, arrowY, 48, 48, '\u2039', {
+        fillColor: COLORS.accentSoft,
+        borderColor: COLORS.surfaceBorder,
+        textColor: COLORS.accentDark,
+        fontSize: 30,
+      }),
+    )
+    addClickZone(panelX - arrowOffset, arrowY, 48, 48, () => {
+      openOutfitPicker(outfitCarouselIndex - 1)
+    })
+
+    container.add(
+      createTextButton(scene, panelX + arrowOffset, arrowY, 48, 48, '\u203A', {
+        fillColor: COLORS.accentSoft,
+        borderColor: COLORS.surfaceBorder,
+        textColor: COLORS.accentDark,
+        fontSize: 30,
+      }),
+    )
+    addClickZone(panelX + arrowOffset, arrowY, 48, 48, () => {
+      openOutfitPicker(outfitCarouselIndex + 1)
+    })
+
+    container.add(createCarouselDots(scene, panelX, previewY + 132, outfitCarouselIndex))
+
+    const selectW = 150
+    const selectFill = isSelected ? COLORS.disabled : COLORS.warm
+    const selectBorder = isSelected ? COLORS.surfaceBorder : COLORS.warmDark
+    const selectText = isSelected ? COLORS.disabledText : COLORS.text
+    container.add(
+      createTextButton(
+        scene,
+        panelX,
+        selectY,
+        selectW,
+        44,
+        isSelected ? LABELS.selected : LABELS.select,
+        {
+          fillColor: selectFill,
+          borderColor: selectBorder,
+          textColor: selectText,
+          fontSize: 17,
+        },
+      ),
     )
 
-    const speedButtons: Phaser.GameObjects.Container[] = []
-    const speedButtonGap = 14
-    const speedButtonW = Math.min(
-      88,
-      (contentRight - contentLeft - labelW - speedButtonGap * 2) / 3,
-    )
-    const speedButtonH = Math.min(38, panelH * 0.074)
-    const speedGroupStartX = contentLeft + labelW + 12 + speedButtonW / 2
-    const refreshSpeedButtons = () => {
-      speedButtons.forEach(button => {
-        const bg = button.getAt(0) as Phaser.GameObjects.Graphics
-        bg.clear()
-        const value = button.getData('value') as MoveSpeedMultiplier
-        const selected = value === settings.moveSpeedMultiplier
-        drawButtonBg(
-          bg,
-          speedButtonW,
-          speedButtonH,
-          selected ? 0xf2c66d : 0x8f5b2b,
-          selected ? 0xfff1c4 : 0xd08a39,
-        )
+    if (!isSelected) {
+      addClickZone(panelX, selectY, selectW, 44, () => {
+        selectedOutfitId = setSelectedPlayerOutfitId(outfit.id)
+        applyOutfitToPlayer(selectedOutfitId)
+        openOutfitPicker(outfitCarouselIndex)
       })
     }
+  }
 
-    ;([1, 1.5, 2] as MoveSpeedMultiplier[]).forEach((value, index) => {
-      const button = createSmallButton(
-        scene,
-        speedGroupStartX + index * (speedButtonW + speedButtonGap),
-        speedY,
-        speedButtonW,
-        speedButtonH,
-        `X ${value}`,
-        () => {
-          settings = updateGameSettings({ moveSpeedMultiplier: value })
-          refreshSpeedButtons()
-        },
-      )
-      button.setData('value', value)
-      speedButtons.push(button)
-      container.add(button)
-      addClickZone(
-        speedGroupStartX + index * (speedButtonW + speedButtonGap),
-        speedY,
-        speedButtonW,
-        speedButtonH,
-        () => {
-          settings = updateGameSettings({ moveSpeedMultiplier: value })
-          refreshSpeedButtons()
-        },
-      )
-    })
-    refreshSpeedButtons()
+  function applyOutfitToPlayer(outfitId: PlayerOutfitId) {
+    const player = getPlayer?.()
+    if (!player?.active) return
+
+    const textureKey = getPlayerOutfitTextureKey(outfitId)
+    if (!scene.textures.exists(textureKey)) return
+
+    ensurePlayerWalkAnimations(scene, textureKey)
+    const currentFrame = Number(player.frame.name)
+    player.anims.stop()
+    player.setTexture(textureKey, Number.isFinite(currentFrame) ? currentFrame : 0)
   }
 
   function addClickZone(x: number, y: number, width: number, height: number, onClick: () => void) {
@@ -290,35 +357,53 @@ export function createSettingsMenu(
     sliderZones.push(zone)
   }
 
-  const handlePointerDown = (pointer: Phaser.Input.Pointer) => {
+  function addSpeedClickZones(
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    labelWidth: number,
+  ) {
+    const values: MoveSpeedMultiplier[] = [1, 1.5, 2]
+    const gap = 10
+    const controlLeft = x + labelWidth + 18
+    const controlW = width - labelWidth - 36
+    const buttonW = (controlW - gap * 2) / 3
+    const buttonH = Math.min(40, height * 0.72)
+    const startX = controlLeft + buttonW / 2
+
+    values.forEach((value, index) => {
+      addClickZone(startX + index * (buttonW + gap), y, buttonW, buttonH, () => {
+        settings = updateGameSettings({ moveSpeedMultiplier: value })
+        openSettings()
+      })
+    })
+  }
+
+  function handlePointerDown(pointer: Phaser.Input.Pointer) {
     if (!modal) return
 
-    const sliderZone = sliderZones.find(zone => isPointInZone(pointer.x, pointer.y, zone))
+    const sliderZone = findContainingZone(sliderZones, pointer.x, pointer.y)
     if (sliderZone) {
       activeSlider = sliderZone
       sliderZone.setValue(pointer.x)
       return
     }
 
-    const zone = clickZones.find(zone => isPointInZone(pointer.x, pointer.y, zone))
-    zone?.onClick()
+    findContainingZone(clickZones, pointer.x, pointer.y)?.onClick()
   }
-  const handlePointerMove = (pointer: Phaser.Input.Pointer) => {
+
+  function handlePointerMove(pointer: Phaser.Input.Pointer) {
     if (!activeSlider || !pointer.isDown) return
     activeSlider.setValue(pointer.x)
   }
-  const handlePointerUp = () => {
+
+  function handlePointerUp() {
     activeSlider = null
   }
-  scene.input.on('pointerdown', handlePointerDown)
-  scene.input.on('pointermove', handlePointerMove)
-  scene.input.on('pointerup', handlePointerUp)
 
   applyMasterVolume(scene, settings.masterVolume)
   scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-    scene.input.off('pointerdown', handlePointerDown)
-    scene.input.off('pointermove', handlePointerMove)
-    scene.input.off('pointerup', handlePointerUp)
     close()
   })
 
@@ -329,163 +414,38 @@ export function createSettingsMenu(
   }
 }
 
-function getMenuFrameSize(
-  scene: Phaser.Scene,
-  widthRatio = 0.86,
-  heightRatio = 0.88,
-  maxWidth = 720,
-) {
-  const aspect = MENU_FRAME_BOUNDS.height / MENU_FRAME_BOUNDS.width
-  let frameW = Math.min(maxWidth, scene.scale.width * widthRatio)
-  let frameH = frameW * aspect
-  const maxH = scene.scale.height * heightRatio
-
-  if (frameH > maxH) {
-    frameH = maxH
-    frameW = frameH / aspect
-  }
-
-  return { frameW, frameH }
-}
-
-function getSettingsFrameSize(scene: Phaser.Scene) {
-  const source = SETTING_FRAME_SLICES.source
-  const maxW = Math.min(520, scene.scale.width * 0.58)
-  const maxH = Math.min(500, scene.scale.height * 0.64)
-  const aspect = source.height / source.width
-  let frameW = maxW
-  let frameH = frameW * aspect
-
-  if (frameH > maxH) {
-    frameH = maxH
-    frameW = frameH / aspect
-  }
-
-  return { frameW, frameH }
-}
-
-function ensureMenuFrame(scene: Phaser.Scene) {
-  const texture = scene.textures.get(MENU_FRAME_KEY)
-  if (!texture.has(MENU_FRAME_BOUNDS.frame)) {
-    texture.add(
-      MENU_FRAME_BOUNDS.frame,
-      0,
-      MENU_FRAME_BOUNDS.x,
-      MENU_FRAME_BOUNDS.y,
-      MENU_FRAME_BOUNDS.width,
-      MENU_FRAME_BOUNDS.height,
-    )
+function getPanelSize(scene: Phaser.Scene, mode: 'settings' | 'outfits') {
+  const maxW = mode === 'settings' ? 620 : 580
+  const maxH = mode === 'settings' ? 430 : 520
+  return {
+    panelW: Math.min(maxW, scene.scale.width * 0.82),
+    panelH: Math.min(maxH, scene.scale.height * 0.84),
   }
 }
 
-function ensureButtonVisibleFrames(scene: Phaser.Scene) {
-  ;([SETTINGS_BUTTON_KEY, EXIT_BUTTON_KEY] as const).forEach(key => {
-    const visible = BUTTON_VISIBLE_FRAMES[key]
-    const texture = scene.textures.get(key)
-    if (!texture.has(visible.frame)) {
-      texture.add(visible.frame, 0, visible.x, visible.y, visible.width, visible.height)
-    }
-  })
+function createPanel(scene: Phaser.Scene, x: number, y: number, width: number, height: number) {
+  const graphics = scene.add.graphics()
+  graphics.fillStyle(COLORS.panelShadow, 0.24)
+  graphics.fillRoundedRect(x - width / 2 + 6, y - height / 2 + 8, width, height, PANEL_RADIUS)
+  graphics.fillStyle(COLORS.panel, 1)
+  graphics.fillRoundedRect(x - width / 2, y - height / 2, width, height, PANEL_RADIUS)
+  graphics.lineStyle(3, COLORS.panelBorder, 1)
+  graphics.strokeRoundedRect(x - width / 2, y - height / 2, width, height, PANEL_RADIUS)
+  return graphics
 }
 
-function ensureSettingFrameSlices(scene: Phaser.Scene) {
-  const texture = scene.textures.get(SETTING_FRAME_KEY)
-  const { source, topHeight, middleHeight, bottomHeight } = SETTING_FRAME_SLICES
-
-  if (!texture.has(SETTING_FRAME_SLICES.top)) {
-    texture.add(SETTING_FRAME_SLICES.top, 0, source.x, source.y, source.width, topHeight)
-  }
-  if (!texture.has(SETTING_FRAME_SLICES.middle)) {
-    texture.add(
-      SETTING_FRAME_SLICES.middle,
-      0,
-      source.x,
-      source.y + topHeight,
-      source.width,
-      middleHeight,
-    )
-  }
-  if (!texture.has(SETTING_FRAME_SLICES.bottom)) {
-    texture.add(
-      SETTING_FRAME_SLICES.bottom,
-      0,
-      source.x,
-      source.y + source.height - bottomHeight,
-      source.width,
-      bottomHeight,
-    )
-  }
-}
-
-function createMenuFrame(scene: Phaser.Scene, x: number, y: number, width: number, height: number) {
-  return scene.add.image(x, y, MENU_FRAME_KEY, MENU_FRAME_VISIBLE).setDisplaySize(width, height)
-}
-
-function createSettingFrame(
-  scene: Phaser.Scene,
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-) {
-  const { source, topHeight, bottomHeight } = SETTING_FRAME_SLICES
-  const scale = width / source.width
-  const topDisplayH = topHeight * scale
-  const bottomDisplayH = bottomHeight * scale
-  const seamOverlap = Math.max(1, Math.round(2 * scale))
-  const middleDisplayH = Math.max(1, height - topDisplayH - bottomDisplayH + seamOverlap * 2)
-  const topY = y - height / 2
-  const middleY = topY + topDisplayH - seamOverlap
-  const bottomY = y + height / 2 - bottomDisplayH
-
-  const top = scene.add
-    .image(x, topY, SETTING_FRAME_KEY, SETTING_FRAME_SLICES.top)
-    .setOrigin(0.5, 0)
-    .setDisplaySize(width, topDisplayH)
-  const middle = scene.add
-    .image(x, middleY, SETTING_FRAME_KEY, SETTING_FRAME_SLICES.middle)
-    .setOrigin(0.5, 0)
-    .setDisplaySize(width, middleDisplayH)
-  const bottom = scene.add
-    .image(x, bottomY, SETTING_FRAME_KEY, SETTING_FRAME_SLICES.bottom)
-    .setOrigin(0.5, 0)
-    .setDisplaySize(width, bottomDisplayH)
-
-  return scene.add.container(0, 0, [top, middle, bottom])
-}
-
-function createImageButton(
-  scene: Phaser.Scene,
-  x: number,
-  y: number,
-  key: string,
-  frame: string,
-  width: number,
-  height: number,
-  onClick: () => void,
-) {
-  const container = scene.add.container(x, y)
-  const image = scene.add.image(0, 0, key, frame).setDisplaySize(width, height)
-  const hit = scene.add.rectangle(0, 0, width, height, 0xffffff, 0).setInteractive({
-    useHandCursor: true,
-  })
-
-  hit.on('pointerover', () => container.setScale(1.03))
-  hit.on('pointerout', () => container.setScale(1))
-  hit.on(
-    'pointerdown',
-    (
-      _pointer: Phaser.Input.Pointer,
-      _localX: number,
-      _localY: number,
-      event: Phaser.Types.Input.EventData,
-    ) => {
-      event.stopPropagation()
-      onClick()
-    },
-  )
-
-  container.add([image, hit])
+function createHeader(scene: Phaser.Scene, x: number, y: number, title: string) {
+  const container = scene.add.container(0, 0)
+  const titleText = scene.add
+    .text(x, y, title, {
+      fontFamily: FONT_FAMILY,
+      fontSize: '28px',
+      color: colorString(COLORS.title),
+      fontStyle: 'bold',
+    })
+    .setOrigin(0.5)
+  const underline = scene.add.rectangle(x, y + 26, 72, 4, COLORS.warm, 1)
+  container.add([titleText, underline])
   return container
 }
 
@@ -494,69 +454,247 @@ function createSlider(
   {
     x,
     y,
+    width,
+    height,
     labelWidth,
-    sliderWidth,
     label,
     value,
     onChange,
   }: {
     x: number
     y: number
+    width: number
+    height: number
     labelWidth: number
-    sliderWidth: number
     label: string
     value: number
     onChange: (value: number) => void
   },
 ) {
-  const width = sliderWidth
   const container = scene.add.container(0, 0)
+  const bg = createRowBackground(scene, x, y, width, height)
   const labelText = scene.add
-    .text(x, y, label, {
-      fontFamily: 'sans-serif',
-      fontSize: '19px',
-      color: '#5c3213',
+    .text(x + 22, y, label, {
+      fontFamily: FONT_FAMILY,
+      fontSize: '18px',
+      color: colorString(COLORS.text),
       fontStyle: 'bold',
     })
     .setOrigin(0, 0.5)
-  const trackX = x + labelWidth
-  const track = scene.add.rectangle(trackX, y, width, 8, 0x9a6834, 1).setOrigin(0, 0.5)
-  const fill = scene.add.rectangle(trackX, y, width * value, 8, 0xd8842a, 1).setOrigin(0, 0.5)
-  const knob = scene.add.circle(trackX + width * value, y, 11, 0xfff0bf)
+  const trackX = x + labelWidth + 18
+  const trackY = y
+  const valueX = x + width - 24
+  const sliderWidth = Math.max(120, valueX - trackX - 44)
+  const track = scene.add
+    .rectangle(trackX, trackY, sliderWidth, 8, COLORS.track, 1)
+    .setOrigin(0, 0.5)
+  const fill = scene.add
+    .rectangle(trackX, trackY, sliderWidth * value, 8, COLORS.trackFill, 1)
+    .setOrigin(0, 0.5)
+  const knob = scene.add.circle(trackX + sliderWidth * value, trackY, 12, COLORS.warm)
+  knob.setStrokeStyle(3, COLORS.warmDark, 1)
   const valueText = scene.add
-    .text(trackX + width + 34, y, `${Math.round(value * 100)}`, {
-      fontFamily: 'sans-serif',
-      fontSize: '17px',
-      color: '#5c3213',
+    .text(valueX, trackY, `${Math.round(value * 100)}`, {
+      fontFamily: FONT_FAMILY,
+      fontSize: '16px',
+      color: colorString(COLORS.mutedText),
       fontStyle: 'bold',
     })
-    .setOrigin(0.5)
+    .setOrigin(1, 0.5)
 
-  const hit = scene.add
-    .rectangle(trackX + width / 2, y, width + 30, 34, 0xffffff, 0)
-    .setInteractive({
-      draggable: true,
-      useHandCursor: true,
-    })
   const setValue = (pointerX: number) => {
-    const next = Phaser.Math.Clamp((pointerX - trackX) / width, 0, 1)
-    fill.width = width * next
-    knob.x = trackX + width * next
+    const next = Phaser.Math.Clamp((pointerX - trackX) / sliderWidth, 0, 1)
+    fill.width = sliderWidth * next
+    knob.x = trackX + sliderWidth * next
     valueText.setText(`${Math.round(next * 100)}`)
     onChange(next)
   }
-  hit.on('pointerdown', (pointer: Phaser.Input.Pointer) => setValue(pointer.x))
-  hit.on('drag', (pointer: Phaser.Input.Pointer) => setValue(pointer.x))
 
-  container.add([labelText, track, fill, knob, valueText, hit])
+  container.add([bg, labelText, track, fill, knob, valueText])
   return {
     container,
-    x: trackX + width / 2,
-    y,
-    width: width + 30,
-    height: 34,
+    x: trackX + sliderWidth / 2,
+    y: trackY,
+    width: sliderWidth + 36,
+    height: 38,
     setValue,
   }
+}
+
+function createSpeedRow(
+  scene: Phaser.Scene,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  labelWidth: number,
+  settings: ReturnType<typeof getGameSettings>,
+) {
+  const container = scene.add.container(0, 0)
+  container.add(createRowBackground(scene, x, y, width, height))
+  container.add(
+    scene.add
+      .text(x + 22, y, LABELS.speed, {
+        fontFamily: FONT_FAMILY,
+        fontSize: '18px',
+        color: colorString(COLORS.text),
+        fontStyle: 'bold',
+      })
+      .setOrigin(0, 0.5),
+  )
+
+  const values: MoveSpeedMultiplier[] = [1, 1.5, 2]
+  const gap = 10
+  const controlLeft = x + labelWidth + 18
+  const controlW = width - labelWidth - 36
+  const buttonW = (controlW - gap * 2) / 3
+  const buttonH = Math.min(40, height * 0.72)
+  const startX = controlLeft + buttonW / 2
+
+  values.forEach((value, index) => {
+    const selected = settings.moveSpeedMultiplier === value
+    container.add(
+      createTextButton(scene, startX + index * (buttonW + gap), y, buttonW, buttonH, `${value}x`, {
+        fillColor: selected ? COLORS.warm : COLORS.accentSoft,
+        borderColor: selected ? COLORS.warmDark : COLORS.surfaceBorder,
+        textColor: selected ? COLORS.text : COLORS.accentDark,
+        fontSize: 16,
+      }),
+    )
+  })
+
+  return container
+}
+
+function createOutfitRow(scene: Phaser.Scene, x: number, y: number, width: number, height: number) {
+  const container = scene.add.container(0, 0)
+  const buttonW = 104
+  const buttonH = 40
+  container.add(createRowBackground(scene, x, y, width, height))
+  container.add(
+    scene.add
+      .text(x + 22, y, LABELS.profileOutfit, {
+        fontFamily: FONT_FAMILY,
+        fontSize: '18px',
+        color: colorString(COLORS.text),
+        fontStyle: 'bold',
+      })
+      .setOrigin(0, 0.5),
+  )
+  container.add(
+    createTextButton(scene, x + width - buttonW / 2 - 16, y, buttonW, buttonH, LABELS.change, {
+      fillColor: COLORS.accent,
+      borderColor: COLORS.accentDark,
+      textColor: 0xffffff,
+      fontSize: 16,
+    }),
+  )
+  return container
+}
+
+function createCarouselPreview(
+  scene: Phaser.Scene,
+  x: number,
+  y: number,
+  outfitId: PlayerOutfitId,
+) {
+  const textureKey = getPlayerOutfitTextureKey(outfitId)
+  const container = scene.add.container(x, y)
+
+  if (scene.textures.exists(textureKey)) {
+    const sprite = scene.add.image(0, 4, textureKey, 0)
+    sprite.setDisplaySize(220, 220)
+    container.add(sprite)
+  }
+
+  return container
+}
+
+function createCarouselDots(scene: Phaser.Scene, x: number, y: number, activeIndex: number) {
+  const container = scene.add.container(0, 0)
+  const count = PLAYER_OUTFITS.length
+  const gap = 13
+  const startX = x - ((count - 1) * gap) / 2
+
+  PLAYER_OUTFITS.forEach((_, index) => {
+    const active = index === activeIndex
+    container.add(
+      scene.add.circle(
+        startX + index * gap,
+        y,
+        active ? 4 : 3,
+        active ? COLORS.accent : COLORS.track,
+      ),
+    )
+  })
+
+  return container
+}
+
+function createRowBackground(
+  scene: Phaser.Scene,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+) {
+  const bg = scene.add.graphics()
+  bg.fillStyle(COLORS.surface, 0.98)
+  bg.fillRoundedRect(x, y - height / 2, width, height, PANEL_RADIUS)
+  bg.lineStyle(2, COLORS.surfaceBorder, 1)
+  bg.strokeRoundedRect(x, y - height / 2, width, height, PANEL_RADIUS)
+  return bg
+}
+
+function createTextButton(
+  scene: Phaser.Scene,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  label: string,
+  {
+    fillColor,
+    borderColor,
+    textColor,
+    fontSize = 17,
+  }: {
+    fillColor: number
+    borderColor: number
+    textColor: number
+    fontSize?: number
+  },
+) {
+  const container = scene.add.container(x, y)
+  const bg = scene.add.graphics()
+  bg.fillStyle(0x000000, 0.12)
+  bg.fillRoundedRect(-width / 2 + 3, -height / 2 + 4, width, height, PANEL_RADIUS)
+  bg.fillStyle(fillColor, 1)
+  bg.fillRoundedRect(-width / 2, -height / 2, width, height, PANEL_RADIUS)
+  bg.lineStyle(2, borderColor, 1)
+  bg.strokeRoundedRect(-width / 2, -height / 2, width, height, PANEL_RADIUS)
+  const text = scene.add
+    .text(0, 0, label, {
+      fontFamily: FONT_FAMILY,
+      fontSize: `${fontSize}px`,
+      color: colorString(textColor),
+      fontStyle: 'bold',
+    })
+    .setOrigin(0.5)
+  container.add([bg, text])
+  return container
+}
+
+function findContainingZone<T extends { x: number; y: number; width: number; height: number }>(
+  zones: T[],
+  x: number,
+  y: number,
+) {
+  for (let index = zones.length - 1; index >= 0; index -= 1) {
+    const zone = zones[index]
+    if (isPointInZone(x, y, zone)) return zone
+  }
+  return null
 }
 
 function isPointInZone(
@@ -572,69 +710,20 @@ function isPointInZone(
   )
 }
 
+function getOutfitIndex(outfitId: PlayerOutfitId) {
+  const index = PLAYER_OUTFITS.findIndex(outfit => outfit.id === outfitId)
+  return index >= 0 ? index : 0
+}
+
+function wrapOutfitIndex(index: number) {
+  const count = PLAYER_OUTFITS.length
+  return ((index % count) + count) % count
+}
+
 function applyMasterVolume(scene: Phaser.Scene, value: number) {
   scene.sound.volume = Phaser.Math.Clamp(value, 0, 1)
 }
 
-function createSmallButton(
-  scene: Phaser.Scene,
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-  label: string,
-  onClick: () => void,
-  {
-    fillColor = 0x6f4521,
-    borderColor = 0xf6d28a,
-  }: {
-    fillColor?: number
-    borderColor?: number
-  } = {},
-) {
-  const container = scene.add.container(x, y)
-  const bg = scene.add.graphics()
-  drawButtonBg(bg, width, height, fillColor, borderColor)
-  const text = scene.add
-    .text(0, 0, label, {
-      fontFamily: 'sans-serif',
-      fontSize: '18px',
-      color: '#fff4d4',
-      fontStyle: 'bold',
-      stroke: '#4b250c',
-      strokeThickness: 2,
-    })
-    .setOrigin(0.5)
-  const hit = scene.add.rectangle(0, 0, width, height, 0xffffff, 0).setInteractive({
-    useHandCursor: true,
-  })
-  hit.on(
-    'pointerdown',
-    (
-      _pointer: Phaser.Input.Pointer,
-      _x: number,
-      _y: number,
-      event: Phaser.Types.Input.EventData,
-    ) => {
-      event.stopPropagation()
-      onClick()
-    },
-  )
-  container.add([bg, text, hit])
-  return container
-}
-
-function drawButtonBg(
-  graphics: Phaser.GameObjects.Graphics,
-  width: number,
-  height: number,
-  fillColor: number,
-  borderColor: number,
-) {
-  graphics.fillStyle(0x241106, 0.24)
-  graphics.fillRoundedRect(-width / 2, -height / 2 + 4, width, height, 12)
-  graphics.fillStyle(fillColor, 1)
-  graphics.fillRoundedRect(-width / 2, -height / 2, width, height, 12)
-  graphics.lineStyle(2, borderColor, 1)
-  graphics.strokeRoundedRect(-width / 2, -height / 2, width, height, 12)
+function colorString(color: number) {
+  return `#${color.toString(16).padStart(6, '0')}`
 }
