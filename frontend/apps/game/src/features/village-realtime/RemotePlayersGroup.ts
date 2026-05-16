@@ -2,6 +2,7 @@ import Phaser from 'phaser'
 
 import {
   createPlayer,
+  ensurePlayerWalkAnimations,
   getPlayerWalkAnimationKey,
   PLAYER_TEXTURE_KEY,
   type PlayerSprite,
@@ -111,12 +112,17 @@ export class RemotePlayersGroup {
     if (this.members.has(payload.userId)) {
       // 멱등: snapshot/join 이 중복 도착해도 sprite 를 새로 만들지 않는다 (latest-wins 재접속 시 동일 userId 가
       // 새 join 으로 다시 들어오는 경우 대비).
+      const member = this.members.get(payload.userId)
+      if (member) {
+        this.updateTexture(member, payload.textureKey)
+      }
       return
     }
     const pixelX = payload.x * this.options.worldWidth
     const pixelY = payload.y * this.options.worldHeight
+    const textureKey = this.resolveTextureKey(payload.textureKey)
     const sprite = createPlayer(this.options.scene, pixelX, pixelY, {
-      textureKey: payload.textureKey,
+      textureKey,
       depth: REMOTE_SPRITE_DEPTH,
     })
     // 빈 닉네임 (lazy spawn 경로) 은 텍스트를 만들지 않는다 — 빈 텍스트로 시야를 가리지 않게.
@@ -135,7 +141,7 @@ export class RemotePlayersGroup {
       userId: payload.userId,
       sprite,
       nameText,
-      textureKey: payload.textureKey,
+      textureKey,
       dir: payload.dir,
       currentTween: null,
     })
@@ -154,13 +160,14 @@ export class RemotePlayersGroup {
         type: 'join',
         userId: event.userId,
         nickname: '',
-        textureKey: PLAYER_TEXTURE_KEY,
+        textureKey: event.textureKey ?? PLAYER_TEXTURE_KEY,
         x: event.x,
         y: event.y,
         dir: event.dir,
       })
       return
     }
+    this.updateTexture(member, event.textureKey)
 
     const targetX = event.x * this.options.worldWidth
     const targetY = event.y * this.options.worldHeight
@@ -220,6 +227,24 @@ export class RemotePlayersGroup {
   }
 
   /** 테스트/디버그용 가시성. */
+  private updateTexture(member: RemoteMember, textureKey?: string): void {
+    const nextTextureKey = this.resolveTextureKey(textureKey)
+    if (member.textureKey === nextTextureKey) return
+
+    ensurePlayerWalkAnimations(this.options.scene, nextTextureKey)
+    const currentFrame = Number(member.sprite.frame.name)
+    member.sprite.setTexture(nextTextureKey, Number.isFinite(currentFrame) ? currentFrame : 0)
+    member.textureKey = nextTextureKey
+    syncNameText(member)
+  }
+
+  private resolveTextureKey(textureKey?: string): string {
+    if (textureKey && this.options.scene.textures.exists(textureKey)) {
+      return textureKey
+    }
+    return PLAYER_TEXTURE_KEY
+  }
+
   size(): number {
     return this.members.size
   }

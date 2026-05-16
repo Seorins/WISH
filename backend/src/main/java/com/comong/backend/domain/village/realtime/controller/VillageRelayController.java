@@ -70,7 +70,13 @@ public class VillageRelayController {
         // latest-wins 로 evict 된 옛 세션이 보낸 패킷은 service 가 sessionId 불일치로 drop.
         presenceService
                 .updatePosition(
-                        roomId, vsp.userId(), simpSessionId, packet.x(), packet.y(), packet.dir())
+                        roomId,
+                        vsp.userId(),
+                        simpSessionId,
+                        packet.x(),
+                        packet.y(),
+                        packet.dir(),
+                        packet.textureKey())
                 .ifPresent(
                         member -> broadcastService.broadcastMove(roomId, member, packet.moving()));
     }
