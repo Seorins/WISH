@@ -17,6 +17,7 @@ import {
   type MoveSpeedMultiplier,
   updateGameSettings,
 } from '@/game/settings/gameSettings'
+import { syncSceneBgmVolume } from '@/game/systems/sceneBgm'
 
 type SettingsMenu = {
   isOpen: () => boolean
@@ -795,6 +796,7 @@ function wrapOutfitIndex(index: number, outfits: Array<{ id: PlayerOutfitId }>) 
 
 function applyMasterVolume(scene: Phaser.Scene, value: number) {
   scene.sound.volume = Phaser.Math.Clamp(value, 0, 1)
+  syncSceneBgmVolume()
 }
 
 function colorString(color: number) {

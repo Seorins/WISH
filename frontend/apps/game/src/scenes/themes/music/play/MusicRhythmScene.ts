@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { playSceneBgm } from '@/game/systems/sceneBgm'
 import {
   requestPresignedUploadUrls,
   saveMusicResult,
@@ -171,6 +172,7 @@ export class MusicRhythmScene extends Phaser.Scene {
   }
 
   create() {
+    playSceneBgm(this)
     this.resetRoundState()
 
     const { width: vw, height: vh } = this.scale

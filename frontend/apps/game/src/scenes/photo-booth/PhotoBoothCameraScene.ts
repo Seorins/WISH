@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { playSceneBgm } from '@/game/systems/sceneBgm'
 import { assetPath } from '@/game/assets/assetPath'
 import { fadeToScene } from '@/game/systems/sceneTransition'
 import { PHOTO_BOOTH_FRAMES, type PhotoFrame } from './frames'
@@ -70,6 +71,7 @@ export class PhotoBoothCameraScene extends Phaser.Scene {
   }
 
   create(data: PhotoBoothCameraSceneData = {}) {
+    playSceneBgm(this)
     const { width: vw, height: vh } = this.scale
     this.isTransitioning = false
     this.currentCut = 0

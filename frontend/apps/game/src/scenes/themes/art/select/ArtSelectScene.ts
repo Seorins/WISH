@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { playSceneBgm } from '@/game/systems/sceneBgm'
 import { assetPath } from '@/game/assets/assetPath'
 import {
   createClickTargetMarker,
@@ -269,6 +270,7 @@ export class ArtSelectScene extends Phaser.Scene {
   }
 
   create(data: ArtSelectSceneData = {}) {
+    playSceneBgm(this)
     const { width: vw, height: vh } = this.scale
     this.isTransitioning = false
     this.isDialogVisible = false

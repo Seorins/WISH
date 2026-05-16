@@ -1,4 +1,5 @@
 ﻿import Phaser from 'phaser'
+import { playSceneBgm } from '@/game/systems/sceneBgm'
 import { assetPath } from '@/game/assets/assetPath'
 import { fadeToScene } from '@/game/systems/sceneTransition'
 import { addCoverBackground } from '@/game/world/background'
@@ -294,6 +295,7 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
   }
 
   create() {
+    playSceneBgm(this)
     const { width: vw, height: vh } = this.scale
 
     addCoverBackground(this, ASSET_KEYS.background)

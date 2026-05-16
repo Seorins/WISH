@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { playSceneBgm } from '@/game/systems/sceneBgm'
 import { assetPath } from '@/game/assets/assetPath'
 import {
   createClickTargetMarker,
@@ -224,6 +225,7 @@ export class MusicSelectScene extends Phaser.Scene {
   }
 
   create(data: MusicSelectSceneData = {}) {
+    playSceneBgm(this)
     const { width: vw, height: vh } = this.scale
     this.isTransitioning = false
     this.isDialogVisible = false

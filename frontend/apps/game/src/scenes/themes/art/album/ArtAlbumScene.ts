@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { playSceneBgm } from '@/game/systems/sceneBgm'
 import {
   deleteArtwork as requestDeleteArtwork,
   getArtwork,
@@ -81,6 +82,7 @@ export class ArtAlbumScene extends Phaser.Scene {
   }
 
   create() {
+    playSceneBgm(this)
     this.isPageTurning = false
     this.isLoadingPage = false
     this.currentPage = 0

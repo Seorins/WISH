@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { playSceneBgm } from '@/game/systems/sceneBgm'
 import {
   createQuizRoom,
   ensureFreshAccessToken,
@@ -149,6 +150,7 @@ export class QuizLobbyScene extends Phaser.Scene {
   }
 
   create() {
+    playSceneBgm(this)
     addCoverBackground(this, 'art-room-background')
 
     // 메뉴/로비 모두 가독성을 위해 배경 위에 어두운 백드롭을 깔아둔다. alpha 0.55 면 배경 분위기는 살리고 텍스트는 또렷.

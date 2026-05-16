@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { playSceneBgm } from '@/game/systems/sceneBgm'
 import { assetPath } from '@/game/assets/assetPath'
 import {
   createClickTargetMarker,
@@ -191,6 +192,7 @@ export class TaekwondoSelectScene extends Phaser.Scene {
   }
 
   create() {
+    playSceneBgm(this)
     const { width: vw, height: vh } = this.scale
     this.isTransitioning = false
     this.isSceneShuttingDown = false

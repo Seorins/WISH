@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { playSceneBgm } from '@/game/systems/sceneBgm'
 import {
   getQuizRoom,
   leaveQuizRoom,
@@ -179,6 +180,7 @@ export class QuizPlayScene extends Phaser.Scene {
   }
 
   create() {
+    playSceneBgm(this)
     addCoverBackground(this, 'art-room-background')
     this.backdrop = this.add
       .rectangle(0, 0, this.scale.width, this.scale.height, 0x0b1020, 0.58)
