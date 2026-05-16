@@ -5,7 +5,7 @@ import {
   createClickTargetMarker,
   createPlayer,
   ensurePlayerWalkAnimations,
-  loadPlayerSpritesheet,
+  loadPlayerSpritesheets,
   type PlayerDirection,
   type PlayerSprite,
   type RatioPoint,
@@ -246,18 +246,13 @@ export class VillageScene extends Phaser.Scene {
     this.load.image(VILLAGE_PHOTO_BOOTH_KEY, assetPath(VILLAGE_PHOTO_BOOTH_PATH))
     this.load.image(VILLAGE_PHOTO_GALLERY_KEY, assetPath(VILLAGE_PHOTO_GALLERY_PATH))
     this.load.image(VILLAGE_GOMOKU_BOARD_KEY, assetPath(VILLAGE_GOMOKU_BOARD_PATH))
-    this.load.image('profile', assetPath('images/common/profile.png'))
-    this.load.image('menu-frame', assetPath('images/ui/buttons/meunframe.png'))
-    this.load.image('setting-frame', assetPath('images/ui/buttons/settingframe.png'))
-    this.load.image('settings-button', assetPath('images/ui/buttons/settingbutton.png'))
-    this.load.image('exit-button', assetPath('images/ui/buttons/exit button.png'))
     this.load.spritesheet('sehyun', assetPath('images/npcs/sehyun/sprite.png'), {
       frameWidth: 313,
       frameHeight: 313,
       margin: 1,
       spacing: 0,
     })
-    loadPlayerSpritesheet(this)
+    loadPlayerSpritesheets(this)
   }
 
   create(data: VillageSceneData = {}) {
@@ -324,6 +319,7 @@ export class VillageScene extends Phaser.Scene {
           _localY: number,
           event: Phaser.Types.Input.EventData,
         ) => {
+          if (this.settingsMenu.isOpen()) return
           event.stopPropagation()
           this.tryOpenNpcDialogue(character.id)
         },
@@ -359,6 +355,7 @@ export class VillageScene extends Phaser.Scene {
         _localY: number,
         event: Phaser.Types.Input.EventData,
       ) => {
+        if (this.settingsMenu.isOpen()) return
         event.stopPropagation()
         if (!this.canStartWorldInteraction()) return
         this.enterPhotoBoothScene()
@@ -391,6 +388,7 @@ export class VillageScene extends Phaser.Scene {
         _localY: number,
         event: Phaser.Types.Input.EventData,
       ) => {
+        if (this.settingsMenu.isOpen()) return
         event.stopPropagation()
         this.tryOpenNpcDialogue(SEHYUN_NPC.id)
       },
@@ -423,14 +421,6 @@ export class VillageScene extends Phaser.Scene {
       ),
     )
 
-    const profileSize = Math.min(vw * 0.16, 180)
-    const profile = this.add.image(0, 0, 'profile')
-    profile.setDisplaySize(profileSize, profileSize)
-    profile.setDepth(20)
-    profile.setScrollFactor(0)
-    profile.x = profileSize / 2 + 12
-    profile.y = profileSize / 2 + 12
-
     const spawn = data.spawn ?? DEFAULT_PLAYER_SPAWN
     this.player = createPlayer(this, W * spawn.xRatio, H * spawn.yRatio, { depth: 5 })
     this.lastSafePlayerPosition = new Phaser.Math.Vector2(this.player.x, this.player.y)
@@ -444,6 +434,7 @@ export class VillageScene extends Phaser.Scene {
     this.settingsMenu = createSettingsMenu(this, {
       onLogout: () => this.logout(),
       onClose: () => this.blockWorldInteractionBriefly(),
+      getPlayer: () => this.player,
     })
     this.interactionHint = new NpcInteractionHintUi(this)
 
@@ -452,15 +443,16 @@ export class VillageScene extends Phaser.Scene {
         this.hideDialog(true)
         return
       }
+      if (this.isPhotoGalleryOpen) return
       this.settingsMenu.toggleButton()
     })
 
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      if (this.obstacleManager?.handlePointerDown(pointer)) {
+      if (this.settingsMenu.isOpen()) {
         return
       }
 
-      if (this.settingsMenu.isOpen()) {
+      if (this.obstacleManager?.handlePointerDown(pointer)) {
         return
       }
 
@@ -661,6 +653,7 @@ export class VillageScene extends Phaser.Scene {
         _localY: number,
         event: Phaser.Types.Input.EventData,
       ) => {
+        if (this.settingsMenu.isOpen()) return
         event.stopPropagation()
         this.openPhotoGallery()
       },
@@ -701,6 +694,7 @@ export class VillageScene extends Phaser.Scene {
         _localY: number,
         event: Phaser.Types.Input.EventData,
       ) => {
+        if (this.settingsMenu.isOpen()) return
         event.stopPropagation()
         this.enterGomokuGame()
       },

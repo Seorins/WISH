@@ -7,9 +7,47 @@ export const PLAYER_FRAME_SIZE = 313
 export const PLAYER_WALK_SPEED = 180
 export const PLAYER_TEXTURE_KEY = 'character'
 
+const PLAYER_CHARACTER_STORAGE_KEY = 'wish_player_character'
+const PLAYER_OUTFIT_STORAGE_KEY = 'wish_player_outfit'
+
 export type PlayerDirection = 'down' | 'left' | 'right' | 'up'
 export type RatioPoint = { xRatio: number; yRatio: number }
 export type PlayerSprite = Phaser.Types.Physics.Arcade.SpriteWithDynamicBody
+export type PlayerCharacterId = 'boy' | 'girl'
+export type PlayerOutfitId =
+  | 'default'
+  | 'man1'
+  | 'man2'
+  | 'man3'
+  | 'man4'
+  | 'man5'
+  | 'man6'
+  | 'man7'
+  | 'man8'
+  | 'man9'
+  | 'girl1'
+  | 'girl2'
+  | 'girl3'
+  | 'girl4'
+  | 'girl5'
+  | 'girl6'
+  | 'girl7'
+  | 'girl8'
+  | 'girl9'
+
+export type PlayerOutfit = {
+  id: PlayerOutfitId
+  characterId: PlayerCharacterId
+  label: string
+  textureKey: string
+  sheetPath: string
+}
+
+export type PlayerCharacter = {
+  id: PlayerCharacterId
+  label: string
+  outfits: PlayerOutfit[]
+}
 
 type CreatePlayerOptions = {
   textureKey?: string
@@ -34,6 +72,54 @@ type PlayerMovementResult = {
 }
 
 const CHARACTER_SHEET_PATH = assetPath('images/common/player/character_sheet.png')
+
+const BOY_OUTFITS: PlayerOutfit[] = [
+  {
+    id: 'default',
+    characterId: 'boy',
+    label: '\uAE30\uBCF8',
+    textureKey: PLAYER_TEXTURE_KEY,
+    sheetPath: CHARACTER_SHEET_PATH,
+  },
+  ...Array.from({ length: 9 }, (_, index): PlayerOutfit => {
+    const number = index + 1
+    return {
+      id: `man${number}` as PlayerOutfitId,
+      characterId: 'boy',
+      label: `\uBCF5\uC7A5 ${number}`,
+      textureKey: `character-outfit-man${number}`,
+      sheetPath: assetPath(`images/common/player/outfit/man${number}.png`),
+    }
+  }),
+]
+
+const GIRL_OUTFITS: PlayerOutfit[] = Array.from({ length: 9 }, (_, index): PlayerOutfit => {
+  const number = index + 1
+  return {
+    id: `girl${number}` as PlayerOutfitId,
+    characterId: 'girl',
+    label: `\uBCF5\uC7A5 ${number}`,
+    textureKey: `character-outfit-girl${number}`,
+    sheetPath: assetPath(`images/common/player/outfit/girl${number}.png`),
+  }
+})
+
+export const PLAYER_CHARACTERS: PlayerCharacter[] = [
+  {
+    id: 'boy',
+    label: '\uB0A8\uC790',
+    outfits: BOY_OUTFITS,
+  },
+  {
+    id: 'girl',
+    label: '\uC5EC\uC790',
+    outfits: GIRL_OUTFITS,
+  },
+]
+
+export const PLAYER_OUTFITS: PlayerOutfit[] = PLAYER_CHARACTERS.flatMap(
+  character => character.outfits,
+)
 const TAEKWONDO_BELT_PLAYER_SHEET_PATHS: Record<TaekwondoBeltColor, string> = {
   WHITE: assetPath('images/common/player/character_white.png'),
   YELLOW: assetPath('images/common/player/character_yellow.png'),
@@ -80,16 +166,107 @@ export function getTaekwondoBeltPlayerTextureKey(beltColor: TaekwondoBeltColor) 
   return TAEKWONDO_BELT_PLAYER_TEXTURE_KEYS[beltColor]
 }
 
+export function getPlayerOutfit(outfitId: PlayerOutfitId) {
+  return PLAYER_OUTFITS.find(outfit => outfit.id === outfitId) ?? PLAYER_OUTFITS[0]
+}
+
+export function getPlayerCharacter(characterId: PlayerCharacterId) {
+  return PLAYER_CHARACTERS.find(character => character.id === characterId) ?? PLAYER_CHARACTERS[0]
+}
+
+export function getPlayerOutfits(characterId: PlayerCharacterId) {
+  return getPlayerCharacter(characterId).outfits
+}
+
+export function getSelectedPlayerCharacterId(): PlayerCharacterId {
+  if (typeof window === 'undefined') {
+    return 'boy'
+  }
+
+  try {
+    return normalizePlayerCharacterId(window.localStorage.getItem(PLAYER_CHARACTER_STORAGE_KEY))
+  } catch {
+    return 'boy'
+  }
+}
+
+export function setSelectedPlayerCharacterId(characterId: PlayerCharacterId) {
+  const next = normalizePlayerCharacterId(characterId)
+
+  if (typeof window !== 'undefined') {
+    try {
+      window.localStorage.setItem(PLAYER_CHARACTER_STORAGE_KEY, next)
+    } catch {
+      // localStorage can be unavailable in private mode; the in-memory sprite still updates.
+    }
+  }
+
+  return next
+}
+
+export function getSelectedPlayerOutfitId(
+  characterId = getSelectedPlayerCharacterId(),
+): PlayerOutfitId {
+  if (typeof window === 'undefined') {
+    return getPlayerOutfits(characterId)[0].id
+  }
+
+  try {
+    return normalizePlayerOutfitId(
+      window.localStorage.getItem(getPlayerOutfitStorageKey(characterId)),
+      characterId,
+    )
+  } catch {
+    return getPlayerOutfits(characterId)[0].id
+  }
+}
+
+export function setSelectedPlayerOutfitId(
+  outfitId: PlayerOutfitId,
+  characterId = getPlayerOutfit(outfitId).characterId,
+) {
+  const next = normalizePlayerOutfitId(outfitId, characterId)
+
+  if (typeof window !== 'undefined') {
+    try {
+      window.localStorage.setItem(getPlayerOutfitStorageKey(characterId), next)
+    } catch {
+      // localStorage can be unavailable in private mode; the in-memory sprite still updates.
+    }
+  }
+
+  return next
+}
+
+export function getSelectedPlayerTextureKey() {
+  const characterId = getSelectedPlayerCharacterId()
+  return getPlayerOutfit(getSelectedPlayerOutfitId(characterId)).textureKey
+}
+
+export function getPlayerOutfitTextureKey(outfitId: PlayerOutfitId) {
+  return getPlayerOutfit(outfitId).textureKey
+}
+
 export function loadPlayerSpritesheet(
   scene: Phaser.Scene,
   textureKey = PLAYER_TEXTURE_KEY,
   sheetPath = CHARACTER_SHEET_PATH,
 ) {
+  if (scene.textures.exists(textureKey)) {
+    return
+  }
+
   scene.load.spritesheet(textureKey, sheetPath, {
     frameWidth: PLAYER_FRAME_SIZE,
     frameHeight: PLAYER_FRAME_SIZE,
     margin: 0,
     spacing: 0,
+  })
+}
+
+export function loadPlayerSpritesheets(scene: Phaser.Scene) {
+  PLAYER_OUTFITS.forEach(outfit => {
+    loadPlayerSpritesheet(scene, outfit.textureKey, outfit.sheetPath)
   })
 }
 
@@ -126,12 +303,13 @@ export function createPlayer(
   x: number,
   y: number,
   {
-    textureKey = PLAYER_TEXTURE_KEY,
+    textureKey = getSelectedPlayerTextureKey(),
     frame = 0,
-    scale = 0.55,
+    scale = 0.5,
     depth = 10,
   }: CreatePlayerOptions = {},
 ) {
+  ensurePlayerWalkAnimations(scene, textureKey)
   const player = scene.physics.add.sprite(x, y, textureKey, frame)
   player.setScale(scale).setDepth(depth)
   player.setCollideWorldBounds(true)
@@ -139,6 +317,23 @@ export function createPlayer(
   player.body.setOffset(PLAYER_FRAME_SIZE * 0.33, PLAYER_FRAME_SIZE * 0.65)
 
   return player
+}
+
+function getPlayerOutfitStorageKey(characterId: PlayerCharacterId) {
+  return characterId === 'boy'
+    ? PLAYER_OUTFIT_STORAGE_KEY
+    : `${PLAYER_OUTFIT_STORAGE_KEY}_${characterId}`
+}
+
+function normalizePlayerCharacterId(value: unknown): PlayerCharacterId {
+  return PLAYER_CHARACTERS.some(character => character.id === value)
+    ? (value as PlayerCharacterId)
+    : 'boy'
+}
+
+function normalizePlayerOutfitId(value: unknown, characterId: PlayerCharacterId): PlayerOutfitId {
+  const outfits = getPlayerOutfits(characterId)
+  return outfits.some(outfit => outfit.id === value) ? (value as PlayerOutfitId) : outfits[0].id
 }
 
 export function updatePlayerMovement({

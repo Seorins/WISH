@@ -4,7 +4,7 @@ import {
   createClickTargetMarker,
   createPlayer,
   ensurePlayerWalkAnimations,
-  loadPlayerSpritesheet,
+  loadPlayerSpritesheets,
   type PlayerDirection,
   type PlayerSprite,
   type RatioPoint,
@@ -242,7 +242,7 @@ export class GymnasticsSelectScene extends Phaser.Scene {
       'gymnastics-seongsu-dialog-frame',
       assetPath('images/npcs/seongsu/dialog_frame.png'),
     )
-    loadPlayerSpritesheet(this)
+    loadPlayerSpritesheets(this)
   }
 
   create(data: GymnasticsSelectSceneData = {}) {

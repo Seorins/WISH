@@ -5,7 +5,7 @@ import {
   createPlayer,
   ensurePlayerWalkAnimations,
   getTaekwondoBeltPlayerTextureKey,
-  loadPlayerSpritesheet,
+  loadPlayerSpritesheets,
   loadTaekwondoBeltPlayerSpritesheets,
   type PlayerDirection,
   type PlayerSprite,
@@ -186,7 +186,7 @@ export class TaekwondoSelectScene extends Phaser.Scene {
         spacing: 0,
       },
     )
-    loadPlayerSpritesheet(this)
+    loadPlayerSpritesheets(this)
     loadTaekwondoBeltPlayerSpritesheets(this)
   }
 
