@@ -16,6 +16,7 @@ import { fadeToScene } from '@/game/systems/sceneTransition'
 import { getPlayerMoveSpeed } from '@/game/settings/gameSettings'
 import { createSceneWeatherLayer } from '@/features/weather/phaserWeatherLayer'
 import {
+  NPC_DIALOG_FRAME_LAYOUT,
   createSimpleDialogUi,
   fadeSimpleDialog,
   setCenteredDialogText,
@@ -50,13 +51,6 @@ const PHOTO_BOOTH_INTERACT_DISTANCE = 40
 const PHOTO_GALLERY_INTERACT_DISTANCE = 40
 const GOMOKU_BOARD_INTERACT_DISTANCE = 56
 const WORLD_INTERACTION_REOPEN_COOLDOWN_MS = 350
-const DIALOG_TEXT_BOX = { x: 585, y: 260, width: 1230, height: 250 }
-const DIALOG_NAME_BOX = { x: 490, y: 130, width: 350, height: 72 }
-const DIALOG_PORTRAIT_BOX = { x: 120, y: 100, width: 320, height: 400 }
-const DIALOG_PORTRAIT_CROP_RATIO = 0.62
-const DIALOG_PORTRAIT_SCALE_BOOST = 1.18
-const VILLAGE_DIALOG_FRAME_KEY = 'village-dialog-frame'
-const VILLAGE_DIALOG_FRAME_PATH = 'images/village/ui/dialogframe.png'
 const VILLAGE_SHIP_KEY = 'village-ship'
 const VILLAGE_SHIP_PATH = 'images/themes/ferry/ui/ship.png'
 const VILLAGE_SHIP = {
@@ -122,7 +116,8 @@ type VillageCharacterConfig = {
   id: VillagerNpcId
   key: string
   path: string
-  portraitScale: number
+  dialogFrameKey: string
+  dialogFramePath: string
   xRatio: number
   yRatio: number
   scale: number
@@ -133,7 +128,8 @@ const VILLAGE_CHARACTERS: VillageCharacterConfig[] = [
     id: 'dain',
     key: 'village-character-dain',
     path: 'images/village/background/character/dain.png',
-    portraitScale: 0.97,
+    dialogFrameKey: 'village-dain-dialog-frame',
+    dialogFramePath: 'images/npcs/dain/dialog-frame.png',
     xRatio: 0.75,
     yRatio: 0.38,
     scale: 0.095,
@@ -142,7 +138,8 @@ const VILLAGE_CHARACTERS: VillageCharacterConfig[] = [
     id: 'nurse_bunny',
     key: 'village-character-joeun',
     path: 'images/village/background/character/joeun.png',
-    portraitScale: 1.58,
+    dialogFrameKey: 'village-joeun-dialog-frame',
+    dialogFramePath: 'images/npcs/joeun/dialog-frame.png',
     xRatio: NURSE_BUNNY_WORLD.xRatio,
     yRatio: NURSE_BUNNY_WORLD.yRatio,
     scale: NURSE_BUNNY_WORLD.scale,
@@ -151,7 +148,8 @@ const VILLAGE_CHARACTERS: VillageCharacterConfig[] = [
     id: 'sleepy_sheep',
     key: 'village-character-geonbin',
     path: 'images/village/background/character/geonbin.png',
-    portraitScale: 1,
+    dialogFrameKey: 'village-geonbin-dialog-frame',
+    dialogFramePath: 'images/npcs/geonbin/dialog-frame.png',
     xRatio: 0.43,
     yRatio: 0.31,
     scale: 0.095,
@@ -160,7 +158,8 @@ const VILLAGE_CHARACTERS: VillageCharacterConfig[] = [
     id: 'gardener_bear',
     key: 'village-character-jungho',
     path: 'images/village/background/character/jungho.png',
-    portraitScale: 1.12,
+    dialogFrameKey: 'village-jeongho-dialog-frame',
+    dialogFramePath: 'images/npcs/jeongho/dialog-frame.png',
     xRatio: 0.616,
     yRatio: 0.29,
     scale: 0.14,
@@ -169,7 +168,8 @@ const VILLAGE_CHARACTERS: VillageCharacterConfig[] = [
     id: 'monkey_friend',
     key: 'village-character-komonge',
     path: 'images/village/background/character/komonge.png',
-    portraitScale: 1.03,
+    dialogFrameKey: 'village-kongmong-dialog-frame',
+    dialogFramePath: 'images/npcs/kongmong/dialog-frame.png',
     xRatio: 0.58,
     yRatio: 0.398,
     scale: 0.08,
@@ -180,8 +180,15 @@ const SEHYUN_NPC = {
   id: 'squirrel_friend',
   portraitKey: 'village-character-sehyun',
   portraitPath: 'images/village/background/character/sehyun.png',
-  portraitScale: 0.85,
-} satisfies { id: VillagerNpcId; portraitKey: string; portraitPath: string; portraitScale: number }
+  dialogFrameKey: 'village-sehyun-dialog-frame',
+  dialogFramePath: 'images/npcs/sehyun/dialog-frame.png',
+} satisfies {
+  id: VillagerNpcId
+  portraitKey: string
+  portraitPath: string
+  dialogFrameKey: string
+  dialogFramePath: string
+}
 
 type VillageNpcInstance = {
   id: VillagerNpcId
@@ -240,9 +247,10 @@ export class VillageScene extends Phaser.Scene {
     })
     VILLAGE_CHARACTERS.forEach(character => {
       this.load.image(character.key, assetPath(character.path))
+      this.load.image(character.dialogFrameKey, assetPath(character.dialogFramePath))
     })
     this.load.image(SEHYUN_NPC.portraitKey, assetPath(SEHYUN_NPC.portraitPath))
-    this.load.image(VILLAGE_DIALOG_FRAME_KEY, assetPath(VILLAGE_DIALOG_FRAME_PATH))
+    this.load.image(SEHYUN_NPC.dialogFrameKey, assetPath(SEHYUN_NPC.dialogFramePath))
     this.load.image(VILLAGE_SHIP_KEY, assetPath(VILLAGE_SHIP_PATH))
     this.load.image(VILLAGE_PHOTO_BOOTH_KEY, assetPath(VILLAGE_PHOTO_BOOTH_PATH))
     this.load.image(VILLAGE_PHOTO_GALLERY_KEY, assetPath(VILLAGE_PHOTO_GALLERY_PATH))
@@ -409,8 +417,7 @@ export class VillageScene extends Phaser.Scene {
         character.id,
         this.createVillageDialog(
           villageDialogues[character.id].displayName,
-          character.key,
-          character.portraitScale,
+          character.dialogFrameKey,
         ),
       )
     })
@@ -418,8 +425,7 @@ export class VillageScene extends Phaser.Scene {
       SEHYUN_NPC.id,
       this.createVillageDialog(
         villageDialogues[SEHYUN_NPC.id].displayName,
-        SEHYUN_NPC.portraitKey,
-        SEHYUN_NPC.portraitScale,
+        SEHYUN_NPC.dialogFrameKey,
       ),
     )
 
@@ -1128,56 +1134,12 @@ export class VillageScene extends Phaser.Scene {
     return this.dialogs.get(this.activeDialogNpcId) ?? null
   }
 
-  private createVillageDialog(name: string, portraitKey: string, portraitScale: number) {
-    const dialog = createSimpleDialogUi(this, {
-      frameKey: VILLAGE_DIALOG_FRAME_KEY,
-      textBox: DIALOG_TEXT_BOX,
-      fontSize: 48,
-      lineSpacing: 8,
-      nameBox: DIALOG_NAME_BOX,
+  private createVillageDialog(name: string, frameKey: string) {
+    return createSimpleDialogUi(this, {
+      ...NPC_DIALOG_FRAME_LAYOUT,
+      frameKey,
       nameText: name,
-      nameFontColor: '#4a2b17',
-      nameFontSize: 44,
-      opticalOffsets: { single: 18, double: 10, multi: 0 },
     })
-    dialog.extras.push(...this.createDialogPortraitObjects(dialog, portraitKey, portraitScale))
-    return dialog
-  }
-
-  private createDialogPortraitObjects(
-    dialog: SimpleDialogUi,
-    portraitKey: string,
-    portraitScale: number,
-  ) {
-    const frameSource = dialog.frame.texture.getSourceImage() as HTMLImageElement
-    const frameScale = dialog.frame.displayWidth / frameSource.width
-    const frameLeft = dialog.frame.x - dialog.frame.displayWidth / 2
-    const frameTop = dialog.frame.y - dialog.frame.displayHeight / 2
-    const boxLeft = frameLeft + DIALOG_PORTRAIT_BOX.x * frameScale
-    const boxTop = frameTop + DIALOG_PORTRAIT_BOX.y * frameScale
-    const boxWidth = DIALOG_PORTRAIT_BOX.width * frameScale
-    const boxHeight = DIALOG_PORTRAIT_BOX.height * frameScale
-    const maskShape = this.add.graphics().setScrollFactor(0).setAlpha(0)
-    maskShape.fillStyle(0xffffff, 1)
-    maskShape.fillRect(boxLeft, boxTop, boxWidth, boxHeight)
-    const portraitMask = maskShape.createGeometryMask()
-    const portrait = this.add
-      .image(boxLeft + boxWidth / 2, boxTop + boxHeight + 6 * frameScale, portraitKey, 0)
-      .setDepth(dialog.frame.depth + 0.2)
-      .setAlpha(0)
-      .setScrollFactor(0)
-      .setMask(portraitMask)
-    const source = portrait.texture.getSourceImage() as HTMLImageElement
-    const cropHeight = Math.round(source.height * DIALOG_PORTRAIT_CROP_RATIO)
-    portrait.setCrop(0, 0, source.width, cropHeight)
-    portrait.setOrigin(0.5, cropHeight / source.height)
-    portrait.setScale(
-      Math.min(boxWidth / source.width, boxHeight / cropHeight) *
-        DIALOG_PORTRAIT_SCALE_BOOST *
-        portraitScale,
-    )
-
-    return [portrait]
   }
 
   private getNearestNpcInTalkDistance() {

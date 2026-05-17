@@ -19,6 +19,7 @@ import {
   setInteractionIconActive,
 } from '@/game/ui/interactionIcon'
 import {
+  NPC_DIALOG_FRAME_LAYOUT,
   createSimpleDialogUi,
   fadeSimpleDialog,
   setCenteredDialogText,
@@ -51,9 +52,6 @@ const ART_EXIT_PORTAL = { xRatio: 0.44, yRatio: 0.86, widthRatio: 0.12, heightRa
 const ART_RETURN_SPAWN = { xRatio: 0.37, yRatio: 0.58 }
 const RUMI_TALK_ICON = { xRatio: 0.37, yRatio: 0.42 }
 const RUMI_INTERACTION = { xRatio: 0.37, yRatio: 0.66, radiusRatio: 0.06 }
-// frame asset is 2172 x 724 — values below are in that pixel space
-const DIALOG_TEXT_BOX = { x: 580, y: 180, width: 1500, height: 400 }
-const DIALOG_NAME_BOX = { x: 505, y: 107, width: 390, height: 150 }
 const CARD_DEPTH = 24
 const CARD_FONT_FAMILY =
   '"Pretendard Variable", Pretendard, "Noto Sans KR", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", sans-serif'
@@ -427,18 +425,9 @@ export class ArtSelectScene extends Phaser.Scene {
 
   private createDialogUi() {
     this.dialog = createSimpleDialogUi(this, {
+      ...NPC_DIALOG_FRAME_LAYOUT,
       frameKey: 'rumi-dialog-frame',
-      textBox: DIALOG_TEXT_BOX,
-      dialogWidthRatio: 0.7,
-      maxDialogWidth: 1000,
-      fontSize: 46,
-      lineSpacing: 6,
-      nameBox: DIALOG_NAME_BOX,
       nameText: '루미',
-      nameFontColor: '#2a1f17',
-      nameFontSize: 48,
-      nameLetterSpacing: 6,
-      opticalOffsets: { single: 0 },
     })
   }
 
