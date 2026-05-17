@@ -96,8 +96,6 @@ class SceneBgmController {
   play(trackKey: SceneBgmTrackKey | null) {
     if (!canUseAudio()) return
 
-    this.ensureUnlockListeners()
-
     if (trackKey === null) {
       this.pendingTrackKey = null
       this.stop()
@@ -106,18 +104,37 @@ class SceneBgmController {
 
     this.pendingTrackKey = trackKey
 
+    if (!getGameSettings().bgmEnabled) {
+      this.stop()
+      return
+    }
+
+    this.ensureUnlockListeners()
+
     if (!this.isUnlocked) return
 
     void this.startTrack(trackKey)
   }
 
   syncVolume() {
+    if (!getGameSettings().bgmEnabled) {
+      this.stop()
+      return
+    }
+
+    if (!this.currentAudio && this.pendingTrackKey && this.isUnlocked) {
+      void this.startTrack(this.pendingTrackKey)
+      return
+    }
+
     if (!this.currentAudio || !this.currentTrackKey) return
 
     this.currentAudio.volume = getTargetVolume(this.currentTrackKey)
   }
 
   private async startTrack(trackKey: SceneBgmTrackKey) {
+    if (!getGameSettings().bgmEnabled) return
+
     if (this.currentTrackKey === trackKey && this.currentAudio && !this.currentAudio.paused) {
       this.fadeIn(this.currentAudio, getTargetVolume(trackKey), FADE_IN_MS)
       return
@@ -225,7 +242,7 @@ class SceneBgmController {
     this.removeUnlockListeners()
     this.isUnlocked = true
 
-    if (this.pendingTrackKey) {
+    if (this.pendingTrackKey && getGameSettings().bgmEnabled) {
       void this.startTrack(this.pendingTrackKey)
     }
   }

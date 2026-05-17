@@ -77,6 +77,9 @@ const COLORS = {
 const LABELS = {
   title: '\uC124\uC815',
   sound: '\uC0AC\uC6B4\uB4DC',
+  bgm: '\uBC30\uACBD\uC74C\uC545',
+  on: 'ON',
+  off: 'OFF',
   speed: '\uC774\uB3D9 \uBC30\uC18D',
   profileOutfit: '\uD504\uB85C\uD544 / \uBCF5\uC7A5',
   change: '\uBCC0\uACBD',
@@ -184,9 +187,10 @@ export function createSettingsMenu(
     const contentW = panelW - 88
     const labelW = Math.min(132, contentW * 0.28)
     const rowH = 58
-    const rowGap = 18
+    const rowGap = 14
     const soundY = panelTop + 124
-    const speedY = soundY + rowH + rowGap
+    const bgmY = soundY + rowH + rowGap
+    const speedY = bgmY + rowH + rowGap
     const outfitY = speedY + rowH + rowGap
     const logoutY = panelTop + panelH - 52
     const closeX = panelLeft + panelW - 34
@@ -219,6 +223,13 @@ export function createSettingsMenu(
     })
     container.add(masterSlider.container)
     addSliderZone(masterSlider)
+
+    container.add(createBgmRow(scene, contentLeft, bgmY, contentW, rowH, labelW, settings))
+    addClickZone(contentLeft + contentW / 2, bgmY, contentW, rowH, () => {
+      settings = updateGameSettings({ bgmEnabled: !settings.bgmEnabled })
+      syncSceneBgmVolume()
+      openSettings()
+    })
 
     container.add(createSpeedRow(scene, contentLeft, speedY, contentW, rowH, labelW, settings))
     addSpeedClickZones(contentLeft, speedY, contentW, rowH, labelW)
@@ -448,7 +459,7 @@ export function createSettingsMenu(
 
 function getPanelSize(scene: Phaser.Scene, mode: 'settings' | 'outfits') {
   const maxW = mode === 'settings' ? 620 : 580
-  const maxH = mode === 'settings' ? 430 : 520
+  const maxH = mode === 'settings' ? 500 : 520
   return {
     panelW: Math.min(maxW, scene.scale.width * 0.82),
     panelH: Math.min(maxH, scene.scale.height * 0.84),
@@ -551,6 +562,64 @@ function createSlider(
     height: 38,
     setValue,
   }
+}
+
+function createBgmRow(
+  scene: Phaser.Scene,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  labelWidth: number,
+  settings: ReturnType<typeof getGameSettings>,
+) {
+  const container = scene.add.container(0, 0)
+  const switchW = Math.min(126, width - labelWidth - 48)
+  const switchH = Math.min(38, height * 0.7)
+  const switchX = x + width - switchW / 2 - 18
+  const isEnabled = settings.bgmEnabled
+
+  container.add(createRowBackground(scene, x, y, width, height))
+  container.add(
+    scene.add
+      .text(x + 22, y, LABELS.bgm, {
+        fontFamily: FONT_FAMILY,
+        fontSize: '18px',
+        color: colorString(COLORS.text),
+        fontStyle: 'bold',
+      })
+      .setOrigin(0, 0.5),
+  )
+
+  const switchBg = scene.add.graphics()
+  switchBg.fillStyle(0x000000, 0.12)
+  switchBg.fillRoundedRect(
+    switchX - switchW / 2 + 3,
+    y - switchH / 2 + 4,
+    switchW,
+    switchH,
+    switchH / 2,
+  )
+  switchBg.fillStyle(isEnabled ? COLORS.warm : COLORS.disabled, 1)
+  switchBg.fillRoundedRect(switchX - switchW / 2, y - switchH / 2, switchW, switchH, switchH / 2)
+  switchBg.lineStyle(2, isEnabled ? COLORS.warmDark : COLORS.surfaceBorder, 1)
+  switchBg.strokeRoundedRect(switchX - switchW / 2, y - switchH / 2, switchW, switchH, switchH / 2)
+
+  const knobRadius = switchH / 2 - 5
+  const knobX = switchX + (isEnabled ? switchW / 2 - switchH / 2 : -switchW / 2 + switchH / 2)
+  const knob = scene.add.circle(knobX, y, knobRadius, 0xffffff, 1)
+  knob.setStrokeStyle(2, isEnabled ? COLORS.warmDark : COLORS.surfaceBorder, 1)
+  const stateText = scene.add
+    .text(switchX + (isEnabled ? -18 : 18), y, isEnabled ? LABELS.on : LABELS.off, {
+      fontFamily: FONT_FAMILY,
+      fontSize: '14px',
+      color: colorString(isEnabled ? COLORS.text : COLORS.disabledText),
+      fontStyle: 'bold',
+    })
+    .setOrigin(0.5)
+
+  container.add([switchBg, knob, stateText])
+  return container
 }
 
 function createSpeedRow(
