@@ -13,7 +13,7 @@ const BGM_TRACKS = {
   },
   village: {
     path: 'sounds/bgm/village-day.wav',
-    volume: 0.34,
+    volume: 0.26,
   },
   art: {
     path: 'sounds/bgm/art-studio.wav',
