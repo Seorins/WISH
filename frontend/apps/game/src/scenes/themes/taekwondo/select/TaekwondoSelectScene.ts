@@ -26,6 +26,7 @@ import {
   setInteractionIconActive,
 } from '@/game/ui/interactionIcon'
 import {
+  NPC_DIALOG_FRAME_LAYOUT,
   createSimpleDialogUi,
   fadeSimpleDialog,
   setCenteredDialogText,
@@ -50,8 +51,6 @@ const SEOKJAE_INTERACTION = { radiusRatio: 0.08 }
 const SEOKJAE_TALK_ICON_OFFSET = { yRatio: 0.15 }
 const SEOKJAE_POSES = [4, 6, 7]
 const RANDOM_POSE_DELAY = 500
-const DIALOG_TEXT_BOX = { x: 580, y: 180, width: 1500, height: 400 }
-const DIALOG_NAME_BOX = { x: 505, y: 109, width: 390, height: 150 }
 const DEBUG_OBSTACLES = false
 const OBSTACLE_EDITOR_ENABLED = import.meta.env.DEV
 const OBSTACLE_EDITOR_MIN_SIZE = 0.003
@@ -541,18 +540,9 @@ export class TaekwondoSelectScene extends Phaser.Scene {
 
   private createDialogUi() {
     this.dialog = createSimpleDialogUi(this, {
+      ...NPC_DIALOG_FRAME_LAYOUT,
       frameKey: 'seokjae-dialog-frame',
-      textBox: DIALOG_TEXT_BOX,
-      dialogWidthRatio: 0.7,
-      maxDialogWidth: 1000,
-      fontSize: 46,
-      lineSpacing: 6,
-      nameBox: DIALOG_NAME_BOX,
       nameText: '석재',
-      nameFontColor: '#2a1f17',
-      nameFontSize: 48,
-      nameLetterSpacing: 6,
-      opticalOffsets: { single: 0 },
     })
   }
 
