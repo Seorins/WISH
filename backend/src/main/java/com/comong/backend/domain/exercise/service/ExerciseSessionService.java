@@ -1,20 +1,17 @@
 package com.comong.backend.domain.exercise.service;
 
 import java.util.List;
-import java.util.Map;
-import java.util.function.Function;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.comong.backend.domain.exercise.dto.ExerciseMotionReplayData;
 import com.comong.backend.domain.exercise.dto.ExerciseMotionReplayResponse;
+import com.comong.backend.domain.exercise.dto.ExerciseSessionCreateRequest;
 import com.comong.backend.domain.exercise.dto.ExerciseSessionMotionResponse;
 import com.comong.backend.domain.exercise.dto.ExerciseSessionMotionSaveRequest;
+import com.comong.backend.domain.exercise.dto.ExerciseSessionMotionSaveResponse;
 import com.comong.backend.domain.exercise.dto.ExerciseSessionResponse;
-import com.comong.backend.domain.exercise.dto.ExerciseSessionSaveRequest;
 import com.comong.backend.domain.exercise.dto.ExerciseSessionSummaryResponse;
 import com.comong.backend.domain.exercise.entity.ExerciseMotion;
 import com.comong.backend.domain.exercise.entity.ExerciseSession;
@@ -99,54 +96,62 @@ public class ExerciseSessionService {
     private final ObjectMapper objectMapper;
 
     @Transactional
-    public ExerciseSessionResponse create(Long userId, ExerciseSessionSaveRequest request) {
-        List<ExerciseSessionMotionSaveRequest> motionRequests = request.motions();
-        List<String> poseReplays =
-                motionRequests.stream()
-                        .map(ExerciseSessionMotionSaveRequest::poseReplay)
-                        .map(replay -> serializeReplay(replay, ReplayKind.RAW))
-                        .toList();
-        List<String> compactPoseReplays =
-                motionRequests.stream()
-                        .map(ExerciseSessionMotionSaveRequest::compactPoseReplay)
-                        .map(replay -> serializeReplay(replay, ReplayKind.COMPACT))
-                        .toList();
+    public ExerciseSessionResponse create(Long userId, ExerciseSessionCreateRequest request) {
         PatientProfile patientProfile =
                 patientProfileService.findOwnedOrThrow(userId, request.patientProfileId());
-        Map<Long, ExerciseMotion> motionMap = loadExerciseMotionMap(motionRequests);
-
         ExerciseSession session =
                 exerciseSessionRepository.save(
                         ExerciseSession.builder()
                                 .patientProfile(patientProfile)
                                 .exerciseType(request.exerciseType())
+                                .durationSec(0)
+                                .averageAccuracy(0.0)
+                                .completedMotionCount(0)
+                                .build());
+        return ExerciseSessionResponse.of(session, List.of());
+    }
+
+    @Transactional
+    public ExerciseSessionMotionSaveResponse saveMotion(
+            Long userId, Long sessionId, ExerciseSessionMotionSaveRequest request) {
+        String poseReplay = serializeReplay(request.poseReplay(), ReplayKind.RAW);
+        String compactPoseReplay = serializeReplay(request.compactPoseReplay(), ReplayKind.COMPACT);
+        ExerciseSession session = findOwnedSessionOrThrow(userId, sessionId);
+        ExerciseMotion exerciseMotion =
+                exerciseMotionRepository
+                        .findById(request.exerciseMotionId())
+                        .orElseThrow(
+                                () ->
+                                        new BusinessException(
+                                                ExerciseErrorCode.EXERCISE_MOTION_NOT_FOUND));
+        if (session.getExerciseType() != exerciseMotion.getExerciseType()) {
+            throw new BusinessException(ExerciseErrorCode.EXERCISE_SESSION_MOTION_TYPE_MISMATCH);
+        }
+        PerformanceVideo performanceVideo =
+                performanceVideoService.createIfPresent(
+                        session.getPatientProfile(),
+                        request.videoKey(),
+                        request.thumbKey(),
+                        UploadPurpose.GYMNASTICS_PERFORMANCE);
+
+        ExerciseSessionMotion sessionMotion =
+                exerciseSessionMotionRepository.save(
+                        ExerciseSessionMotion.builder()
+                                .session(session)
+                                .exerciseMotion(exerciseMotion)
                                 .durationSec(request.durationSec())
-                                .averageAccuracy(request.averageAccuracy())
-                                .completedMotionCount(motionRequests.size())
+                                .accuracy(request.accuracy())
+                                .completedReps(request.completedReps())
+                                .feedback(request.feedback())
+                                .performanceVideo(performanceVideo)
+                                .poseReplay(poseReplay)
+                                .compactPoseReplay(compactPoseReplay)
                                 .build());
 
-        List<ExerciseSessionMotion> sessionMotions =
-                IntStream.range(0, motionRequests.size())
-                        .mapToObj(
-                                index ->
-                                        toSessionMotion(
-                                                session,
-                                                motionRequests.get(index),
-                                                motionMap,
-                                                poseReplays.get(index),
-                                                compactPoseReplays.get(index)))
-                        .toList();
-        List<ExerciseSessionMotion> savedSessionMotions =
-                exerciseSessionMotionRepository.saveAll(sessionMotions);
+        session.recordMotion(request.durationSec(), request.accuracy());
 
-        return ExerciseSessionResponse.of(
-                session,
-                savedSessionMotions.stream()
-                        .map(
-                                motion ->
-                                        ExerciseSessionMotionResponse.from(
-                                                motion, performanceVideoService))
-                        .toList());
+        return ExerciseSessionMotionSaveResponse.of(
+                session, sessionMotion, performanceVideoService);
     }
 
     public List<ExerciseSessionSummaryResponse> findAll(Long userId, Long patientProfileId) {
@@ -202,53 +207,6 @@ public class ExerciseSessionService {
                 .filter(session -> session.getPatientProfile().getUser().getId().equals(userId))
                 .orElseThrow(
                         () -> new BusinessException(ExerciseErrorCode.EXERCISE_SESSION_NOT_FOUND));
-    }
-
-    private Map<Long, ExerciseMotion> loadExerciseMotionMap(
-            List<ExerciseSessionMotionSaveRequest> requests) {
-        List<Long> motionIds =
-                requests.stream()
-                        .map(ExerciseSessionMotionSaveRequest::exerciseMotionId)
-                        .distinct()
-                        .toList();
-        Map<Long, ExerciseMotion> motionMap =
-                exerciseMotionRepository.findAllById(motionIds).stream()
-                        .collect(Collectors.toMap(ExerciseMotion::getId, Function.identity()));
-
-        if (motionMap.size() != motionIds.size()) {
-            throw new BusinessException(ExerciseErrorCode.EXERCISE_MOTION_NOT_FOUND);
-        }
-        return motionMap;
-    }
-
-    private ExerciseSessionMotion toSessionMotion(
-            ExerciseSession session,
-            ExerciseSessionMotionSaveRequest request,
-            Map<Long, ExerciseMotion> motionMap,
-            String poseReplay,
-            String compactPoseReplay) {
-        ExerciseMotion exerciseMotion = motionMap.get(request.exerciseMotionId());
-        if (session.getExerciseType() != exerciseMotion.getExerciseType()) {
-            throw new BusinessException(ExerciseErrorCode.EXERCISE_SESSION_MOTION_TYPE_MISMATCH);
-        }
-        PerformanceVideo performanceVideo =
-                performanceVideoService.createIfPresent(
-                        session.getPatientProfile(),
-                        request.videoKey(),
-                        request.thumbKey(),
-                        UploadPurpose.GYMNASTICS_PERFORMANCE);
-
-        return ExerciseSessionMotion.builder()
-                .session(session)
-                .exerciseMotion(exerciseMotion)
-                .durationSec(request.durationSec())
-                .accuracy(request.accuracy())
-                .completedReps(request.completedReps())
-                .feedback(request.feedback())
-                .performanceVideo(performanceVideo)
-                .poseReplay(poseReplay)
-                .compactPoseReplay(compactPoseReplay)
-                .build();
     }
 
     private String serializeReplay(ExerciseMotionReplayData replay, ReplayKind replayKind) {

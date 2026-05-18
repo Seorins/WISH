@@ -17,8 +17,10 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.comong.backend.domain.exercise.dto.ExerciseMotionMovementAnalysisResponse;
 import com.comong.backend.domain.exercise.dto.ExerciseMotionReplayResponse;
+import com.comong.backend.domain.exercise.dto.ExerciseSessionCreateRequest;
+import com.comong.backend.domain.exercise.dto.ExerciseSessionMotionSaveRequest;
+import com.comong.backend.domain.exercise.dto.ExerciseSessionMotionSaveResponse;
 import com.comong.backend.domain.exercise.dto.ExerciseSessionResponse;
-import com.comong.backend.domain.exercise.dto.ExerciseSessionSaveRequest;
 import com.comong.backend.domain.exercise.dto.ExerciseSessionSummaryResponse;
 import com.comong.backend.domain.exercise.service.ExerciseMotionAnalysisService;
 import com.comong.backend.domain.exercise.service.ExerciseSessionService;
@@ -89,7 +91,37 @@ public class ExerciseSessionController {
                 ApiResponse.success(exerciseSessionService.findOne(currentUser.userId(), id)));
     }
 
-    @Operation(summary = "체조 세션 기록 저장", description = "체조 세션과 동작별 수행 결과를 저장합니다.")
+    @Operation(
+            summary = "체조 세션 생성",
+            description =
+                    "빈 체조 세션을 생성하고 sessionId 를 반환합니다. 이후 동작별 결과는 `POST /exercise-sessions/{id}/motions` 로 누적 저장합니다.")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "201",
+                description = "생성 성공"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "400",
+                description = "입력값 검증 실패 (G-001)"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "401",
+                description = "인증 필요 (G-003)"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "404",
+                description = "환자 프로필이 없거나 본인 소유가 아님 (P-001)")
+    })
+    @PostMapping
+    public ResponseEntity<ApiResponse<ExerciseSessionResponse>> create(
+            @AuthenticationPrincipal AuthenticatedUser currentUser,
+            @Valid @RequestBody ExerciseSessionCreateRequest request) {
+        ExerciseSessionResponse response =
+                exerciseSessionService.create(currentUser.userId(), request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(response));
+    }
+
+    @Operation(
+            summary = "체조 세션 동작 단건 저장",
+            description =
+                    "지정한 체조 세션에 동작 1건을 추가 저장하고 세션의 누적 통계 (duration, averageAccuracy, completedMotionCount) 를 재계산합니다.")
     @ApiResponses({
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
                 responseCode = "201",
@@ -102,14 +134,16 @@ public class ExerciseSessionController {
                 description = "인증 필요 (G-003)"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
                 responseCode = "404",
-                description = "환자 프로필이 없거나 (P-001) 또는 요청한 동작 ID 가 존재하지 않음 (EX-001)")
+                description = "세션이 없거나 본인 소유가 아님 (EX-005) 또는 요청한 동작 ID 가 존재하지 않음 (EX-001)")
     })
-    @PostMapping
-    public ResponseEntity<ApiResponse<ExerciseSessionResponse>> create(
+    @PostMapping("/{id}/motions")
+    public ResponseEntity<ApiResponse<ExerciseSessionMotionSaveResponse>> saveMotion(
             @AuthenticationPrincipal AuthenticatedUser currentUser,
-            @Valid @RequestBody ExerciseSessionSaveRequest request) {
-        ExerciseSessionResponse response =
-                exerciseSessionService.create(currentUser.userId(), request);
+            @Parameter(description = "체조 세션 ID (본인 환자 프로필 소유)", required = true) @PathVariable
+                    Long id,
+            @Valid @RequestBody ExerciseSessionMotionSaveRequest request) {
+        ExerciseSessionMotionSaveResponse response =
+                exerciseSessionService.saveMotion(currentUser.userId(), id, request);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(response));
     }
 
