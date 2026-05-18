@@ -30,25 +30,54 @@ const SLOT_BG_EMPTY = 0x435a7d
 const TOOLBAR_BG = 0x3d557d
 const CHIP_BG = 0xffe9c2
 const STROKE_THROTTLE_MS = 60
+const MIN_VISIBLE_PLAYER_SLOTS = 6
 /** 추측 말풍선 표시 시간 — 정답/오답 동일. 너무 길면 화면 혼잡, 너무 짧으면 못 봄. */
 const BUBBLE_TTL_MS = 3200
 
 /**
- * 플레이어 슬롯 아바타 — themes/art/ui/char1~4.png 의 상반신만 setCrop 으로 잘라 노출. 원형 배경 없이 그대로 노출.
- * joinOrder 기준으로 1~4 순환.
+ * 플레이어 슬롯 아바타 — themes/art/ui/char1~9.png 의 상반신만 setCrop 으로 잘라 노출.
+ * roomId + joinOrder 기준으로 방마다 섞인 순서를 만들되, 모든 클라이언트가 같은 캐릭터를 보도록 고정 매핑한다.
  */
-const SLOT_CHAR_NUMBERS = [1, 2, 3, 4] as const
+const SLOT_CHAR_NUMBERS = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const
 /** 이미지 상단에서 얼마만큼 잘라 상반신만 보일지 — 헤더/머리/어깨까지 포함. */
 const SLOT_CHAR_CROP_RATIO = 0.55
+const SLOT_CHAR_STEPS = [1, 2, 4, 5, 7, 8] as const
 
-function slotCharKey(joinOrder: number): string {
-  const n = SLOT_CHAR_NUMBERS[(joinOrder < 0 ? 0 : joinOrder) % SLOT_CHAR_NUMBERS.length]
-  return `quiz-avatar-char${n}`
+function slotCharKey(charNumber: number): string {
+  return `quiz-avatar-char${charNumber}`
 }
 
-function slotCharPath(joinOrder: number): string {
-  const n = SLOT_CHAR_NUMBERS[(joinOrder < 0 ? 0 : joinOrder) % SLOT_CHAR_NUMBERS.length]
-  return `images/themes/art/ui/char${n}.png`
+function slotCharPath(charNumber: number): string {
+  return `images/themes/art/ui/char${charNumber}.png`
+}
+
+function hashString(value: string): number {
+  let hash = 2166136261
+  for (let i = 0; i < value.length; i++) {
+    hash = Math.imul(hash ^ value.charCodeAt(i), 16777619)
+  }
+  return hash >>> 0
+}
+
+function slotCharNumber(joinOrder: number, roomId: string): number {
+  const seed = hashString(roomId || 'quiz-room')
+  const normalizedOrder = Math.max(0, Math.trunc(joinOrder))
+  const step = SLOT_CHAR_STEPS[(seed >>> 8) % SLOT_CHAR_STEPS.length]
+  const index = (seed + normalizedOrder * step) % SLOT_CHAR_NUMBERS.length
+  return SLOT_CHAR_NUMBERS[index]
+}
+
+function slotCharKeyForMember(joinOrder: number, roomId: string): string {
+  return slotCharKey(slotCharNumber(joinOrder, roomId))
+}
+
+function slotIndicesForSide(maxPlayers: number, side: 'left' | 'right'): number[] {
+  const start = side === 'left' ? 0 : 1
+  const indices: number[] = []
+  for (let i = start; i < maxPlayers; i += 2) {
+    indices.push(i)
+  }
+  return indices
 }
 
 // 검정을 맨 앞에 둬서 기본 펜 색으로 사용. 그림 그릴 때 가장 흔하게 쓰는 색.
@@ -171,10 +200,10 @@ export class QuizPlayScene extends Phaser.Scene {
       )
     }
     // 슬롯 아바타 — char1~4 (art/ui) 를 미리 로드. setCrop 으로 상반신만 노출.
-    SLOT_CHAR_NUMBERS.forEach((_, index) => {
-      const key = slotCharKey(index)
+    SLOT_CHAR_NUMBERS.forEach(charNumber => {
+      const key = slotCharKey(charNumber)
       if (!this.textures.exists(key)) {
-        this.load.image(key, assetPath(slotCharPath(index)))
+        this.load.image(key, assetPath(slotCharPath(charNumber)))
       }
     })
   }
@@ -246,6 +275,11 @@ export class QuizPlayScene extends Phaser.Scene {
     const canvasAreaTop = padding + topBarH + padding
     const canvasAreaBottom = h - padding - bottomBarH - padding
     const canvasAreaH = canvasAreaBottom - canvasAreaTop
+    const maxPlayerSlots = Math.max(
+      MIN_VISIBLE_PLAYER_SLOTS,
+      this.snapshot.maxPlayers,
+      this.snapshot.members.length,
+    )
 
     // 캔버스/하단 도구바 먼저 그리고, 슬롯(=말풍선 포함) 을 나중에 그려 z-order 우위 확보.
     // 게스트가 보낸 추측 말풍선은 슬롯 옆으로 펼쳐져 캔버스 영역과 겹치는데, 슬롯이 캔버스보다
@@ -255,14 +289,22 @@ export class QuizPlayScene extends Phaser.Scene {
     this.drawCanvasArea(container, canvasX, canvasAreaTop, canvasW, canvasAreaH)
     this.drawBottomBar(container, padding, h - padding - bottomBarH, w - padding * 2, bottomBarH)
     this.drawTopBar(container, padding, padding, w - padding * 2, topBarH)
-    this.drawSidebar(container, padding, canvasAreaTop, sidebarW, canvasAreaH, [0, 2], 'left')
+    this.drawSidebar(
+      container,
+      padding,
+      canvasAreaTop,
+      sidebarW,
+      canvasAreaH,
+      slotIndicesForSide(maxPlayerSlots, 'left'),
+      'left',
+    )
     this.drawSidebar(
       container,
       w - padding - sidebarW,
       canvasAreaTop,
       sidebarW,
       canvasAreaH,
-      [1, 3],
+      slotIndicesForSide(maxPlayerSlots, 'right'),
       'right',
     )
 
@@ -317,14 +359,21 @@ export class QuizPlayScene extends Phaser.Scene {
       .setOrigin(0, 0.5)
     container.add(turnLabel)
 
-    const pipGap = 18
+    const promptW = Math.min(420, w * 0.36)
+    const promptLeft = x + w / 2 - promptW / 2
     const pipStart = x + 170
+    const pipAvailableW = Math.max(72, promptLeft - pipStart - 16)
+    const pipGap =
+      this.snapshot.totalRounds > 1
+        ? Math.max(7, Math.min(18, pipAvailableW / (this.snapshot.totalRounds - 1)))
+        : 18
+    const pipRadius = Math.max(3, Math.min(5, pipGap * 0.32))
     for (let i = 0; i < this.snapshot.totalRounds; i++) {
       const active = i + 1 <= this.snapshot.roundNumber
       const pip = this.add.circle(
         pipStart + i * pipGap,
         y + h - 17,
-        5,
+        pipRadius,
         active ? 0xffd36b : 0x5b6680,
         1,
       )
@@ -339,7 +388,6 @@ export class QuizPlayScene extends Phaser.Scene {
       : this.wordLength
         ? `${this.wordLength}글자`
         : '그림을 맞춰봐!'
-    const promptW = Math.min(420, w * 0.36)
     const promptBg = this.add.graphics()
     promptBg.fillStyle(0x121a2b, 1)
     promptBg.fillRoundedRect(x + w / 2 - promptW / 2, y + 10, promptW, h - 20, 20)
@@ -442,9 +490,10 @@ export class QuizPlayScene extends Phaser.Scene {
     }
 
     // 캐릭터(art/ui/char1~4) 의 상반신만 setCrop 으로 잘라 표시. 원형 배경/마스크 없이 그대로 노출.
-    const avatarSize = Math.min(96, w * 0.7)
-    const avatarY = y + Math.max(58, h * 0.34)
-    const avatarKey = slotCharKey(member.joinOrder)
+    const avatarSize = Math.min(96, w * 0.7, Math.max(56, h * 0.46))
+    const avatarY = y + Math.max(46, h * 0.32)
+    const nameY = y + h - Math.min(58, Math.max(48, h * 0.38))
+    const avatarKey = slotCharKeyForMember(member.joinOrder, this.snapshot.roomId)
     if (this.textures.exists(avatarKey)) {
       const source = this.textures.get(avatarKey).getSourceImage() as HTMLImageElement
       const srcW = source.width || 1
@@ -461,7 +510,7 @@ export class QuizPlayScene extends Phaser.Scene {
     }
     container.add(
       this.add
-        .text(x + w / 2, y + h - 58, member.nickname, {
+        .text(x + w / 2, nameY, member.nickname, {
           fontFamily: FONT_FAMILY,
           fontSize: '16px',
           color: isDrawer ? '#1a0e05' : '#ffffff',
