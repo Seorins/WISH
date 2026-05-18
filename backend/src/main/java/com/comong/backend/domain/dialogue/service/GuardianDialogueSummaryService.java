@@ -238,7 +238,7 @@ public class GuardianDialogueSummaryService {
         return npc.catalogId()
                 .flatMap(catalogService::findNpc)
                 .map(n -> n.displayName())
-                .orElseGet(npc::name);
+                .orElseGet(npc::displayName);
     }
 
     private static <T> List<T> safe(List<T> list) {
