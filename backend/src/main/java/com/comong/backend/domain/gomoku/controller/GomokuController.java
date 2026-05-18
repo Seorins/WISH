@@ -71,6 +71,14 @@ public class GomokuController {
                 ApiResponse.success(gomokuService.joinRoom(currentUser.userId(), roomId, request)));
     }
 
+    @Operation(summary = "Start online Gomoku room")
+    @PostMapping("/rooms/{roomId}/start")
+    public ResponseEntity<ApiResponse<GomokuRoomResponse>> startRoom(
+            @AuthenticationPrincipal AuthenticatedUser currentUser, @PathVariable Long roomId) {
+        return ResponseEntity.ok(
+                ApiResponse.success(gomokuService.startRoom(currentUser.userId(), roomId)));
+    }
+
     @Operation(summary = "Get online Gomoku room state")
     @GetMapping("/rooms/{roomId}")
     public ResponseEntity<ApiResponse<GomokuRoomResponse>> findRoom(

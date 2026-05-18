@@ -135,6 +135,11 @@ export async function joinGomokuRoom(roomId: number, request: GomokuRoomJoinRequ
   return response.data
 }
 
+export async function startGomokuRoom(roomId: number) {
+  const response = await apiClient.post<ApiResponse<GomokuRoom>>(`/gomoku/rooms/${roomId}/start`)
+  return response.data
+}
+
 export async function playGomokuMove(roomId: number, request: GomokuMoveRequest) {
   const response = await apiClient.post<ApiResponse<GomokuRoom>>(
     `/gomoku/rooms/${roomId}/moves`,

@@ -130,8 +130,17 @@ public class GomokuMatch {
         this.whitePatientProfile =
                 Objects.requireNonNull(patientProfile, "patientProfile must not be null");
         this.whiteTextureKey = normalizeTextureKey(textureKey);
+    }
+
+    public void start() {
         this.status = GomokuMatchStatus.PLAYING;
+        this.currentTurn = GomokuStone.BLACK;
         this.startedAt = LocalDateTime.now();
+    }
+
+    public void removeWhiteBeforeStart() {
+        this.whitePatientProfile = null;
+        this.whiteTextureKey = null;
     }
 
     public void applyMove(String movesJson, GomokuStone nextTurn, int moveCount) {

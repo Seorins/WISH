@@ -81,8 +81,15 @@ class GomokuControllerIntegrationTest extends IntegrationTestSupport {
                         post("/gomoku/rooms/{roomId}/join", roomId)
                                 .header("Authorization", "Bearer " + white.token()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.status").value("PLAYING"))
+                .andExpect(jsonPath("$.data.status").value("WAITING"))
                 .andExpect(jsonPath("$.data.myStone").value("WHITE"));
+
+        mockMvc.perform(
+                        post("/gomoku/rooms/{roomId}/start", roomId)
+                                .header("Authorization", "Bearer " + black.token()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("PLAYING"))
+                .andExpect(jsonPath("$.data.currentTurn").value("BLACK"));
 
         play(black.token(), roomId, 7, 7).andExpect(jsonPath("$.data.status").value("PLAYING"));
         play(white.token(), roomId, 0, 0).andExpect(jsonPath("$.data.status").value("PLAYING"));
@@ -162,6 +169,7 @@ class GomokuControllerIntegrationTest extends IntegrationTestSupport {
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(joinRoomRequest("character-outfit-girl4")))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("WAITING"))
                 .andExpect(jsonPath("$.data.blackPlayer.textureKey").value("character-outfit-man3"))
                 .andExpect(
                         jsonPath("$.data.whitePlayer.textureKey").value("character-outfit-girl4"));
@@ -260,6 +268,12 @@ class GomokuControllerIntegrationTest extends IntegrationTestSupport {
                         post("/gomoku/rooms/{roomId}/join", roomId)
                                 .header("Authorization", "Bearer " + white.token()))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("WAITING"));
+
+        mockMvc.perform(
+                        post("/gomoku/rooms/{roomId}/start", roomId)
+                                .header("Authorization", "Bearer " + black.token()))
+                .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("PLAYING"));
 
         play(black.token(), roomId, 7, 6);
@@ -310,6 +324,12 @@ class GomokuControllerIntegrationTest extends IntegrationTestSupport {
         mockMvc.perform(
                         post("/gomoku/rooms/{roomId}/join", roomId)
                                 .header("Authorization", "Bearer " + white.token()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("WAITING"));
+
+        mockMvc.perform(
+                        post("/gomoku/rooms/{roomId}/start", roomId)
+                                .header("Authorization", "Bearer " + black.token()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("PLAYING"));
 
@@ -395,6 +415,12 @@ class GomokuControllerIntegrationTest extends IntegrationTestSupport {
         mockMvc.perform(
                         post("/gomoku/rooms/{roomId}/join", roomId)
                                 .header("Authorization", "Bearer " + white.token()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("WAITING"));
+
+        mockMvc.perform(
+                        post("/gomoku/rooms/{roomId}/start", roomId)
+                                .header("Authorization", "Bearer " + black.token()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("PLAYING"));
         return roomId;

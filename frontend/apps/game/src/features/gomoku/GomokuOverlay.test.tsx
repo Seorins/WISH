@@ -24,6 +24,7 @@ vi.mock('@wish/api-client', () => ({
   listPatientProfiles: vi.fn(),
   playGomokuMove: vi.fn(),
   resignGomokuRoom: vi.fn(),
+  startGomokuRoom: vi.fn(),
 }))
 
 const ONLINE_LABEL = '\uC628\uB77C\uC778'
@@ -89,7 +90,7 @@ const createdRoom: GomokuRoom = {
   roomCode: 'ABC123',
   status: 'WAITING',
   ruleSet: 'RENJU_LITE',
-  timerSeconds: 300,
+  timerSeconds: 30,
   blackPlayer: {
     patientProfileId: 7,
     nickname: 'black',
@@ -155,7 +156,7 @@ describe('GomokuOverlay online room creation', () => {
     await waitFor(() => {
       expect(createGomokuRoom).toHaveBeenCalledWith({
         ruleSet: 'RENJU_LITE',
-        timerSeconds: 300,
+        timerSeconds: 30,
         textureKey: 'character',
       })
     })

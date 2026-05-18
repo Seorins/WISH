@@ -9,6 +9,7 @@ import {
   leaveGomokuRoom,
   playGomokuMove,
   resignGomokuRoom,
+  startGomokuRoom,
   type GomokuEndReason,
   type GomokuRanking,
   type GomokuRoom,
@@ -16,6 +17,7 @@ import {
   type GomokuStats,
   type GomokuStone as ApiGomokuStone,
 } from '@wish/api-client'
+import { assetPath } from '@/game/assets/assetPath'
 import {
   PLAYER_OUTFITS,
   getPlayerOutfit,
@@ -54,7 +56,7 @@ type OnlinePanelTab = 'rooms' | 'stats' | 'ranking'
 
 const HUMAN_STONE: Stone = 'black'
 const COMPUTER_STONE: Stone = 'white'
-const DEFAULT_TIMER_SECONDS = 300
+const DEFAULT_TIMER_SECONDS = 30
 const ONLINE_RULE_SET: RuleSet = 'renju-lite'
 const ONLINE_AVATAR_SIZE = 54
 const ONLINE_AVATAR_FRAME_SIZE = 78
@@ -110,6 +112,10 @@ const text = {
   waitingRooms: '\uB300\uAE30 \uC911\uC778 \uBC29',
   waiting: '\uB300\uAE30',
   waitingOpponent: '\uC0C1\uB300\uB97C \uAE30\uB2E4\uB9AC\uB294 \uC911',
+  waitingHostStart:
+    '\uBC29\uC7A5\uC774 \uB300\uAD6D\uC744 \uC2DC\uC791\uD560 \uB54C\uAE4C\uC9C0 \uB300\uAE30',
+  readyToStart: '\uC0C1\uB300 \uC785\uC7A5 \uC644\uB8CC',
+  startRoom: '\uAC8C\uC784 \uC2DC\uC791',
   noRooms: '\uC785\uC7A5\uD560 \uBC29\uC774 \uC5C6\uC5B4\uC694.',
   roomCode: '\uBC29 \uCF54\uB4DC',
   myStats: '\uB0B4 \uC804\uC801',
@@ -146,9 +152,9 @@ const text = {
 } as const
 
 const timerOptions = [
-  { label: '3\uBD84', value: 180 },
-  { label: '5\uBD84', value: 300 },
-  { label: '10\uBD84', value: 600 },
+  { label: '15\uCD08', value: 15 },
+  { label: '30\uCD08', value: 30 },
+  { label: '60\uCD08', value: 60 },
 ] as const
 
 const starPoints = new Set(['3:3', '3:11', '7:7', '11:3', '11:11'])
@@ -399,6 +405,24 @@ export function GomokuOverlay({
     [ensureOnlinePatientProfile, loadOnlineDashboard, selectedOnlineOutfit.textureKey],
   )
 
+  const handleOnlineStart = useCallback(async () => {
+    if (!onlineRoomId) return
+    setOnlineBusy(true)
+    try {
+      const response = await startGomokuRoom(onlineRoomId)
+      if (!response.data) {
+        throw new Error(text.onlineActionFailed)
+      }
+      setOnlineRoom(response.data)
+      setOnlineError('')
+      await loadOnlineDashboard()
+    } catch (error) {
+      setOnlineError(getApiErrorMessage(error, text.onlineActionFailed))
+    } finally {
+      setOnlineBusy(false)
+    }
+  }, [loadOnlineDashboard, onlineRoomId])
+
   const handleOnlineResign = useCallback(async () => {
     if (!onlineRoomId) return
     setOnlineBusy(true)
@@ -431,7 +455,7 @@ export function GomokuOverlay({
       if (!response.data) {
         throw new Error(text.onlineActionFailed)
       }
-      setOnlineRoom(response.data)
+      setOnlineRoom(response.data.myStone ? response.data : null)
       setOnlineError('')
       await loadOnlineDashboard()
     } catch (error) {
@@ -568,6 +592,13 @@ export function GomokuOverlay({
   }, [mode, resetGame, ruleSet, timerSeconds])
 
   useEffect(() => {
+    if (!open || mode === 'online' || !timerEnabled || effectiveStatus.phase !== 'playing') {
+      return
+    }
+    setTimers(previous => ({ ...previous, [currentTurn]: timerSeconds }))
+  }, [currentTurn, effectiveStatus.phase, mode, open, timerEnabled, timerSeconds])
+
+  useEffect(() => {
     if (!open || mode !== 'online' || !hasOnlinePatientProfile) return
     void loadOnlineDashboard()
   }, [hasOnlinePatientProfile, loadOnlineDashboard, mode, open])
@@ -648,6 +679,12 @@ export function GomokuOverlay({
   }, [loadOnlineDashboard, mode, onlineRoomId, onlineRoomStatus])
 
   if (!open) return null
+
+  const canStartOnlineRoom =
+    mode === 'online' &&
+    onlineRoom?.status === 'WAITING' &&
+    Boolean(onlineRoom.whitePlayer) &&
+    myOnlineStone === 'black'
 
   const handleCellClick = (position: Position) => {
     if (mode === 'online') {
@@ -783,6 +820,7 @@ export function GomokuOverlay({
           </section>
 
           <aside className="gomoku-side">
+            <ModePanel mode={mode} onModeChange={handleModeChange} />
             {mode !== 'online' ? (
               <ControlPanel
                 mode={mode}
@@ -790,7 +828,6 @@ export function GomokuOverlay({
                 ruleSet={ruleSet}
                 timerEnabled={timerEnabled}
                 timerSeconds={timerSeconds}
-                onModeChange={handleModeChange}
                 onComputerLevelChange={setComputerLevel}
                 onRuleSetChange={setRuleSet}
                 onTimerEnabledChange={setTimerEnabled}
@@ -815,19 +852,21 @@ export function GomokuOverlay({
                   currentTurn={currentTurn}
                   myOnlineStone={myOnlineStone}
                   selectedOutfit={selectedOnlineOutfit}
+                  timers={onlineTimers}
                 />
               </>
             ) : null}
-            <MatchPanel
-              currentTurn={currentTurn}
-              timers={mode === 'online' ? onlineTimers : timers}
-              scoreboard={mode === 'online' ? null : scoreboard}
-              timerEnabled={mode === 'online' || timerEnabled}
-              blackName={mode === 'online' ? onlineRoom?.blackPlayer.nickname : undefined}
-              whiteName={
-                mode === 'online' ? (onlineRoom?.whitePlayer?.nickname ?? text.waiting) : undefined
-              }
-            />
+            {mode !== 'online' ? (
+              <PracticeVersusPanel
+                mode={mode}
+                currentTurn={currentTurn}
+                timers={timers}
+                scoreboard={scoreboard}
+                timerEnabled={timerEnabled}
+                computerLevel={computerLevel}
+                selectedOutfit={selectedOnlineOutfit}
+              />
+            ) : null}
             {mode === 'online' ? (
               <ControlPanel
                 mode={mode}
@@ -835,7 +874,6 @@ export function GomokuOverlay({
                 ruleSet={ruleSet}
                 timerEnabled={timerEnabled}
                 timerSeconds={timerSeconds}
-                onModeChange={handleModeChange}
                 onComputerLevelChange={setComputerLevel}
                 onRuleSetChange={setRuleSet}
                 onTimerEnabledChange={setTimerEnabled}
@@ -846,6 +884,13 @@ export function GomokuOverlay({
               <div className="gomoku-actions" aria-label="\uB300\uAD6D \uBA85\uB839">
                 <button type="button" onClick={handleOnlineRefresh} disabled={onlineBusy}>
                   {text.refresh}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleOnlineStart}
+                  disabled={!canStartOnlineRoom || onlineBusy}
+                >
+                  {text.startRoom}
                 </button>
                 <button
                   type="button"
@@ -887,13 +932,49 @@ export function GomokuOverlay({
   )
 }
 
+function ModePanel({
+  mode,
+  onModeChange,
+}: {
+  mode: GameMode
+  onModeChange: (mode: GameMode) => void
+}) {
+  return (
+    <section className="gomoku-panel gomoku-mode-panel" aria-label={text.mode}>
+      <span>{text.mode}</span>
+      <div className="gomoku-segmented gomoku-mode-segmented">
+        <button
+          type="button"
+          className={mode === 'computer' ? 'active' : ''}
+          onClick={() => onModeChange('computer')}
+        >
+          {text.computer}
+        </button>
+        <button
+          type="button"
+          className={mode === 'local' ? 'active' : ''}
+          onClick={() => onModeChange('local')}
+        >
+          {text.local}
+        </button>
+        <button
+          type="button"
+          className={mode === 'online' ? 'active' : ''}
+          onClick={() => onModeChange('online')}
+        >
+          {text.online}
+        </button>
+      </div>
+    </section>
+  )
+}
+
 function ControlPanel({
   mode,
   computerLevel,
   ruleSet,
   timerEnabled,
   timerSeconds,
-  onModeChange,
   onComputerLevelChange,
   onRuleSetChange,
   onTimerEnabledChange,
@@ -904,7 +985,6 @@ function ControlPanel({
   ruleSet: RuleSet
   timerEnabled: boolean
   timerSeconds: number
-  onModeChange: (mode: GameMode) => void
   onComputerLevelChange: (level: ComputerLevel) => void
   onRuleSetChange: (ruleSet: RuleSet) => void
   onTimerEnabledChange: (enabled: boolean) => void
@@ -912,33 +992,6 @@ function ControlPanel({
 }) {
   return (
     <section className="gomoku-panel">
-      <div className="gomoku-control-group">
-        <span>{text.mode}</span>
-        <div className="gomoku-segmented">
-          <button
-            type="button"
-            className={mode === 'computer' ? 'active' : ''}
-            onClick={() => onModeChange('computer')}
-          >
-            {text.computer}
-          </button>
-          <button
-            type="button"
-            className={mode === 'local' ? 'active' : ''}
-            onClick={() => onModeChange('local')}
-          >
-            {text.local}
-          </button>
-          <button
-            type="button"
-            className={mode === 'online' ? 'active' : ''}
-            onClick={() => onModeChange('online')}
-          >
-            {text.online}
-          </button>
-        </div>
-      </div>
-
       {mode !== 'online' ? (
         <div className="gomoku-control-group">
           <span>{text.computerLevel}</span>
@@ -1022,52 +1075,119 @@ function ControlPanel({
   )
 }
 
-function MatchPanel({
+const computerOpponents: Record<ComputerLevel, { name: string; imagePath: string }> = {
+  beginner: {
+    name: '\uCF54\uBABD',
+    imagePath: assetPath('images/village/background/character/komonge.png'),
+  },
+  intermediate: {
+    name: '\uC870\uC740',
+    imagePath: assetPath('images/village/background/character/joeun.png'),
+  },
+  advanced: {
+    name: '\uC138\uD604',
+    imagePath: assetPath('images/village/background/character/sehyun.png'),
+  },
+}
+
+function PracticeVersusPanel({
+  mode,
   currentTurn,
   timers,
   scoreboard,
   timerEnabled,
-  blackName,
-  whiteName,
+  computerLevel,
+  selectedOutfit,
 }: {
+  mode: Exclude<GameMode, 'online'>
   currentTurn: Stone
   timers: Record<Stone, number>
-  scoreboard: (Record<Stone, number> & { draw: number }) | null
+  scoreboard: Record<Stone, number> & { draw: number }
   timerEnabled: boolean
-  blackName?: string
-  whiteName?: string
+  computerLevel: ComputerLevel
+  selectedOutfit: PlayerOutfit
 }) {
+  const opponent = computerOpponents[computerLevel]
+  const whiteName = mode === 'computer' ? opponent.name : text.white
+
   return (
-    <section className="gomoku-panel gomoku-match-panel">
-      <div className={`gomoku-player-row ${currentTurn === 'black' ? 'active' : ''}`}>
-        <span className="gomoku-player-dot black" />
-        <span>{blackName ?? text.black}</span>
-        <strong>
-          {scoreboard
-            ? `${scoreboard.black}${text.wins}`
-            : currentTurn === 'black'
-              ? text.current
-              : ''}
-        </strong>
-        <time>{timerEnabled ? formatTime(timers.black) : '--:--'}</time>
+    <section className="gomoku-panel gomoku-online-versus gomoku-practice-versus">
+      <div className="gomoku-online-versus-heading">
+        <h2>{mode === 'computer' ? text.computer : text.local}</h2>
+        <span>
+          {text.current}: {currentTurn === 'black' ? text.black : text.white}
+        </span>
       </div>
-      <div className={`gomoku-player-row ${currentTurn === 'white' ? 'active' : ''}`}>
-        <span className="gomoku-player-dot white" />
-        <span>{whiteName ?? text.white}</span>
-        <strong>
-          {scoreboard
-            ? `${scoreboard.white}${text.wins}`
-            : currentTurn === 'white'
-              ? text.current
-              : ''}
-        </strong>
-        <time>{timerEnabled ? formatTime(timers.white) : '--:--'}</time>
-      </div>
-      <div className="gomoku-current-turn">
-        {text.current}: {currentTurn === 'black' ? text.black : text.white}
-        <span>{scoreboard ? `${scoreboard.draw}${text.draw}` : ''}</span>
+      <div className="gomoku-versus-grid">
+        <PracticePlayerCard
+          stone="black"
+          name={mode === 'computer' ? text.me : text.black}
+          isTurn={currentTurn === 'black'}
+          timerLabel={timerEnabled ? formatTime(timers.black) : '--:--'}
+          resultLabel={`${scoreboard.black}${text.wins}`}
+          outfit={selectedOutfit}
+        />
+        <span className="gomoku-versus-mark">{text.versus}</span>
+        <PracticePlayerCard
+          stone="white"
+          name={whiteName}
+          isTurn={currentTurn === 'white'}
+          timerLabel={timerEnabled ? formatTime(timers.white) : '--:--'}
+          resultLabel={`${scoreboard.white}${text.wins} / ${scoreboard.draw}${text.draw}`}
+          imagePath={mode === 'computer' ? opponent.imagePath : undefined}
+        />
       </div>
     </section>
+  )
+}
+
+function PracticePlayerCard({
+  stone,
+  name,
+  isTurn,
+  timerLabel,
+  resultLabel,
+  outfit,
+  imagePath,
+}: {
+  stone: Stone
+  name: string
+  isTurn: boolean
+  timerLabel: string
+  resultLabel: string
+  outfit?: PlayerOutfit
+  imagePath?: string
+}) {
+  const stoneLabel = stone === 'black' ? text.black : text.white
+
+  return (
+    <div className={`gomoku-versus-player ${stone} ${isTurn ? 'active' : ''}`}>
+      <div className="gomoku-versus-avatar">
+        {outfit ? (
+          <img
+            className="gomoku-versus-avatar-sheet"
+            src={outfit.sheetPath}
+            alt=""
+            aria-hidden="true"
+            style={{
+              width: `${ONLINE_AVATAR_FRAME_SIZE * 4}px`,
+              height: `${ONLINE_AVATAR_FRAME_SIZE * 4}px`,
+              transform: `translate(${(ONLINE_AVATAR_SIZE - ONLINE_AVATAR_FRAME_SIZE) / 2}px, 0)`,
+            }}
+          />
+        ) : imagePath ? (
+          <img className="gomoku-versus-npc-image" src={imagePath} alt="" aria-hidden="true" />
+        ) : (
+          <span className={`gomoku-versus-stone ${stone}`} aria-hidden="true" />
+        )}
+      </div>
+      <div>
+        <span>{stoneLabel}</span>
+        <strong>{name}</strong>
+        <em>{isTurn ? text.current : resultLabel}</em>
+        <time>{timerLabel}</time>
+      </div>
+    </div>
   )
 }
 
@@ -1143,7 +1263,11 @@ function OnlinePanel({
         {activeTab === 'rooms' ? (
           !canChooseNextRoom && room ? (
             <p className="gomoku-online-message">
-              {room.status === 'WAITING' ? text.waitingOpponent : formatRoomStatus(room)}
+              {room.status === 'WAITING'
+                ? room.whitePlayer
+                  ? text.readyToStart
+                  : text.waitingOpponent
+                : formatRoomStatus(room)}
             </p>
           ) : (
             <>
@@ -1240,11 +1364,13 @@ function OnlineVersusPanel({
   currentTurn,
   myOnlineStone,
   selectedOutfit,
+  timers,
 }: {
   room: GomokuRoom | null
   currentTurn: Stone
   myOnlineStone: Stone | null
   selectedOutfit: PlayerOutfit
+  timers: Record<Stone, number>
 }) {
   const blackPlayer = room?.blackPlayer ?? null
   const whitePlayer = room?.whitePlayer ?? null
@@ -1266,6 +1392,8 @@ function OnlineVersusPanel({
           outfit={blackIsMe ? selectedOutfit : getOnlinePlayerOutfit(blackPlayer, 0)}
           isMe={blackIsMe}
           isTurn={isPlaying && currentTurn === 'black'}
+          statusLabel={getOnlinePlayerStateLabel(room, 'black', currentTurn)}
+          timerLabel={getOnlinePlayerTimerLabel(room, timers, 'black')}
         />
         <span className="gomoku-versus-mark">{text.versus}</span>
         <OnlinePlayerCard
@@ -1276,6 +1404,8 @@ function OnlineVersusPanel({
           isMe={whiteIsMe}
           isTurn={isPlaying && currentTurn === 'white'}
           isWaiting={Boolean(room && !whitePlayer)}
+          statusLabel={getOnlinePlayerStateLabel(room, 'white', currentTurn)}
+          timerLabel={getOnlinePlayerTimerLabel(room, timers, 'white')}
         />
       </div>
     </section>
@@ -1288,7 +1418,9 @@ function OnlinePlayerCard({
   fallbackName,
   outfit,
   isMe,
-  isTurn,
+  isTurn: isActiveTurn,
+  statusLabel,
+  timerLabel,
   isWaiting = false,
 }: {
   stone: Stone
@@ -1297,9 +1429,11 @@ function OnlinePlayerCard({
   outfit: PlayerOutfit
   isMe: boolean
   isTurn: boolean
+  statusLabel: string
+  timerLabel: string
   isWaiting?: boolean
 }) {
-  const stoneLabel = stone === 'black' ? text.black : text.white
+  const stoneLabel = `${stone === 'black' ? text.black : text.white} / ${statusLabel}`
 
   return (
     <div
@@ -1307,7 +1441,7 @@ function OnlinePlayerCard({
         'gomoku-versus-player',
         stone,
         isMe ? 'me' : '',
-        isTurn ? 'active' : '',
+        isActiveTurn ? 'active' : '',
         isWaiting ? 'waiting' : '',
       ]
         .filter(Boolean)
@@ -1329,10 +1463,8 @@ function OnlinePlayerCard({
       <div>
         <span>{isMe ? text.me : isWaiting ? text.waiting : text.opponent}</span>
         <strong>{player?.nickname ?? fallbackName}</strong>
-        <em>
-          {stoneLabel}
-          {isTurn ? ` · ${text.current}` : ''}
-        </em>
+        <em>{stoneLabel}</em>
+        <time>{timerLabel}</time>
       </div>
     </div>
   )
@@ -1488,11 +1620,16 @@ function getStatusPresentation({
   }
 
   if (mode === 'online' && room?.status === 'WAITING') {
+    const waitingDetail = room.whitePlayer
+      ? myOnlineStone === 'black'
+        ? text.readyToStart
+        : text.waitingHostStart
+      : text.onlineLobbyGuide
     return {
       tone: 'online',
       label: `${text.roomCode} ${room.roomCode}`,
-      headline: text.waitingOpponent,
-      detail: text.onlineLobbyGuide,
+      headline: room.whitePlayer ? text.readyToStart : text.waitingOpponent,
+      detail: waitingDetail,
     } as const
   }
 
@@ -1592,11 +1729,35 @@ function getOnlineGameStatus(room: GomokuRoom, fallback: GameStatus): GameStatus
 }
 
 function getOnlineStatusMessage(room: GomokuRoom, myStone: Stone | null, currentTurn: Stone) {
-  if (room.status === 'WAITING') return text.waitingOpponent
+  if (room.status === 'WAITING') {
+    if (!room.whitePlayer) return text.waitingOpponent
+    return myStone === 'black' ? text.readyToStart : text.waitingHostStart
+  }
   if (room.status === 'CANCELLED') return text.cancelled
   if (room.status === 'FINISHED') return formatEndReason(room.endReason)
   if (myStone === null) return currentTurn === 'black' ? text.black : text.white
   return myStone === currentTurn ? text.myTurn : text.opponentTurn
+}
+
+function getOnlinePlayerStateLabel(room: GomokuRoom | null, stone: Stone, currentTurn: Stone) {
+  if (!room) return text.onlineLobbyGuide
+  if (room.status === 'WAITING') {
+    if (!room.whitePlayer) return stone === 'white' ? text.waitingOpponent : text.waiting
+    return stone === 'black' ? text.readyToStart : text.waitingHostStart
+  }
+  if (room.status === 'PLAYING') return stone === currentTurn ? text.current : text.waiting
+  return formatRoomStatus(room)
+}
+
+function getOnlinePlayerTimerLabel(
+  room: GomokuRoom | null,
+  timers: Record<Stone, number>,
+  stone: Stone,
+) {
+  if (!room) return ''
+  if (room.status === 'PLAYING') return formatTime(timers[stone])
+  if (room.status === 'WAITING') return `${room.timerSeconds}\uCD08`
+  return ''
 }
 
 function formatEndReason(reason: GomokuEndReason | null) {
@@ -1619,14 +1780,12 @@ function calculateOnlineTimers(room: GomokuRoom, now: number): Record<Stone, num
   for (const move of room.moves) {
     const playedAt = toTimestamp(move.playedAt)
     if (!playedAt) continue
-    const stone = fromApiStone(move.stone)
-    timers[stone] = Math.max(0, timers[stone] - Math.floor((playedAt - turnStartedAt) / 1000))
     turnStartedAt = playedAt
   }
 
   if (room.status === 'PLAYING') {
     const current = fromApiStone(room.currentTurn)
-    timers[current] = Math.max(0, timers[current] - Math.floor((now - turnStartedAt) / 1000))
+    timers[current] = Math.max(0, room.timerSeconds - Math.floor((now - turnStartedAt) / 1000))
   }
 
   return timers
@@ -1700,6 +1859,7 @@ function formatMoveNumber(position: Position) {
 }
 
 function formatTime(seconds: number) {
+  if (seconds < 60) return `${seconds}\uCD08`
   const min = Math.floor(seconds / 60)
   const sec = seconds % 60
   return `${min}:${sec.toString().padStart(2, '0')}`

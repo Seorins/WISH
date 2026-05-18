@@ -68,6 +68,7 @@ export {
   leaveGomokuRoom,
   playGomokuMove,
   resignGomokuRoom,
+  startGomokuRoom,
 } from './gomoku'
 export {
   getChartRanking,

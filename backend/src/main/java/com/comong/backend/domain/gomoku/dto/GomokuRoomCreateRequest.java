@@ -10,5 +10,5 @@ import com.comong.backend.domain.gomoku.entity.GomokuRuleSet;
 
 public record GomokuRoomCreateRequest(
         @NotNull GomokuRuleSet ruleSet,
-        @Min(60) @Max(1800) int timerSeconds,
+        @Min(10) @Max(300) int timerSeconds,
         @Size(max = 80) @Pattern(regexp = "^[A-Za-z0-9_-]*$") String textureKey) {}

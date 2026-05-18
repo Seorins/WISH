@@ -340,6 +340,24 @@
   margin-bottom: 8px;
 }
 
+.gomoku-mode-panel {
+  display: grid;
+  gap: 8px;
+  border-color: rgba(14, 114, 128, 0.34);
+  background: #eef8f6;
+}
+
+.gomoku-mode-panel > span {
+  color: #24544d;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.gomoku-mode-segmented button {
+  min-height: 44px;
+  font-size: 15px;
+}
+
 .gomoku-control-group > span {
   color: #35514c;
   font-size: 13px;
@@ -348,10 +366,15 @@
 
 .gomoku-segmented,
 .gomoku-timer-options,
-.gomoku-actions,
 .gomoku-online-tabs {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.gomoku-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
   gap: 6px;
 }
 
@@ -508,6 +531,31 @@
   transform-origin: top left;
 }
 
+.gomoku-versus-npc-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center bottom;
+}
+
+.gomoku-versus-stone {
+  width: 34px;
+  aspect-ratio: 1;
+  align-self: center;
+  justify-self: center;
+  border-radius: 50%;
+  box-shadow: 0 4px 8px rgba(29, 20, 13, 0.26);
+}
+
+.gomoku-versus-stone.black {
+  background: linear-gradient(135deg, #1d2423, #050707);
+}
+
+.gomoku-versus-stone.white {
+  border: 1px solid #ccd6cf;
+  background: linear-gradient(135deg, #ffffff, #d5ddd6);
+}
+
 .gomoku-versus-player div:last-child {
   min-width: 0;
   display: grid;
@@ -515,12 +563,18 @@
 }
 
 .gomoku-versus-player span,
-.gomoku-versus-player em {
+.gomoku-versus-player em,
+.gomoku-versus-player time {
   color: #61756e;
   font-size: 11px;
   font-style: normal;
   font-weight: 900;
   line-height: 1.25;
+}
+
+.gomoku-versus-player time {
+  color: #0e7280;
+  font-variant-numeric: tabular-nums;
 }
 
 .gomoku-versus-player strong {
