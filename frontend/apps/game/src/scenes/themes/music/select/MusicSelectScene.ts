@@ -1,10 +1,11 @@
 import Phaser from 'phaser'
+import { playSceneBgm } from '@/game/systems/sceneBgm'
 import { assetPath } from '@/game/assets/assetPath'
 import {
   createClickTargetMarker,
   createPlayer,
   ensurePlayerWalkAnimations,
-  loadPlayerSpritesheet,
+  loadPlayerSpritesheets,
   type PlayerDirection,
   type PlayerSprite,
   type RatioPoint,
@@ -18,6 +19,7 @@ import {
   setInteractionIconActive,
 } from '@/game/ui/interactionIcon'
 import {
+  NPC_DIALOG_FRAME_LAYOUT,
   createSimpleDialogUi,
   fadeSimpleDialog,
   setCenteredDialogText,
@@ -49,9 +51,6 @@ const MUSIC_RETURN_SPAWN = { xRatio: 0.238, yRatio: 0.228 }
 const GISUNG_ON_WINDOW = { xRatio: 0.5, yRatio: 0.42, heightRatio: 0.32 }
 const GISUNG_INTERACTION_RADIUS_RATIO = 0.16
 const GISUNG_TALK_ICON_OFFSET_RATIO = 1.18
-// frame asset is 2172 x 724 — values below are in that pixel space
-const DIALOG_TEXT_BOX = { x: 580, y: 180, width: 1500, height: 400 }
-const DIALOG_NAME_BOX = { x: 505, y: 107, width: 390, height: 150 }
 const CONTENT_CONFIRM_VISIBLE_MS = 1300
 const RHYTHM_TARGET_SCENE_KEY = 'MusicSongSelectScene'
 const DEBUG_OBSTACLES = false
@@ -166,6 +165,10 @@ export class MusicSelectScene extends Phaser.Scene {
   private backgroundDisplayArea!: BackgroundDisplayArea
 
   private readonly handlePointerDown = (pointer: Phaser.Input.Pointer) => {
+    if (this.emojiPalette?.consumePointerDown(pointer)) {
+      return
+    }
+
     if (this.handleObstacleEditorPointerDown(pointer)) {
       return
     }
@@ -220,10 +223,11 @@ export class MusicSelectScene extends Phaser.Scene {
     )
     loadInteractionIcons(this)
     this.load.image('gisung-dialog-frame', assetPath('images/npcs/gisung/dialog-frame.png'))
-    loadPlayerSpritesheet(this)
+    loadPlayerSpritesheets(this)
   }
 
   create(data: MusicSelectSceneData = {}) {
+    playSceneBgm(this)
     const { width: vw, height: vh } = this.scale
     this.isTransitioning = false
     this.isDialogVisible = false
@@ -569,19 +573,9 @@ export class MusicSelectScene extends Phaser.Scene {
 
   private createDialogUi() {
     this.dialog = createSimpleDialogUi(this, {
+      ...NPC_DIALOG_FRAME_LAYOUT,
       frameKey: 'gisung-dialog-frame',
-      textBox: DIALOG_TEXT_BOX,
-      dialogWidthRatio: 0.7,
-      maxDialogWidth: 1000,
-      fontSize: 46,
-      lineSpacing: 6,
-      nameBox: DIALOG_NAME_BOX,
       nameText: '기성',
-      nameFontColor: '#2a1f17',
-      nameFontSize: 48,
-      nameLetterSpacing: 6,
-      // only flatten the optical offset for single-line text — multi-line keeps default
-      opticalOffsets: { single: 0 },
     })
   }
 

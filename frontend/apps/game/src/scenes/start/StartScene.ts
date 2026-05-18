@@ -1,6 +1,8 @@
 import Phaser from 'phaser'
+import { playSceneBgm } from '@/game/systems/sceneBgm'
 import { assetPath } from '@/game/assets/assetPath'
 import { hasValidAuthToken } from '@/features/auth'
+import { loadTaekwondoBeltEmoteImages } from '@/features/village-realtime'
 
 export class StartScene extends Phaser.Scene {
   constructor() {
@@ -11,9 +13,11 @@ export class StartScene extends Phaser.Scene {
     this.load.image('home', assetPath('images/common/background/home.png'))
     this.load.image('logo', assetPath('images/common/logo.png'))
     this.load.image('startbtn', assetPath('images/ui/buttons/startbtn.png'))
+    loadTaekwondoBeltEmoteImages(this)
   }
 
   create() {
+    playSceneBgm(this)
     const { width, height } = this.scale
 
     // 배경

@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { playSceneBgm } from '@/game/systems/sceneBgm'
 import {
   createQuizRoom,
   ensureFreshAccessToken,
@@ -47,23 +48,77 @@ type LobbyState =
   | 'transitioningToPlay'
   | 'leaving'
 
+export interface QuizLobbySceneInit {
+  snapshot: QuizRoomSnapshot
+  currentUserId: number | null
+  realtimeClient: QuizRealtimeClient | null
+  statusMessage?: string
+}
+
+const ROUND_OPTIONS = [3, 6, 9, 12, 15] as const
+const DEFAULT_SELECTED_ROUNDS = 3
+const MIN_VISIBLE_PLAYER_SLOTS = 6
 const PALETTE_DANGER = CUTE_CARD_PALETTES.rose
 
-// 게임 느낌 큰 버튼 컬러 — 채도 높여서 카드 톤과 분리.
-const COLOR_SOLO = 0xf4a64a
-const COLOR_SOLO_DARK = 0xc77a1f
-const COLOR_MULTI = 0x6aaa64
-const COLOR_MULTI_DARK = 0x447f3e
-const COLOR_CREATE = 0xf4a64a
-const COLOR_CREATE_DARK = 0xc77a1f
-const COLOR_JOIN = 0x4a8fc4
-const COLOR_JOIN_DARK = 0x2e6592
+// 카드 팔레트 — 채도 톤다운된 코디네이션 페어. 이전엔 #f4a64a/#6aaa64/#4a8fc4 가 너무 쨍해서 산만했음.
+// 같은 채도/명도 패밀리에서 따뜻함(피치/테라코타) ↔ 차분함(세이지/슬레이트) 으로만 갈라줌.
+const COLOR_WARM = 0xe89865
+const COLOR_WARM_DARK = 0xb06840
+const COLOR_COOL = 0x82b596
+const COLOR_COOL_DARK = 0x517e64
+const COLOR_SLATE = 0x7c9bc0
+const COLOR_SLATE_DARK = 0x4f6c91
+
+// 슬롯 아바타 — QuizPlayScene 과 동일한 char1~9 (art/ui) 를 방마다 섞인 순서로 사용.
+// Math.random() 을 쓰면 클라이언트마다 다르게 보일 수 있어 roomId + joinOrder 로 고정 랜덤 매핑.
+const SLOT_CHAR_NUMBERS = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const
+const SLOT_CHAR_CROP_RATIO = 0.55
+const SLOT_CHAR_STEPS = [1, 2, 4, 5, 7, 8] as const
+
+function slotCharKey(charNumber: number): string {
+  return `quiz-lobby-char${charNumber}`
+}
+
+function slotCharPath(charNumber: number): string {
+  return `images/themes/art/ui/char${charNumber}.png`
+}
+
+function hashString(value: string): number {
+  let hash = 2166136261
+  for (let i = 0; i < value.length; i++) {
+    hash = Math.imul(hash ^ value.charCodeAt(i), 16777619)
+  }
+  return hash >>> 0
+}
+
+function slotCharNumber(joinOrder: number, roomId: string): number {
+  const seed = hashString(roomId || 'quiz-room')
+  const normalizedOrder = Math.max(0, Math.trunc(joinOrder))
+  const step = SLOT_CHAR_STEPS[(seed >>> 8) % SLOT_CHAR_STEPS.length]
+  const index = (seed + normalizedOrder * step) % SLOT_CHAR_NUMBERS.length
+  return SLOT_CHAR_NUMBERS[index]
+}
+
+function slotCharKeyForMember(joinOrder: number, roomId: string): string {
+  return slotCharKey(slotCharNumber(joinOrder, roomId))
+}
 
 export class QuizLobbyScene extends Phaser.Scene {
   private state: LobbyState = 'modeSelect'
   private snapshot: QuizRoomSnapshot | null = null
   private currentUserId: number | null = null
   private realtimeClient: QuizRealtimeClient | null = null
+  private initialLobbyData: QuizLobbySceneInit | null = null
+  private selectedTotalRounds: (typeof ROUND_OPTIONS)[number] = DEFAULT_SELECTED_ROUNDS
+  /**
+   * BE 가 `/user/queue/quiz/{roomId}/prompt` 로 push 해주는 제시어를 일단 stash.
+   * <p>로비에서 BE 가 startNextRound 를 부르면 (a) roundStarted broadcast (b) sendPromptToUser 를
+   * 거의 동시에 발사한다. WS broadcast 가 호스트의 REST `/start` 응답보다 먼저 도착하면
+   * `transitionToPlayScene(snapshot, null, wordLength)` 가 prompt=null 로 PlayScene 을 띄워버려
+   * 출제자(=호스트, 라운드 1 drawer) 화면이 "제시어 확인 중" 으로 굳어버리던 버그가 있었다.
+   * 여기에 보관한 prompt 는 transitionToPlayScene 의 fallback 으로 사용.
+   */
+  private pendingPrompt: PromptAssignment | null = null
 
   private root!: Phaser.GameObjects.Container
   private backdrop: Phaser.GameObjects.Rectangle | null = null
@@ -76,6 +131,27 @@ export class QuizLobbyScene extends Phaser.Scene {
     super('QuizLobbyScene')
   }
 
+  init(data: Partial<QuizLobbySceneInit> = {}) {
+    this.state = 'modeSelect'
+    this.snapshot = null
+    this.currentUserId = null
+    this.realtimeClient = null
+    this.pendingPrompt = null
+    this.selectedTotalRounds = data.snapshot
+      ? normalizeRoundOption(data.snapshot.totalRounds)
+      : DEFAULT_SELECTED_ROUNDS
+    this.menuContainer = null
+    this.lobbyContainer = null
+    this.initialLobbyData = data.snapshot
+      ? {
+          snapshot: data.snapshot,
+          currentUserId: data.currentUserId ?? null,
+          realtimeClient: data.realtimeClient ?? null,
+          statusMessage: data.statusMessage ?? '',
+        }
+      : null
+  }
+
   preload() {
     // ArtSelectScene 도 같은 키로 로드하지만, 다른 진입 경로 (재접속 새로고침 등) 에서 본 씬이 먼저 뜰 수도 있어 안전하게 중복 로드.
     if (!this.textures.exists('art-room-background')) {
@@ -84,9 +160,17 @@ export class QuizLobbyScene extends Phaser.Scene {
         assetPath('images/themes/art/background/background.png'),
       )
     }
+    // 슬롯 아바타 — 멤버 슬롯에 NPC 캐릭터 상반신을 노출. 게임 씬과 같은 char1~4.
+    SLOT_CHAR_NUMBERS.forEach(charNumber => {
+      const key = slotCharKey(charNumber)
+      if (!this.textures.exists(key)) {
+        this.load.image(key, assetPath(slotCharPath(charNumber)))
+      }
+    })
   }
 
   create() {
+    playSceneBgm(this)
     addCoverBackground(this, 'art-room-background')
 
     // 메뉴/로비 모두 가독성을 위해 배경 위에 어두운 백드롭을 깔아둔다. alpha 0.55 면 배경 분위기는 살리고 텍스트는 또렷.
@@ -104,6 +188,7 @@ export class QuizLobbyScene extends Phaser.Scene {
         color: '#ffe9c2',
       })
       .setOrigin(0.5)
+      .setVisible(false)
     this.root.add(this.statusText)
 
     this.scale.on('resize', this.layout, this)
@@ -112,7 +197,11 @@ export class QuizLobbyScene extends Phaser.Scene {
     this.game.events.on('quiz-join-code:submitted', this.handleCodeSubmitted, this)
     this.game.events.on('quiz-join-code:cancelled', this.handleCodeCancelled, this)
 
-    this.showModeSelect()
+    if (this.initialLobbyData) {
+      this.enterTransferredLobby(this.initialLobbyData)
+    } else {
+      this.showModeSelect()
+    }
   }
 
   private layout() {
@@ -124,7 +213,7 @@ export class QuizLobbyScene extends Phaser.Scene {
     } else if (this.state === 'multiMethod') {
       this.drawMultiMethod()
     }
-    this.statusText.setPosition(this.scale.width / 2, this.scale.height - 48)
+    this.positionStatusText()
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -160,8 +249,8 @@ export class QuizLobbyScene extends Phaser.Scene {
         icon: '🎨',
         title: '솔로 모드',
         desc: 'AI 랑 둘이서\n제시어 그림 퀴즈',
-        fill: COLOR_SOLO,
-        shadow: COLOR_SOLO_DARK,
+        fill: COLOR_WARM,
+        shadow: COLOR_WARM_DARK,
         onClick: () => this.startSingleplayer(),
       }),
     )
@@ -171,8 +260,8 @@ export class QuizLobbyScene extends Phaser.Scene {
         icon: '👥',
         title: '멀티 모드',
         desc: '친구들이랑 같이\n그리고 맞춰봐',
-        fill: COLOR_MULTI,
-        shadow: COLOR_MULTI_DARK,
+        fill: COLOR_COOL,
+        shadow: COLOR_COOL_DARK,
         onClick: () => this.showMultiMethod(),
       }),
     )
@@ -225,8 +314,8 @@ export class QuizLobbyScene extends Phaser.Scene {
         icon: '🏠',
         title: '방 만들기',
         desc: '코드를 받아서\n친구를 초대해',
-        fill: COLOR_CREATE,
-        shadow: COLOR_CREATE_DARK,
+        fill: COLOR_WARM,
+        shadow: COLOR_WARM_DARK,
         onClick: () => this.startCreate(),
       }),
     )
@@ -236,8 +325,8 @@ export class QuizLobbyScene extends Phaser.Scene {
         icon: '🔑',
         title: '코드로 입장',
         desc: '친구가 알려준\n방 코드를 입력',
-        fill: COLOR_JOIN,
-        shadow: COLOR_JOIN_DARK,
+        fill: COLOR_SLATE,
+        shadow: COLOR_SLATE_DARK,
         onClick: () => this.startJoinByCode(),
       }),
     )
@@ -363,10 +452,34 @@ export class QuizLobbyScene extends Phaser.Scene {
   private async enterLobby(snapshot: QuizRoomSnapshot) {
     this.snapshot = snapshot
     this.currentUserId = await this.resolveCurrentUserId()
+    this.selectedTotalRounds = normalizeRoundOption(snapshot.totalRounds)
     this.state = 'lobby'
     this.setStatus('')
     this.connectRealtime(snapshot)
     this.drawLobby()
+  }
+
+  private enterTransferredLobby(data: QuizLobbySceneInit) {
+    this.snapshot = data.snapshot
+    this.currentUserId = data.currentUserId
+    this.realtimeClient = data.realtimeClient
+    this.selectedTotalRounds = normalizeRoundOption(data.snapshot.totalRounds)
+    this.state = 'lobby'
+    this.pendingPrompt = null
+    if (this.realtimeClient) {
+      this.attachRealtimeHandlers(this.realtimeClient)
+    } else {
+      this.connectRealtime(data.snapshot)
+    }
+    this.drawLobby()
+    this.setStatus(data.statusMessage ?? '')
+    if (this.currentUserId === null) {
+      void this.resolveCurrentUserId().then(userId => {
+        if (this.state !== 'lobby') return
+        this.currentUserId = userId
+        this.drawLobby()
+      })
+    }
   }
 
   private async resolveCurrentUserId(): Promise<number | null> {
@@ -383,11 +496,39 @@ export class QuizLobbyScene extends Phaser.Scene {
         this.snapshot = next
         this.drawLobby()
       },
+      // BE 가 /start 직후 출제자에게 보내는 제시어 push 를 받아 stash. 자세한 사유는
+      // pendingPrompt 필드 주석 참고. 호스트가 본인의 1라운드 drawer 일 때 화면 race
+      // 를 막아주는 핵심 경로.
+      onPrompt: prompt => {
+        this.pendingPrompt = prompt
+      },
       onEvent: event => this.handleRealtimeEvent(event),
       onError: error => this.setStatus(friendlyWsError(error.message)),
       onReady: () => this.setStatus(''),
     })
     this.realtimeClient.connect()
+  }
+
+  private attachRealtimeHandlers(client: QuizRealtimeClient) {
+    client.setHandlers(this.createRealtimeHandlers())
+  }
+
+  private createRealtimeHandlers() {
+    return {
+      onSnapshot: (next: QuizRoomSnapshot) => {
+        this.snapshot = next
+        if (next.status === 'WAITING') {
+          this.selectedTotalRounds = normalizeRoundOption(next.totalRounds)
+        }
+        this.drawLobby()
+      },
+      onPrompt: (prompt: PromptAssignment) => {
+        this.pendingPrompt = prompt
+      },
+      onEvent: (event: QuizRoomEvent) => this.handleRealtimeEvent(event),
+      onError: (error: Error) => this.setStatus(friendlyWsError(error.message)),
+      onReady: () => this.setStatus(''),
+    }
   }
 
   private handleRealtimeEvent(event: QuizRoomEvent) {
@@ -413,6 +554,20 @@ export class QuizLobbyScene extends Phaser.Scene {
       }
     } else if (event.type === 'status_changed') {
       this.snapshot = { ...this.snapshot, status: event.status }
+    } else if (event.type === 'room_reset') {
+      this.snapshot = {
+        ...this.snapshot,
+        status: event.status,
+        hostUserId: event.hostUserId,
+        members: event.members,
+        roundNumber: event.roundNumber,
+        currentDrawerUserId: event.currentDrawerUserId,
+        roundEndsAtEpochMillis: null,
+      }
+      this.pendingPrompt = null
+      this.selectedTotalRounds = normalizeRoundOption(this.snapshot.totalRounds)
+      this.state = 'lobby'
+      this.setStatus(event.message ?? '')
     } else if (event.type === 'round_started') {
       // 게스트 진입 경로: 호스트가 /start 호출 → BE broadcast → 여기서 플레이 씬 전이.
       // 호스트는 REST 응답 핸들러에서 직접 전이하므로(이미 state=transitioningToPlay), 중복 호출 안 됨.
@@ -421,23 +576,48 @@ export class QuizLobbyScene extends Phaser.Scene {
         status: event.status,
         roundNumber: event.roundNumber,
         currentDrawerUserId: event.currentDrawerUserId,
+        roundEndsAtEpochMillis: event.roundEndsAtEpochMillis,
+        totalRounds: event.totalRounds,
       }
-      this.transitionToPlayScene(this.snapshot, null)
+      this.transitionToPlayScene(this.snapshot, null, event.wordLength)
       return
     }
     this.drawLobby()
   }
 
-  private transitionToPlayScene(snapshot: QuizRoomSnapshot, prompt: PromptAssignment | null) {
+  private transitionToPlayScene(
+    snapshot: QuizRoomSnapshot,
+    prompt: PromptAssignment | null,
+    wordLength?: number,
+  ) {
     if (this.state === 'transitioningToPlay' || this.state === 'leaving') return
     this.state = 'transitioningToPlay'
-    fadeToScene(this, 'QuizPlayScene', {
-      duration: 220,
-      data: {
+    const realtimeClient = this.realtimeClient
+    this.realtimeClient = null
+    // 호스트의 1라운드 race: WS roundStarted 가 REST /start .then() 보다 먼저 도착하면
+    // 본 함수가 prompt=null 로 호출된다. BE 의 sendPromptToUser push 는 그 사이/페이드
+    // 중에도 도착할 수 있으니, onPrompt 는 노옵 하지 말고 stash 를 계속 유지.
+    realtimeClient?.setHandlers({
+      onSnapshot: () => {},
+      onPrompt: nextPrompt => {
+        this.pendingPrompt = nextPrompt
+      },
+      onEvent: () => {},
+      onError: () => {},
+    })
+    // 페이드 종료 시점에 prompt 를 한 번 더 resolve — 220ms 페이드 동안 늦게 도착한 push
+    // 까지 픽업한다. fadeToScene 유틸리티는 data 를 호출 시점에 캡처하므로 여기선 수동 전개.
+    const duration = 220
+    this.cameras.main.fadeOut(duration, 0, 0, 0)
+    this.time.delayedCall(duration, () => {
+      const effectivePrompt = prompt ?? this.pendingPrompt
+      this.scene.start('QuizPlayScene', {
         snapshot,
         currentUserId: this.currentUserId,
-        prompt,
-      },
+        prompt: effectivePrompt,
+        wordLength: wordLength ?? effectivePrompt?.word.length ?? null,
+        realtimeClient,
+      })
     })
   }
 
@@ -469,15 +649,20 @@ export class QuizLobbyScene extends Phaser.Scene {
     const codeBoxY = headerY + 22
     this.drawCodeBox(container, w / 2, codeBoxY, codeBoxW, codeBoxH, this.snapshot.code)
 
-    // 멤버 슬롯 — 최대 정원만큼 가로 정렬, 게임 메뉴 톤(다크 카드 + 강조 보더).
-    const slotW = Math.min(180, (w - 80) / this.snapshot.maxPlayers - 20)
+    // 멤버 슬롯 — 기존 4인 스냅샷으로 들어와도 6인 룸 기준 슬롯을 먼저 보여준다.
+    const visibleSlots = Math.max(
+      MIN_VISIBLE_PLAYER_SLOTS,
+      this.snapshot.maxPlayers,
+      this.snapshot.members.length,
+    )
+    const slotW = Math.min(180, (w - 80) / visibleSlots - 20)
     const slotH = 220
     const slotGap = 20
-    const totalW = this.snapshot.maxPlayers * slotW + (this.snapshot.maxPlayers - 1) * slotGap
+    const totalW = visibleSlots * slotW + (visibleSlots - 1) * slotGap
     const slotY = h * 0.56
     let cursorX = w / 2 - totalW / 2 + slotW / 2
 
-    for (let i = 0; i < this.snapshot.maxPlayers; i++) {
+    for (let i = 0; i < visibleSlots; i++) {
       const member = this.snapshot.members[i] ?? null
       const slot = this.createMemberSlot(cursorX, slotY, slotW, slotH, member, i)
       container.add(slot)
@@ -487,16 +672,11 @@ export class QuizLobbyScene extends Phaser.Scene {
     // 액션 버튼 — 시작은 큰 게임 버튼, 나가기는 pill.
     const isHost = this.snapshot.hostUserId === this.currentUserId
     const canStart = isHost && this.snapshot.members.length >= this.snapshot.minPlayers
-    const buttonY = h - 110
+    const buttonY = h - 92
 
     if (isHost) {
-      this.drawStartButton(
-        container,
-        w / 2,
-        buttonY,
-        canStart ? '시작하기' : `친구 ${this.snapshot.minPlayers}명 모이면 시작`,
-        canStart,
-      )
+      this.drawRoundSelector(container, w / 2, buttonY - 74)
+      this.drawStartButton(container, w / 2, buttonY, '게임 시작', canStart)
     } else {
       const waitText = this.add
         .text(w / 2, buttonY, '방장이 시작하면 출발!', {
@@ -510,13 +690,15 @@ export class QuizLobbyScene extends Phaser.Scene {
       container.add(waitText)
     }
 
-    container.add(
-      this.createPillButton(w - 130, buttonY, 200, 56, '방 나가기', PALETTE_DANGER, () =>
-        this.handleLeave(),
-      ),
-    )
+    // 우측 상단 X 버튼 — 방 나가기. 모달의 close 패턴.
+    container.add(this.createCloseButton(w - 28, 28, () => this.handleLeave()))
   }
 
+  /**
+   * 코드 박스 — 클릭하면 클립보드에 방 코드 복사. 호버 시 살짝 밝아지고, 복사 직후 박스 아래
+   * "복사됨!" 토스트가 1.4s 동안 뜨고 사라진다. (Phaser graphic 위에 hit zone Rectangle 을
+   * 깔아두는 패턴은 본 씬의 다른 큰 버튼과 동일 — 시각=클릭 영역 일치.)
+   */
   private drawCodeBox(
     container: Phaser.GameObjects.Container,
     cx: number,
@@ -525,13 +707,19 @@ export class QuizLobbyScene extends Phaser.Scene {
     h: number,
     code: string,
   ) {
+    const hit = this.add.rectangle(cx, cy + h / 2, w, h, 0xffffff, 0.001).setOrigin(0.5)
+    hit.setInteractive({ useHandCursor: true })
+
     const g = this.add.graphics()
-    // 짙은 배경 + 밝은 외곽선으로 게임 HUD 톤.
-    g.fillStyle(0x1a2230, 0.96)
-    g.fillRoundedRect(cx - w / 2, cy, w, h, 18)
-    g.lineStyle(3, 0xffe9c2, 0.95)
-    g.strokeRoundedRect(cx - w / 2, cy, w, h, 18)
-    container.add(g)
+    const draw = (hovered: boolean) => {
+      g.clear()
+      // 짙은 배경 + 밝은 외곽선으로 게임 HUD 톤.
+      g.fillStyle(hovered ? 0x243049 : 0x1a2230, 0.96)
+      g.fillRoundedRect(cx - w / 2, cy, w, h, 18)
+      g.lineStyle(3, hovered ? 0xffffff : 0xffe9c2, hovered ? 1 : 0.95)
+      g.strokeRoundedRect(cx - w / 2, cy, w, h, 18)
+    }
+    draw(false)
 
     const text = this.add
       .text(cx, cy + h / 2, code, {
@@ -542,7 +730,155 @@ export class QuizLobbyScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
     text.setLetterSpacing(8)
-    container.add(text)
+
+    container.add([hit, g, text])
+
+    hit.on(Phaser.Input.Events.POINTER_OVER, () => draw(true))
+    hit.on(Phaser.Input.Events.POINTER_OUT, () => draw(false))
+    hit.on(Phaser.Input.Events.POINTER_DOWN, () => this.copyCodeToClipboard(code, cx, cy + h + 12))
+  }
+
+  private async copyCodeToClipboard(code: string, toastX: number, toastY: number) {
+    let ok = false
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(code)
+        ok = true
+      }
+    } catch {
+      ok = false
+    }
+    if (!ok) {
+      // 폴백 — 안전 컨텍스트 외/권한 거절 등. 임시 textarea 로 execCommand.
+      try {
+        const ta = document.createElement('textarea')
+        ta.value = code
+        ta.style.position = 'fixed'
+        ta.style.opacity = '0'
+        document.body.appendChild(ta)
+        ta.select()
+        ok = document.execCommand('copy')
+        document.body.removeChild(ta)
+      } catch {
+        ok = false
+      }
+    }
+    this.showCopyToast(ok ? '복사됨!' : '복사 실패', toastX, toastY)
+  }
+
+  private showCopyToast(label: string, cx: number, cy: number) {
+    const toast = this.add
+      .text(cx, cy, label, {
+        fontFamily: FONT_FAMILY,
+        fontSize: '16px',
+        color: '#1a0e05',
+        backgroundColor: '#ffe9c2',
+        padding: { x: 12, y: 6 },
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5, 0)
+      .setDepth(50)
+    this.root.add(toast)
+    this.tweens.add({
+      targets: toast,
+      alpha: { from: 1, to: 0 },
+      y: cy - 8,
+      duration: 1400,
+      ease: 'Sine.easeOut',
+      onComplete: () => toast.destroy(),
+    })
+  }
+
+  /**
+   * 우측 상단 모달 close 버튼 — 작은 라운드 사각형 + X 글리프. 빨강 톤(PALETTE_DANGER) 으로 위험/종료 신호.
+   */
+  private createCloseButton(cx: number, cy: number, onClick: () => void) {
+    const container = this.add.container(cx, cy)
+    const size = 36
+    const radius = 8
+
+    const hit = this.add.rectangle(0, 0, size + 4, size + 4, 0xffffff, 0.001)
+    hit.setInteractive({ useHandCursor: true })
+
+    const g = this.add.graphics()
+    const draw = (hovered: boolean) => {
+      g.clear()
+      g.fillStyle(0x000000, 0.18)
+      g.fillRoundedRect(-size / 2 + 1, -size / 2 + 2, size, size, radius)
+      g.fillStyle(PALETTE_DANGER.accent, hovered ? 1 : 0.92)
+      g.fillRoundedRect(-size / 2, -size / 2, size, size, radius)
+      g.lineStyle(1.5, 0xffffff, hovered ? 1 : 0.85)
+      g.strokeRoundedRect(-size / 2, -size / 2, size, size, radius)
+    }
+    draw(false)
+
+    const x = this.add
+      .text(0, 1, '✕', {
+        fontFamily: FONT_FAMILY,
+        fontSize: '18px',
+        color: '#ffffff',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5)
+    container.add([hit, g, x])
+
+    hit.on(Phaser.Input.Events.POINTER_OVER, () => draw(true))
+    hit.on(Phaser.Input.Events.POINTER_OUT, () => draw(false))
+    hit.on(Phaser.Input.Events.POINTER_DOWN, onClick)
+    return container
+  }
+
+  private drawRoundSelector(container: Phaser.GameObjects.Container, cx: number, cy: number) {
+    const optionW = 56
+    const optionH = 40
+    const gap = 10
+    const labelW = 86
+    const panelW = labelW + ROUND_OPTIONS.length * optionW + (ROUND_OPTIONS.length - 1) * gap + 28
+    const panelH = 54
+
+    const panel = this.add.graphics()
+    panel.fillStyle(0x1a2230, 0.92)
+    panel.fillRoundedRect(cx - panelW / 2, cy - panelH / 2, panelW, panelH, 16)
+    panel.lineStyle(2, 0xffe9c2, 0.35)
+    panel.strokeRoundedRect(cx - panelW / 2, cy - panelH / 2, panelW, panelH, 16)
+    container.add(panel)
+
+    container.add(
+      this.add
+        .text(cx - panelW / 2 + 18, cy, '라운드', {
+          fontFamily: FONT_FAMILY,
+          fontSize: '17px',
+          color: '#ffe9c2',
+          fontStyle: 'bold',
+        })
+        .setOrigin(0, 0.5),
+    )
+
+    let x = cx - panelW / 2 + labelW + optionW / 2
+    ROUND_OPTIONS.forEach(rounds => {
+      const selected = rounds === this.selectedTotalRounds
+      const button = this.add.graphics()
+      button.fillStyle(selected ? 0xffc45f : 0x34445e, 1)
+      button.fillRoundedRect(x - optionW / 2, cy - optionH / 2, optionW, optionH, 12)
+      button.lineStyle(2, selected ? 0xfff3c4 : 0x7d8aa3, 1)
+      button.strokeRoundedRect(x - optionW / 2, cy - optionH / 2, optionW, optionH, 12)
+      const hit = this.add.rectangle(x, cy, optionW, optionH, 0xffffff, 0.001).setOrigin(0.5)
+      hit.setInteractive({ useHandCursor: true })
+      hit.on(Phaser.Input.Events.POINTER_DOWN, () => {
+        this.selectedTotalRounds = rounds
+        this.drawLobby()
+      })
+      const text = this.add
+        .text(x, cy, `${rounds}R`, {
+          fontFamily: FONT_FAMILY,
+          fontSize: '16px',
+          color: selected ? '#3a2614' : '#ffffff',
+          fontStyle: 'bold',
+        })
+        .setOrigin(0.5)
+      container.add([button, hit, text])
+      x += optionW + gap
+    })
   }
 
   private drawStartButton(
@@ -632,9 +968,10 @@ export class QuizLobbyScene extends Phaser.Scene {
     container.add(g)
 
     // 슬롯 내 vertical anchor — 빈/채워진 카드 모두 동일 위치를 사용해 줄이 흐트러지지 않게.
-    const avatarY = -h / 2 + 70
-    const nameY = -h / 2 + 140
-    const roleY = -h / 2 + 175
+    // NPC 캐릭터 상반신은 아바타 박스 안에서 살짝 위로. name/role 과 16px+ 의 호흡공간을 둔다.
+    const avatarY = -h / 2 + 64
+    const nameY = -h / 2 + 158
+    const roleY = -h / 2 + 188
 
     if (!member) {
       const slotLabel = this.add
@@ -656,15 +993,32 @@ export class QuizLobbyScene extends Phaser.Scene {
       return container
     }
 
-    const initial = (member.nickname || '?').slice(0, 1)
-    const avatar = this.add
-      .text(0, avatarY, initial, {
-        fontFamily: FONT_FAMILY,
-        fontSize: '54px',
-        color: isHost ? '#3a2614' : '#ffe9c2',
-        fontStyle: 'bold',
-      })
-      .setOrigin(0.5)
+    // 게임 씬과 동일하게 char1~4 상반신만 setCrop 으로 노출. 텍스처 미로드 시 글자 폴백.
+    const avatarKey = slotCharKeyForMember(member.joinOrder, this.snapshot?.roomId ?? '')
+    const avatarSize = Math.min(96, w * 0.6)
+    if (this.textures.exists(avatarKey)) {
+      const source = this.textures.get(avatarKey).getSourceImage() as HTMLImageElement
+      const srcH = source.height || 1
+      const srcW = source.width || 1
+      const cropH = srcH * SLOT_CHAR_CROP_RATIO
+      const scale = avatarSize / cropH
+      const npc = this.add.image(0, avatarY, avatarKey)
+      npc.setScale(scale)
+      npc.setOrigin(0.5, SLOT_CHAR_CROP_RATIO / 2)
+      npc.setCrop(0, 0, srcW, cropH)
+      container.add(npc)
+    } else {
+      const initial = (member.nickname || '?').slice(0, 1)
+      const fallback = this.add
+        .text(0, avatarY, initial, {
+          fontFamily: FONT_FAMILY,
+          fontSize: '54px',
+          color: isHost ? '#3a2614' : '#ffe9c2',
+          fontStyle: 'bold',
+        })
+        .setOrigin(0.5)
+      container.add(fallback)
+    }
     const name = this.add
       .text(0, nameY, member.nickname, {
         fontFamily: FONT_FAMILY,
@@ -682,7 +1036,7 @@ export class QuizLobbyScene extends Phaser.Scene {
         color: isHost ? '#5a3818' : '#c5d0e3',
       })
       .setOrigin(0.5)
-    container.add([avatar, name, role])
+    container.add([name, role])
 
     if (isHost) {
       const badge = this.add
@@ -715,11 +1069,11 @@ export class QuizLobbyScene extends Phaser.Scene {
     const roomId = this.snapshot.roomId
     this.state = 'starting'
     this.setStatus('게임 시작 중…')
-    void startQuizRoom(roomId)
+    void startQuizRoom(roomId, { totalRounds: this.selectedTotalRounds })
       .then(response => {
         // 호스트 진입 경로: REST 응답에 prompt 동봉. 토픽의 round_started 가 비슷한 시점에 도착하지만,
         // transitionToPlayScene 가 상태 가드로 중복 전이를 막는다.
-        this.transitionToPlayScene(response.snapshot, response.prompt)
+        this.transitionToPlayScene(response.snapshot, response.prompt, response.prompt.word.length)
       })
       .catch(error => {
         this.setStatus(extractMessage(error, '시작에 실패했어요. 잠시 후 다시 시도해줘.'))
@@ -778,7 +1132,13 @@ export class QuizLobbyScene extends Phaser.Scene {
 
   private setStatus(text: string) {
     this.statusText.setText(text)
-    this.statusText.setPosition(this.scale.width / 2, this.scale.height - 56)
+    this.statusText.setVisible(text.trim().length > 0)
+    this.positionStatusText()
+  }
+
+  private positionStatusText() {
+    const y = this.state === 'lobby' ? this.scale.height - 24 : this.scale.height - 56
+    this.statusText.setPosition(this.scale.width / 2, y)
   }
 
   /**
@@ -808,7 +1168,6 @@ export class QuizLobbyScene extends Phaser.Scene {
     const dropOffset = 8
     const liftAmount = 4
 
-    // hit zone = 외곽 그림자까지 포함한 전체 시각 영역. Phaser Rectangle 은 alpha=0 이면 hit 도 안 받아서 0.001 로.
     const hitW = w + 4
     const hitH = h + thickness + dropOffset + 4
     const hitY = (thickness + dropOffset) / 2 - 2
@@ -819,7 +1178,6 @@ export class QuizLobbyScene extends Phaser.Scene {
     const faceG = this.add.graphics()
     const drawButton = (lifted: boolean) => {
       const lift = lifted ? liftAmount : 0
-      // 부드러운 외부 드롭섀도우 — 한 번에 어두운 한 겹보단 여러 겹 알파로 깔면 자연스러움.
       shadowG.clear()
       const shadowSteps = 5
       for (let i = 0; i < shadowSteps; i++) {
@@ -835,13 +1193,10 @@ export class QuizLobbyScene extends Phaser.Scene {
       }
 
       faceG.clear()
-      // 하단 두께 면 (3D)
       faceG.fillStyle(shadow, 1)
       faceG.fillRoundedRect(-w / 2, -h / 2 - lift, w, h + thickness, radius)
-      // 윗 면 (메인 컬러)
       faceG.fillStyle(fill, 1)
       faceG.fillRoundedRect(-w / 2, -h / 2 - lift, w, h, radius)
-      // 같은 색 진한 톤으로 1px 안쪽 보더 — 흰 외곽선 대신 차분한 윤곽 정의
       faceG.lineStyle(2, shadow, 0.7)
       faceG.strokeRoundedRect(-w / 2 + 1, -h / 2 - lift + 1, w - 2, h - 2, radius - 1)
     }
@@ -953,6 +1308,12 @@ function isAlreadyInRoomError(error: unknown): boolean {
   return response?.status === 409 && response?.data?.code === 'Q-004'
 }
 
+function normalizeRoundOption(value: number | null | undefined) {
+  return ROUND_OPTIONS.includes(value as (typeof ROUND_OPTIONS)[number])
+    ? (value as (typeof ROUND_OPTIONS)[number])
+    : DEFAULT_SELECTED_ROUNDS
+}
+
 /**
  * 사용자에게 그대로 노출하기 부적절한 STOMP/BE 원본 에러 문구를 친절한 한 줄로 매핑.
  *
@@ -963,8 +1324,10 @@ function friendlyWsError(raw: string): string {
   if (!raw) return '연결을 확인하는 중…'
   const lower = raw.toLowerCase()
   if (lower.includes('not a member')) return '방 멤버가 아니에요. 다시 입장해줘.'
+  // 실시간 비활성 상태 — 사용자에게 굳이 노출하지 않는다. dev/local 에선 yaml 로 활성화되며
+  // 운영에서 의도적으로 꺼진 상태일 때도 로비 화면에 경고를 띄우면 오히려 혼란.
   if (lower.includes('quiz realtime disabled') || lower.includes('village realtime disabled'))
-    return '실시간 기능이 잠시 꺼져 있어요.'
+    return ''
   // principal missing / missing bearer / 일반 에러 — 자동 재접속에 맡기고 부드럽게.
   return '연결을 다시 시도하는 중…'
 }

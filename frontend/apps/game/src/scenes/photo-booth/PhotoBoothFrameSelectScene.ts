@@ -1,17 +1,25 @@
 import Phaser from 'phaser'
+import { playSceneBgm } from '@/game/systems/sceneBgm'
 import { assetPath } from '@/game/assets/assetPath'
 import { fadeToScene } from '@/game/systems/sceneTransition'
 import { PHOTO_BOOTH_FRAMES, type PhotoFrame } from './frames'
 
-const FRAME_DISPLAY_WIDTH = 360
-const FRAME_GAP = 36
-const FRAMES_ROW_TOP = 230
+const FRAME_PREVIEW_CELL_MAX_W = 320
+const FRAME_PREVIEW_MAX_H = 430
+const FRAME_GAP = 44
+const FRAME_SIDE_MARGIN = 72
+const FRAMES_ROW_TOP = 220
 const FONT = "'Jua', 'Apple SD Gothic Neo', sans-serif"
 
 type FrameItem = {
   frame: PhotoFrame
   image: Phaser.GameObjects.Image
   highlight: Phaser.GameObjects.Rectangle
+}
+
+const getFramePreviewSize = (frame: PhotoFrame, maxW: number, maxH: number) => {
+  const fitByWidth = maxW / frame.aspect <= maxH
+  return fitByWidth ? { w: maxW, h: maxW / frame.aspect } : { w: maxH * frame.aspect, h: maxH }
 }
 
 export class PhotoBoothFrameSelectScene extends Phaser.Scene {
@@ -30,6 +38,7 @@ export class PhotoBoothFrameSelectScene extends Phaser.Scene {
   }
 
   create() {
+    playSceneBgm(this)
     const { width: vw, height: vh } = this.scale
     this.isTransitioning = false
     this.currentIndex = 0
@@ -65,27 +74,40 @@ export class PhotoBoothFrameSelectScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
 
-    const totalWidth =
-      FRAME_DISPLAY_WIDTH * PHOTO_BOOTH_FRAMES.length + FRAME_GAP * (PHOTO_BOOTH_FRAMES.length - 1)
+    const frameCount = PHOTO_BOOTH_FRAMES.length
+    const availableRowW = Math.max(320, vw - FRAME_SIDE_MARGIN * 2)
+    const cellW = Math.max(
+      80,
+      Math.min(
+        FRAME_PREVIEW_CELL_MAX_W,
+        (availableRowW - FRAME_GAP * (frameCount - 1)) / frameCount,
+      ),
+    )
+    const maxPreviewH = Math.max(180, Math.min(FRAME_PREVIEW_MAX_H, vh - FRAMES_ROW_TOP - 150))
+    const previewSizes = PHOTO_BOOTH_FRAMES.map(frame =>
+      getFramePreviewSize(frame, cellW, maxPreviewH),
+    )
+    const totalWidth = cellW * frameCount + FRAME_GAP * (frameCount - 1)
     const rowStartX = (vw - totalWidth) / 2
 
     PHOTO_BOOTH_FRAMES.forEach((frame, index) => {
-      const frameH = FRAME_DISPLAY_WIDTH / frame.aspect
-      const frameX = rowStartX + index * (FRAME_DISPLAY_WIDTH + FRAME_GAP) + FRAME_DISPLAY_WIDTH / 2
-      const frameY = FRAMES_ROW_TOP + frameH / 2
+      const { w: frameW, h: frameH } = previewSizes[index]!
+      const cellX = rowStartX + index * (cellW + FRAME_GAP) + cellW / 2
+      const cellY = FRAMES_ROW_TOP + maxPreviewH / 2
+      const frameX = cellX
+      const frameY = cellY
 
       const highlight = this.add
-        .rectangle(frameX, frameY, FRAME_DISPLAY_WIDTH + 22, frameH + 22, 0xfff0f4, 1)
+        .rectangle(frameX, frameY, frameW + 22, frameH + 22, 0xfff0f4, 1)
         .setOrigin(0.5)
         .setStrokeStyle(4, 0xff7aa3, 1)
         .setVisible(false)
 
       // 회색 슬롯 배경 먼저 (프레임 PNG 의 투명 슬롯 영역으로 비춰 보임)
       frame.slots.forEach(slot => {
-        const slotW = slot.wRatio * FRAME_DISPLAY_WIDTH
+        const slotW = slot.wRatio * frameW
         const slotH = slot.hRatio * frameH
-        const slotX =
-          frameX - FRAME_DISPLAY_WIDTH / 2 + slot.xRatio * FRAME_DISPLAY_WIDTH + slotW / 2
+        const slotX = frameX - frameW / 2 + slot.xRatio * frameW + slotW / 2
         const slotY = frameY - frameH / 2 + slot.yRatio * frameH + slotH / 2
         this.add.rectangle(slotX, slotY, slotW, slotH, 0xdcdcdc, 1).setOrigin(0.5)
       })
@@ -94,7 +116,7 @@ export class PhotoBoothFrameSelectScene extends Phaser.Scene {
       const image = this.add
         .image(frameX, frameY, frame.overlayKey)
         .setOrigin(0.5)
-        .setDisplaySize(FRAME_DISPLAY_WIDTH, frameH)
+        .setDisplaySize(frameW, frameH)
         .setInteractive({ useHandCursor: true })
 
       image.on('pointerdown', () => this.selectIndex(index))

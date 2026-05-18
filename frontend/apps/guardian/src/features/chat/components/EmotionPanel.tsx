@@ -92,16 +92,13 @@ type Props = {
   shares: EmotionShare[]
   trend: EmotionTrendPoint[]
   signals: EmotionSignal[]
-  /** BE daily summary 의 정성 요약 문단. 있으면 최상단 카드로 표시. */
+  /** BE daily summary 의 정성 요약 문단. 있으면 감정 변화와 감정 신호 사이의 카드로 표시. */
   summaryText?: string | null
-  /** BE daily summary 의 추천 후속 활동 (endingType 기반 권유 문구). 없으면 카드 자체 숨김. */
-  recommendedActivity?: string | null
   /** 오늘 방문한 NPC + 다룬 도메인. 있으면 '오늘 만난 친구들' 카드로 표시. */
   npcsVisited?: NpcVisitedItem[] | null
   summarySample?: boolean
   trendSample?: boolean
   signalsSample?: boolean
-  recommendedActivitySample?: boolean
 }
 
 function SampleBadge() {
@@ -111,16 +108,17 @@ function SampleBadge() {
 /**
  * 보호자 오른쪽 패널 카드 스택.
  *
- * <p>섹션 순서 (v4):
+ * <p>섹션 순서 (v5):
  *
  * <ol>
- *   <li>오늘의 관찰 (정성 요약 문단)
  *   <li>오늘 감정 요약 (응답 톤 ring + 분포)
  *   <li>감정 변화 (지난 주 추세)
+ *   <li>오늘의 관찰 (정성 요약 문단 — 추세와 신호 사이)
  *   <li>오늘 보인 감정 신호
- *   <li>함께 해볼 수 있는 활동 (endingType 기반 권유)
  *   <li>오늘 만난 친구들
  * </ol>
+ *
+ * <p>추천 후속 활동은 좌측 ConversationMain 의 "추천 후속 활동" 카드에서 노출하므로 여기엔 두지 않는다.
  */
 export function EmotionPanel({
   todayScore,
@@ -128,28 +126,13 @@ export function EmotionPanel({
   trend,
   signals,
   summaryText,
-  recommendedActivity,
   npcsVisited,
   summarySample = false,
   trendSample = false,
   signalsSample = false,
-  recommendedActivitySample = false,
 }: Props) {
   return (
     <div className={styles.stack}>
-      {summaryText ? (
-        <div className={`${styles.card} ${styles.observationCard}`}>
-          <div className={styles.observationHeader}>
-            <span className={styles.observationIcon}>📝</span>
-            <div>
-              <h3 className={styles.observationTitle}>오늘의 관찰</h3>
-              <div className={styles.observationKicker}>보호자에게 드리는 메모</div>
-            </div>
-          </div>
-          <p className={styles.observationBody}>{summaryText}</p>
-        </div>
-      ) : null}
-
       <div className={styles.card}>
         <h3 className={styles.cardTitle}>오늘 감정 요약 {summarySample && <SampleBadge />}</h3>
         <div className={styles.summaryRow}>
@@ -173,6 +156,19 @@ export function EmotionPanel({
         <TrendLine points={trend} />
       </div>
 
+      {summaryText ? (
+        <div className={`${styles.card} ${styles.observationCard}`}>
+          <div className={styles.observationHeader}>
+            <span className={styles.observationIcon}>📝</span>
+            <div>
+              <h3 className={styles.observationTitle}>오늘의 관찰</h3>
+              <div className={styles.observationKicker}>보호자에게 드리는 메모</div>
+            </div>
+          </div>
+          <p className={styles.observationBody}>{summaryText}</p>
+        </div>
+      ) : null}
+
       <div className={styles.card}>
         <h3 className={styles.cardTitle}>오늘 보인 감정 신호 {signalsSample && <SampleBadge />}</h3>
         <div className={styles.signalList}>
@@ -189,18 +185,6 @@ export function EmotionPanel({
           ))}
         </div>
       </div>
-
-      {recommendedActivity ? (
-        <div className={`${styles.card} ${styles.activityCard}`}>
-          <div className={styles.activityHeader}>
-            <span className={styles.activityIcon}>🌱</span>
-            <h3 className={styles.activityTitle}>
-              오늘 함께 해보세요 {recommendedActivitySample && <SampleBadge />}
-            </h3>
-          </div>
-          <p className={styles.activityBody}>{recommendedActivity}</p>
-        </div>
-      ) : null}
 
       {npcsVisited && npcsVisited.length > 0 ? (
         <div className={styles.card}>

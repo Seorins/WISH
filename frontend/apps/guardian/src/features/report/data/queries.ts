@@ -10,6 +10,7 @@ import type {
   TaekwondoSessionDetail,
   TaekwondoSessionPage,
   UsageAverages,
+  UsageRankings,
 } from '@wish/api-client'
 import {
   useDailyUsageStats,
@@ -18,6 +19,7 @@ import {
   useMyMusicResults,
   useMyTaekwondoSessions,
   useUsageAverages,
+  useUsageRankings,
 } from '@/features/activity/hooks'
 import { useFuelStatus } from '@/features/fuel/hooks'
 import { buildMockReport, buildUsageRanking } from './mock'
@@ -121,8 +123,10 @@ function buildSummary({
 
 function buildUsageCompare(
   averages: UsageAverages | undefined,
+  rankings: UsageRankings | undefined,
   selfMinutes: number,
   selfName: string,
+  selfPatientId: number | undefined,
 ): UsageCompare {
   // 컨텐츠 평균(art/music/taekwondo/gymnastics)만 합산 — LOGIN 은 로비/메뉴 포함이라 의미 부풀려짐
   const othersAverageSeconds = averages
@@ -131,10 +135,24 @@ function buildUsageCompare(
         .reduce((sum, c) => sum + (c.averageSeconds ?? 0), 0)
     : 0
   const othersAverageMinutes = Math.round(othersAverageSeconds / 60)
+
+  // BE 가 전체 환자 닉네임 + 합산 시간 순위를 내려주면 그대로 사용. 응답 전에는 mock fallback.
+  let ranking
+  if (rankings) {
+    ranking = rankings.rankings.map(r => ({
+      rank: r.rank,
+      name: r.nickname,
+      minutes: Math.round(r.totalSeconds / 60),
+      isMe: selfPatientId !== undefined && r.patientProfileId === selfPatientId,
+    }))
+  } else {
+    ranking = buildUsageRanking(selfName, selfMinutes)
+  }
+
   return {
     selfMinutes,
     othersAverageMinutes,
-    ranking: buildUsageRanking(selfName, selfMinutes),
+    ranking,
   }
 }
 
@@ -352,6 +370,7 @@ export function useReportData({ patientId, patientName, week }: UseReportDataOpt
     to: lastWeek.end,
   })
   const averagesQuery = useUsageAverages({ from: week.start, to: week.end })
+  const rankingsQuery = useUsageRankings({ from: week.start, to: week.end })
   const musicQuery = useMyMusicResults({ size: 100 })
   const taekwondoQuery = useMyTaekwondoSessions(patientId, { size: 100 })
   const exerciseQuery = usePatientExerciseSessions(patientId, { size: 100 })
@@ -365,6 +384,7 @@ export function useReportData({ patientId, patientName, week }: UseReportDataOpt
     const dailyData = dailyQuery.data as DailyUsageStats | undefined
     const lastDailyData = lastDailyQuery.data as DailyUsageStats | undefined
     const averagesData = averagesQuery.data as UsageAverages | undefined
+    const rankingsData = rankingsQuery.data as UsageRankings | undefined
     const musicPage = musicQuery.data as MusicResultPage | undefined
     const taekwondoPage = taekwondoQuery.data as TaekwondoSessionPage | undefined
     const exerciseSessions = exerciseQuery.data as ExerciseSessionDetail[] | undefined
@@ -412,7 +432,13 @@ export function useReportData({ patientId, patientName, week }: UseReportDataOpt
       },
     }
 
-    const usage = buildUsageCompare(averagesData, summary.totalMinutes, patientName)
+    const usage = buildUsageCompare(
+      averagesData,
+      rankingsData,
+      summary.totalMinutes,
+      patientName,
+      patientId,
+    )
 
     const { buckets: timeBuckets, topBucketId } = buildTimeBucketsFromSessions({
       musicWeek,
@@ -444,9 +470,11 @@ export function useReportData({ patientId, patientName, week }: UseReportDataOpt
     week,
     lastWeek,
     patientName,
+    patientId,
     dailyQuery.data,
     lastDailyQuery.data,
     averagesQuery.data,
+    rankingsQuery.data,
     musicQuery.data,
     taekwondoQuery.data,
     exerciseQuery.data,

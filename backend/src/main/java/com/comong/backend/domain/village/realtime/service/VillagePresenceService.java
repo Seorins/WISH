@@ -210,7 +210,13 @@ public class VillagePresenceService {
      * <p>"sessionId 불일치" 는 evict 된 옛 세션의 늦은 position 패킷 — 새 세션 좌표 덮어쓰기 방지 (S14P31E103-763).
      */
     public Optional<PlayerState> updatePosition(
-            String roomId, long userId, String sessionId, double x, double y, String dir) {
+            String roomId,
+            long userId,
+            String sessionId,
+            double x,
+            double y,
+            String dir,
+            String textureKey) {
         RoomState room = rooms.get(roomId);
         if (room == null) {
             return Optional.empty();
@@ -222,7 +228,7 @@ public class VillagePresenceService {
             if (existing == null || !sessionId.equals(existing.sessionId())) {
                 return Optional.empty();
             }
-            PlayerState updated = existing.withPosition(x, y, dir, now);
+            PlayerState updated = existing.withPosition(x, y, dir, textureKey, now);
             room.members.put(userId, updated);
             return Optional.of(updated);
         } finally {

@@ -1,11 +1,12 @@
 import Phaser from 'phaser'
+import { playSceneBgm } from '@/game/systems/sceneBgm'
 import { useAuthStore } from '@/features/auth/store'
 import { assetPath } from '@/game/assets/assetPath'
 import {
   createClickTargetMarker,
   createPlayer,
   ensurePlayerWalkAnimations,
-  loadPlayerSpritesheet,
+  loadPlayerSpritesheets,
   type PlayerDirection,
   type PlayerSprite,
   type RatioPoint,
@@ -15,6 +16,7 @@ import { fadeToScene } from '@/game/systems/sceneTransition'
 import { getPlayerMoveSpeed } from '@/game/settings/gameSettings'
 import { createSceneWeatherLayer } from '@/features/weather/phaserWeatherLayer'
 import {
+  NPC_DIALOG_FRAME_LAYOUT,
   createSimpleDialogUi,
   fadeSimpleDialog,
   setCenteredDialogText,
@@ -32,7 +34,8 @@ import {
   attachVillageRealtime,
   createVillageEmojiPalette,
   emitEmoteBubble,
-  VILLAGE_EMOJIS,
+  syncCurrentBeltEmojiToPalette,
+  VILLAGE_EMOJI_SLOT_COUNT,
   type VillageEmojiPaletteHandle,
   type VillageRealtimeIntegration,
 } from '@/features/village-realtime'
@@ -46,14 +49,11 @@ import { VillageObstacleManager } from './villageObstacles'
 
 const NPC_DIALOG_DISTANCE = 28
 const PHOTO_BOOTH_INTERACT_DISTANCE = 40
+const PHOTO_GALLERY_INTERACT_DISTANCE = 40
 const GOMOKU_BOARD_INTERACT_DISTANCE = 56
-const DIALOG_TEXT_BOX = { x: 585, y: 260, width: 1230, height: 250 }
-const DIALOG_NAME_BOX = { x: 490, y: 130, width: 350, height: 72 }
-const DIALOG_PORTRAIT_BOX = { x: 120, y: 100, width: 320, height: 400 }
-const DIALOG_PORTRAIT_CROP_RATIO = 0.62
-const DIALOG_PORTRAIT_SCALE_BOOST = 1.18
-const VILLAGE_DIALOG_FRAME_KEY = 'village-dialog-frame'
-const VILLAGE_DIALOG_FRAME_PATH = 'images/village/ui/dialogframe.png'
+const WORLD_INTERACTION_REOPEN_COOLDOWN_MS = 350
+const EMOJI_HINT_OPEN_TEXT = '[Q] 닫기'
+const EMOJI_HINT_OPEN_OFFSET_Y = 66
 const VILLAGE_SHIP_KEY = 'village-ship'
 const VILLAGE_SHIP_PATH = 'images/themes/ferry/ui/ship.png'
 const VILLAGE_SHIP = {
@@ -67,6 +67,14 @@ const VILLAGE_PHOTO_BOOTH = {
   xRatio: 0.515,
   yRatio: 0.31,
   scale: 0.145,
+} as const
+const VILLAGE_PHOTO_GALLERY_KEY = 'village-photo-gallery'
+const VILLAGE_PHOTO_GALLERY_PATH = 'images/village/objects/gallery.png'
+// 포토부스 우측 가로등 위에 덮어쓰는 위치. 같은 원점(0.5, 1) 사용.
+const VILLAGE_PHOTO_GALLERY = {
+  xRatio: 0.5461,
+  yRatio: 0.3285,
+  scale: 0.14,
 } as const
 const SEHYUN_NPC_WORLD = {
   xRatio: 0.38,
@@ -111,7 +119,8 @@ type VillageCharacterConfig = {
   id: VillagerNpcId
   key: string
   path: string
-  portraitScale: number
+  dialogFrameKey: string
+  dialogFramePath: string
   xRatio: number
   yRatio: number
   scale: number
@@ -122,7 +131,8 @@ const VILLAGE_CHARACTERS: VillageCharacterConfig[] = [
     id: 'dain',
     key: 'village-character-dain',
     path: 'images/village/background/character/dain.png',
-    portraitScale: 0.97,
+    dialogFrameKey: 'village-dain-dialog-frame',
+    dialogFramePath: 'images/npcs/dain/dialog-frame.png',
     xRatio: 0.75,
     yRatio: 0.38,
     scale: 0.095,
@@ -131,7 +141,8 @@ const VILLAGE_CHARACTERS: VillageCharacterConfig[] = [
     id: 'nurse_bunny',
     key: 'village-character-joeun',
     path: 'images/village/background/character/joeun.png',
-    portraitScale: 1.58,
+    dialogFrameKey: 'village-joeun-dialog-frame',
+    dialogFramePath: 'images/npcs/joeun/dialog-frame.png',
     xRatio: NURSE_BUNNY_WORLD.xRatio,
     yRatio: NURSE_BUNNY_WORLD.yRatio,
     scale: NURSE_BUNNY_WORLD.scale,
@@ -140,7 +151,8 @@ const VILLAGE_CHARACTERS: VillageCharacterConfig[] = [
     id: 'sleepy_sheep',
     key: 'village-character-geonbin',
     path: 'images/village/background/character/geonbin.png',
-    portraitScale: 1,
+    dialogFrameKey: 'village-geonbin-dialog-frame',
+    dialogFramePath: 'images/npcs/geonbin/dialog-frame.png',
     xRatio: 0.43,
     yRatio: 0.31,
     scale: 0.095,
@@ -149,7 +161,8 @@ const VILLAGE_CHARACTERS: VillageCharacterConfig[] = [
     id: 'gardener_bear',
     key: 'village-character-jungho',
     path: 'images/village/background/character/jungho.png',
-    portraitScale: 1.12,
+    dialogFrameKey: 'village-jeongho-dialog-frame',
+    dialogFramePath: 'images/npcs/jeongho/dialog-frame.png',
     xRatio: 0.616,
     yRatio: 0.29,
     scale: 0.14,
@@ -158,7 +171,8 @@ const VILLAGE_CHARACTERS: VillageCharacterConfig[] = [
     id: 'monkey_friend',
     key: 'village-character-komonge',
     path: 'images/village/background/character/komonge.png',
-    portraitScale: 1.03,
+    dialogFrameKey: 'village-kongmong-dialog-frame',
+    dialogFramePath: 'images/npcs/kongmong/dialog-frame.png',
     xRatio: 0.58,
     yRatio: 0.398,
     scale: 0.08,
@@ -169,8 +183,15 @@ const SEHYUN_NPC = {
   id: 'squirrel_friend',
   portraitKey: 'village-character-sehyun',
   portraitPath: 'images/village/background/character/sehyun.png',
-  portraitScale: 0.85,
-} satisfies { id: VillagerNpcId; portraitKey: string; portraitPath: string; portraitScale: number }
+  dialogFrameKey: 'village-sehyun-dialog-frame',
+  dialogFramePath: 'images/npcs/sehyun/dialog-frame.png',
+} satisfies {
+  id: VillagerNpcId
+  portraitKey: string
+  portraitPath: string
+  dialogFrameKey: string
+  dialogFramePath: string
+}
 
 type VillageNpcInstance = {
   id: VillagerNpcId
@@ -189,12 +210,15 @@ export class VillageScene extends Phaser.Scene {
   private obstacleManager?: VillageObstacleManager
   private sehyunNpc!: Phaser.GameObjects.Sprite
   private photoBooth?: Phaser.GameObjects.Image
+  private photoGallery?: Phaser.GameObjects.Image
   private gomokuBoard?: Phaser.GameObjects.Image
   private isPhotoBoothInRange = false
+  private isPhotoGalleryInRange = false
   private isGomokuBoardInRange = false
   private dialogs = new Map<VillagerNpcId, SimpleDialogUi>()
   private villageNpcs: VillageNpcInstance[] = []
   private portalCooldownUntil = 0
+  private worldInteractionCooldownUntil = 0
   private portals = new Map<VillagePortalKey, Phaser.Geom.Rectangle>()
   private playerWasInPortal = createInitialVillagePortalState()
   private isTransitioning = false
@@ -203,6 +227,7 @@ export class VillageScene extends Phaser.Scene {
   private lastSafePlayerPosition?: Phaser.Math.Vector2
   private isVillagerDialogueOpen = false
   private isGomokuOpen = false
+  private isPhotoGalleryOpen = false
   private dialogDismissed = false
   private nearestNpcId: VillagerNpcId | null = null
   private activeDialogNpcId: VillagerNpcId | null = null
@@ -210,6 +235,7 @@ export class VillageScene extends Phaser.Scene {
   private interactionHint!: NpcInteractionHintUi
   private villageRealtime: VillageRealtimeIntegration | null = null
   private emojiPalette: VillageEmojiPaletteHandle | null = null
+  private disposeEmojiBeltSync: (() => void) | null = null
   /** Q 키로 사용자가 의도적으로 팔레트를 켰는지. 다이얼로그/설정 패널 자동 숨김과 분리. */
   private emojiPaletteManuallyShown = false
   /** 팔레트 숨겨져 있을 때 우하단에 "[Q] 이모티콘" 으로 토글 단축키 안내 (S14P31E103-769). */
@@ -225,27 +251,25 @@ export class VillageScene extends Phaser.Scene {
     })
     VILLAGE_CHARACTERS.forEach(character => {
       this.load.image(character.key, assetPath(character.path))
+      this.load.image(character.dialogFrameKey, assetPath(character.dialogFramePath))
     })
     this.load.image(SEHYUN_NPC.portraitKey, assetPath(SEHYUN_NPC.portraitPath))
-    this.load.image(VILLAGE_DIALOG_FRAME_KEY, assetPath(VILLAGE_DIALOG_FRAME_PATH))
+    this.load.image(SEHYUN_NPC.dialogFrameKey, assetPath(SEHYUN_NPC.dialogFramePath))
     this.load.image(VILLAGE_SHIP_KEY, assetPath(VILLAGE_SHIP_PATH))
     this.load.image(VILLAGE_PHOTO_BOOTH_KEY, assetPath(VILLAGE_PHOTO_BOOTH_PATH))
+    this.load.image(VILLAGE_PHOTO_GALLERY_KEY, assetPath(VILLAGE_PHOTO_GALLERY_PATH))
     this.load.image(VILLAGE_GOMOKU_BOARD_KEY, assetPath(VILLAGE_GOMOKU_BOARD_PATH))
-    this.load.image('profile', assetPath('images/common/profile.png'))
-    this.load.image('menu-frame', assetPath('images/ui/buttons/meunframe.png'))
-    this.load.image('setting-frame', assetPath('images/ui/buttons/settingframe.png'))
-    this.load.image('settings-button', assetPath('images/ui/buttons/settingbutton.png'))
-    this.load.image('exit-button', assetPath('images/ui/buttons/exit button.png'))
     this.load.spritesheet('sehyun', assetPath('images/npcs/sehyun/sprite.png'), {
       frameWidth: 313,
       frameHeight: 313,
       margin: 1,
       spacing: 0,
     })
-    loadPlayerSpritesheet(this)
+    loadPlayerSpritesheets(this)
   }
 
   create(data: VillageSceneData = {}) {
+    playSceneBgm(this)
     const { width: vw, height: vh } = this.scale
     this.isTransitioning = false
     this.target = null
@@ -255,9 +279,11 @@ export class VillageScene extends Phaser.Scene {
     this.dialogs.clear()
     this.isVillagerDialogueOpen = false
     this.isGomokuOpen = false
+    this.isPhotoGalleryOpen = false
     this.activeDialogNpcId = null
     this.nearestNpcId = null
     this.portalCooldownUntil = this.time.now + (data.portalCooldownMs ?? 0)
+    this.worldInteractionCooldownUntil = this.time.now + (data.portalCooldownMs ?? 0)
 
     const firstTile = this.textures.get(MAP_TILE_KEYS[0].key).getSourceImage() as HTMLImageElement
     const rawTileW = firstTile.width
@@ -307,6 +333,7 @@ export class VillageScene extends Phaser.Scene {
           _localY: number,
           event: Phaser.Types.Input.EventData,
         ) => {
+          if (this.settingsMenu.isOpen()) return
           event.stopPropagation()
           this.tryOpenNpcDialogue(character.id)
         },
@@ -342,11 +369,15 @@ export class VillageScene extends Phaser.Scene {
         _localY: number,
         event: Phaser.Types.Input.EventData,
       ) => {
+        if (this.settingsMenu.isOpen()) return
         event.stopPropagation()
+        if (!this.canStartWorldInteraction()) return
         this.enterPhotoBoothScene()
       },
     )
     this.isPhotoBoothInRange = false
+    this.photoGallery = this.createPhotoGallery(W, H)
+    this.isPhotoGalleryInRange = false
     this.gomokuBoard = this.createGomokuBoard(W, H)
     this.isGomokuBoardInRange = false
 
@@ -371,6 +402,7 @@ export class VillageScene extends Phaser.Scene {
         _localY: number,
         event: Phaser.Types.Input.EventData,
       ) => {
+        if (this.settingsMenu.isOpen()) return
         event.stopPropagation()
         this.tryOpenNpcDialogue(SEHYUN_NPC.id)
       },
@@ -389,8 +421,7 @@ export class VillageScene extends Phaser.Scene {
         character.id,
         this.createVillageDialog(
           villageDialogues[character.id].displayName,
-          character.key,
-          character.portraitScale,
+          character.dialogFrameKey,
         ),
       )
     })
@@ -398,18 +429,9 @@ export class VillageScene extends Phaser.Scene {
       SEHYUN_NPC.id,
       this.createVillageDialog(
         villageDialogues[SEHYUN_NPC.id].displayName,
-        SEHYUN_NPC.portraitKey,
-        SEHYUN_NPC.portraitScale,
+        SEHYUN_NPC.dialogFrameKey,
       ),
     )
-
-    const profileSize = Math.min(vw * 0.16, 180)
-    const profile = this.add.image(0, 0, 'profile')
-    profile.setDisplaySize(profileSize, profileSize)
-    profile.setDepth(20)
-    profile.setScrollFactor(0)
-    profile.x = profileSize / 2 + 12
-    profile.y = profileSize / 2 + 12
 
     const spawn = data.spawn ?? DEFAULT_PLAYER_SPAWN
     this.player = createPlayer(this, W * spawn.xRatio, H * spawn.yRatio, { depth: 5 })
@@ -423,6 +445,8 @@ export class VillageScene extends Phaser.Scene {
     this.cursors = this.input.keyboard!.createCursorKeys()
     this.settingsMenu = createSettingsMenu(this, {
       onLogout: () => this.logout(),
+      onClose: () => this.blockWorldInteractionBriefly(),
+      getPlayer: () => this.player,
     })
     this.interactionHint = new NpcInteractionHintUi(this)
 
@@ -431,15 +455,20 @@ export class VillageScene extends Phaser.Scene {
         this.hideDialog(true)
         return
       }
+      if (this.isPhotoGalleryOpen) return
       this.settingsMenu.toggleButton()
     })
 
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      if (this.obstacleManager?.handlePointerDown(pointer)) {
+      if (this.settingsMenu.isOpen()) {
         return
       }
 
-      if (this.settingsMenu.isOpen()) {
+      if (this.emojiPalette?.consumePointerDown(pointer)) {
+        return
+      }
+
+      if (this.obstacleManager?.handlePointerDown(pointer)) {
         return
       }
 
@@ -471,14 +500,15 @@ export class VillageScene extends Phaser.Scene {
     })
     this.emojiPalette = createVillageEmojiPalette(this, {
       onSelect: emoji => {
-        if (this.isVillagerDialogueOpen || this.settingsMenu.isOpen()) return
+        if (this.isEmojiOverlayOpen()) return
         if (!this.villageRealtime?.publishEmote(emoji)) return
         // 로컬 즉시 렌더로 latency 가림. 서버 echo 는 RemotePlayersGroup 가 localUserId 필터링으로 무시.
         emitEmoteBubble(this, this.player, emoji, 100)
       },
     })
+    this.disposeEmojiBeltSync = syncCurrentBeltEmojiToPalette(this.emojiPalette)
     this.emojiPaletteManuallyShown = false
-    // 팔레트는 기본 숨김 → 단축키를 모른 사용자가 발견할 수 있도록 우하단 고정 힌트. 팔레트가 열리면 같은 자리이므로 숨겨서 겹침 회피.
+    // 팔레트는 기본 숨김 → 단축키를 모른 사용자가 발견할 수 있도록 우하단 고정 힌트. 팔레트가 열리면 위로 띄워 닫기 버튼으로 유지.
     this.emojiHint = this.add
       .text(vw - 18, vh - 18, '[Q] 이모티콘', {
         fontSize: '14px',
@@ -491,6 +521,12 @@ export class VillageScene extends Phaser.Scene {
       .setOrigin(1, 1)
       .setScrollFactor(0)
       .setDepth(100)
+      .setInteractive({ useHandCursor: true })
+    this.emojiHint.on('pointerdown', (event: Phaser.Types.Input.EventData) => {
+      ;(event as unknown as { stopPropagation?: () => void }).stopPropagation?.()
+      if (this.isEmojiOverlayOpen()) return
+      this.emojiPaletteManuallyShown = !this.emojiPaletteManuallyShown
+    })
     // 1\~9 + 0 단축키. 인덱스 0\~9 매핑. 팔레트가 숨겨져 있어도 발사 가능 (학습용 토글 vs 즉시 발사 분리).
     const emojiKeyNames = [
       'ONE',
@@ -505,30 +541,33 @@ export class VillageScene extends Phaser.Scene {
       'ZERO',
     ] as const
     emojiKeyNames.forEach((name, index) => {
-      if (index >= VILLAGE_EMOJIS.length) return
+      if (index >= VILLAGE_EMOJI_SLOT_COUNT) return
       this.input.keyboard?.on(`keydown-${name}`, () => {
-        if (this.isVillagerDialogueOpen || this.settingsMenu.isOpen()) return
+        if (this.isEmojiOverlayOpen()) return
         this.emojiPalette?.triggerByIndex(index)
       })
     })
     // Q 키 — 팔레트 토글. 다이얼로그/설정 패널 열려있으면 무시.
     this.input.keyboard?.on('keydown-Q', () => {
-      if (this.isVillagerDialogueOpen || this.settingsMenu.isOpen()) return
+      if (this.isEmojiOverlayOpen()) return
       this.emojiPaletteManuallyShown = !this.emojiPaletteManuallyShown
     })
     this.game.events.on('villager-dialogue:closed', this.handleVillagerDialogueClosed, this)
     this.game.events.on('villager-dialogue:text', this.handleVillagerDialogueText, this)
     this.game.events.on('gomoku:closed', this.handleGomokuClosed, this)
+    this.game.events.on('photo-gallery:closed', this.handlePhotoGalleryClosed, this)
     // photo-booth FrameSelect 가 pause 해뒀던 마을을 resume 시켜 돌아올 때 isTransitioning 해제.
     // 안 풀면 update 의 transitioning 가드에 걸려 입력이 죽음.
     this.events.on(Phaser.Scenes.Events.RESUME, () => {
       this.isTransitioning = false
+      this.blockWorldInteractionBriefly()
     })
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.events.off(Phaser.Scenes.Events.RESUME)
       this.game.events.off('villager-dialogue:closed', this.handleVillagerDialogueClosed, this)
       this.game.events.off('villager-dialogue:text', this.handleVillagerDialogueText, this)
       this.game.events.off('gomoku:closed', this.handleGomokuClosed, this)
+      this.game.events.off('photo-gallery:closed', this.handlePhotoGalleryClosed, this)
       this.input.off('pointermove', this.handleObstacleEditorPointerMove, this)
       this.input.off('pointerup', this.handleObstacleEditorPointerUp, this)
       this.input.keyboard?.off('keydown-E', this.handleNpcInteract, this)
@@ -537,11 +576,22 @@ export class VillageScene extends Phaser.Scene {
       this.input.keyboard?.off('keydown-BACKSPACE', this.undoObstaclePolygonPoint, this)
       this.villageRealtime?.destroy()
       this.villageRealtime = null
+      this.disposeEmojiBeltSync?.()
+      this.disposeEmojiBeltSync = null
       this.emojiPalette?.destroy()
       this.emojiPalette = null
       this.emojiHint?.destroy()
       this.emojiHint = null
     })
+  }
+
+  private isEmojiOverlayOpen() {
+    return (
+      this.isVillagerDialogueOpen ||
+      this.settingsMenu.isOpen() ||
+      this.isGomokuOpen ||
+      this.isPhotoGalleryOpen
+    )
   }
 
   update(_time: number, delta: number) {
@@ -551,7 +601,11 @@ export class VillageScene extends Phaser.Scene {
       target: this.target,
       lastDirection: this.lastDirection,
       speed: getPlayerMoveSpeed(),
-      blocked: this.isVillagerDialogueOpen || this.settingsMenu.isOpen() || this.isGomokuOpen,
+      blocked:
+        this.isVillagerDialogueOpen ||
+        this.settingsMenu.isOpen() ||
+        this.isGomokuOpen ||
+        this.isPhotoGalleryOpen,
     })
     this.target = movement.target
     this.lastDirection = movement.lastDirection
@@ -559,14 +613,19 @@ export class VillageScene extends Phaser.Scene {
     this.resolvePolygonObstacleCollision()
 
     this.villageRealtime?.publishLocal(this.player, this.lastDirection, movement.moving)
-    const overlaysOpen =
-      this.isVillagerDialogueOpen || this.settingsMenu.isOpen() || this.isGomokuOpen
+    const overlaysOpen = this.isEmojiOverlayOpen()
     const paletteVisible = this.emojiPaletteManuallyShown && !overlaysOpen
     this.emojiPalette?.setVisible(paletteVisible)
-    this.emojiHint?.setVisible(!paletteVisible && !overlaysOpen)
+    this.emojiHint
+      ?.setText(paletteVisible ? EMOJI_HINT_OPEN_TEXT : '[Q] 이모티콘')
+      .setY(
+        paletteVisible ? this.scale.height - 18 - EMOJI_HINT_OPEN_OFFSET_Y : this.scale.height - 18,
+      )
+      .setVisible(!overlaysOpen)
 
     const nearestNpc = this.getNearestNpcInTalkDistance()
     const photoBoothDistance = this.getPhotoBoothDistance()
+    const photoGalleryDistance = this.getPhotoGalleryDistance()
     const gomokuBoardDistance = this.getGomokuBoardDistance()
     const npcDistance = nearestNpc
       ? Phaser.Math.Distance.Between(
@@ -577,13 +636,19 @@ export class VillageScene extends Phaser.Scene {
         )
       : Number.POSITIVE_INFINITY
     const photoBoothInRange = photoBoothDistance < PHOTO_BOOTH_INTERACT_DISTANCE
+    const photoGalleryInRange = photoGalleryDistance < PHOTO_GALLERY_INTERACT_DISTANCE
     const gomokuBoardInRange = gomokuBoardDistance < GOMOKU_BOARD_INTERACT_DISTANCE
-    let nearestAction: 'npc' | 'photo' | 'gomoku' | null = nearestNpc ? 'npc' : null
+    let nearestAction: 'npc' | 'photo' | 'gallery' | 'gomoku' | null = nearestNpc ? 'npc' : null
     let nearestActionDistance = npcDistance
 
     if (photoBoothInRange && photoBoothDistance < nearestActionDistance) {
       nearestAction = 'photo'
       nearestActionDistance = photoBoothDistance
+    }
+
+    if (photoGalleryInRange && photoGalleryDistance < nearestActionDistance) {
+      nearestAction = 'gallery'
+      nearestActionDistance = photoGalleryDistance
     }
 
     if (gomokuBoardInRange && gomokuBoardDistance < nearestActionDistance) {
@@ -592,6 +657,7 @@ export class VillageScene extends Phaser.Scene {
 
     this.nearestNpcId = nearestAction === 'npc' ? (nearestNpc?.id ?? null) : null
     this.isPhotoBoothInRange = nearestAction === 'photo'
+    this.isPhotoGalleryInRange = nearestAction === 'gallery'
     this.isGomokuBoardInRange = nearestAction === 'gomoku'
     this.updateInteractionHint(nearestAction === 'npc' ? nearestNpc : null)
 
@@ -603,6 +669,45 @@ export class VillageScene extends Phaser.Scene {
     }
 
     this.updateThemePortalTransitions()
+  }
+
+  private createPhotoGallery(worldWidth: number, worldHeight: number) {
+    const x = VILLAGE_PHOTO_GALLERY.xRatio * worldWidth
+    const y = VILLAGE_PHOTO_GALLERY.yRatio * worldHeight
+    const gallery = this.add
+      .image(x, y, VILLAGE_PHOTO_GALLERY_KEY)
+      .setOrigin(0.5, 1)
+      .setScale(VILLAGE_PHOTO_GALLERY.scale)
+      .setDepth(3)
+      .setInteractive({ useHandCursor: true })
+    gallery.on(
+      'pointerdown',
+      (
+        _pointer: Phaser.Input.Pointer,
+        _localX: number,
+        _localY: number,
+        event: Phaser.Types.Input.EventData,
+      ) => {
+        if (this.settingsMenu.isOpen()) return
+        event.stopPropagation()
+        this.openPhotoGallery()
+      },
+    )
+
+    const box = this.add
+      .rectangle(
+        x,
+        y - gallery.displayHeight * 0.25,
+        gallery.displayWidth * 0.55,
+        gallery.displayHeight * 0.4,
+        0xff0000,
+        0,
+      )
+      .setDepth(1)
+    this.physics.add.existing(box, true)
+    this.obstacles.add(box)
+
+    return gallery
   }
 
   private createGomokuBoard(worldWidth: number, worldHeight: number) {
@@ -624,6 +729,7 @@ export class VillageScene extends Phaser.Scene {
         _localY: number,
         event: Phaser.Types.Input.EventData,
       ) => {
+        if (this.settingsMenu.isOpen()) return
         event.stopPropagation()
         this.enterGomokuGame()
       },
@@ -653,15 +759,20 @@ export class VillageScene extends Phaser.Scene {
   }
 
   private readonly handleNpcInteract = (event?: KeyboardEvent) => {
-    if (
-      !this.isVillagerDialogueOpen &&
-      !this.settingsMenu.isOpen() &&
-      !this.isGomokuOpen &&
-      !this.dialogDismissed
-    ) {
+    if (!this.canStartWorldInteraction()) {
+      event?.preventDefault()
+      return
+    }
+
+    if (!this.dialogDismissed) {
       if (this.isPhotoBoothInRange) {
         event?.preventDefault()
         this.enterPhotoBoothScene()
+        return
+      }
+      if (this.isPhotoGalleryInRange) {
+        event?.preventDefault()
+        this.openPhotoGallery()
         return
       }
       if (this.isGomokuBoardInRange) {
@@ -798,8 +909,36 @@ export class VillageScene extends Phaser.Scene {
     )
   }
 
+  private blockWorldInteractionBriefly(durationMs = WORLD_INTERACTION_REOPEN_COOLDOWN_MS) {
+    this.worldInteractionCooldownUntil = Math.max(
+      this.worldInteractionCooldownUntil,
+      this.time.now + durationMs,
+    )
+  }
+
+  private isWorldInteractionCooldownActive() {
+    return this.time.now < this.worldInteractionCooldownUntil
+  }
+
+  private hasBlockingOverlayOpen() {
+    return (
+      this.isVillagerDialogueOpen ||
+      this.settingsMenu.isOpen() ||
+      this.isGomokuOpen ||
+      this.isPhotoGalleryOpen
+    )
+  }
+
+  private canStartWorldInteraction() {
+    return (
+      !this.isTransitioning &&
+      !this.hasBlockingOverlayOpen() &&
+      !this.isWorldInteractionCooldownActive()
+    )
+  }
+
   private tryOpenNpcDialogue(npcId: VillagerNpcId) {
-    if (this.isVillagerDialogueOpen || this.settingsMenu.isOpen() || this.dialogDismissed) return
+    if (!this.canStartWorldInteraction() || this.dialogDismissed) return
 
     const npc = this.villageNpcs.find(candidate => candidate.id === npcId)
     if (!npc) return
@@ -816,7 +955,7 @@ export class VillageScene extends Phaser.Scene {
   }
 
   private tryOpenGomokuGame() {
-    if (this.isVillagerDialogueOpen || this.settingsMenu.isOpen() || this.isGomokuOpen) return
+    if (!this.canStartWorldInteraction()) return
     if (this.getGomokuBoardDistance() > GOMOKU_BOARD_INTERACT_DISTANCE) return
     this.enterGomokuGame()
   }
@@ -837,6 +976,7 @@ export class VillageScene extends Phaser.Scene {
 
   private hideDialog(markDismissed: boolean, notifyReact = true) {
     const dialog = this.getActiveDialog()
+    const wasOpen = this.isVillagerDialogueOpen
     if (this.isVillagerDialogueOpen && notifyReact) {
       this.game.events.emit('villager-dialogue:force-close')
     }
@@ -846,6 +986,10 @@ export class VillageScene extends Phaser.Scene {
 
     if (dialog) {
       fadeSimpleDialog(this, dialog, 0, 200)
+    }
+
+    if (wasOpen && markDismissed) {
+      this.blockWorldInteractionBriefly()
     }
   }
 
@@ -861,10 +1005,31 @@ export class VillageScene extends Phaser.Scene {
 
   private handleGomokuClosed() {
     this.isGomokuOpen = false
+    this.blockWorldInteractionBriefly()
+  }
+
+  private openPhotoGallery() {
+    if (!this.canStartWorldInteraction()) return
+    this.isPhotoGalleryOpen = true
+    this.target = null
+    this.player.setVelocity(0, 0)
+    this.interactionHint.hide()
+    this.game.events.emit('photo-gallery:open')
+  }
+
+  private handlePhotoGalleryClosed = () => {
+    this.isPhotoGalleryOpen = false
+    this.blockWorldInteractionBriefly()
   }
 
   private updateInteractionHint(nearestNpc: VillageNpcInstance | null) {
-    if (this.isVillagerDialogueOpen || this.settingsMenu.isOpen() || this.isGomokuOpen) {
+    if (
+      this.isVillagerDialogueOpen ||
+      this.settingsMenu.isOpen() ||
+      this.isGomokuOpen ||
+      this.isPhotoGalleryOpen ||
+      this.isWorldInteractionCooldownActive()
+    ) {
       this.interactionHint.hide()
       return
     }
@@ -875,6 +1040,16 @@ export class VillageScene extends Phaser.Scene {
         this.photoBooth.y - this.photoBooth.displayHeight,
         '포토부스',
         { badgeLabel: '사진', helpMessage: 'E 또는 Enter로 사진 찍기' },
+      )
+      return
+    }
+
+    if (this.isPhotoGalleryInRange && this.photoGallery) {
+      this.interactionHint.show(
+        this.photoGallery.x,
+        this.photoGallery.y - this.photoGallery.displayHeight,
+        '사진 갤러리',
+        { badgeLabel: '갤러리', helpMessage: 'E 또는 Enter로 공개 사진 보기' },
       )
       return
     }
@@ -916,6 +1091,18 @@ export class VillageScene extends Phaser.Scene {
     )
   }
 
+  private getPhotoGalleryDistance() {
+    if (!this.photoGallery) {
+      return Number.POSITIVE_INFINITY
+    }
+    return Phaser.Math.Distance.Between(
+      this.player.x,
+      this.player.y,
+      this.photoGallery.x,
+      this.photoGallery.y,
+    )
+  }
+
   private getGomokuBoardDistance() {
     if (!this.gomokuBoard) {
       return Number.POSITIVE_INFINITY
@@ -942,6 +1129,7 @@ export class VillageScene extends Phaser.Scene {
   }
 
   private enterGomokuGame() {
+    if (!this.canStartWorldInteraction()) return
     this.isGomokuOpen = true
     this.target = null
     this.player.setVelocity(0, 0)
@@ -953,7 +1141,7 @@ export class VillageScene extends Phaser.Scene {
   }
 
   private enterPhotoBoothScene() {
-    if (this.isTransitioning) return
+    if (!this.canStartWorldInteraction()) return
     this.isTransitioning = true
     this.target = null
     this.player.setVelocity(0, 0)
@@ -973,56 +1161,12 @@ export class VillageScene extends Phaser.Scene {
     return this.dialogs.get(this.activeDialogNpcId) ?? null
   }
 
-  private createVillageDialog(name: string, portraitKey: string, portraitScale: number) {
-    const dialog = createSimpleDialogUi(this, {
-      frameKey: VILLAGE_DIALOG_FRAME_KEY,
-      textBox: DIALOG_TEXT_BOX,
-      fontSize: 48,
-      lineSpacing: 8,
-      nameBox: DIALOG_NAME_BOX,
+  private createVillageDialog(name: string, frameKey: string) {
+    return createSimpleDialogUi(this, {
+      ...NPC_DIALOG_FRAME_LAYOUT,
+      frameKey,
       nameText: name,
-      nameFontColor: '#4a2b17',
-      nameFontSize: 44,
-      opticalOffsets: { single: 18, double: 10, multi: 0 },
     })
-    dialog.extras.push(...this.createDialogPortraitObjects(dialog, portraitKey, portraitScale))
-    return dialog
-  }
-
-  private createDialogPortraitObjects(
-    dialog: SimpleDialogUi,
-    portraitKey: string,
-    portraitScale: number,
-  ) {
-    const frameSource = dialog.frame.texture.getSourceImage() as HTMLImageElement
-    const frameScale = dialog.frame.displayWidth / frameSource.width
-    const frameLeft = dialog.frame.x - dialog.frame.displayWidth / 2
-    const frameTop = dialog.frame.y - dialog.frame.displayHeight / 2
-    const boxLeft = frameLeft + DIALOG_PORTRAIT_BOX.x * frameScale
-    const boxTop = frameTop + DIALOG_PORTRAIT_BOX.y * frameScale
-    const boxWidth = DIALOG_PORTRAIT_BOX.width * frameScale
-    const boxHeight = DIALOG_PORTRAIT_BOX.height * frameScale
-    const maskShape = this.add.graphics().setScrollFactor(0).setAlpha(0)
-    maskShape.fillStyle(0xffffff, 1)
-    maskShape.fillRect(boxLeft, boxTop, boxWidth, boxHeight)
-    const portraitMask = maskShape.createGeometryMask()
-    const portrait = this.add
-      .image(boxLeft + boxWidth / 2, boxTop + boxHeight + 6 * frameScale, portraitKey, 0)
-      .setDepth(dialog.frame.depth + 0.2)
-      .setAlpha(0)
-      .setScrollFactor(0)
-      .setMask(portraitMask)
-    const source = portrait.texture.getSourceImage() as HTMLImageElement
-    const cropHeight = Math.round(source.height * DIALOG_PORTRAIT_CROP_RATIO)
-    portrait.setCrop(0, 0, source.width, cropHeight)
-    portrait.setOrigin(0.5, cropHeight / source.height)
-    portrait.setScale(
-      Math.min(boxWidth / source.width, boxHeight / cropHeight) *
-        DIALOG_PORTRAIT_SCALE_BOOST *
-        portraitScale,
-    )
-
-    return [portrait]
   }
 
   private getNearestNpcInTalkDistance() {

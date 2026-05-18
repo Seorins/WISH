@@ -6,7 +6,9 @@ interface FakeSprite {
   x: number
   y: number
   displayHeight: number
+  frame: { name: string }
   destroy: ReturnType<typeof vi.fn>
+  setTexture: ReturnType<typeof vi.fn>
   anims: {
     currentAnim: { key: string } | null
     isPlaying: boolean
@@ -31,11 +33,13 @@ interface FakeTween {
 }
 
 const createPlayerMock = vi.fn()
+const ensurePlayerWalkAnimationsMock = vi.fn()
 const getPlayerWalkAnimationKeyMock = vi.fn()
 const emitEmoteBubbleMock = vi.fn()
 
 vi.mock('@/game/entities/player', () => ({
   createPlayer: (...args: unknown[]) => createPlayerMock(...args),
+  ensurePlayerWalkAnimations: (...args: unknown[]) => ensurePlayerWalkAnimationsMock(...args),
   getPlayerWalkAnimationKey: (...args: unknown[]) => getPlayerWalkAnimationKeyMock(...args),
   PLAYER_TEXTURE_KEY: 'character',
 }))
@@ -55,7 +59,9 @@ function newFakeSprite(): FakeSprite {
     x: 0,
     y: 0,
     displayHeight: 100,
+    frame: { name: '0' },
     destroy: vi.fn(),
+    setTexture: vi.fn(),
     anims: {
       currentAnim: null,
       isPlaying: false,
@@ -98,6 +104,11 @@ function setupScene() {
   getPlayerWalkAnimationKeyMock.mockImplementation((dir: string) => `walk-${dir}`)
 
   const scene = {
+    textures: {
+      exists: vi.fn(
+        (textureKey: string) => textureKey === 'character' || textureKey === 'outfit-a',
+      ),
+    },
     tweens: {
       add: vi.fn((config: Record<string, unknown>) => {
         const tween: FakeTween = { stop: vi.fn(), config }
@@ -135,6 +146,7 @@ function group(scene: unknown, opts: Partial<{ localUserId: number; w: number; h
 
 beforeEach(() => {
   createPlayerMock.mockReset()
+  ensurePlayerWalkAnimationsMock.mockReset()
   getPlayerWalkAnimationKeyMock.mockReset()
   emitEmoteBubbleMock.mockReset()
 })
@@ -241,6 +253,33 @@ describe('RemotePlayersGroup', () => {
     g.applyEvent({ type: 'move', userId: 1, x: 0.4, y: 0.4, dir: 'down', moving: false })
 
     expect(sprites[0].anims.stop).toHaveBeenCalled()
+  })
+
+  it('move updates the remote sprite texture when textureKey changes', () => {
+    const { scene, sprites } = setupScene()
+    const g = group(scene)
+    g.applyEvent({
+      type: 'join',
+      userId: 1,
+      nickname: 'a',
+      textureKey: 'character',
+      x: 0.1,
+      y: 0.1,
+      dir: 'down',
+    })
+
+    g.applyEvent({
+      type: 'move',
+      userId: 1,
+      textureKey: 'outfit-a',
+      x: 0.1,
+      y: 0.1,
+      dir: 'down',
+      moving: false,
+    })
+
+    expect(ensurePlayerWalkAnimationsMock).toHaveBeenCalledWith(scene, 'outfit-a')
+    expect(sprites[0].setTexture).toHaveBeenCalledWith('outfit-a', 0)
   })
 
   it('successive moves stop the previous tween', () => {

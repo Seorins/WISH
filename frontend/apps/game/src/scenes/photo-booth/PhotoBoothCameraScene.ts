@@ -1,6 +1,9 @@
 import Phaser from 'phaser'
+import { playSceneBgm } from '@/game/systems/sceneBgm'
+import { assetPath } from '@/game/assets/assetPath'
 import { fadeToScene } from '@/game/systems/sceneTransition'
 import { PHOTO_BOOTH_FRAMES, type PhotoFrame } from './frames'
+import { exitPhotoBoothToVillage } from './navigation'
 
 const FONT = "'Jua', 'Apple SD Gothic Neo', sans-serif"
 const TOTAL_CAPTURES = 8
@@ -46,7 +49,11 @@ export class PhotoBoothCameraScene extends Phaser.Scene {
   private captureButtonLabel!: Phaser.GameObjects.Text
   private backButtonGroup: Phaser.GameObjects.GameObject[] = []
   private thumbnailSlots: ThumbnailSlot[] = []
+  private previewOverlay?: Phaser.GameObjects.Image
+  private previewOverlayMask?: Phaser.GameObjects.Graphics
   private isCountingDown = false
+  private previewX = 0
+  private previewY = 0
   private previewW = 480
   private previewH = 360
   private slotAspect = 1.2
@@ -55,7 +62,16 @@ export class PhotoBoothCameraScene extends Phaser.Scene {
     super({ key: 'PhotoBoothCameraScene' })
   }
 
+  preload() {
+    PHOTO_BOOTH_FRAMES.forEach(frame => {
+      if (!this.textures.exists(frame.overlayKey)) {
+        this.load.image(frame.overlayKey, assetPath(frame.overlayPath))
+      }
+    })
+  }
+
   create(data: PhotoBoothCameraSceneData = {}) {
+    playSceneBgm(this)
     const { width: vw, height: vh } = this.scale
     this.isTransitioning = false
     this.currentCut = 0
@@ -89,6 +105,8 @@ export class PhotoBoothCameraScene extends Phaser.Scene {
     const groupLeft = Math.max(40, (vw - groupW) / 2)
     const previewX = groupLeft + this.previewW / 2
     const previewY = Math.max(titleSpace + this.previewH / 2, vh / 2 + 10)
+    this.previewX = previewX
+    this.previewY = previewY
     const panelLeft = groupLeft + this.previewW + PANEL_GAP
     const panelTopY = previewY - this.previewH / 2
 
@@ -128,10 +146,14 @@ export class PhotoBoothCameraScene extends Phaser.Scene {
       })
       .setOrigin(1, 0)
 
+    this.add.rectangle(previewX, previewY, this.previewW, this.previewH, 0xffffff, 1).setOrigin(0.5)
     this.add
-      .rectangle(previewX, previewY, this.previewW, this.previewH, 0xffffff, 1)
+      .rectangle(previewX, previewY, this.previewW, this.previewH, 0xffffff, 0)
       .setOrigin(0.5)
       .setStrokeStyle(3, 0xffc1d8, 1)
+      .setDepth(5)
+
+    this.updatePreviewOverlay()
 
     this.flashOverlay = this.add
       .rectangle(previewX, previewY, this.previewW, this.previewH, 0xffffff, 0)
@@ -198,7 +220,7 @@ export class PhotoBoothCameraScene extends Phaser.Scene {
     // 프레임 선택 버튼 제거됨 — ESC 키로만 이동 가능
     this.backButtonGroup = []
 
-    this.input.keyboard?.on('keydown-ESC', () => this.backToFrameSelect())
+    this.input.keyboard?.on('keydown-ESC', () => this.exitToVillage())
     this.input.keyboard?.on('keydown-SPACE', () => void this.startCaptureSession())
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.cleanup())
@@ -267,7 +289,7 @@ export class PhotoBoothCameraScene extends Phaser.Scene {
         if (!this.scene.isActive() || !this.video) return
         const v = this.video.video as HTMLVideoElement | null
         if (v && v.videoWidth > 0 && v.readyState >= 2) {
-          this.video.setDisplaySize(this.previewW, this.previewH)
+          this.applyVideoPreviewCover(v.videoWidth, v.videoHeight)
           return
         }
         if (attempts < 50) {
@@ -279,6 +301,17 @@ export class PhotoBoothCameraScene extends Phaser.Scene {
       console.warn('카메라 권한 거부됨', err)
       this.showPermissionError()
     }
+  }
+
+  private applyVideoPreviewCover(videoWidth: number, videoHeight: number) {
+    if (!this.video || videoWidth <= 0 || videoHeight <= 0) return
+
+    const sourceAspect = videoWidth / videoHeight
+    const previewAspect = this.previewW / this.previewH
+    const displayW = sourceAspect > previewAspect ? this.previewH * sourceAspect : this.previewW
+    const displayH = sourceAspect > previewAspect ? this.previewH : this.previewW / sourceAspect
+
+    this.video.setDisplaySize(displayW, displayH)
   }
 
   private showPermissionError() {
@@ -307,6 +340,7 @@ export class PhotoBoothCameraScene extends Phaser.Scene {
       this.currentCut = 0
       this.clearThumbnails()
       this.updateCutCounter()
+      this.updatePreviewOverlay()
     }
 
     this.isCountingDown = true
@@ -333,6 +367,7 @@ export class PhotoBoothCameraScene extends Phaser.Scene {
       this.flashCapture()
       this.fillThumbnail(slotIndex, dataUrl)
       this.updateCutCounter()
+      this.updatePreviewOverlay()
 
       if (this.currentCut < TOTAL_CAPTURES) {
         await this.wait(POST_CAPTURE_DELAY_MS)
@@ -358,6 +393,36 @@ export class PhotoBoothCameraScene extends Phaser.Scene {
 
   private updateCutCounter() {
     this.cutCounterText.setText(`${this.currentCut} / ${TOTAL_CAPTURES}`)
+  }
+
+  private updatePreviewOverlay() {
+    const slot = this.frame.slots[this.currentCut % this.frame.cutCount]
+    if (!slot || !this.textures.exists(this.frame.overlayKey)) {
+      this.previewOverlay?.setVisible(false)
+      return
+    }
+
+    if (!this.previewOverlay) {
+      this.previewOverlay = this.add.image(0, 0, this.frame.overlayKey).setOrigin(0.5).setDepth(4)
+      this.previewOverlayMask = this.make.graphics({ x: 0, y: 0 }, false)
+      this.previewOverlayMask.fillRect(
+        this.previewX - this.previewW / 2,
+        this.previewY - this.previewH / 2,
+        this.previewW,
+        this.previewH,
+      )
+      this.previewOverlay.setMask(this.previewOverlayMask.createGeometryMask())
+    }
+
+    const frameDisplayW = this.previewW / slot.wRatio
+    const frameDisplayH = this.previewH / slot.hRatio
+    const frameLeft = this.previewX - slot.xRatio * frameDisplayW - this.previewW / 2
+    const frameTop = this.previewY - slot.yRatio * frameDisplayH - this.previewH / 2
+
+    this.previewOverlay
+      .setPosition(frameLeft + frameDisplayW / 2, frameTop + frameDisplayH / 2)
+      .setDisplaySize(frameDisplayW, frameDisplayH)
+      .setVisible(true)
   }
 
   private captureCurrentFrame(): string {
@@ -450,10 +515,10 @@ export class PhotoBoothCameraScene extends Phaser.Scene {
     })
   }
 
-  private backToFrameSelect() {
+  private exitToVillage() {
     if (this.isTransitioning) return
     this.isTransitioning = true
-    fadeToScene(this, 'PhotoBoothFrameSelectScene', { duration: 250 })
+    exitPhotoBoothToVillage(this)
   }
 
   private cleanup() {
@@ -468,6 +533,10 @@ export class PhotoBoothCameraScene extends Phaser.Scene {
       this.video.destroy()
       this.video = undefined
     }
+    this.previewOverlay?.destroy()
+    this.previewOverlay = undefined
+    this.previewOverlayMask?.destroy()
+    this.previewOverlayMask = undefined
     this.thumbnailSlots.forEach(slot => {
       if (slot.textureKey && this.textures.exists(slot.textureKey)) {
         this.textures.remove(slot.textureKey)

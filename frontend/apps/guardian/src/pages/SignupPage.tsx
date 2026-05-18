@@ -190,21 +190,6 @@ export function SignupPage() {
                 )}
               </div>
 
-              <div className={styles.field}>
-                <span className={styles.label}>닉네임</span>
-                <input
-                  type="text"
-                  autoComplete="nickname"
-                  {...register('nickname')}
-                  className={styles.input}
-                  disabled={submitting}
-                  placeholder="2~30자"
-                />
-                {formState.errors.nickname && (
-                  <span className={styles.errorText}>{formState.errors.nickname.message}</span>
-                )}
-              </div>
-
               <div className={styles.sectionHeader}>
                 아이 정보
                 <span className={styles.sectionHint}>회원가입 시 등록되는 자녀(환자) 프로필</span>
@@ -221,6 +206,21 @@ export function SignupPage() {
                 />
                 {formState.errors.name && (
                   <span className={styles.errorText}>{formState.errors.name.message}</span>
+                )}
+              </div>
+
+              <div className={styles.field}>
+                <span className={styles.label}>아이 닉네임</span>
+                <input
+                  type="text"
+                  autoComplete="nickname"
+                  {...register('nickname')}
+                  className={styles.input}
+                  disabled={submitting}
+                  placeholder="2~30자"
+                />
+                {formState.errors.nickname && (
+                  <span className={styles.errorText}>{formState.errors.nickname.message}</span>
                 )}
               </div>
 
