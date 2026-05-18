@@ -4,6 +4,7 @@ import {
   getGomokuRanking,
   getMyGomokuStats,
   getWaitingGomokuRooms,
+  leaveGomokuRoom,
   listPatientProfiles,
   rematchGomokuRoom,
   swapGomokuRoomStones,
@@ -34,6 +35,7 @@ vi.mock('@wish/api-client', () => ({
 const ONLINE_LABEL = '\uC628\uB77C\uC778'
 const COMPUTER_LABEL = '\uCEF4\uD4E8\uD130'
 const LOCAL_LABEL = '2\uC778'
+const CLOSE_LABEL = '\uB2EB\uAE30'
 const CREATE_ROOM_LABEL = '\uBC29 \uB9CC\uB4E4\uAE30'
 const NEXT_ONLINE_GAME_LABEL = '\uB2E4\uC74C \uB300\uAD6D'
 const SWAP_STONES_LABEL = '\uD751\uBC31 \uBCC0\uACBD'
@@ -123,6 +125,12 @@ const createdRoom: GomokuRoom = {
   finishedAt: null,
 }
 
+const cancelledRoom: GomokuRoom = {
+  ...createdRoom,
+  status: 'CANCELLED',
+  myStone: null,
+}
+
 const finishedRoom: GomokuRoom = {
   ...createdRoom,
   id: 11,
@@ -202,6 +210,30 @@ describe('GomokuOverlay online room creation', () => {
     })
     expect(await screen.findByText('ABC123')).toBeTruthy()
     expect(screen.getByText(NO_OPPONENT_LABEL)).toBeTruthy()
+  })
+
+  it('leaves the online room and resets state when the overlay closes', async () => {
+    const onClose = vi.fn()
+    vi.mocked(createGomokuRoom).mockResolvedValueOnce(apiResponse(createdRoom))
+    vi.mocked(leaveGomokuRoom).mockResolvedValueOnce(apiResponse(cancelledRoom))
+
+    render(<GomokuOverlay open onClose={onClose} patientProfileId={7} />)
+
+    fireEvent.click(screen.getByRole('button', { name: ONLINE_LABEL }))
+    fireEvent.click(screen.getByRole('button', { name: CREATE_ROOM_LABEL }))
+
+    expect(await screen.findByText('ABC123')).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: CLOSE_LABEL }))
+
+    expect(onClose).toHaveBeenCalledTimes(1)
+    await waitFor(() => {
+      expect(leaveGomokuRoom).toHaveBeenCalledWith(createdRoom.id)
+    })
+    await waitFor(() => {
+      expect(screen.queryByText('ABC123')).toBeNull()
+    })
+    expect(screen.getByRole('button', { name: COMPUTER_LABEL }).className).toContain('active')
   })
 
   it('requests authentication instead of creating a room without a patient profile', async () => {
