@@ -222,6 +222,8 @@ export class QuizLobbyScene extends Phaser.Scene {
       this.hubWheelBound = true
     }
 
+    this.input.keyboard?.on('keydown-ESC', this.handleEscKey, this)
+
     if (this.initialLobbyData) {
       this.enterTransferredLobby(this.initialLobbyData)
     } else {
@@ -491,9 +493,9 @@ export class QuizLobbyScene extends Phaser.Scene {
     this.hubListMinY = listTop - overflow
     listContainer.y = Phaser.Math.Clamp(listContainer.y, this.hubListMinY, this.hubListMaxY)
 
-    // 뒤로 버튼 — 좌하단.
+    // 뒤로 버튼 — 패널 좌상단 안쪽에 통합. 좌하단에 두던 이전 안은 패널이 크면 시각적으로 가려졌음.
     container.add(
-      this.createPillButton(120, h - 60, 180, 52, '← 뒤로', PALETTE_DANGER, () =>
+      this.createPillButton(panelX + 64, panelTop + 30, 110, 38, '← 뒤로', PALETTE_DANGER, () =>
         this.showModeSelect(),
       ),
     )
@@ -697,6 +699,20 @@ export class QuizLobbyScene extends Phaser.Scene {
     this.state = 'joining'
     this.setStatus('방에 입장하는 중…')
     void this.joinRoomWithStaleCleanup(room.roomId)
+  }
+
+  /**
+   * ESC 키 — 현재 화면 단계에서 한 단계 뒤로. multiHub → modeSelect → 미술실, 로비에서는 방 나가기.
+   * 작업 진행 중 상태(creating/joining/starting/transitioningToPlay/leaving) 에선 무시.
+   */
+  private handleEscKey() {
+    if (this.state === 'multiHub') {
+      this.showModeSelect()
+    } else if (this.state === 'modeSelect') {
+      this.backToArtRoom()
+    } else if (this.state === 'lobby') {
+      void this.handleLeave()
+    }
   }
 
   /**
@@ -1408,6 +1424,7 @@ export class QuizLobbyScene extends Phaser.Scene {
       this.input.off('wheel', this.handleHubWheel, this)
       this.hubWheelBound = false
     }
+    this.input.keyboard?.off('keydown-ESC', this.handleEscKey, this)
     this.hubListMask?.destroy()
     this.hubListMask = null
     void this.tearDownRealtime()
