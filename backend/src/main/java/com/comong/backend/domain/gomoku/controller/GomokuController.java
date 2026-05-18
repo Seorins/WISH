@@ -103,6 +103,14 @@ public class GomokuController {
                 ApiResponse.success(gomokuService.findRoom(currentUser.userId(), roomId)));
     }
 
+    @Operation(summary = "Refresh online Gomoku room presence")
+    @PostMapping("/rooms/{roomId}/heartbeat")
+    public ResponseEntity<ApiResponse<GomokuRoomResponse>> heartbeat(
+            @AuthenticationPrincipal AuthenticatedUser currentUser, @PathVariable Long roomId) {
+        return ResponseEntity.ok(
+                ApiResponse.success(gomokuService.heartbeat(currentUser.userId(), roomId)));
+    }
+
     @Operation(summary = "Play online Gomoku move")
     @PostMapping("/rooms/{roomId}/moves")
     public ResponseEntity<ApiResponse<GomokuRoomResponse>> playMove(

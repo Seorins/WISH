@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -60,6 +61,12 @@ public class GomokuService {
 
     private final SecureRandom random = new SecureRandom();
 
+    @Value("${gomoku.rooms.waiting-stale-timeout:PT2M}")
+    private Duration waitingRoomStaleTimeout;
+
+    @Value("${gomoku.rooms.playing-stale-timeout:PT90S}")
+    private Duration playingRoomStaleTimeout;
+
     @Transactional
     public GomokuRoomResponse createRoom(Long userId, GomokuRoomCreateRequest request) {
         PatientProfile patientProfile = findPatientProfileOrThrow(userId);
@@ -82,8 +89,10 @@ public class GomokuService {
                         .map(PatientProfile::getId)
                         .orElse(null);
         return gomokuMatchRepository
-                .findByStatusAndWhitePatientProfileIsNullOrderByCreatedAtDesc(
-                        GomokuMatchStatus.WAITING, pageable)
+                .findJoinableWaitingRooms(
+                        GomokuMatchStatus.WAITING,
+                        LocalDateTime.now().minus(waitingRoomStaleTimeout),
+                        pageable)
                 .map(match -> toRoomResponse(match, myPatientProfileId));
     }
 
@@ -115,6 +124,7 @@ public class GomokuService {
         if (!match.getBlackPatientProfile().getId().equals(patientProfile.getId())) {
             throw new BusinessException(GomokuErrorCode.GOMOKU_NOT_PARTICIPANT);
         }
+        match.markSeen(patientProfile.getId());
         match.start();
         return toRoomResponse(match, patientProfile.getId());
     }
@@ -131,6 +141,7 @@ public class GomokuService {
             throw new BusinessException(GomokuErrorCode.GOMOKU_NOT_PARTICIPANT);
         }
         match.swapPlayersBeforeStart();
+        match.markSeen(patientProfile.getId());
         return toRoomResponse(match, patientProfile.getId());
     }
 
@@ -165,11 +176,29 @@ public class GomokuService {
     }
 
     @Transactional
+    public GomokuRoomResponse heartbeat(Long userId, Long roomId) {
+        PatientProfile patientProfile = findPatientProfileOrThrow(userId);
+        GomokuMatch match = findRoomForUpdateOrThrow(roomId);
+        ensureParticipant(match, patientProfile.getId());
+
+        List<GomokuMoveRecord> moves = parseMoves(match.getMovesJson());
+        if (match.getStatus() == GomokuMatchStatus.PLAYING) {
+            finishIfTimedOut(match, moves);
+        }
+        if (match.getStatus() == GomokuMatchStatus.WAITING
+                || match.getStatus() == GomokuMatchStatus.PLAYING) {
+            match.markSeen(patientProfile.getId());
+        }
+        return GomokuRoomResponse.of(match, moves, patientProfile.getId());
+    }
+
+    @Transactional
     public GomokuRoomResponse playMove(Long userId, Long roomId, GomokuMoveRequest request) {
         PatientProfile patientProfile = findPatientProfileOrThrow(userId);
         GomokuMatch match = findRoomForUpdateOrThrow(roomId);
         ensurePlaying(match);
         GomokuStone myStone = ensureParticipant(match, patientProfile.getId());
+        match.markSeen(patientProfile.getId());
 
         List<GomokuMoveRecord> moves = parseMoves(match.getMovesJson());
         if (finishIfTimedOut(match, moves)) {
@@ -223,6 +252,7 @@ public class GomokuService {
         GomokuMatch match = findRoomForUpdateOrThrow(roomId);
         ensurePlaying(match);
         GomokuStone myStone = ensureParticipant(match, patientProfile.getId());
+        match.markSeen(patientProfile.getId());
 
         List<GomokuMoveRecord> moves = parseMoves(match.getMovesJson());
         if (finishIfTimedOut(match, moves)) {
@@ -238,6 +268,7 @@ public class GomokuService {
         PatientProfile patientProfile = findPatientProfileOrThrow(userId);
         GomokuMatch match = findRoomForUpdateOrThrow(roomId);
         GomokuStone myStone = ensureParticipant(match, patientProfile.getId());
+        match.markSeen(patientProfile.getId());
         if (match.getStatus() == GomokuMatchStatus.WAITING) {
             if (myStone == GomokuStone.BLACK) {
                 match.cancel(GomokuEndReason.LEAVE);
@@ -299,6 +330,70 @@ public class GomokuService {
                         .orElse(null);
         long totalPlayers = gomokuMatchRepository.countRankedPlayers(safeMinGames);
         return new GomokuRankingResponse((int) totalPlayers, safeMinGames, topEntries, me);
+    }
+
+    @Transactional
+    public int cleanupStaleRooms() {
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime waitingStaleBefore = now.minus(waitingRoomStaleTimeout);
+        LocalDateTime playingStaleBefore = now.minus(playingRoomStaleTimeout);
+        List<GomokuMatch> staleRooms =
+                gomokuMatchRepository.findStaleActiveRoomsForUpdate(
+                        GomokuMatchStatus.WAITING,
+                        GomokuMatchStatus.PLAYING,
+                        waitingStaleBefore,
+                        playingStaleBefore);
+
+        int cleaned = 0;
+        for (GomokuMatch match : staleRooms) {
+            if (cleanupStaleRoom(match, waitingStaleBefore, playingStaleBefore)) {
+                cleaned += 1;
+            }
+        }
+        return cleaned;
+    }
+
+    private boolean cleanupStaleRoom(
+            GomokuMatch match, LocalDateTime waitingStaleBefore, LocalDateTime playingStaleBefore) {
+        if (match.getStatus() == GomokuMatchStatus.WAITING) {
+            boolean blackStale = isStale(match.getBlackLastSeenAt(), waitingStaleBefore);
+            boolean whiteStale =
+                    match.getWhitePatientProfile() != null
+                            && isStale(match.getWhiteLastSeenAt(), waitingStaleBefore);
+
+            if (blackStale) {
+                match.cancel(GomokuEndReason.LEAVE);
+                return true;
+            }
+            if (whiteStale) {
+                match.removeWhiteBeforeStart();
+                return true;
+            }
+            return false;
+        }
+
+        if (match.getStatus() == GomokuMatchStatus.PLAYING) {
+            boolean blackStale = isStale(match.getBlackLastSeenAt(), playingStaleBefore);
+            boolean whiteStale = isStale(match.getWhiteLastSeenAt(), playingStaleBefore);
+
+            if (blackStale && whiteStale) {
+                match.cancel(GomokuEndReason.LEAVE);
+                return true;
+            }
+            if (blackStale) {
+                finishByForfeit(match, GomokuStone.BLACK, GomokuEndReason.LEAVE);
+                return true;
+            }
+            if (whiteStale) {
+                finishByForfeit(match, GomokuStone.WHITE, GomokuEndReason.LEAVE);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean isStale(LocalDateTime lastSeenAt, LocalDateTime staleBefore) {
+        return lastSeenAt == null || lastSeenAt.isBefore(staleBefore);
     }
 
     private PatientProfile findPatientProfileOrThrow(Long userId) {

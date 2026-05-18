@@ -127,6 +127,13 @@ export async function getGomokuRoom(roomId: number) {
   return response.data
 }
 
+export async function heartbeatGomokuRoom(roomId: number) {
+  const response = await apiClient.post<ApiResponse<GomokuRoom>>(
+    `/gomoku/rooms/${roomId}/heartbeat`,
+  )
+  return response.data
+}
+
 export async function joinGomokuRoom(roomId: number, request: GomokuRoomJoinRequest = {}) {
   const response = await apiClient.post<ApiResponse<GomokuRoom>>(
     `/gomoku/rooms/${roomId}/join`,

@@ -2,9 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   createGomokuRoom,
   getGomokuRanking,
-  getGomokuRoom,
   getMyGomokuStats,
   getWaitingGomokuRooms,
+  heartbeatGomokuRoom,
   joinGomokuRoom,
   leaveGomokuRoom,
   playGomokuMove,
@@ -345,7 +345,7 @@ export function GomokuOverlay({
 
   const refreshOnlineRoom = useCallback(async (roomId: number) => {
     try {
-      const response = await getGomokuRoom(roomId)
+      const response = await heartbeatGomokuRoom(roomId)
       if (!response.data) {
         throw new Error(text.onlineLoadingFailed)
       }

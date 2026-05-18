@@ -1,5 +1,6 @@
 package com.comong.backend.domain.gomoku.controller;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -14,12 +15,15 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.comong.backend.domain.gomoku.dto.GomokuMoveRecord;
 import com.comong.backend.domain.gomoku.entity.GomokuMatch;
+import com.comong.backend.domain.gomoku.entity.GomokuMatchStatus;
 import com.comong.backend.domain.gomoku.entity.GomokuStone;
 import com.comong.backend.domain.gomoku.repository.GomokuMatchRepository;
+import com.comong.backend.domain.gomoku.service.GomokuService;
 import com.comong.backend.domain.patient.repository.PatientProfileRepository;
 import com.comong.backend.domain.user.repository.UserRepository;
 import com.comong.backend.support.IntegrationTestSupport;
@@ -32,7 +36,9 @@ class GomokuControllerIntegrationTest extends IntegrationTestSupport {
 
     @Autowired private MockMvc mockMvc;
     @Autowired private ObjectMapper objectMapper;
+    @Autowired private JdbcTemplate jdbc;
     @Autowired private GomokuMatchRepository gomokuMatchRepository;
+    @Autowired private GomokuService gomokuService;
     @Autowired private PatientProfileRepository patientProfileRepository;
     @Autowired private UserRepository userRepository;
 
@@ -136,6 +142,70 @@ class GomokuControllerIntegrationTest extends IntegrationTestSupport {
                 .andExpect(jsonPath("$.data.entries[0].nickname").value("black"))
                 .andExpect(jsonPath("$.data.entries[0].wins").value(1))
                 .andExpect(jsonPath("$.data.entries[0].isMe").value(true));
+    }
+
+    @Test
+    void waitingRooms_excludesStaleHostRooms() throws Exception {
+        TestUser host =
+                setupUserWithProfile(
+                        "gomoku-stale-host@example.com", "gomoku-stale-host", "stale-host");
+        TestUser viewer =
+                setupUserWithProfile(
+                        "gomoku-stale-viewer@example.com", "gomoku-stale-viewer", "stale-viewer");
+        long roomId = createWaitingRoom(host, "RENJU_LITE");
+
+        expireGomokuParticipant(roomId, "black_last_seen_at", LocalDateTime.now().minusMinutes(5));
+
+        mockMvc.perform(
+                        get("/gomoku/rooms/waiting")
+                                .header("Authorization", "Bearer " + viewer.token()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content.length()").value(0));
+    }
+
+    @Test
+    void heartbeatKeepsWaitingRoomVisible() throws Exception {
+        TestUser host =
+                setupUserWithProfile(
+                        "gomoku-heartbeat-host@example.com",
+                        "gomoku-heartbeat-host",
+                        "heartbeat-host");
+        TestUser viewer =
+                setupUserWithProfile(
+                        "gomoku-heartbeat-viewer@example.com",
+                        "gomoku-heartbeat-viewer",
+                        "heartbeat-viewer");
+        long roomId = createWaitingRoom(host, "RENJU_LITE");
+
+        expireGomokuParticipant(roomId, "black_last_seen_at", LocalDateTime.now().minusMinutes(5));
+
+        mockMvc.perform(
+                        post("/gomoku/rooms/{roomId}/heartbeat", roomId)
+                                .header("Authorization", "Bearer " + host.token()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.id").value(roomId))
+                .andExpect(jsonPath("$.data.status").value("WAITING"));
+
+        mockMvc.perform(
+                        get("/gomoku/rooms/waiting")
+                                .header("Authorization", "Bearer " + viewer.token()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content[0].id").value(roomId));
+    }
+
+    @Test
+    void cleanupStaleRooms_cancelsStaleWaitingRoom() throws Exception {
+        TestUser host =
+                setupUserWithProfile(
+                        "gomoku-cleanup-host@example.com", "gomoku-cleanup-host", "cleanup-host");
+        long roomId = createWaitingRoom(host, "RENJU_LITE");
+
+        expireGomokuParticipant(roomId, "black_last_seen_at", LocalDateTime.now().minusMinutes(5));
+
+        assertThat(gomokuService.cleanupStaleRooms()).isEqualTo(1);
+
+        GomokuMatch match = gomokuMatchRepository.findById(roomId).orElseThrow();
+        assertThat(match.getStatus()).isEqualTo(GomokuMatchStatus.CANCELLED);
     }
 
     @Test
@@ -537,6 +607,23 @@ class GomokuControllerIntegrationTest extends IntegrationTestSupport {
         return roomId;
     }
 
+    private long createWaitingRoom(TestUser black, String ruleSet) throws Exception {
+        return objectMapper
+                .readTree(
+                        mockMvc.perform(
+                                        post("/gomoku/rooms")
+                                                .header("Authorization", "Bearer " + black.token())
+                                                .contentType(MediaType.APPLICATION_JSON)
+                                                .content(createRoomRequest(ruleSet)))
+                                .andExpect(status().isCreated())
+                                .andReturn()
+                                .getResponse()
+                                .getContentAsString())
+                .get("data")
+                .get("id")
+                .asLong();
+    }
+
     private long createWaitingJoinedRoom(TestUser black, TestUser white, String ruleSet)
             throws Exception {
         long roomId =
@@ -564,6 +651,15 @@ class GomokuControllerIntegrationTest extends IntegrationTestSupport {
                 .andExpect(jsonPath("$.data.status").value("WAITING"));
 
         return roomId;
+    }
+
+    private void expireGomokuParticipant(long roomId, String columnName, LocalDateTime lastSeenAt) {
+        assertThat(List.of("black_last_seen_at", "white_last_seen_at")).contains(columnName);
+        jdbc.update(
+                "UPDATE gomoku_matches SET " + columnName + " = ?, updated_at = ? WHERE id = ?",
+                lastSeenAt,
+                lastSeenAt,
+                roomId);
     }
 
     private void seedMoves(Long roomId, List<GomokuMoveRecord> moves) throws Exception {

@@ -65,6 +65,7 @@ export {
   getMyGomokuMatches,
   getMyGomokuStats,
   getWaitingGomokuRooms,
+  heartbeatGomokuRoom,
   joinGomokuRoom,
   leaveGomokuRoom,
   playGomokuMove,

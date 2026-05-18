@@ -89,6 +89,12 @@ public class GomokuMatch {
     @JoinColumn(name = "rematch_source_match_id")
     private GomokuMatch rematchSourceMatch;
 
+    @Column(name = "black_last_seen_at")
+    private LocalDateTime blackLastSeenAt;
+
+    @Column(name = "white_last_seen_at")
+    private LocalDateTime whiteLastSeenAt;
+
     @Column(name = "move_count", nullable = false)
     private int moveCount;
 
@@ -141,6 +147,7 @@ public class GomokuMatch {
         this.whitePatientProfile =
                 Objects.requireNonNull(patientProfile, "patientProfile must not be null");
         this.whiteTextureKey = normalizeTextureKey(textureKey);
+        this.whiteLastSeenAt = LocalDateTime.now();
     }
 
     public void start() {
@@ -152,19 +159,36 @@ public class GomokuMatch {
     public void removeWhiteBeforeStart() {
         this.whitePatientProfile = null;
         this.whiteTextureKey = null;
+        this.whiteLastSeenAt = null;
     }
 
     public void swapPlayersBeforeStart() {
         PatientProfile previousBlackPatientProfile = this.blackPatientProfile;
         String previousBlackTextureKey = this.blackTextureKey;
+        LocalDateTime previousBlackLastSeenAt = this.blackLastSeenAt;
 
         this.blackPatientProfile =
                 Objects.requireNonNull(
                         this.whitePatientProfile, "whitePatientProfile must not be null");
         this.blackTextureKey = normalizeTextureKey(this.whiteTextureKey);
+        this.blackLastSeenAt = this.whiteLastSeenAt;
         this.whitePatientProfile = previousBlackPatientProfile;
         this.whiteTextureKey = normalizeTextureKey(previousBlackTextureKey);
+        this.whiteLastSeenAt = previousBlackLastSeenAt;
         this.currentTurn = GomokuStone.BLACK;
+    }
+
+    public void markSeen(Long patientProfileId) {
+        LocalDateTime now = LocalDateTime.now();
+        if (blackPatientProfile.getId().equals(patientProfileId)) {
+            this.blackLastSeenAt = now;
+            this.updatedAt = now;
+            return;
+        }
+        if (whitePatientProfile != null && whitePatientProfile.getId().equals(patientProfileId)) {
+            this.whiteLastSeenAt = now;
+            this.updatedAt = now;
+        }
     }
 
     public void applyMove(String movesJson, GomokuStone nextTurn, int moveCount) {
@@ -229,6 +253,12 @@ public class GomokuMatch {
         LocalDateTime now = LocalDateTime.now();
         this.createdAt = now;
         this.updatedAt = now;
+        if (this.blackLastSeenAt == null) {
+            this.blackLastSeenAt = now;
+        }
+        if (this.whitePatientProfile != null && this.whiteLastSeenAt == null) {
+            this.whiteLastSeenAt = now;
+        }
     }
 
     @PreUpdate
