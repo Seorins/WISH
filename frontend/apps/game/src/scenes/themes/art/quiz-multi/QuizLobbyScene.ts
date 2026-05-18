@@ -834,6 +834,8 @@ export class QuizLobbyScene extends Phaser.Scene {
   // lobby
 
   private async enterLobby(snapshot: QuizRoomSnapshot) {
+    this.stopHubPolling()
+    this.tearDownMenu()
     this.snapshot = snapshot
     this.currentUserId = await this.resolveCurrentUserId()
     this.selectedTotalRounds = normalizeRoundOption(snapshot.totalRounds)
@@ -844,6 +846,8 @@ export class QuizLobbyScene extends Phaser.Scene {
   }
 
   private enterTransferredLobby(data: QuizLobbySceneInit) {
+    this.stopHubPolling()
+    this.tearDownMenu()
     this.snapshot = data.snapshot
     this.currentUserId = data.currentUserId
     this.realtimeClient = data.realtimeClient
@@ -1410,6 +1414,12 @@ export class QuizLobbyScene extends Phaser.Scene {
   private tearDownMenu() {
     this.menuContainer?.destroy()
     this.menuContainer = null
+    // hub 잔여 자원 정리 — 로비/모드선택으로 전환 시 mask graphic 이 남아 있으면
+    // 다음 화면 위에 hub 패널이 유령처럼 겹쳐 보이던 버그가 있었다.
+    this.hubListMask?.destroy()
+    this.hubListMask = null
+    this.hubListContainer = null
+    this.hubListArea = null
   }
 
   private tearDownLobby() {
