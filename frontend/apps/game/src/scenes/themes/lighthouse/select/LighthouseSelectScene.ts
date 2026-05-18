@@ -471,6 +471,10 @@ export class LighthouseSelectScene extends Phaser.Scene {
   }
 
   private readonly handlePointerDown = (pointer: Phaser.Input.Pointer) => {
+    if (this.emojiPalette?.consumePointerDown(pointer)) {
+      return
+    }
+
     if (this.handleObstacleEditorPointerDown(pointer)) {
       return
     }
