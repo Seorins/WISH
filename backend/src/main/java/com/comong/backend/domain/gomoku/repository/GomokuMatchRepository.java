@@ -1,5 +1,6 @@
 package com.comong.backend.domain.gomoku.repository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -23,8 +24,31 @@ public interface GomokuMatchRepository extends JpaRepository<GomokuMatch, Long> 
     @Query("select m from GomokuMatch m where m.id = :id")
     Optional<GomokuMatch> findByIdForUpdate(@Param("id") Long id);
 
-    Page<GomokuMatch> findByStatusAndWhitePatientProfileIsNullOrderByCreatedAtDesc(
-            GomokuMatchStatus status, Pageable pageable);
+    @Query(
+            "select m from GomokuMatch m "
+                    + "where m.status = :status "
+                    + "and m.whitePatientProfile is null "
+                    + "and coalesce(m.blackLastSeenAt, m.updatedAt) >= :activeAfter")
+    Page<GomokuMatch> findJoinableWaitingRooms(
+            @Param("status") GomokuMatchStatus status,
+            @Param("activeAfter") LocalDateTime activeAfter,
+            Pageable pageable);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query(
+            "select m from GomokuMatch m "
+                    + "where (m.status = :waitingStatus "
+                    + "and (coalesce(m.blackLastSeenAt, m.updatedAt) < :waitingStaleBefore "
+                    + "or (m.whitePatientProfile is not null "
+                    + "and coalesce(m.whiteLastSeenAt, m.updatedAt) < :waitingStaleBefore))) "
+                    + "or (m.status = :playingStatus "
+                    + "and (coalesce(m.blackLastSeenAt, m.updatedAt) < :playingStaleBefore "
+                    + "or coalesce(m.whiteLastSeenAt, m.updatedAt) < :playingStaleBefore))")
+    List<GomokuMatch> findStaleActiveRoomsForUpdate(
+            @Param("waitingStatus") GomokuMatchStatus waitingStatus,
+            @Param("playingStatus") GomokuMatchStatus playingStatus,
+            @Param("waitingStaleBefore") LocalDateTime waitingStaleBefore,
+            @Param("playingStaleBefore") LocalDateTime playingStaleBefore);
 
     Optional<GomokuMatch> findByRematchSourceMatchId(Long rematchSourceMatchId);
 

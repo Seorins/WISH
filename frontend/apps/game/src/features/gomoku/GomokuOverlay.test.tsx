@@ -4,6 +4,7 @@ import {
   getGomokuRanking,
   getMyGomokuStats,
   getWaitingGomokuRooms,
+  heartbeatGomokuRoom,
   leaveGomokuRoom,
   listPatientProfiles,
   rematchGomokuRoom,
@@ -22,6 +23,7 @@ vi.mock('@wish/api-client', () => ({
   getGomokuRoom: vi.fn(),
   getMyGomokuStats: vi.fn(),
   getWaitingGomokuRooms: vi.fn(),
+  heartbeatGomokuRoom: vi.fn(),
   joinGomokuRoom: vi.fn(),
   leaveGomokuRoom: vi.fn(),
   listPatientProfiles: vi.fn(),
@@ -183,6 +185,7 @@ describe('GomokuOverlay online room creation', () => {
     vi.mocked(getWaitingGomokuRooms).mockResolvedValue(apiResponse(emptyRoomPage()))
     vi.mocked(getMyGomokuStats).mockResolvedValue(apiResponse(emptyStats))
     vi.mocked(getGomokuRanking).mockResolvedValue(apiResponse(emptyRanking))
+    vi.mocked(heartbeatGomokuRoom).mockResolvedValue(apiResponse(createdRoom))
     vi.mocked(listPatientProfiles).mockResolvedValue(apiResponse([]))
   })
 
@@ -234,6 +237,25 @@ describe('GomokuOverlay online room creation', () => {
       expect(screen.queryByText('ABC123')).toBeNull()
     })
     expect(screen.getByRole('button', { name: COMPUTER_LABEL }).className).toContain('active')
+  })
+
+  it('sends heartbeat while an online room is open', async () => {
+    vi.mocked(createGomokuRoom).mockResolvedValueOnce(apiResponse(createdRoom))
+    vi.mocked(heartbeatGomokuRoom).mockResolvedValue(apiResponse(createdRoom))
+
+    render(<GomokuOverlay open onClose={vi.fn()} patientProfileId={7} />)
+
+    fireEvent.click(screen.getByRole('button', { name: ONLINE_LABEL }))
+    fireEvent.click(screen.getByRole('button', { name: CREATE_ROOM_LABEL }))
+
+    expect(await screen.findByText('ABC123')).toBeTruthy()
+
+    await waitFor(
+      () => {
+        expect(heartbeatGomokuRoom).toHaveBeenCalledWith(createdRoom.id)
+      },
+      { timeout: 2500 },
+    )
   })
 
   it('requests authentication instead of creating a room without a patient profile', async () => {
