@@ -15,8 +15,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.comong.backend.domain.taekwondo.dto.TaekwondoSessionCreateRequest;
+import com.comong.backend.domain.taekwondo.dto.TaekwondoSessionMotionSaveRequest;
+import com.comong.backend.domain.taekwondo.dto.TaekwondoSessionMotionSaveResponse;
 import com.comong.backend.domain.taekwondo.dto.TaekwondoSessionResponse;
-import com.comong.backend.domain.taekwondo.dto.TaekwondoSessionSaveRequest;
 import com.comong.backend.domain.taekwondo.dto.TaekwondoSessionSummaryResponse;
 import com.comong.backend.domain.taekwondo.service.TaekwondoSessionService;
 import com.comong.backend.global.common.response.ApiResponse;
@@ -85,7 +87,37 @@ public class TaekwondoSessionController {
                 ApiResponse.success(taekwondoSessionService.findOne(currentUser.userId(), id)));
     }
 
-    @Operation(summary = "태권도 세션 기록 저장", description = "태권도 세션과 동작별 수행 결과를 저장합니다.")
+    @Operation(
+            summary = "태권도 세션 생성",
+            description =
+                    "빈 태권도 세션을 생성하고 sessionId 를 반환합니다. 이후 동작별 결과는 `POST /taekwondo-sessions/{id}/motions` 로 누적 저장합니다.")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "201",
+                description = "생성 성공"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "400",
+                description = "입력값 검증 실패 (G-001)"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "401",
+                description = "인증 필요 (G-003)"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "404",
+                description = "환자 프로필이 없거나 본인 소유가 아님 (P-001)")
+    })
+    @PostMapping
+    public ResponseEntity<ApiResponse<TaekwondoSessionResponse>> create(
+            @AuthenticationPrincipal AuthenticatedUser currentUser,
+            @Valid @RequestBody TaekwondoSessionCreateRequest request) {
+        TaekwondoSessionResponse response =
+                taekwondoSessionService.create(currentUser.userId(), request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(response));
+    }
+
+    @Operation(
+            summary = "태권도 세션 동작 단건 저장",
+            description =
+                    "지정한 태권도 세션에 동작 1건을 추가 저장하고 세션의 누적 통계 (duration, averageAccuracy, completedMotionCount, monstersDefeated) 를 재계산합니다.")
     @ApiResponses({
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
                 responseCode = "201",
@@ -98,14 +130,16 @@ public class TaekwondoSessionController {
                 description = "인증 필요 (G-003)"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
                 responseCode = "404",
-                description = "환자 프로필이 없거나 (P-001) 또는 요청한 동작 ID 가 존재하지 않음 (TK-001)")
+                description = "세션이 없거나 본인 소유가 아님 (TK-005) 또는 요청한 동작 ID 가 존재하지 않음 (TK-001)")
     })
-    @PostMapping
-    public ResponseEntity<ApiResponse<TaekwondoSessionResponse>> create(
+    @PostMapping("/{id}/motions")
+    public ResponseEntity<ApiResponse<TaekwondoSessionMotionSaveResponse>> saveMotion(
             @AuthenticationPrincipal AuthenticatedUser currentUser,
-            @Valid @RequestBody TaekwondoSessionSaveRequest request) {
-        TaekwondoSessionResponse response =
-                taekwondoSessionService.create(currentUser.userId(), request);
+            @Parameter(description = "태권도 세션 ID (본인 환자 프로필 소유)", required = true) @PathVariable
+                    Long id,
+            @Valid @RequestBody TaekwondoSessionMotionSaveRequest request) {
+        TaekwondoSessionMotionSaveResponse response =
+                taekwondoSessionService.saveMotion(currentUser.userId(), id, request);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(response));
     }
 }

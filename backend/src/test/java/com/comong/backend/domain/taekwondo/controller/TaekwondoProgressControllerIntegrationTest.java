@@ -61,10 +61,11 @@ class TaekwondoProgressControllerIntegrationTest extends IntegrationTestSupport 
         TestUser user = setupUserWithProfile("progress@example.com", "progress-user");
         PatientProfile profile = findProfile(user);
 
-        // 누적 처치수 25 (YELLOW 임계 30 미달) — currentBelt 는 WHITE 유지
+        // 누적 처치수 25 (YELLOW 임계 30 미달) — currentBelt 는 WHITE 유지.
+        // 두 세션의 첫 동작 저장 시점으로 모사 (firstMotionOfSession=true 두 번 → sessionCount=2).
         TaekwondoProgress progress = TaekwondoProgress.firstSession(profile);
-        progress.applySession(15);
-        progress.applySession(10);
+        progress.applyMotion(15, true);
+        progress.applyMotion(10, true);
         taekwondoProgressRepository.save(progress);
 
         // 두 세션 모두 0.5 — 평균 0.5 (binary 정확 표현, double 부동소수점 오차 회피)

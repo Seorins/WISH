@@ -1,9 +1,6 @@
 package com.comong.backend.domain.taekwondo.service;
 
 import java.util.List;
-import java.util.Map;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -13,10 +10,11 @@ import com.comong.backend.domain.patient.service.PatientProfileService;
 import com.comong.backend.domain.performance.entity.PerformanceVideo;
 import com.comong.backend.domain.performance.service.PerformanceVideoService;
 import com.comong.backend.domain.taekwondo.dto.BeltPromotionResponse;
+import com.comong.backend.domain.taekwondo.dto.TaekwondoSessionCreateRequest;
 import com.comong.backend.domain.taekwondo.dto.TaekwondoSessionMotionResponse;
 import com.comong.backend.domain.taekwondo.dto.TaekwondoSessionMotionSaveRequest;
+import com.comong.backend.domain.taekwondo.dto.TaekwondoSessionMotionSaveResponse;
 import com.comong.backend.domain.taekwondo.dto.TaekwondoSessionResponse;
-import com.comong.backend.domain.taekwondo.dto.TaekwondoSessionSaveRequest;
 import com.comong.backend.domain.taekwondo.dto.TaekwondoSessionSummaryResponse;
 import com.comong.backend.domain.taekwondo.entity.Belt;
 import com.comong.backend.domain.taekwondo.entity.TaekwondoBeltHistory;
@@ -49,40 +47,108 @@ public class TaekwondoSessionService {
     private final PerformanceVideoService performanceVideoService;
 
     @Transactional
-    public TaekwondoSessionResponse create(Long userId, TaekwondoSessionSaveRequest request) {
+    public TaekwondoSessionResponse create(Long userId, TaekwondoSessionCreateRequest request) {
         PatientProfile patientProfile =
                 patientProfileService.findOwnedOrThrow(userId, request.patientProfileId());
-        Map<Long, TaekwondoMotion> motionMap = loadTaekwondoMotionMap(request.motions());
-
         TaekwondoSession session =
                 taekwondoSessionRepository.save(
                         TaekwondoSession.builder()
                                 .patientProfile(patientProfile)
                                 .poomsae(request.poomsae())
+                                .durationSec(0)
+                                .averageAccuracy(0.0)
+                                .completedMotionCount(0)
+                                .monstersDefeated(0)
+                                .build());
+        return TaekwondoSessionResponse.of(session, List.of());
+    }
+
+    @Transactional
+    public TaekwondoSessionMotionSaveResponse saveMotion(
+            Long userId, Long sessionId, TaekwondoSessionMotionSaveRequest request) {
+        TaekwondoSession session = findOwnedSessionOrThrow(userId, sessionId);
+        TaekwondoMotion motion =
+                taekwondoMotionRepository
+                        .findById(request.taekwondoMotionId())
+                        .orElseThrow(
+                                () ->
+                                        new BusinessException(
+                                                TaekwondoErrorCode.TAEKWONDO_MOTION_NOT_FOUND));
+        if (session.getPoomsae() != motion.getPoomsae()) {
+            throw new BusinessException(
+                    TaekwondoErrorCode.TAEKWONDO_SESSION_MOTION_POOMSAE_MISMATCH);
+        }
+        PerformanceVideo performanceVideo =
+                performanceVideoService.createIfPresent(
+                        session.getPatientProfile(),
+                        request.videoKey(),
+                        request.thumbKey(),
+                        UploadPurpose.TAEKWONDO_PERFORMANCE);
+
+        boolean firstMotionOfSession = session.getCompletedMotionCount() == 0;
+
+        TaekwondoSessionMotion sessionMotion =
+                taekwondoSessionMotionRepository.save(
+                        TaekwondoSessionMotion.builder()
+                                .session(session)
+                                .motion(motion)
                                 .durationSec(request.durationSec())
-                                .averageAccuracy(request.averageAccuracy())
-                                .completedMotionCount(request.motions().size())
+                                .accuracy(request.accuracy())
+                                .completedReps(request.completedReps())
+                                .feedback(request.feedback())
                                 .monstersDefeated(request.monstersDefeated())
+                                .performanceVideo(performanceVideo)
                                 .build());
 
-        List<TaekwondoSessionMotion> sessionMotions =
-                request.motions().stream()
-                        .map(motionRequest -> toSessionMotion(session, motionRequest, motionMap))
-                        .toList();
-        List<TaekwondoSessionMotion> savedSessionMotions =
-                taekwondoSessionMotionRepository.saveAll(sessionMotions);
+        session.recordMotion(request.durationSec(), request.accuracy(), request.monstersDefeated());
 
-        BeltPromotionResponse beltPromotion = applyProgressAndPromote(patientProfile, session);
+        BeltPromotionResponse beltPromotion =
+                applyProgressAndPromote(
+                        session.getPatientProfile(),
+                        session,
+                        request.monstersDefeated(),
+                        firstMotionOfSession);
 
-        return TaekwondoSessionResponse.of(
-                session,
-                savedSessionMotions.stream()
-                        .map(
-                                motion ->
-                                        TaekwondoSessionMotionResponse.from(
-                                                motion, performanceVideoService))
-                        .toList(),
-                beltPromotion);
+        return TaekwondoSessionMotionSaveResponse.of(
+                session, sessionMotion, beltPromotion, performanceVideoService);
+    }
+
+    /**
+     * 동작 결과 누적 + 띠 승급 판정. 첫 동작 저장 시점에 progress 가 없으면 lazy 로 INSERT 하고 BeltHistory(NULL → WHITE)
+     * 적재한다. 매 동작 저장마다 누적 처치수가 다음 띠 임계값을 통과하면 progress.promote() 를 호출하며, 다단계 점프를 허용한다 (while 루프).
+     */
+    private BeltPromotionResponse applyProgressAndPromote(
+            PatientProfile patientProfile,
+            TaekwondoSession session,
+            int motionMonstersDefeated,
+            boolean firstMotionOfSession) {
+        TaekwondoProgress progress =
+                taekwondoProgressRepository
+                        .findByPatientProfileId(patientProfile.getId())
+                        .orElseGet(() -> createFirstProgress(patientProfile, session));
+
+        Belt initialBelt = progress.getCurrentBelt();
+        progress.applyMotion(motionMonstersDefeated, firstMotionOfSession);
+        while (progress.getCurrentBelt().canPromoteWith(progress.getTotalMonstersDefeated())) {
+            Belt fromBelt = progress.promote();
+            Belt toBelt = progress.getCurrentBelt();
+            taekwondoBeltHistoryRepository.save(
+                    TaekwondoBeltHistory.promotion(patientProfile, fromBelt, toBelt, session));
+        }
+
+        if (progress.getCurrentBelt() == initialBelt) {
+            return null;
+        }
+        return new BeltPromotionResponse(initialBelt, progress.getCurrentBelt());
+    }
+
+    private TaekwondoProgress createFirstProgress(
+            PatientProfile patientProfile, TaekwondoSession session) {
+        TaekwondoProgress progress =
+                taekwondoProgressRepository.save(TaekwondoProgress.firstSession(patientProfile));
+        taekwondoBeltHistoryRepository.save(
+                TaekwondoBeltHistory.firstEntry(patientProfile, session));
+        return progress;
     }
 
     public List<TaekwondoSessionSummaryResponse> findAll(Long userId, Long patientProfileId) {
@@ -118,86 +184,5 @@ public class TaekwondoSessionService {
                         () ->
                                 new BusinessException(
                                         TaekwondoErrorCode.TAEKWONDO_SESSION_NOT_FOUND));
-    }
-
-    private Map<Long, TaekwondoMotion> loadTaekwondoMotionMap(
-            List<TaekwondoSessionMotionSaveRequest> requests) {
-        List<Long> motionIds =
-                requests.stream()
-                        .map(TaekwondoSessionMotionSaveRequest::taekwondoMotionId)
-                        .distinct()
-                        .toList();
-        Map<Long, TaekwondoMotion> motionMap =
-                taekwondoMotionRepository.findAllById(motionIds).stream()
-                        .collect(Collectors.toMap(TaekwondoMotion::getId, Function.identity()));
-
-        if (motionMap.size() != motionIds.size()) {
-            throw new BusinessException(TaekwondoErrorCode.TAEKWONDO_MOTION_NOT_FOUND);
-        }
-        return motionMap;
-    }
-
-    private TaekwondoSessionMotion toSessionMotion(
-            TaekwondoSession session,
-            TaekwondoSessionMotionSaveRequest request,
-            Map<Long, TaekwondoMotion> motionMap) {
-        TaekwondoMotion motion = motionMap.get(request.taekwondoMotionId());
-        if (session.getPoomsae() != motion.getPoomsae()) {
-            throw new BusinessException(
-                    TaekwondoErrorCode.TAEKWONDO_SESSION_MOTION_POOMSAE_MISMATCH);
-        }
-        PerformanceVideo performanceVideo =
-                performanceVideoService.createIfPresent(
-                        session.getPatientProfile(),
-                        request.videoKey(),
-                        request.thumbKey(),
-                        UploadPurpose.TAEKWONDO_PERFORMANCE);
-
-        return TaekwondoSessionMotion.builder()
-                .session(session)
-                .motion(motion)
-                .durationSec(request.durationSec())
-                .accuracy(request.accuracy())
-                .completedReps(request.completedReps())
-                .feedback(request.feedback())
-                .performanceVideo(performanceVideo)
-                .build();
-    }
-
-    /**
-     * 세션 결과 누적 + 띠 승급 판정. 첫 세션이면 progress 를 lazy 로 INSERT 하고 BeltHistory(NULL → WHITE) 적재한다. 이후 누적
-     * 처치수가 다음 띠 임계값을 통과할 때마다 progress.promote() 를 호출하여 다단계 점프를 허용한다 (while 루프).
-     *
-     * @return 진입 시점 띠와 최종 띠가 다르면 BeltPromotionResponse, 동일하면 null
-     */
-    private BeltPromotionResponse applyProgressAndPromote(
-            PatientProfile patientProfile, TaekwondoSession session) {
-        TaekwondoProgress progress =
-                taekwondoProgressRepository
-                        .findByPatientProfileId(patientProfile.getId())
-                        .orElseGet(() -> createFirstProgress(patientProfile, session));
-
-        Belt initialBelt = progress.getCurrentBelt();
-        progress.applySession(session.getMonstersDefeated());
-        while (progress.getCurrentBelt().canPromoteWith(progress.getTotalMonstersDefeated())) {
-            Belt fromBelt = progress.promote();
-            Belt toBelt = progress.getCurrentBelt();
-            taekwondoBeltHistoryRepository.save(
-                    TaekwondoBeltHistory.promotion(patientProfile, fromBelt, toBelt, session));
-        }
-
-        if (progress.getCurrentBelt() == initialBelt) {
-            return null;
-        }
-        return new BeltPromotionResponse(initialBelt, progress.getCurrentBelt());
-    }
-
-    private TaekwondoProgress createFirstProgress(
-            PatientProfile patientProfile, TaekwondoSession session) {
-        TaekwondoProgress progress =
-                taekwondoProgressRepository.save(TaekwondoProgress.firstSession(patientProfile));
-        taekwondoBeltHistoryRepository.save(
-                TaekwondoBeltHistory.firstEntry(patientProfile, session));
-        return progress;
     }
 }

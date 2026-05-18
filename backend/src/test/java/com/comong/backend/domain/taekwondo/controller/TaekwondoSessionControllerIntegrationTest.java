@@ -70,52 +70,44 @@ class TaekwondoSessionControllerIntegrationTest extends IntegrationTestSupport {
         TaekwondoMotion ready = taekwondoMotionRepository.save(taekwondoMotion("기본준비", 1));
         TaekwondoMotion lowBlock = taekwondoMotionRepository.save(taekwondoMotion("앞서고 아래막기", 2));
 
+        long sessionId =
+                createEmptyTaekwondoSession(user.token(), user.patientProfileId(), "TAEGEUK_1");
+
         mockMvc.perform(
-                        post("/taekwondo-sessions")
+                        post("/taekwondo-sessions/{id}/motions", sessionId)
                                 .header("Authorization", "Bearer " + user.token())
                                 .contentType(MediaType.APPLICATION_JSON)
-                                .content(
-                                        """
-                                        {
-                                          "patientProfileId": %d,
-                                          "poomsae": "TAEGEUK_1",
-                                          "durationSec": 120,
-                                          "averageAccuracy": 0.85,
-                                          "monstersDefeated": 12,
-                                          "motions": [
-                                            {
-                                              "taekwondoMotionId": %d,
-                                              "durationSec": 8,
-                                              "accuracy": 0.9,
-                                              "completedReps": 1,
-                                              "feedback": "좋아요"
-                                            },
-                                            {
-                                              "taekwondoMotionId": %d,
-                                              "durationSec": 14,
-                                              "accuracy": 0.82,
-                                              "completedReps": 1,
-                                              "feedback": "팔을 더 내려요"
-                                            }
-                                          ]
-                                        }
-                                        """
-                                                .formatted(
-                                                        user.patientProfileId(),
-                                                        ready.getId(),
-                                                        lowBlock.getId())))
+                                .content(motionBody(ready.getId(), 8, 0.9, 1, "좋아요", 3)))
                 .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.sessionId").value(sessionId))
+                .andExpect(jsonPath("$.data.sessionDurationSec").value(8))
+                .andExpect(jsonPath("$.data.sessionCompletedMotionCount").value(1))
+                .andExpect(jsonPath("$.data.sessionMonstersDefeated").value(3))
+                .andExpect(jsonPath("$.data.savedMotion.taekwondoMotionId").value(ready.getId()))
+                .andExpect(jsonPath("$.data.savedMotion.motionName").value("기본준비"));
+
+        mockMvc.perform(
+                        post("/taekwondo-sessions/{id}/motions", sessionId)
+                                .header("Authorization", "Bearer " + user.token())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(motionBody(lowBlock.getId(), 14, 0.82, 1, "팔을 더 내려요", 9)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.sessionDurationSec").value(22))
+                .andExpect(jsonPath("$.data.sessionCompletedMotionCount").value(2))
+                .andExpect(jsonPath("$.data.sessionMonstersDefeated").value(12));
+
+        mockMvc.perform(
+                        get("/taekwondo-sessions/{id}", sessionId)
+                                .header("Authorization", "Bearer " + user.token()))
+                .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("SUCCESS"))
-                .andExpect(jsonPath("$.data.id").isNumber())
+                .andExpect(jsonPath("$.data.id").value(sessionId))
                 .andExpect(jsonPath("$.data.patientProfileId").value(user.patientProfileId()))
                 .andExpect(jsonPath("$.data.poomsae").value("TAEGEUK_1"))
-                .andExpect(jsonPath("$.data.durationSec").value(120))
-                .andExpect(jsonPath("$.data.averageAccuracy").value(0.85))
                 .andExpect(jsonPath("$.data.completedMotionCount").value(2))
                 .andExpect(jsonPath("$.data.monstersDefeated").value(12))
                 .andExpect(jsonPath("$.data.motions.length()").value(2))
                 .andExpect(jsonPath("$.data.motions[0].taekwondoMotionId").value(ready.getId()))
-                .andExpect(jsonPath("$.data.motions[0].motionName").value("기본준비"))
                 .andExpect(jsonPath("$.data.motions[0].routineOrder").value(1));
 
         assertThat(taekwondoSessionRepository.count()).isEqualTo(1);
@@ -207,17 +199,12 @@ class TaekwondoSessionControllerIntegrationTest extends IntegrationTestSupport {
     void createTaekwondoSession_rejectsOtherUsersPatientProfile() throws Exception {
         TestUser owner = setupUserWithProfile("owner@example.com", "owner-user");
         TestUser other = setupUserWithProfile("other@example.com", "other-user");
-        TaekwondoMotion motion = taekwondoMotionRepository.save(taekwondoMotion("기본준비", 1));
 
         mockMvc.perform(
                         post("/taekwondo-sessions")
                                 .header("Authorization", "Bearer " + other.token())
                                 .contentType(MediaType.APPLICATION_JSON)
-                                .content(
-                                        saveRequest(
-                                                owner.patientProfileId(),
-                                                motion.getId(),
-                                                "TAEGEUK_1")))
+                                .content(createSessionBody(owner.patientProfileId(), "TAEGEUK_1")))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("P-001"));
 
@@ -226,133 +213,56 @@ class TaekwondoSessionControllerIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
-    void createTaekwondoSession_rejectsUnknownMotion() throws Exception {
+    void saveTaekwondoMotion_rejectsUnknownMotion() throws Exception {
         TestUser user = setupUserWithProfile("unknown@example.com", "unknown-user");
+        long sessionId =
+                createEmptyTaekwondoSession(user.token(), user.patientProfileId(), "TAEGEUK_1");
 
         mockMvc.perform(
-                        post("/taekwondo-sessions")
+                        post("/taekwondo-sessions/{id}/motions", sessionId)
                                 .header("Authorization", "Bearer " + user.token())
                                 .contentType(MediaType.APPLICATION_JSON)
-                                .content(
-                                        saveRequest(
-                                                user.patientProfileId(), 999_999L, "TAEGEUK_1")))
+                                .content(motionBody(999_999L, 8, 0.9, 1, "좋아요", 0)))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("TK-001"));
 
-        assertThat(taekwondoSessionRepository.count()).isZero();
         assertThat(taekwondoSessionMotionRepository.count()).isZero();
     }
 
     @Test
-    void createTaekwondoSession_rejectsMotionPoomsaeMismatch() throws Exception {
+    void saveTaekwondoMotion_rejectsMotionPoomsaeMismatch() throws Exception {
         TestUser user = setupUserWithProfile("mismatch@example.com", "mismatch-user");
         TaekwondoMotion motion =
                 taekwondoMotionRepository.save(taekwondoMotion(Poomsae.TAEGEUK_2, "태극2장 동작", 1));
+        long sessionId =
+                createEmptyTaekwondoSession(user.token(), user.patientProfileId(), "TAEGEUK_1");
 
         mockMvc.perform(
-                        post("/taekwondo-sessions")
+                        post("/taekwondo-sessions/{id}/motions", sessionId)
                                 .header("Authorization", "Bearer " + user.token())
                                 .contentType(MediaType.APPLICATION_JSON)
-                                .content(
-                                        saveRequest(
-                                                user.patientProfileId(),
-                                                motion.getId(),
-                                                "TAEGEUK_1")))
+                                .content(motionBody(motion.getId(), 8, 0.9, 1, "좋아요", 0)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("TK-004"));
 
-        assertThat(taekwondoSessionRepository.count()).isZero();
         assertThat(taekwondoSessionMotionRepository.count()).isZero();
     }
 
     @Test
-    void createTaekwondoSession_rejectsEmptyMotions() throws Exception {
-        TestUser user = setupUserWithProfile("empty@example.com", "empty-user");
-
-        mockMvc.perform(
-                        post("/taekwondo-sessions")
-                                .header("Authorization", "Bearer " + user.token())
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(
-                                        """
-                                        {
-                                          "patientProfileId": %d,
-                                          "poomsae": "TAEGEUK_1",
-                                          "durationSec": 120,
-                                          "averageAccuracy": 0.85,
-                                          "monstersDefeated": 0,
-                                          "motions": []
-                                        }
-                                        """
-                                                .formatted(user.patientProfileId())))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("G-001"));
-
-        assertThat(taekwondoSessionRepository.count()).isZero();
-        assertThat(taekwondoSessionMotionRepository.count()).isZero();
-    }
-
-    @Test
-    void createTaekwondoSession_rejectsNullMotionElement() throws Exception {
-        TestUser user = setupUserWithProfile("null-motion@example.com", "null-motion-user");
-
-        mockMvc.perform(
-                        post("/taekwondo-sessions")
-                                .header("Authorization", "Bearer " + user.token())
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(
-                                        """
-                                        {
-                                          "patientProfileId": %d,
-                                          "poomsae": "TAEGEUK_1",
-                                          "durationSec": 120,
-                                          "averageAccuracy": 0.85,
-                                          "monstersDefeated": 0,
-                                          "motions": [null]
-                                        }
-                                        """
-                                                .formatted(user.patientProfileId())))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("G-001"));
-
-        assertThat(taekwondoSessionRepository.count()).isZero();
-        assertThat(taekwondoSessionMotionRepository.count()).isZero();
-    }
-
-    @Test
-    void createTaekwondoSession_rejectsAccuracyOutOfRange() throws Exception {
+    void saveTaekwondoMotion_rejectsAccuracyOutOfRange() throws Exception {
         TestUser user = setupUserWithProfile("range@example.com", "range-user");
         TaekwondoMotion motion = taekwondoMotionRepository.save(taekwondoMotion("기본준비", 1));
+        long sessionId =
+                createEmptyTaekwondoSession(user.token(), user.patientProfileId(), "TAEGEUK_1");
 
         mockMvc.perform(
-                        post("/taekwondo-sessions")
+                        post("/taekwondo-sessions/{id}/motions", sessionId)
                                 .header("Authorization", "Bearer " + user.token())
                                 .contentType(MediaType.APPLICATION_JSON)
-                                .content(
-                                        """
-                                        {
-                                          "patientProfileId": %d,
-                                          "poomsae": "TAEGEUK_1",
-                                          "durationSec": 120,
-                                          "averageAccuracy": 1.5,
-                                          "monstersDefeated": 0,
-                                          "motions": [
-                                            {
-                                              "taekwondoMotionId": %d,
-                                              "durationSec": 8,
-                                              "accuracy": 0.9,
-                                              "completedReps": 1,
-                                              "feedback": "ok"
-                                            }
-                                          ]
-                                        }
-                                        """
-                                                .formatted(
-                                                        user.patientProfileId(), motion.getId())))
+                                .content(motionBody(motion.getId(), 8, 1.5, 1, "ok", 0)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("G-001"));
 
-        assertThat(taekwondoSessionRepository.count()).isZero();
         assertThat(taekwondoSessionMotionRepository.count()).isZero();
     }
 
@@ -361,7 +271,7 @@ class TaekwondoSessionControllerIntegrationTest extends IntegrationTestSupport {
         mockMvc.perform(
                         post("/taekwondo-sessions")
                                 .contentType(MediaType.APPLICATION_JSON)
-                                .content(saveRequest(1L, 1L, "TAEGEUK_1")))
+                                .content(createSessionBody(1L, "TAEGEUK_1")))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("G-003"));
     }
@@ -381,17 +291,17 @@ class TaekwondoSessionControllerIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
-    void createTaekwondoSession_promotesBeltWhenThresholdReached() throws Exception {
+    void saveTaekwondoMotion_promotesBeltWhenThresholdReached() throws Exception {
         TestUser user = setupUserWithProfile("promote@example.com", "promote-user");
         TaekwondoMotion ready = taekwondoMotionRepository.save(taekwondoMotion("기본준비", 1));
+        long sessionId =
+                createEmptyTaekwondoSession(user.token(), user.patientProfileId(), "TAEGEUK_1");
 
         mockMvc.perform(
-                        post("/taekwondo-sessions")
+                        post("/taekwondo-sessions/{id}/motions", sessionId)
                                 .header("Authorization", "Bearer " + user.token())
                                 .contentType(MediaType.APPLICATION_JSON)
-                                .content(
-                                        saveRequestWithMonsters(
-                                                user.patientProfileId(), ready.getId(), 30)))
+                                .content(motionBody(ready.getId(), 8, 0.9, 1, "좋아요", 30)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.code").value("SUCCESS"))
                 .andExpect(jsonPath("$.data.beltPromotion.fromBelt").value("WHITE"))
@@ -403,17 +313,17 @@ class TaekwondoSessionControllerIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
-    void createTaekwondoSession_supportsMultiBeltJumpInSingleSession() throws Exception {
+    void saveTaekwondoMotion_supportsMultiBeltJumpInSingleMotion() throws Exception {
         TestUser user = setupUserWithProfile("jump@example.com", "jump-user");
         TaekwondoMotion ready = taekwondoMotionRepository.save(taekwondoMotion("기본준비", 1));
+        long sessionId =
+                createEmptyTaekwondoSession(user.token(), user.patientProfileId(), "TAEGEUK_1");
 
         mockMvc.perform(
-                        post("/taekwondo-sessions")
+                        post("/taekwondo-sessions/{id}/motions", sessionId)
                                 .header("Authorization", "Bearer " + user.token())
                                 .contentType(MediaType.APPLICATION_JSON)
-                                .content(
-                                        saveRequestWithMonsters(
-                                                user.patientProfileId(), ready.getId(), 70)))
+                                .content(motionBody(ready.getId(), 8, 0.9, 1, "좋아요", 70)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.data.beltPromotion.fromBelt").value("WHITE"))
                 .andExpect(jsonPath("$.data.beltPromotion.toBelt").value("ORANGE"));
@@ -422,27 +332,55 @@ class TaekwondoSessionControllerIntegrationTest extends IntegrationTestSupport {
         assertThat(taekwondoBeltHistoryRepository.count()).isEqualTo(3);
     }
 
-    private String saveRequestWithMonsters(
-            Long patientProfileId, Long taekwondoMotionId, int monstersDefeated) {
+    private long createEmptyTaekwondoSession(String token, Long patientProfileId, String poomsae)
+            throws Exception {
+        String body =
+                mockMvc.perform(
+                                post("/taekwondo-sessions")
+                                        .header("Authorization", "Bearer " + token)
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .content(createSessionBody(patientProfileId, poomsae)))
+                        .andExpect(status().isCreated())
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString();
+        return objectMapper.readTree(body).get("data").get("id").asLong();
+    }
+
+    private String createSessionBody(Long patientProfileId, String poomsae) {
         return """
                 {
                   "patientProfileId": %d,
-                  "poomsae": "TAEGEUK_1",
-                  "durationSec": 120,
-                  "averageAccuracy": 0.85,
-                  "monstersDefeated": %d,
-                  "motions": [
-                    {
-                      "taekwondoMotionId": %d,
-                      "durationSec": 8,
-                      "accuracy": 0.9,
-                      "completedReps": 1,
-                      "feedback": "좋아요"
-                    }
-                  ]
+                  "poomsae": "%s"
                 }
                 """
-                .formatted(patientProfileId, monstersDefeated, taekwondoMotionId);
+                .formatted(patientProfileId, poomsae);
+    }
+
+    private String motionBody(
+            Long taekwondoMotionId,
+            int durationSec,
+            double accuracy,
+            int completedReps,
+            String feedback,
+            int monstersDefeated) {
+        return """
+                {
+                  "taekwondoMotionId": %d,
+                  "durationSec": %d,
+                  "accuracy": %s,
+                  "completedReps": %d,
+                  "feedback": "%s",
+                  "monstersDefeated": %d
+                }
+                """
+                .formatted(
+                        taekwondoMotionId,
+                        durationSec,
+                        accuracy,
+                        completedReps,
+                        feedback,
+                        monstersDefeated);
     }
 
     private TaekwondoMotion taekwondoMotion(String name, int routineOrder) {
@@ -489,28 +427,6 @@ class TaekwondoSessionControllerIntegrationTest extends IntegrationTestSupport {
 
     private PatientProfile findProfile(TestUser user) {
         return patientProfileRepository.findById(user.patientProfileId()).orElseThrow();
-    }
-
-    private String saveRequest(Long patientProfileId, Long taekwondoMotionId, String poomsae) {
-        return """
-                {
-                  "patientProfileId": %d,
-                  "poomsae": "%s",
-                  "durationSec": 120,
-                  "averageAccuracy": 0.85,
-                  "monstersDefeated": 5,
-                  "motions": [
-                    {
-                      "taekwondoMotionId": %d,
-                      "durationSec": 8,
-                      "accuracy": 0.9,
-                      "completedReps": 1,
-                      "feedback": "좋아요"
-                    }
-                  ]
-                }
-                """
-                .formatted(patientProfileId, poomsae, taekwondoMotionId);
     }
 
     private TestUser setupUserWithProfile(String email, String nickname) throws Exception {
