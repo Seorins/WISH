@@ -10,8 +10,24 @@ class VillageEmojisTest {
     void allowedContainsShiftedPaletteAndBeltBoasts() {
         assertThat(VillageEmojis.ALLOWED)
                 .contains(
-                        "안녕", "따라와", "좋아", "고마워", "😄", "😢", "👍", "❤️", "❓", "🥋흰띠", "🥋노란띠",
-                        "🥋주황띠", "🥋초록띠", "🥋파란띠", "🥋보라띠", "🥋갈색띠", "🥋빨간띠", "🥋검은띠");
+                        "안녕",
+                        "따라와",
+                        "좋아",
+                        "고마워",
+                        "😄",
+                        "😢",
+                        "👍",
+                        "❤️",
+                        "❓",
+                        "taekwondo-belt:WHITE",
+                        "taekwondo-belt:YELLOW",
+                        "taekwondo-belt:ORANGE",
+                        "taekwondo-belt:GREEN",
+                        "taekwondo-belt:BLUE",
+                        "taekwondo-belt:PURPLE",
+                        "taekwondo-belt:BROWN",
+                        "taekwondo-belt:RED",
+                        "taekwondo-belt:BLACK");
     }
 
     @Test

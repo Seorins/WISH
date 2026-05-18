@@ -76,7 +76,7 @@ export const TAEKWONDO_BELT_LABELS: Record<TaekwondoBeltColor, string> = {
   BLACK: '검은 띠',
 }
 
-const TAEKWONDO_BELT_BOAST_PREFIX = '🥋' as const
+const TAEKWONDO_BELT_BOAST_PREFIX = 'taekwondo-belt:' as const
 
 export type TaekwondoBeltBoastEmoji = `${typeof TAEKWONDO_BELT_BOAST_PREFIX}${string}`
 
@@ -102,7 +102,7 @@ export function getTaekwondoBeltLabel(beltColor: TaekwondoBeltColor) {
 export function createTaekwondoBeltBoastEmoji(
   beltColor: TaekwondoBeltColor,
 ): TaekwondoBeltBoastEmoji {
-  return `${TAEKWONDO_BELT_BOAST_PREFIX}${getTaekwondoBeltLabel(beltColor).replace(/\s/g, '')}`
+  return `${TAEKWONDO_BELT_BOAST_PREFIX}${beltColor}`
 }
 
 export const TAEKWONDO_BELT_BOAST_EMOJIS = TAEKWONDO_BELT_COLORS.map(createTaekwondoBeltBoastEmoji)

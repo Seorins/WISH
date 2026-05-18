@@ -23,14 +23,14 @@ describe('village realtime emote types', () => {
       '👍',
       '❤️',
       '❓',
-      '🥋검은띠',
+      'taekwondo-belt:BLACK',
     ])
   })
 
   it('detects taekwondo belt boast emotes', () => {
     const emote = createTaekwondoBeltBoastEmoji('RED')
 
-    expect(emote).toBe('🥋빨간띠')
+    expect(emote).toBe('taekwondo-belt:RED')
     expect(isTaekwondoBeltBoastEmoji(emote)).toBe(true)
     expect(getTaekwondoBeltColorFromBoastEmoji(emote)).toBe('RED')
     expect(isTaekwondoBeltBoastEmoji('힘내')).toBe(false)

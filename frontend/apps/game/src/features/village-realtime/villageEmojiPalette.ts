@@ -2,8 +2,11 @@ import Phaser from 'phaser'
 import type { TaekwondoBeltColor } from '@wish/api-client'
 
 import {
+  getTaekwondoBeltEmoteTextureKey,
+  setTaekwondoBeltImageDisplay,
+} from './taekwondoBeltEmoteAssets'
+import {
   getTaekwondoBeltColorFromBoastEmoji,
-  getTaekwondoBeltLabel,
   isTaekwondoBeltBoastEmoji,
   VILLAGE_EMOJIS,
   type VillageEmoji,
@@ -18,9 +21,9 @@ const BUTTON_GAP = 8
 const FONT_SIZE_EMOJI = 28
 /** 한글 단축 메시지용 작은 폰트. */
 const FONT_SIZE_TEXT = 16
-/** 0번 태권도 띠 자랑 슬롯은 두 줄 배지로 보여 좁은 버튼 안에 맞춘다. */
-const FONT_SIZE_BELT = 13
 const HANGUL_PATTERN = /[㄰-㆏가-힣]/
+const BELT_IMAGE_MAX_WIDTH = 44
+const BELT_IMAGE_MAX_HEIGHT = 32
 
 const BELT_STROKE_COLORS: Record<TaekwondoBeltColor, number> = {
   WHITE: 0xf8fafc,
@@ -74,7 +77,11 @@ export function createVillageEmojiPalette(
     .setDepth(depth)
     .setVisible(options.initiallyVisible ?? false)
 
-  const buttons: { bg: Phaser.GameObjects.Rectangle; text: Phaser.GameObjects.Text }[] = []
+  const buttons: {
+    bg: Phaser.GameObjects.Rectangle
+    text: Phaser.GameObjects.Text
+    beltImage: Phaser.GameObjects.Image
+  }[] = []
 
   emojis.forEach((emoji, index) => {
     const buttonX = index * (BUTTON_SIZE + BUTTON_GAP) + BUTTON_SIZE / 2
@@ -86,7 +93,7 @@ export function createVillageEmojiPalette(
       .setStrokeStyle(2, getButtonStrokeColor(emoji), 0.7)
 
     const text = scene.add
-      .text(buttonX, buttonY, getButtonLabel(emoji), {
+      .text(buttonX, buttonY, emoji, {
         fontSize: `${fontSize}px`,
         fontFamily: "'Jua', 'Apple SD Gothic Neo', sans-serif",
         align: 'center',
@@ -94,6 +101,11 @@ export function createVillageEmojiPalette(
         resolution: 2,
       })
       .setOrigin(0.5, 0.5)
+
+    const beltImage = scene.add
+      .image(buttonX, buttonY + 2, getTaekwondoBeltEmoteTextureKey('YELLOW'))
+      .setOrigin(0.5, 0.5)
+    applyButtonEmoji(bg, text, beltImage, emoji)
 
     // 1\~9, 0 매핑 키 라벨 — 사용자가 단축키 학습할 수 있게 작은 글씨로 좌상단.
     const keyLabel = (index + 1) % 10
@@ -114,18 +126,19 @@ export function createVillageEmojiPalette(
       triggerByIndex(index)
     })
 
-    container.add([bg, text, keyText])
-    buttons.push({ bg, text })
+    container.add([bg, text, beltImage, keyText])
+    buttons.push({ bg, text, beltImage })
   })
 
   function triggerByIndex(index: number) {
     if (index < 0 || index >= emojis.length) return
     const emoji = emojis[index]
     // 살짝 통통 피드백.
-    const target = buttons[index].text
+    const target = getTweenTarget(buttons[index], emoji)
     scene.tweens.add({
       targets: target,
-      scale: 1.35,
+      scaleX: target.scaleX * 1.35,
+      scaleY: target.scaleY * 1.35,
       duration: 90,
       yoyo: true,
       ease: 'Quad.Out',
@@ -137,12 +150,10 @@ export function createVillageEmojiPalette(
     triggerByIndex,
     setEmojis(nextEmojis: readonly VillageEmoji[]) {
       emojis = nextEmojis
-      buttons.forEach(({ bg, text }, index) => {
+      buttons.forEach(({ bg, text, beltImage }, index) => {
         const emoji = emojis[index]
         if (!emoji) return
-        bg.setStrokeStyle(2, getButtonStrokeColor(emoji), 0.7)
-        text.setText(getButtonLabel(emoji))
-        text.setFontSize(getButtonFontSize(emoji))
+        applyButtonEmoji(bg, text, beltImage, emoji)
       })
     },
     setVisible(visible: boolean) {
@@ -157,22 +168,44 @@ export function createVillageEmojiPalette(
   }
 }
 
-function getButtonLabel(emoji: VillageEmoji) {
+function applyButtonEmoji(
+  bg: Phaser.GameObjects.Rectangle,
+  text: Phaser.GameObjects.Text,
+  beltImage: Phaser.GameObjects.Image,
+  emoji: VillageEmoji,
+) {
+  bg.setStrokeStyle(2, getButtonStrokeColor(emoji), 0.7)
+
   if (!isTaekwondoBeltBoastEmoji(emoji)) {
-    return emoji
+    beltImage.setVisible(false)
+    text.setText(emoji)
+    text.setFontSize(getButtonFontSize(emoji))
+    text.setScale(1)
+    text.setVisible(true)
+    return
   }
 
   const beltColor = getTaekwondoBeltColorFromBoastEmoji(emoji)
-  const beltLabel = beltColor ? getTaekwondoBeltLabel(beltColor).replace(/\s/g, '') : '띠'
-  return `🥋\n${beltLabel}`
+  if (!beltColor) return
+
+  text.setVisible(false)
+  beltImage.setScale(1)
+  setTaekwondoBeltImageDisplay(beltImage, beltColor, BELT_IMAGE_MAX_WIDTH, BELT_IMAGE_MAX_HEIGHT)
+  beltImage.setVisible(true)
 }
 
 function getButtonFontSize(emoji: VillageEmoji) {
-  if (isTaekwondoBeltBoastEmoji(emoji)) return FONT_SIZE_BELT
   return HANGUL_PATTERN.test(emoji) ? FONT_SIZE_TEXT : FONT_SIZE_EMOJI
 }
 
 function getButtonStrokeColor(emoji: VillageEmoji) {
   const beltColor = getTaekwondoBeltColorFromBoastEmoji(emoji)
   return beltColor ? BELT_STROKE_COLORS[beltColor] : 0xffffff
+}
+
+function getTweenTarget(
+  button: { text: Phaser.GameObjects.Text; beltImage: Phaser.GameObjects.Image },
+  emoji: VillageEmoji,
+) {
+  return isTaekwondoBeltBoastEmoji(emoji) ? button.beltImage : button.text
 }

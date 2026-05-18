@@ -12,6 +12,13 @@ export type { VillageEmojiPaletteHandle } from './villageEmojiPalette'
 export { attachEmojiPalette } from './attachEmojiPalette'
 export type { AttachedEmojiPalette } from './attachEmojiPalette'
 export { syncCurrentBeltEmojiToPalette } from './currentBeltEmote'
+export {
+  getTaekwondoBeltEmoteTextureKey,
+  getTaekwondoBeltEmoteTintFill,
+  loadTaekwondoBeltEmoteImages,
+  setTaekwondoBeltImageDisplay,
+  TAEKWONDO_BELT_EMOTE_TEXTURE_KEYS,
+} from './taekwondoBeltEmoteAssets'
 export type {
   EmotePacket,
   PlayerDirection,
