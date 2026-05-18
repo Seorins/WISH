@@ -1,5 +1,7 @@
 import Phaser from 'phaser'
+import { PUBLIC_PHOTO_BOOTHS_QUERY_KEY } from '@/features/photoGallery'
 import { playSceneBgm } from '@/game/systems/sceneBgm'
+import { queryClient } from '@/queryClient'
 import { createPhotoBooth } from '@wish/api-client'
 import { assetPath } from '@/game/assets/assetPath'
 import { fadeToScene } from '@/game/systems/sceneTransition'
@@ -402,6 +404,9 @@ export class PhotoBoothSaveScene extends Phaser.Scene {
           image: blob,
           filename: `photo-booth-${this.frame.id}-${Date.now()}.png`,
         })
+        if (this.isPublic) {
+          await queryClient.invalidateQueries({ queryKey: [PUBLIC_PHOTO_BOOTHS_QUERY_KEY] })
+        }
       } else {
         console.warn('[Save] 합성 캔버스 생성 실패 — 업로드 스킵')
       }
