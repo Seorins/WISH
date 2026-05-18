@@ -29,15 +29,29 @@ const FERRY_BACKGROUND_KEY = 'ferry-background'
 const FERRY_CLOUDY_BACKGROUND_KEY = 'ferry-background-cloudy'
 const FERRY_FRAME_KEY = 'ferry-frame'
 const STAR_FRAME_KEY = 'ferry-star-frame'
+const FUEL_STAR_ICON_KEY = 'ferry-fuel-star-icon'
 const FERRY_ROOM_SPAWN = { xRatio: 0.5, yRatio: 0.78 }
 const FERRY_EXIT_PORTAL = { xRatio: 0.43, yRatio: 0.86, widthRatio: 0.14, heightRatio: 0.12 }
 const FERRY_RETURN_SPAWN = { xRatio: 0.475, yRatio: 0.755 }
 const FUEL_GOAL_PERCENT = 100
 const FUEL_PANEL_DEPTH = 20
 const INITIAL_FUEL_PERCENT = 0
-const STAR_FLY_DURATION_MS = 750
-const STAR_FLY_ARC_HEIGHT = 90
-const SHIP_TARGET = { xRatio: 0.54, yRatio: 0.56 }
+const SHIP_STAR_SHINE_DURATION_MS = 1650
+const SHIP_TARGET = { xRatio: 0.58, yRatio: 0.18 }
+const SHIP_TARGET_OFFSET = { x: 28, y: 0 }
+const SHIP_LIGHT_SPARKLES = [
+  { x: -46, y: -34, driftX: -12, driftY: -24, size: 12, delay: 0 },
+  { x: 44, y: -28, driftX: 18, driftY: -18, size: 10, delay: 90 },
+  { x: -58, y: 8, driftX: -24, driftY: -8, size: 9, delay: 180 },
+  { x: 52, y: 16, driftX: 24, driftY: 4, size: 13, delay: 270 },
+  { x: -24, y: 38, driftX: -10, driftY: 22, size: 10, delay: 360 },
+  { x: 18, y: 42, driftX: 8, driftY: 24, size: 8, delay: 470 },
+  { x: 4, y: -54, driftX: 0, driftY: -26, size: 11, delay: 560 },
+  { x: -76, y: -14, driftX: -20, driftY: -16, size: 7, delay: 650 },
+  { x: 74, y: -4, driftX: 24, driftY: -12, size: 8, delay: 730 },
+  { x: -6, y: 64, driftX: -4, driftY: 26, size: 9, delay: 820 },
+  { x: 28, y: -70, driftX: 14, driftY: -28, size: 8, delay: 900 },
+] as const
 const DEFAULT_GUARDIAN_MESSAGE = '오늘도 정말 잘했어, 천천히 같이 가보자.'
 const FERRY_UI_FONT_FAMILY =
   '"Pretendard Variable", Pretendard, "Noto Sans KR", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", sans-serif'
@@ -62,7 +76,7 @@ const FERRY_FUEL_COLORS = {
 } as const
 const COMPACT_PANEL = {
   designWidth: 360,
-  designHeight: 226,
+  designHeight: 310,
   maxWidth: 380,
   minWidth: 330,
   marginX: 28,
@@ -101,19 +115,30 @@ const ROOM_OBSTACLES: ObstacleRect[] = [
   { x: 0.0625, y: 0.5621, w: 0.0951, h: 0.0641 },
 ]
 
-type FuelPopupState = 'emptyIcon' | 'emptyOpen' | 'arrived' | 'received' | 'complete'
+type FuelPopupState =
+  | 'emptyIcon'
+  | 'emptyOpen'
+  | 'arrived'
+  | 'received'
+  | 'complete'
+  | 'fuelStatusOpen'
 
 type FuelPanelUi = {
   container: Phaser.GameObjects.Container
+  fuelStatusContainer: Phaser.GameObjects.Container
   bounds: Phaser.Geom.Rectangle
   uiScale: number
   card: Phaser.GameObjects.Graphics
+  fuelStatusCard: Phaser.GameObjects.Graphics
+  fuelStatusStar: Phaser.GameObjects.Image
+  fuelStatusButton: Phaser.GameObjects.Zone
   button: Phaser.GameObjects.Zone
   buttonBg: Phaser.GameObjects.Graphics
   buttonText: Phaser.GameObjects.Text
   starIcon: Phaser.GameObjects.Image
   inboxIcon: Phaser.GameObjects.Graphics
   messageBox: Phaser.GameObjects.Graphics
+  rewardBadge: Phaser.GameObjects.Graphics
   progressTrack: Phaser.GameObjects.Rectangle
   progressFill: Phaser.GameObjects.Rectangle
   titleText: Phaser.GameObjects.Text
@@ -197,6 +222,26 @@ function drawFuelButton(
   graphics.strokeRoundedRect(x, y, width, height, radius)
 }
 
+function drawFuelRewardBadge(
+  graphics: Phaser.GameObjects.Graphics,
+  cx: number,
+  cy: number,
+  width: number,
+  height: number,
+  ui: number,
+) {
+  const radius = height / 2
+  const x = cx - width / 2
+  const y = cy - height / 2
+  graphics.clear()
+  graphics.fillStyle(FERRY_FUEL_COLORS.accent, 0.26)
+  graphics.fillRoundedRect(x, y, width, height, radius)
+  graphics.fillStyle(0xffffff, 0.24)
+  graphics.fillRoundedRect(x + 3 * ui, y + 3 * ui, width - 6 * ui, height * 0.36, radius - 2 * ui)
+  graphics.lineStyle(1.4 * ui, FERRY_FUEL_COLORS.accent, 0.72)
+  graphics.strokeRoundedRect(x, y, width, height, radius)
+}
+
 function drawFuelInboxIcon(graphics: Phaser.GameObjects.Graphics, size: number, hasStar: boolean) {
   const width = size * 0.76
   const height = size * 0.5
@@ -246,7 +291,7 @@ export class FerrySelectScene extends Phaser.Scene {
   private obstacleEditorDraft?: Phaser.GameObjects.Rectangle
   private currentFuelPercent = INITIAL_FUEL_PERCENT
   private fuelPanel?: FuelPanelUi
-  private isStarFlying = false
+  private isStarShining = false
   private isFuelRequestPending = false
   private pendingFuelEvents: FuelInboxEvent[] = []
   private lastReceivedAmount = 0
@@ -265,6 +310,7 @@ export class FerrySelectScene extends Phaser.Scene {
     )
     this.load.image(FERRY_FRAME_KEY, assetPath('images/themes/ferry/ui/ferryframe.png'))
     this.load.image(STAR_FRAME_KEY, assetPath('images/themes/ferry/ui/starframe.png'))
+    this.load.image(FUEL_STAR_ICON_KEY, assetPath('images/themes/ferry/ui/starferry.png'))
     loadPlayerSpritesheets(this)
   }
 
@@ -275,7 +321,7 @@ export class FerrySelectScene extends Phaser.Scene {
     this.target = null
     this.playerWasInExitPortal = true
     this.fuelPanel = undefined
-    this.isStarFlying = false
+    this.isStarShining = false
     this.isFuelRequestPending = false
     this.pendingFuelEvents = []
     this.lastReceivedAmount = 0
@@ -564,7 +610,21 @@ export class FerrySelectScene extends Phaser.Scene {
     const scaleY = panelWidth / COMPACT_PANEL.designWidth
 
     const panel = this.add.container(panelX, panelY).setDepth(FUEL_PANEL_DEPTH)
+    const fuelStatusContainer = this.add.container(0, 0).setDepth(FUEL_PANEL_DEPTH)
     const card = this.add.graphics()
+    const fuelStatusCard = this.add.graphics()
+    const fuelStatusStar = this.add
+      .image(38 * scaleY, 38 * scaleY, FUEL_STAR_ICON_KEY)
+      .setOrigin(0.5)
+      .setDisplaySize(58 * scaleY, 58 * scaleY)
+    const fuelStatusButton = this.add
+      .zone(
+        38 * scaleY,
+        38 * scaleY,
+        COMPACT_PANEL.iconSize * scaleY,
+        COMPACT_PANEL.iconSize * scaleY,
+      )
+      .setInteractive({ useHandCursor: true })
     const titleText = this.add
       .text(96 * scaleY, 24 * scaleY, '', {
         fontFamily: FERRY_UI_FONT_FAMILY,
@@ -588,6 +648,7 @@ export class FerrySelectScene extends Phaser.Scene {
       .setDisplaySize(50 * scaleY, 50 * scaleY)
     const inboxIcon = this.add.graphics()
     const messageBox = this.add.graphics()
+    const rewardBadge = this.add.graphics()
     const messageTitleText = this.add
       .text(180 * scaleY, 100 * scaleY, '', {
         fontFamily: FERRY_UI_FONT_FAMILY,
@@ -631,7 +692,7 @@ export class FerrySelectScene extends Phaser.Scene {
       )
       .setOrigin(0, 0.5)
     const rewardText = this.add
-      .text(180 * scaleY, 152 * scaleY, '', {
+      .text(180 * scaleY, 224 * scaleY, '', {
         fontFamily: FERRY_UI_FONT_FAMILY,
         fontSize: `${Math.round(16.5 * scaleY)}px`,
         fontStyle: '800',
@@ -639,13 +700,13 @@ export class FerrySelectScene extends Phaser.Scene {
         align: 'center',
         wordWrap: { width: 312 * scaleY },
       })
-      .setOrigin(0.5, 0)
+      .setOrigin(0.5)
     const button = this.add
-      .zone(180 * scaleY, 194 * scaleY, 312 * scaleY, 40 * scaleY)
+      .zone(180 * scaleY, 278 * scaleY, 312 * scaleY, 42 * scaleY)
       .setInteractive({ useHandCursor: true })
     const buttonBg = this.add.graphics()
     const buttonText = this.add
-      .text(180 * scaleY, 194 * scaleY, '', {
+      .text(180 * scaleY, 278 * scaleY, '', {
         fontFamily: FERRY_UI_FONT_FAMILY,
         fontSize: `${Math.round(18 * scaleY)}px`,
         fontStyle: '800',
@@ -665,6 +726,18 @@ export class FerrySelectScene extends Phaser.Scene {
         void this.handleFuelButton()
       },
     )
+    fuelStatusButton.on(
+      'pointerdown',
+      (
+        _pointer: Phaser.Input.Pointer,
+        _localX: number,
+        _localY: number,
+        event: Phaser.Types.Input.EventData,
+      ) => {
+        event.stopPropagation()
+        this.handleFuelStatusButton()
+      },
+    )
 
     panel.add([
       card,
@@ -677,23 +750,30 @@ export class FerrySelectScene extends Phaser.Scene {
       messageBodyText,
       progressTrack,
       progressFill,
+      rewardBadge,
       rewardText,
       buttonBg,
       button,
       buttonText,
     ])
+    fuelStatusContainer.add([fuelStatusCard, fuelStatusStar, fuelStatusButton])
 
     this.fuelPanel = {
       container: panel,
+      fuelStatusContainer,
       bounds: new Phaser.Geom.Rectangle(panelX, panelY, panelWidth, panelHeight),
       uiScale: scaleY,
       card,
+      fuelStatusCard,
+      fuelStatusStar,
+      fuelStatusButton,
       button,
       buttonBg,
       buttonText,
       starIcon,
       inboxIcon,
       messageBox,
+      rewardBadge,
       progressTrack,
       progressFill,
       titleText,
@@ -737,7 +817,7 @@ export class FerrySelectScene extends Phaser.Scene {
   }
 
   private async receiveFuel() {
-    if (this.isStarFlying || this.isFuelRequestPending) return
+    if (this.isStarShining || this.isFuelRequestPending) return
 
     if (this.pendingFuelEvents.length === 0) {
       void this.loadFuelState()
@@ -763,7 +843,7 @@ export class FerrySelectScene extends Phaser.Scene {
       this.lastReceivedMessage = latestEvent?.message ?? DEFAULT_GUARDIAN_MESSAGE
       this.fuelPopupState = this.currentFuelPercent >= FUEL_GOAL_PERCENT ? 'complete' : 'received'
       this.refreshFuelUi()
-      this.playStarFlyAnimation()
+      this.playShipStarShineAnimation()
     } catch (error) {
       console.warn('Failed to receive ferry fuel.', error)
     } finally {
@@ -773,7 +853,7 @@ export class FerrySelectScene extends Phaser.Scene {
   }
 
   private async handleFuelButton() {
-    if (this.fuelPopupState === 'received') {
+    if (this.fuelPopupState === 'received' || this.fuelPopupState === 'fuelStatusOpen') {
       this.fuelPopupState = 'emptyIcon'
       this.refreshFuelUi()
       return
@@ -802,6 +882,13 @@ export class FerrySelectScene extends Phaser.Scene {
     await this.receiveFuel()
   }
 
+  private handleFuelStatusButton() {
+    if (this.isFuelRequestPending) return
+
+    this.fuelPopupState = 'fuelStatusOpen'
+    this.refreshFuelUi()
+  }
+
   private refreshFuelUi() {
     if (!this.fuelPanel) return
 
@@ -810,11 +897,12 @@ export class FerrySelectScene extends Phaser.Scene {
     const popupWidth = COMPACT_PANEL.designWidth * ui
     const popupHeight = COMPACT_PANEL.designHeight * ui
     const iconSize = COMPACT_PANEL.iconSize * ui
-    const iconX = this.scale.width - iconSize - COMPACT_PANEL.iconMarginX
+    const fuelStatusIconX = this.scale.width - iconSize - COMPACT_PANEL.iconMarginX
+    const inboxIconX = Math.max(16, fuelStatusIconX - iconSize - 12 * ui)
     const iconY = COMPACT_PANEL.iconMarginY
     const popupX = Math.max(16, this.scale.width - popupWidth - COMPACT_PANEL.iconMarginX)
     const popupY = Phaser.Math.Clamp(iconY, 16, this.scale.height - popupHeight - 16)
-    const buttonY = 194 * ui
+    const buttonY = 278 * ui
 
     const setPanelFrame = (width: number, height: number) => {
       const scaledWidth = width * ui
@@ -849,11 +937,12 @@ export class FerrySelectScene extends Phaser.Scene {
         .setPosition(28 * ui, 96 * ui)
         .setAlign('left')
         .setWordWrapWidth(304 * ui, true)
+      panel.rewardBadge.setVisible(false).clear()
       panel.rewardText
-        .setVisible(true)
-        .setOrigin(0, 0)
-        .setPosition(28 * ui, 152 * ui)
-        .setAlign('left')
+        .setVisible(false)
+        .setOrigin(0.5)
+        .setPosition(180 * ui, 224 * ui)
+        .setAlign('center')
       panel.progressTrack
         .setVisible(false)
         .setPosition(110 * ui, 126 * ui)
@@ -875,7 +964,7 @@ export class FerrySelectScene extends Phaser.Scene {
     }
 
     const showInboxIcon = () => {
-      panel.container.setPosition(iconX, iconY)
+      panel.container.setPosition(inboxIconX, iconY)
       setPanelFrame(COMPACT_PANEL.iconSize, COMPACT_PANEL.iconSize)
       panel.card.setVisible(true)
       panel.inboxIcon.setVisible(true).setPosition(38 * ui, 38 * ui)
@@ -889,6 +978,7 @@ export class FerrySelectScene extends Phaser.Scene {
       panel.messageBox.setVisible(false).clear()
       panel.messageTitleText.setVisible(false)
       panel.messageBodyText.setVisible(false)
+      panel.rewardBadge.setVisible(false).clear()
       panel.rewardText.setVisible(false)
       panel.progressTrack.setVisible(false)
       panel.progressFill.setVisible(false)
@@ -907,8 +997,28 @@ export class FerrySelectScene extends Phaser.Scene {
     const progressRatio = Phaser.Math.Clamp(this.currentFuelPercent / FUEL_GOAL_PERCENT, 0, 1)
     panel.progressFill.setScale(progressRatio, 1)
 
+    const showFuelStatusIcon = (visible: boolean) => {
+      panel.fuelStatusContainer.setVisible(visible)
+      if (!visible) {
+        panel.fuelStatusButton.disableInteractive()
+        return
+      }
+
+      panel.fuelStatusContainer.setPosition(fuelStatusIconX, iconY)
+      drawFuelPanelSurface(panel.fuelStatusCard, iconSize, iconSize, ui)
+      panel.fuelStatusStar
+        .setPosition(38 * ui, 38 * ui)
+        .setDisplaySize(58 * ui, 58 * ui)
+        .setVisible(true)
+      panel.fuelStatusButton
+        .setPosition(38 * ui, 38 * ui)
+        .setSize(COMPACT_PANEL.iconSize * ui, COMPACT_PANEL.iconSize * ui)
+      panel.fuelStatusButton.setInteractive({ useHandCursor: true })
+    }
+
     if (this.isFuelRequestPending) {
       panel.container.setVisible(false)
+      showFuelStatusIcon(false)
       panel.button.disableInteractive()
       return
     }
@@ -916,7 +1026,50 @@ export class FerrySelectScene extends Phaser.Scene {
     panel.container.setVisible(true)
 
     if (this.fuelPopupState === 'emptyIcon') {
+      showFuelStatusIcon(true)
       showInboxIcon()
+      return
+    }
+
+    showFuelStatusIcon(false)
+
+    if (this.fuelPopupState === 'fuelStatusOpen') {
+      showPopupFrame()
+      panel.titleText
+        .setOrigin(0.5, 0)
+        .setPosition(180 * ui, 24 * ui)
+        .setAlign('center')
+        .setText('별빛 에너지 충전 완료')
+      panel.subText
+        .setVisible(true)
+        .setOrigin(0.5, 0)
+        .setPosition(180 * ui, 64 * ui)
+        .setAlign('center')
+        .setText('배에 별빛이 스며들었어요')
+      panel.messageBox.setVisible(true)
+      drawFuelMessageBox(panel.messageBox, 32 * ui, 98 * ui, 296 * ui, 94 * ui, ui)
+      panel.starIcon.setPosition(72 * ui, 145 * ui).setDisplaySize(42 * ui, 42 * ui)
+      panel.messageBodyText
+        .setOrigin(0, 0)
+        .setPosition(112 * ui, 116 * ui)
+        .setAlign('left')
+        .setWordWrapWidth(190 * ui, true)
+      panel.messageBodyText.setText(`현재 별빛 에너지 ${this.currentFuelPercent}%`)
+      panel.progressTrack.setVisible(true)
+      panel.progressTrack.setPosition(112 * ui, 156 * ui).setSize(188 * ui, 12 * ui)
+      panel.progressFill.setVisible(true)
+      panel.progressFill.setPosition(112 * ui, 156 * ui).setSize(188 * ui, 12 * ui)
+      drawFuelRewardBadge(panel.rewardBadge, 180 * ui, 224 * ui, 230 * ui, 34 * ui, ui)
+      panel.rewardBadge.setVisible(true)
+      panel.rewardText
+        .setVisible(true)
+        .setOrigin(0.5)
+        .setPosition(180 * ui, 224 * ui)
+        .setAlign('center')
+      panel.rewardText.setText(
+        remainPercent > 0 ? `출발까지 ${remainPercent}% 남았어요` : '출발 준비 완료',
+      )
+      panel.buttonText.setText('확인')
       return
     }
 
@@ -934,13 +1087,14 @@ export class FerrySelectScene extends Phaser.Scene {
         .setText('별빛 우편함')
       panel.subText.setVisible(false).setText('')
       panel.messageBox.setVisible(true)
-      drawFuelMessageBox(panel.messageBox, 24 * ui, 86 * ui, 312 * ui, 72 * ui, ui)
+      drawFuelMessageBox(panel.messageBox, 24 * ui, 94 * ui, 312 * ui, 136 * ui, ui)
       panel.messageBodyText
         .setOrigin(0.5, 0.5)
-        .setPosition(180 * ui, 122 * ui)
+        .setPosition(180 * ui, 162 * ui)
         .setAlign('center')
         .setWordWrapWidth(290 * ui, true)
       panel.messageBodyText.setText('아직 받은 별빛이 없어요')
+      panel.rewardBadge.setVisible(false).clear()
       panel.rewardText.setVisible(false).setText('')
       panel.buttonText.setText('확인')
       return
@@ -948,43 +1102,63 @@ export class FerrySelectScene extends Phaser.Scene {
 
     if (this.fuelPopupState === 'arrived' && hasPendingFuel) {
       showPopupFrame()
-      panel.titleText.setText('별빛이 도착했어요')
-      panel.subText.setText('응원 메시지를 확인하고 연료를 받아요')
+      panel.titleText
+        .setOrigin(0, 0.5)
+        .setPosition(96 * ui, 52 * ui)
+        .setText('별빛 우편함')
+      panel.subText.setVisible(false).setText('')
       panel.messageBox.setVisible(true)
-      drawFuelMessageBox(panel.messageBox, 26 * ui, 88 * ui, 308 * ui, 64 * ui, ui)
+      drawFuelMessageBox(panel.messageBox, 24 * ui, 94 * ui, 312 * ui, 104 * ui, ui)
       panel.messageBodyText
-        .setOrigin(0.5, 0)
-        .setPosition(180 * ui, 98 * ui)
+        .setOrigin(0.5, 0.5)
+        .setPosition(180 * ui, 146 * ui)
         .setAlign('center')
-        .setWordWrapWidth(270 * ui, true)
+        .setWordWrapWidth(290 * ui, true)
       panel.messageBodyText.setText(normalizeFuelMessage(this.lastReceivedMessage))
+      drawFuelRewardBadge(panel.rewardBadge, 180 * ui, 228 * ui, 198 * ui, 34 * ui, ui)
+      panel.rewardBadge.setVisible(true)
       panel.rewardText
-        .setOrigin(0.5, 0)
-        .setPosition(180 * ui, 156 * ui)
+        .setVisible(true)
+        .setOrigin(0.5)
+        .setPosition(180 * ui, 228 * ui)
         .setAlign('center')
-      panel.rewardText.setText(`+${this.lastReceivedAmount}% 연료 충전`)
+      panel.rewardText.setText(`+${this.lastReceivedAmount}% 에너지 충전`)
       panel.buttonText.setText('별빛 받기')
       return
     }
 
     if (this.fuelPopupState === 'received') {
       showPopupFrame()
-      panel.titleText.setText('별빛 연료 충전 완료')
-      panel.subText.setText('배에 별빛이 스며들었어요')
-      panel.messageBox.setVisible(false).clear()
-      panel.starIcon.setPosition(58 * ui, 112 * ui).setDisplaySize(54 * ui, 54 * ui)
+      panel.titleText
+        .setOrigin(0.5, 0)
+        .setPosition(180 * ui, 24 * ui)
+        .setAlign('center')
+        .setText('별빛 에너지 충전 완료')
+      panel.subText
+        .setOrigin(0.5, 0)
+        .setPosition(180 * ui, 64 * ui)
+        .setAlign('center')
+        .setText('배에 별빛이 스며들었어요')
+      panel.messageBox.setVisible(true)
+      drawFuelMessageBox(panel.messageBox, 32 * ui, 98 * ui, 296 * ui, 94 * ui, ui)
+      panel.starIcon.setPosition(72 * ui, 145 * ui).setDisplaySize(42 * ui, 42 * ui)
       panel.messageBodyText
         .setOrigin(0, 0)
-        .setPosition(110 * ui, 92 * ui)
+        .setPosition(112 * ui, 116 * ui)
         .setAlign('left')
-        .setWordWrapWidth(220 * ui, true)
-      panel.messageBodyText.setText(`현재 별빛 연료 ${this.currentFuelPercent}%`)
+        .setWordWrapWidth(190 * ui, true)
+      panel.messageBodyText.setText(`현재 별빛 에너지 ${this.currentFuelPercent}%`)
       panel.progressTrack.setVisible(true)
+      panel.progressTrack.setPosition(112 * ui, 156 * ui).setSize(188 * ui, 12 * ui)
       panel.progressFill.setVisible(true)
+      panel.progressFill.setPosition(112 * ui, 156 * ui).setSize(188 * ui, 12 * ui)
+      drawFuelRewardBadge(panel.rewardBadge, 180 * ui, 224 * ui, 230 * ui, 34 * ui, ui)
+      panel.rewardBadge.setVisible(true)
       panel.rewardText
-        .setOrigin(0, 0)
-        .setPosition(110 * ui, 150 * ui)
-        .setAlign('left')
+        .setVisible(true)
+        .setOrigin(0.5)
+        .setPosition(180 * ui, 224 * ui)
+        .setAlign('center')
       panel.rewardText.setText(`출발까지 ${remainPercent}% 남았어요`)
       panel.buttonText.setText('확인')
       return
@@ -992,20 +1166,36 @@ export class FerrySelectScene extends Phaser.Scene {
 
     if (this.fuelPopupState === 'complete') {
       showPopupFrame()
-      panel.titleText.setText('별빛 연료가 가득해요')
-      panel.subText.setText('이제 배를 출발시킬 수 있어요')
-      panel.messageBox.setVisible(false).clear()
-      panel.starIcon.setPosition(58 * ui, 112 * ui).setDisplaySize(56 * ui, 56 * ui)
+      panel.titleText
+        .setOrigin(0.5, 0)
+        .setPosition(180 * ui, 24 * ui)
+        .setAlign('center')
+        .setText('별빛 에너지가 가득해요')
+      panel.subText
+        .setOrigin(0.5, 0)
+        .setPosition(180 * ui, 64 * ui)
+        .setAlign('center')
+        .setText('이제 배를 출발시킬 수 있어요')
+      panel.messageBox.setVisible(true)
+      drawFuelMessageBox(panel.messageBox, 32 * ui, 98 * ui, 296 * ui, 94 * ui, ui)
+      panel.starIcon.setPosition(72 * ui, 145 * ui).setDisplaySize(44 * ui, 44 * ui)
       panel.messageBodyText
         .setOrigin(0, 0)
-        .setPosition(110 * ui, 94 * ui)
+        .setPosition(112 * ui, 116 * ui)
         .setAlign('left')
-        .setWordWrapWidth(220 * ui, true)
+        .setWordWrapWidth(190 * ui, true)
       panel.messageBodyText.setText('100% 달성!')
+      panel.progressTrack.setVisible(true)
+      panel.progressTrack.setPosition(112 * ui, 156 * ui).setSize(188 * ui, 12 * ui)
+      panel.progressFill.setVisible(true)
+      panel.progressFill.setPosition(112 * ui, 156 * ui).setSize(188 * ui, 12 * ui)
+      drawFuelRewardBadge(panel.rewardBadge, 180 * ui, 224 * ui, 190 * ui, 34 * ui, ui)
+      panel.rewardBadge.setVisible(true)
       panel.rewardText
-        .setOrigin(0, 0)
-        .setPosition(110 * ui, 148 * ui)
-        .setAlign('left')
+        .setVisible(true)
+        .setOrigin(0.5)
+        .setPosition(180 * ui, 224 * ui)
+        .setAlign('center')
       panel.rewardText.setText('출발 준비 완료')
       panel.buttonText.setText('배 출발하기')
       return
@@ -1014,43 +1204,164 @@ export class FerrySelectScene extends Phaser.Scene {
     this.fuelPopupState = 'emptyIcon'
     this.refreshFuelUi()
   }
-  private playStarFlyAnimation() {
+  private playShipStarShineAnimation() {
     if (!this.fuelPanel) return
 
-    const star = this.add
-      .image(this.fuelPanel.starStart.x, this.fuelPanel.starStart.y, STAR_FRAME_KEY)
-      .setOrigin(0.5)
-      .setDepth(FUEL_PANEL_DEPTH + 2)
-    star.setDisplaySize(42, 42)
+    const ui = this.fuelPanel.uiScale
+    const target = new Phaser.Math.Vector2(
+      this.scale.width * SHIP_TARGET.xRatio + SHIP_TARGET_OFFSET.x,
+      this.scale.height * SHIP_TARGET.yRatio + SHIP_TARGET_OFFSET.y,
+    )
+    this.fuelPanel.shipTarget.copy(target)
+    const effectDepth = FUEL_PANEL_DEPTH + 1
 
-    this.isStarFlying = true
-    const start = this.fuelPanel.starStart.clone()
-    const end = this.fuelPanel.shipTarget.clone()
+    this.isStarShining = true
+
+    const flash = this.add.circle(target.x, target.y, 18 * ui, 0xffffff, 0.48).setDepth(effectDepth)
+
     this.tweens.add({
-      targets: { t: 0 },
-      t: 1,
-      scale: 0.65,
-      alpha: 0.25,
-      duration: STAR_FLY_DURATION_MS,
+      targets: flash,
+      scale: 3.2,
+      alpha: 0,
+      duration: 420,
+      ease: 'Sine.easeOut',
+      onComplete: () => flash.destroy(),
+    })
+
+    const ring = this.add
+      .graphics()
+      .setPosition(target.x, target.y)
+      .setDepth(effectDepth)
+      .setAlpha(0.9)
+    ring.lineStyle(2 * ui, 0xfff4c0, 0.72)
+    ring.strokeCircle(0, 0, 26 * ui)
+    ring.strokeCircle(0, 0, 46 * ui)
+
+    this.tweens.add({
+      targets: ring,
+      scale: 2.05,
+      alpha: 0,
+      duration: 850,
+      ease: 'Sine.easeOut',
+      onComplete: () => ring.destroy(),
+    })
+
+    const burst = this.add
+      .graphics()
+      .setPosition(target.x, target.y)
+      .setDepth(effectDepth)
+      .setAlpha(0.95)
+    burst.lineStyle(3.2 * ui, FERRY_FUEL_COLORS.accent, 0.82)
+    for (let i = 0; i < 12; i += 1) {
+      const angle = (Math.PI * 2 * i) / 12
+      const inner = 18 * ui
+      const outer = 74 * ui
+      burst.beginPath()
+      burst.moveTo(Math.cos(angle) * inner, Math.sin(angle) * inner)
+      burst.lineTo(Math.cos(angle) * outer, Math.sin(angle) * outer)
+      burst.strokePath()
+    }
+
+    this.tweens.add({
+      targets: burst,
+      scale: 1.18,
+      alpha: 0,
+      duration: 520,
+      ease: 'Sine.easeOut',
+      onComplete: () => burst.destroy(),
+    })
+
+    const glow = this.add
+      .circle(target.x, target.y, 40 * ui, FERRY_FUEL_COLORS.accent, 0.34)
+      .setDepth(effectDepth)
+
+    this.tweens.add({
+      targets: glow,
+      scale: 2.9,
+      alpha: 0,
+      duration: SHIP_STAR_SHINE_DURATION_MS,
+      ease: 'Sine.easeOut',
+      onComplete: () => glow.destroy(),
+    })
+
+    const core = this.add
+      .graphics()
+      .setPosition(target.x, target.y)
+      .setDepth(effectDepth)
+      .setAlpha(0.88)
+    core.fillStyle(0xffffff, 0.72)
+    core.fillCircle(0, 0, 13 * ui)
+    core.fillStyle(FERRY_FUEL_COLORS.accent, 0.42)
+    core.fillCircle(0, 0, 28 * ui)
+    core.lineStyle(1.6 * ui, 0xfff4c0, 0.76)
+    core.strokeCircle(0, 0, 38 * ui)
+
+    this.tweens.add({
+      targets: core,
+      scale: 1.75,
+      alpha: 0,
+      duration: 840,
       ease: 'Sine.easeInOut',
-      onUpdate: tween => {
-        const t = tween.getValue() ?? 1
-        const x = Phaser.Math.Linear(start.x, end.x, t)
-        const y =
-          Phaser.Math.Linear(start.y, end.y, t) - Math.sin(t * Math.PI) * STAR_FLY_ARC_HEIGHT
-        star.setPosition(x, y)
-        star.setScale(Phaser.Math.Linear(1, 0.65, t))
-        star.setAngle(Phaser.Math.Linear(0, 180, t))
-        star.setAlpha(Phaser.Math.Linear(1, 0.25, t))
-      },
-      onComplete: () => {
-        star.destroy()
-        this.isStarFlying = false
-      },
+      onComplete: () => core.destroy(),
+    })
+
+    const secondRing = this.add
+      .graphics()
+      .setPosition(target.x, target.y)
+      .setDepth(effectDepth)
+      .setAlpha(0.68)
+    secondRing.lineStyle(1.4 * ui, 0xffffff, 0.54)
+    secondRing.strokeCircle(0, 0, 34 * ui)
+    secondRing.lineStyle(2 * ui, FERRY_FUEL_COLORS.accent, 0.46)
+    secondRing.strokeCircle(0, 0, 64 * ui)
+
+    this.tweens.add({
+      targets: secondRing,
+      scale: 2.35,
+      alpha: 0,
+      duration: 1180,
+      delay: 160,
+      ease: 'Sine.easeOut',
+      onComplete: () => secondRing.destroy(),
+    })
+
+    SHIP_LIGHT_SPARKLES.forEach(sparkle => {
+      const startX = target.x + sparkle.x * ui
+      const startY = target.y + sparkle.y * ui
+      const light = this.add
+        .graphics()
+        .setPosition(startX, startY)
+        .setDepth(effectDepth)
+        .setAlpha(0)
+      light.fillStyle(FERRY_FUEL_COLORS.accent, 0.46)
+      light.fillCircle(0, 0, sparkle.size * 0.68 * ui)
+      light.fillStyle(0xffffff, 0.86)
+      light.fillCircle(0, 0, Math.max(2.2, sparkle.size * 0.28) * ui)
+      light.lineStyle(1.1 * ui, 0xfff4c0, 0.44)
+      light.strokeCircle(0, 0, sparkle.size * 0.95 * ui)
+      light.setScale(0.35)
+
+      this.tweens.add({
+        targets: light,
+        alpha: 1,
+        x: startX + sparkle.driftX * ui,
+        y: startY + sparkle.driftY * ui,
+        scale: 1.55,
+        duration: 390,
+        hold: 140,
+        yoyo: true,
+        delay: sparkle.delay,
+        ease: 'Sine.easeInOut',
+        onComplete: () => light.destroy(),
+      })
+    })
+
+    this.time.delayedCall(SHIP_STAR_SHINE_DURATION_MS, () => {
+      this.isStarShining = false
     })
   }
 
   private onFuelCompleted() {
-    console.info('별빛 연료 100% 완료. 배 출발 연출 실행 가능.')
+    console.info('별빛 에너지 100% 완료. 배 출발 연출 실행 가능.')
   }
 }
