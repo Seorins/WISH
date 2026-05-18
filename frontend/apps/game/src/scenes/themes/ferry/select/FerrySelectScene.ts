@@ -130,13 +130,16 @@ type FuelPanelUi = {
   uiScale: number
   card: Phaser.GameObjects.Graphics
   fuelStatusCard: Phaser.GameObjects.Graphics
+  fuelStatusStarShadow: Phaser.GameObjects.Image
   fuelStatusStar: Phaser.GameObjects.Image
+  fuelStatusLabel: Phaser.GameObjects.Text
   fuelStatusButton: Phaser.GameObjects.Zone
   button: Phaser.GameObjects.Zone
   buttonBg: Phaser.GameObjects.Graphics
   buttonText: Phaser.GameObjects.Text
   starIcon: Phaser.GameObjects.Image
   inboxIcon: Phaser.GameObjects.Graphics
+  inboxLabel: Phaser.GameObjects.Text
   messageBox: Phaser.GameObjects.Graphics
   rewardBadge: Phaser.GameObjects.Graphics
   progressTrack: Phaser.GameObjects.Rectangle
@@ -243,27 +246,26 @@ function drawFuelRewardBadge(
 }
 
 function drawFuelInboxIcon(graphics: Phaser.GameObjects.Graphics, size: number, hasStar: boolean) {
-  const width = size * 0.76
-  const height = size * 0.5
-  const x = -width / 2
-  const y = -height / 2 + size * 0.06
-  const flapY = y + height * 0.5
-  const strokeWidth = Math.max(2.5, size * 0.07)
+  const iconScale = size / 62
+  const x = (value: number) => (value - 38) * iconScale
+  const y = (value: number) => (value - 34) * iconScale
 
   graphics.clear()
-  graphics.fillStyle(FERRY_FUEL_COLORS.message, 0.98)
-  graphics.fillRoundedRect(x, y, width, height, size * 0.1)
-  graphics.lineStyle(strokeWidth, FERRY_FUEL_COLORS.panelBorder, 0.95)
-  graphics.strokeRoundedRect(x, y, width, height, size * 0.1)
-  graphics.lineStyle(strokeWidth, FERRY_FUEL_COLORS.accentDark, 0.9)
-  graphics.lineBetween(x + 3, y + 4, 0, flapY)
-  graphics.lineBetween(width / 2 - 3, y + 4, 0, flapY)
-  graphics.lineBetween(x + 4, y + height - 4, -width * 0.14, flapY + height * 0.08)
-  graphics.lineBetween(width / 2 - 4, y + height - 4, width * 0.14, flapY + height * 0.08)
+  graphics.fillStyle(0x000000, 0.16)
+  graphics.fillEllipse(x(38), y(51), 58 * iconScale, 12 * iconScale)
+  graphics.fillStyle(0xfffefa, 1)
+  graphics.fillRoundedRect(x(8), y(15), 58 * iconScale, 40 * iconScale, 8 * iconScale)
+  graphics.lineStyle(3 * iconScale, 0x8f7c54, 0.95)
+  graphics.strokeRoundedRect(x(8), y(15), 58 * iconScale, 40 * iconScale, 8 * iconScale)
+  graphics.lineStyle(2.8 * iconScale, 0x8f7c54, 0.95)
+  graphics.lineBetween(x(12), y(18), x(38), y(40))
+  graphics.lineBetween(x(62), y(18), x(38), y(40))
+  graphics.lineBetween(x(12), y(52), x(32), y(37))
+  graphics.lineBetween(x(62), y(52), x(44), y(37))
 
   if (hasStar) {
     graphics.fillStyle(FERRY_FUEL_COLORS.accent, 1)
-    graphics.fillCircle(width * 0.34, y + 1, size * 0.13)
+    graphics.fillCircle(x(62), y(15), 6 * iconScale)
   }
 }
 
@@ -613,17 +615,30 @@ export class FerrySelectScene extends Phaser.Scene {
     const fuelStatusContainer = this.add.container(0, 0).setDepth(FUEL_PANEL_DEPTH)
     const card = this.add.graphics()
     const fuelStatusCard = this.add.graphics()
+    const fuelStatusStarShadow = this.add
+      .image(38 * scaleY, 34 * scaleY, FUEL_STAR_ICON_KEY)
+      .setOrigin(0.5)
+      .setDisplaySize(64 * scaleY, 64 * scaleY)
+      .setTint(0x6d5a34)
+      .setAlpha(0.32)
     const fuelStatusStar = this.add
       .image(38 * scaleY, 38 * scaleY, FUEL_STAR_ICON_KEY)
       .setOrigin(0.5)
       .setDisplaySize(58 * scaleY, 58 * scaleY)
+    const iconLabelStyle = {
+      fontFamily: "'Jua', 'Apple SD Gothic Neo', sans-serif",
+      fontSize: `${Math.round(16 * scaleY)}px`,
+      fontStyle: '800',
+      color: '#4f4431',
+      stroke: '#fff8e8',
+      strokeThickness: 4 * scaleY,
+      resolution: 2,
+    } satisfies Phaser.Types.GameObjects.Text.TextStyle
+    const fuelStatusLabel = this.add
+      .text(38 * scaleY, 62 * scaleY, '에너지', iconLabelStyle)
+      .setOrigin(0.5, 0)
     const fuelStatusButton = this.add
-      .zone(
-        38 * scaleY,
-        38 * scaleY,
-        COMPACT_PANEL.iconSize * scaleY,
-        COMPACT_PANEL.iconSize * scaleY,
-      )
+      .zone(38 * scaleY, 38 * scaleY, COMPACT_PANEL.iconSize * scaleY, 96 * scaleY)
       .setInteractive({ useHandCursor: true })
     const titleText = this.add
       .text(96 * scaleY, 24 * scaleY, '', {
@@ -647,6 +662,9 @@ export class FerrySelectScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDisplaySize(50 * scaleY, 50 * scaleY)
     const inboxIcon = this.add.graphics()
+    const inboxLabel = this.add
+      .text(38 * scaleY, 62 * scaleY, '메시지', iconLabelStyle)
+      .setOrigin(0.5, 0)
     const messageBox = this.add.graphics()
     const rewardBadge = this.add.graphics()
     const messageTitleText = this.add
@@ -741,6 +759,7 @@ export class FerrySelectScene extends Phaser.Scene {
 
     panel.add([
       card,
+      inboxLabel,
       titleText,
       subText,
       messageBox,
@@ -756,7 +775,13 @@ export class FerrySelectScene extends Phaser.Scene {
       button,
       buttonText,
     ])
-    fuelStatusContainer.add([fuelStatusCard, fuelStatusStar, fuelStatusButton])
+    fuelStatusContainer.add([
+      fuelStatusCard,
+      fuelStatusStarShadow,
+      fuelStatusStar,
+      fuelStatusLabel,
+      fuelStatusButton,
+    ])
 
     this.fuelPanel = {
       container: panel,
@@ -765,13 +790,16 @@ export class FerrySelectScene extends Phaser.Scene {
       uiScale: scaleY,
       card,
       fuelStatusCard,
+      fuelStatusStarShadow,
       fuelStatusStar,
+      fuelStatusLabel,
       fuelStatusButton,
       button,
       buttonBg,
       buttonText,
       starIcon,
       inboxIcon,
+      inboxLabel,
       messageBox,
       rewardBadge,
       progressTrack,
@@ -915,6 +943,7 @@ export class FerrySelectScene extends Phaser.Scene {
       panel.container.setPosition(popupX, popupY)
       setPanelFrame(COMPACT_PANEL.designWidth, COMPACT_PANEL.designHeight)
       panel.card.setVisible(true)
+      panel.inboxLabel.setVisible(false)
       panel.inboxIcon.setVisible(false).clear()
       panel.starIcon
         .setVisible(true)
@@ -965,14 +994,15 @@ export class FerrySelectScene extends Phaser.Scene {
 
     const showInboxIcon = () => {
       panel.container.setPosition(inboxIconX, iconY)
-      setPanelFrame(COMPACT_PANEL.iconSize, COMPACT_PANEL.iconSize)
-      panel.card.setVisible(true)
-      panel.inboxIcon.setVisible(true).setPosition(38 * ui, 38 * ui)
-      drawFuelInboxIcon(panel.inboxIcon, 56 * ui, false)
-      panel.starIcon
+      panel.bounds.setTo(panel.container.x, panel.container.y, COMPACT_PANEL.iconSize * ui, 96 * ui)
+      panel.card.setVisible(false).clear()
+      panel.inboxIcon.setVisible(true).setPosition(38 * ui, 34 * ui)
+      drawFuelInboxIcon(panel.inboxIcon, 62 * ui, false)
+      panel.inboxLabel
         .setVisible(true)
-        .setPosition(20 * ui, 27 * ui)
-        .setDisplaySize(24 * ui, 24 * ui)
+        .setPosition(38 * ui, 64 * ui)
+        .setFontSize(Math.round(16 * ui))
+      panel.starIcon.setVisible(false)
       panel.titleText.setVisible(false).setText('')
       panel.subText.setVisible(false).setText('')
       panel.messageBox.setVisible(false).clear()
@@ -987,7 +1017,7 @@ export class FerrySelectScene extends Phaser.Scene {
       panel.button
         .setVisible(true)
         .setPosition(38 * ui, 38 * ui)
-        .setSize(COMPACT_PANEL.iconSize * ui, COMPACT_PANEL.iconSize * ui)
+        .setSize(COMPACT_PANEL.iconSize * ui, 96 * ui)
       panel.button.setInteractive({ useHandCursor: true })
     }
 
@@ -1005,14 +1035,22 @@ export class FerrySelectScene extends Phaser.Scene {
       }
 
       panel.fuelStatusContainer.setPosition(fuelStatusIconX, iconY)
-      drawFuelPanelSurface(panel.fuelStatusCard, iconSize, iconSize, ui)
+      panel.fuelStatusCard.setVisible(false).clear()
+      panel.fuelStatusStarShadow
+        .setPosition(38 * ui, 34 * ui)
+        .setDisplaySize(64 * ui, 64 * ui)
+        .setVisible(true)
       panel.fuelStatusStar
-        .setPosition(38 * ui, 38 * ui)
+        .setPosition(38 * ui, 34 * ui)
         .setDisplaySize(58 * ui, 58 * ui)
         .setVisible(true)
+      panel.fuelStatusLabel
+        .setVisible(true)
+        .setPosition(38 * ui, 64 * ui)
+        .setFontSize(Math.round(16 * ui))
       panel.fuelStatusButton
         .setPosition(38 * ui, 38 * ui)
-        .setSize(COMPACT_PANEL.iconSize * ui, COMPACT_PANEL.iconSize * ui)
+        .setSize(COMPACT_PANEL.iconSize * ui, 96 * ui)
       panel.fuelStatusButton.setInteractive({ useHandCursor: true })
     }
 
@@ -1077,13 +1115,14 @@ export class FerrySelectScene extends Phaser.Scene {
       showPopupFrame()
       panel.starIcon
         .setVisible(true)
-        .setPosition(36 * ui, 38 * ui)
+        .setPosition(92 * ui, 38 * ui)
         .setDisplaySize(24 * ui, 24 * ui)
-      panel.inboxIcon.setVisible(true).setPosition(56 * ui, 49 * ui)
+      panel.inboxIcon.setVisible(true).setPosition(116 * ui, 52 * ui)
       drawFuelInboxIcon(panel.inboxIcon, 58 * ui, false)
       panel.titleText
-        .setOrigin(0, 0.5)
-        .setPosition(96 * ui, 52 * ui)
+        .setOrigin(0.5, 0.5)
+        .setPosition(210 * ui, 52 * ui)
+        .setAlign('center')
         .setText('별빛 우편함')
       panel.subText.setVisible(false).setText('')
       panel.messageBox.setVisible(true)
@@ -1102,9 +1141,12 @@ export class FerrySelectScene extends Phaser.Scene {
 
     if (this.fuelPopupState === 'arrived' && hasPendingFuel) {
       showPopupFrame()
+      panel.starIcon.setPosition(112 * ui, 52 * ui).setDisplaySize(50 * ui, 50 * ui)
+      panel.starStart.set(popupX + 112 * ui, popupY + 52 * ui)
       panel.titleText
-        .setOrigin(0, 0.5)
-        .setPosition(96 * ui, 52 * ui)
+        .setOrigin(0.5, 0.5)
+        .setPosition(204 * ui, 52 * ui)
+        .setAlign('center')
         .setText('별빛 우편함')
       panel.subText.setVisible(false).setText('')
       panel.messageBox.setVisible(true)
