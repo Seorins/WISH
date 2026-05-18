@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { getFuelInbox } from '@wish/api-client'
 import { playSceneBgm } from '@/game/systems/sceneBgm'
 import { useAuthStore } from '@/features/auth/store'
 import { assetPath } from '@/game/assets/assetPath'
@@ -198,6 +199,161 @@ type VillageNpcInstance = {
   object: Phaser.GameObjects.Image | Phaser.GameObjects.Sprite
 }
 
+const VILLAGE_MINIMAP = {
+  marginX: 16,
+  marginY: 16,
+  maxWidth: 274,
+  minWidth: 198,
+  widthRatio: 0.34,
+  padding: 12,
+  headerHeight: 38,
+  depth: 96,
+} as const
+
+const VILLAGE_MINIMAP_ZOOM_LEVELS = [0.74, 1.08, 1.58] as const
+const VILLAGE_FUEL_NOTICE_POLL_INTERVAL_MS = 3_000
+const VILLAGE_NOTICE_FONT_FAMILY =
+  '"Pretendard Variable", Pretendard, "Noto Sans KR", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", sans-serif'
+const VILLAGE_FUEL_NOTICE_POPUP = {
+  designWidth: 360,
+  designHeight: 268,
+  marginX: 28,
+  marginY: 24,
+} as const
+const VILLAGE_FUEL_NOTICE_COLORS = {
+  shadow: 0x4a321e,
+  panel: 0xfffdf7,
+  panelBottom: 0xf8f0e4,
+  panelBorder: 0xb99f71,
+  innerBorder: 0xe8dcc8,
+  message: 0xfffdf8,
+  messageBorder: 0xeadfce,
+  title: '#3b3026',
+  text: '#4a3a2c',
+  muted: '#8a7d70',
+  primary: 0xf3a86f,
+  primaryDark: 0xd4834f,
+} as const
+
+function drawVillageFuelNoticePanelSurface(
+  graphics: Phaser.GameObjects.Graphics,
+  width: number,
+  height: number,
+  ui: number,
+) {
+  const radius = 12 * ui
+  graphics.clear()
+  graphics.fillStyle(VILLAGE_FUEL_NOTICE_COLORS.shadow, 0.12)
+  graphics.fillRoundedRect(4 * ui, 6 * ui, width, height, radius)
+  graphics.fillStyle(VILLAGE_FUEL_NOTICE_COLORS.panel, 0.99)
+  graphics.fillRoundedRect(0, 0, width, height, radius)
+  graphics.fillStyle(VILLAGE_FUEL_NOTICE_COLORS.panelBottom, 0.34)
+  graphics.fillRoundedRect(6 * ui, height * 0.58, width - 12 * ui, height * 0.36, radius - 3 * ui)
+  graphics.lineStyle(1.5 * ui, VILLAGE_FUEL_NOTICE_COLORS.innerBorder, 0.62)
+  graphics.strokeRoundedRect(4 * ui, 4 * ui, width - 8 * ui, height - 8 * ui, radius - 3 * ui)
+  graphics.lineStyle(2.2 * ui, VILLAGE_FUEL_NOTICE_COLORS.panelBorder, 0.95)
+  graphics.strokeRoundedRect(0, 0, width, height, radius)
+}
+
+function drawVillageFuelNoticeMessageBox(
+  graphics: Phaser.GameObjects.Graphics,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  ui: number,
+) {
+  const radius = 8 * ui
+  graphics.clear()
+  graphics.fillStyle(VILLAGE_FUEL_NOTICE_COLORS.message, 0.96)
+  graphics.fillRoundedRect(x, y, width, height, radius)
+  graphics.lineStyle(1.2 * ui, VILLAGE_FUEL_NOTICE_COLORS.messageBorder, 0.92)
+  graphics.strokeRoundedRect(x, y, width, height, radius)
+}
+
+function drawVillageFuelNoticeButton(
+  graphics: Phaser.GameObjects.Graphics,
+  cx: number,
+  cy: number,
+  width: number,
+  height: number,
+  ui: number,
+) {
+  const radius = 8 * ui
+  const x = cx - width / 2
+  const y = cy - height / 2
+  graphics.clear()
+  graphics.fillStyle(VILLAGE_FUEL_NOTICE_COLORS.primary, 1)
+  graphics.fillRoundedRect(x, y, width, height, radius)
+  graphics.fillStyle(0xffffff, 0.12)
+  graphics.fillRoundedRect(x + 3 * ui, y + 3 * ui, width - 6 * ui, height * 0.34, radius - 2 * ui)
+  graphics.lineStyle(1.5 * ui, VILLAGE_FUEL_NOTICE_COLORS.primaryDark, 0.92)
+  graphics.strokeRoundedRect(x, y, width, height, radius)
+}
+
+const VILLAGE_MINIMAP_THEME_LABELS: Record<VillagePortalKey, string> = {
+  art: '미술',
+  taekwondo: '태권도',
+  gymnastics: '체조',
+  music: '음악',
+  lighthouse: '등대',
+  ferry: '별빛 항구',
+}
+
+type VillageMinimapMarkerKey = VillagePortalKey | 'photo' | 'gomoku' | 'ship'
+
+const VILLAGE_MINIMAP_MARKER_OFFSETS: Record<VillageMinimapMarkerKey, RatioPoint> = {
+  art: { xRatio: -0.004, yRatio: -0.012 },
+  taekwondo: { xRatio: 0.006, yRatio: 0.012 },
+  gymnastics: { xRatio: 0, yRatio: 0.006 },
+  music: { xRatio: -0.004, yRatio: 0.006 },
+  lighthouse: { xRatio: 0.01, yRatio: -0.01 },
+  ferry: { xRatio: 0.006, yRatio: -0.018 },
+  photo: { xRatio: -0.006, yRatio: -0.024 },
+  gomoku: { xRatio: 0.008, yRatio: -0.018 },
+  ship: { xRatio: 0, yRatio: -0.044 },
+}
+
+type VillageMinimapMarker = {
+  key: VillageMinimapMarkerKey
+  label: string
+  xRatio: number
+  yRatio: number
+  color: number
+  radius: number
+}
+
+type VillageMinimapBaseUi = {
+  container: Phaser.GameObjects.Container
+  worldWidth: number
+  worldHeight: number
+}
+
+type VillageMinimapUi =
+  | (VillageMinimapBaseUi & {
+      collapsed: true
+      mapIconBounds: Phaser.Geom.Rectangle
+    })
+  | (VillageMinimapBaseUi & {
+      collapsed: false
+      cameraRect: Phaser.GameObjects.Graphics
+      playerDot: Phaser.GameObjects.Arc
+      zoomOutBounds: Phaser.Geom.Rectangle
+      zoomInBounds: Phaser.Geom.Rectangle
+      mapX: number
+      mapY: number
+      mapWidth: number
+      mapHeight: number
+    })
+
+type VillageFuelNoticeUi = {
+  container: Phaser.GameObjects.Container
+  iconBounds: Phaser.Geom.Rectangle
+  popupBounds: Phaser.Geom.Rectangle
+  confirmBounds: Phaser.Geom.Rectangle
+  popup: Phaser.GameObjects.Container
+}
+
 type VillageSceneData = {
   spawn?: RatioPoint
   portalCooldownMs?: number
@@ -235,6 +391,19 @@ export class VillageScene extends Phaser.Scene {
   private interactionHint!: NpcInteractionHintUi
   private villageRealtime: VillageRealtimeIntegration | null = null
   private emojiPalette: VillageEmojiPaletteHandle | null = null
+  private minimap: VillageMinimapUi | null = null
+  private fuelNotice: VillageFuelNoticeUi | null = null
+  private minimapZoomIndex = 1
+  private isMinimapCollapsed = false
+  private hasPendingFuelNotice = false
+  private isFuelNoticeOpen = false
+  private isFuelInboxNoticeRequestPending = false
+  private currentFuelNoticeSignature = ''
+  private dismissedFuelNoticeSignature = ''
+  private fuelNoticePoll?: Phaser.Time.TimerEvent
+  private readonly handleFuelNoticeFocus = () => {
+    void this.loadVillageFuelNoticeState()
+  }
   private disposeEmojiBeltSync: (() => void) | null = null
   /** Q 키로 사용자가 의도적으로 팔레트를 켰는지. 다이얼로그/설정 패널 자동 숨김과 분리. */
   private emojiPaletteManuallyShown = false
@@ -276,6 +445,16 @@ export class VillageScene extends Phaser.Scene {
     this.villageNpcs = []
     this.obstacleManager?.destroy()
     this.obstacleManager = undefined
+    this.minimap?.container.destroy()
+    this.minimap = null
+    this.fuelNotice?.container.destroy()
+    this.fuelNotice = null
+    this.isFuelNoticeOpen = false
+    this.hasPendingFuelNotice = false
+    this.isFuelInboxNoticeRequestPending = false
+    this.currentFuelNoticeSignature = ''
+    this.fuelNoticePoll?.remove(false)
+    this.fuelNoticePoll = undefined
     this.dialogs.clear()
     this.isVillagerDialogueOpen = false
     this.isGomokuOpen = false
@@ -449,6 +628,17 @@ export class VillageScene extends Phaser.Scene {
       getPlayer: () => this.player,
     })
     this.interactionHint = new NpcInteractionHintUi(this)
+    this.createVillageMinimap(W, H)
+    this.createVillageFuelNotice()
+    this.refreshVillageFixedUiAfterFontReady(W, H)
+    void this.loadVillageFuelNoticeState()
+    this.fuelNoticePoll = this.time.addEvent({
+      delay: VILLAGE_FUEL_NOTICE_POLL_INTERVAL_MS,
+      loop: true,
+      callback: () => void this.loadVillageFuelNoticeState(),
+    })
+    window.addEventListener('focus', this.handleFuelNoticeFocus)
+    document.addEventListener('visibilitychange', this.handleFuelNoticeFocus)
 
     this.input.keyboard!.on('keydown-ESC', () => {
       if (this.isVillagerDialogueOpen) {
@@ -461,6 +651,14 @@ export class VillageScene extends Phaser.Scene {
 
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       if (this.settingsMenu.isOpen()) {
+        return
+      }
+
+      if (this.handleFuelNoticePointerDown(pointer)) {
+        return
+      }
+
+      if (this.handleMinimapPointerDown(pointer)) {
         return
       }
 
@@ -582,6 +780,14 @@ export class VillageScene extends Phaser.Scene {
       this.emojiPalette = null
       this.emojiHint?.destroy()
       this.emojiHint = null
+      this.minimap?.container.destroy()
+      this.minimap = null
+      this.fuelNoticePoll?.remove(false)
+      this.fuelNoticePoll = undefined
+      window.removeEventListener('focus', this.handleFuelNoticeFocus)
+      document.removeEventListener('visibilitychange', this.handleFuelNoticeFocus)
+      this.fuelNotice?.container.destroy()
+      this.fuelNotice = null
     })
   }
 
@@ -622,6 +828,9 @@ export class VillageScene extends Phaser.Scene {
         paletteVisible ? this.scale.height - 18 - EMOJI_HINT_OPEN_OFFSET_Y : this.scale.height - 18,
       )
       .setVisible(!overlaysOpen)
+    this.minimap?.container.setVisible(!overlaysOpen)
+    this.refreshVillageFuelNoticeUi(!overlaysOpen)
+    this.updateVillageMinimap()
 
     const nearestNpc = this.getNearestNpcInTalkDistance()
     const photoBoothDistance = this.getPhotoBoothDistance()
@@ -669,6 +878,677 @@ export class VillageScene extends Phaser.Scene {
     }
 
     this.updateThemePortalTransitions()
+  }
+
+  private createVillageMinimap(worldWidth: number, worldHeight: number) {
+    if (this.isMinimapCollapsed) {
+      this.createCollapsedVillageMinimap(worldWidth, worldHeight)
+      return
+    }
+
+    const basePanelWidth = Phaser.Math.Clamp(
+      this.scale.width * VILLAGE_MINIMAP.widthRatio,
+      VILLAGE_MINIMAP.minWidth,
+      VILLAGE_MINIMAP.maxWidth,
+    )
+    const zoom = VILLAGE_MINIMAP_ZOOM_LEVELS[this.minimapZoomIndex] ?? 1
+    const panelWidth = Math.min(
+      this.scale.width - VILLAGE_MINIMAP.marginX * 2,
+      basePanelWidth * zoom,
+    )
+    const mapWidth = panelWidth - VILLAGE_MINIMAP.padding * 2
+    const mapHeight = mapWidth / (worldWidth / worldHeight)
+    const panelHeight = VILLAGE_MINIMAP.headerHeight + mapHeight + VILLAGE_MINIMAP.padding + 12
+    const mapX = VILLAGE_MINIMAP.padding
+    const mapY = VILLAGE_MINIMAP.headerHeight
+
+    const panelX = this.scale.width - panelWidth - VILLAGE_MINIMAP.marginX
+    const container = this.add
+      .container(panelX, VILLAGE_MINIMAP.marginY)
+      .setDepth(VILLAGE_MINIMAP.depth)
+      .setScrollFactor(0)
+      .setSize(panelWidth, panelHeight)
+
+    const background = this.add.graphics()
+    background.fillStyle(0xfffcf3, 0.94)
+    background.fillRoundedRect(0, 0, panelWidth, panelHeight, 14)
+    background.lineStyle(3, 0xb8a36f, 0.9)
+    background.strokeRoundedRect(1.5, 1.5, panelWidth - 3, panelHeight - 3, 13)
+    background.lineStyle(1, 0xffffff, 0.85)
+    background.strokeRoundedRect(6, 6, panelWidth - 12, panelHeight - 12, 10)
+    background.fillStyle(0xfffbef, 0.9)
+    background.fillRoundedRect(mapX, mapY, mapWidth, mapHeight, 10)
+
+    const tileWidth = mapWidth / MAP_TILE_COLUMNS
+    const tileHeight = mapHeight / MAP_TILE_ROWS
+    const mapTiles = MAP_TILE_KEYS.map(tile =>
+      this.add
+        .image(mapX + tile.column * tileWidth, mapY + tile.row * tileHeight, tile.key)
+        .setOrigin(0, 0)
+        .setDisplaySize(tileWidth + 0.5, tileHeight + 0.5)
+        .setAlpha(0.88),
+    )
+
+    const mapOverlay = this.add.graphics()
+    mapOverlay.lineStyle(1, 0xffffff, 0.28)
+    for (let index = 1; index < MAP_TILE_COLUMNS; index += 1) {
+      const x = mapX + (mapWidth / MAP_TILE_COLUMNS) * index
+      mapOverlay.lineBetween(x, mapY + 2, x, mapY + mapHeight - 2)
+    }
+    for (let index = 1; index < MAP_TILE_ROWS; index += 1) {
+      const y = mapY + (mapHeight / MAP_TILE_ROWS) * index
+      mapOverlay.lineBetween(mapX + 2, y, mapX + mapWidth - 2, y)
+    }
+    mapOverlay.lineStyle(2.2, 0xd7c79a, 0.95)
+    mapOverlay.strokeRoundedRect(mapX, mapY, mapWidth, mapHeight, 10)
+    mapOverlay.lineStyle(1, 0xffffff, 0.65)
+    mapOverlay.strokeRoundedRect(mapX + 3, mapY + 3, mapWidth - 6, mapHeight - 6, 8)
+
+    const title = this.add
+      .text(panelWidth / 2, 10, '지도', {
+        fontSize: '20px',
+        fontFamily: "'Jua', 'Apple SD Gothic Neo', sans-serif",
+        color: '#4f4431',
+        align: 'center',
+        resolution: 2,
+      })
+      .setOrigin(0.5, 0)
+
+    const cameraRect = this.add.graphics()
+    container.add([background, ...mapTiles, mapOverlay, title, cameraRect])
+    const zoomOutBounds = this.createMinimapZoomButton(container, panelWidth - 57, 21, '-', -1)
+    const zoomInBounds = this.createMinimapZoomButton(container, panelWidth - 27, 21, '+', 1)
+
+    const themeMarkers: VillageMinimapMarker[] = VILLAGE_THEME_PORTALS.filter(
+      portal => portal.key !== 'ferry',
+    ).map(portal => ({
+      key: portal.key,
+      label: VILLAGE_MINIMAP_THEME_LABELS[portal.key],
+      xRatio: portal.xRatio,
+      yRatio: portal.yRatio,
+      color: 0xf2b65a,
+      radius: 5.5,
+    }))
+    const facilityMarkers: VillageMinimapMarker[] = [
+      {
+        key: 'photo',
+        label: '사진',
+        xRatio: (VILLAGE_PHOTO_BOOTH.xRatio + VILLAGE_PHOTO_GALLERY.xRatio) / 2,
+        yRatio: (VILLAGE_PHOTO_BOOTH.yRatio + VILLAGE_PHOTO_GALLERY.yRatio) / 2,
+        color: 0x6fc6c7,
+        radius: 5,
+      },
+      {
+        key: 'gomoku',
+        label: '오목',
+        xRatio: this.gomokuBoard ? this.gomokuBoard.x / worldWidth : VILLAGE_GOMOKU_BOARD.xRatio,
+        yRatio: this.gomokuBoard ? this.gomokuBoard.y / worldHeight : VILLAGE_GOMOKU_BOARD.yRatio,
+        color: 0x7dc36b,
+        radius: 5,
+      },
+      {
+        key: 'ship',
+        label: '별빛 항구',
+        xRatio: VILLAGE_SHIP.xRatio,
+        yRatio: VILLAGE_SHIP.yRatio,
+        color: 0x9d8bd7,
+        radius: 5,
+      },
+    ]
+
+    const minimapMarkers = [...themeMarkers, ...facilityMarkers]
+    minimapMarkers.forEach(marker => {
+      const offset = VILLAGE_MINIMAP_MARKER_OFFSETS[marker.key]
+      const adjustedXRatio = Phaser.Math.Clamp(marker.xRatio + offset.xRatio, 0, 1)
+      const adjustedYRatio = Phaser.Math.Clamp(marker.yRatio + offset.yRatio, 0, 1)
+      const x = mapX + adjustedXRatio * mapWidth
+      const y = mapY + adjustedYRatio * mapHeight
+      const labelOnLeft = x > mapX + mapWidth * 0.76
+      const labelX = labelOnLeft ? x - 10 : x + 10
+      const labelY = Phaser.Math.Clamp(y, mapY + 13, mapY + mapHeight - 13)
+      const dot = this.add
+        .circle(x, y, marker.radius, marker.color, 0.96)
+        .setStrokeStyle(2, 0xffffff, 0.98)
+      const label = this.add
+        .text(labelX, labelY, marker.label, {
+          fontSize: '12px',
+          fontFamily: "'Jua', 'Apple SD Gothic Neo', sans-serif",
+          color: '#3f3526',
+          stroke: '#fffaf0',
+          strokeThickness: 5,
+          resolution: 2,
+        })
+        .setOrigin(labelOnLeft ? 1 : 0, 0.5)
+      container.add([dot, label])
+    })
+
+    const playerDot = this.add.circle(0, 0, 7, 0xff6f76, 1).setStrokeStyle(2.5, 0xffffff, 1)
+    container.add(playerDot)
+
+    this.minimap = {
+      container,
+      collapsed: false,
+      cameraRect,
+      playerDot,
+      zoomOutBounds,
+      zoomInBounds,
+      worldWidth,
+      worldHeight,
+      mapX,
+      mapY,
+      mapWidth,
+      mapHeight,
+    }
+    this.updateVillageMinimap()
+    this.refreshVillageFuelNoticePosition()
+  }
+
+  private createCollapsedVillageMinimap(worldWidth: number, worldHeight: number) {
+    const width = 74
+    const height = 76
+    const panelX = this.scale.width - width - VILLAGE_MINIMAP.marginX
+    const container = this.add
+      .container(panelX, VILLAGE_MINIMAP.marginY)
+      .setDepth(VILLAGE_MINIMAP.depth)
+      .setScrollFactor(0)
+      .setSize(width, height)
+
+    const icon = this.add.graphics()
+    icon.fillStyle(0x000000, 0.16)
+    icon.fillEllipse(38, 48, 54, 12)
+    icon.fillStyle(0x95d7e8, 1)
+    icon.fillRoundedRect(8, 13, 9, 43, 4)
+    icon.fillStyle(0x7ec4d4, 1)
+    icon.fillRoundedRect(14, 10, 6, 47, 3)
+    icon.fillStyle(0xbee4c4, 1)
+    icon.beginPath()
+    icon.moveTo(18, 13)
+    icon.lineTo(34, 8)
+    icon.lineTo(49, 13)
+    icon.lineTo(65, 9)
+    icon.lineTo(62, 53)
+    icon.lineTo(45, 57)
+    icon.lineTo(30, 52)
+    icon.lineTo(16, 57)
+    icon.closePath()
+    icon.fillPath()
+    icon.fillStyle(0x83bd6a, 1)
+    icon.beginPath()
+    icon.moveTo(20, 14)
+    icon.lineTo(34, 9)
+    icon.lineTo(30, 24)
+    icon.lineTo(45, 21)
+    icon.lineTo(55, 29)
+    icon.lineTo(48, 38)
+    icon.lineTo(62, 45)
+    icon.lineTo(62, 53)
+    icon.lineTo(45, 57)
+    icon.lineTo(31, 52)
+    icon.lineTo(18, 56)
+    icon.lineTo(21, 42)
+    icon.lineTo(16, 32)
+    icon.closePath()
+    icon.fillPath()
+    icon.fillStyle(0x8ad2df, 1)
+    icon.beginPath()
+    icon.moveTo(18, 24)
+    icon.lineTo(34, 30)
+    icon.lineTo(50, 25)
+    icon.lineTo(64, 28)
+    icon.lineTo(63, 45)
+    icon.lineTo(49, 40)
+    icon.lineTo(34, 45)
+    icon.lineTo(18, 39)
+    icon.closePath()
+    icon.fillPath()
+    icon.lineStyle(3, 0xd9a343, 1)
+    icon.beginPath()
+    icon.moveTo(26, 42)
+    icon.lineTo(35, 35)
+    icon.lineTo(45, 37)
+    icon.lineTo(52, 29)
+    icon.lineTo(59, 30)
+    icon.strokePath()
+    icon.fillStyle(0xf09b36, 1)
+    icon.fillCircle(25, 42, 5)
+    icon.lineStyle(1.5, 0xffffff, 0.75)
+    icon.strokeCircle(25, 42, 5)
+    icon.fillStyle(0xf05c93, 1)
+    icon.fillCircle(59, 30, 4.6)
+    icon.strokeCircle(59, 30, 4.6)
+    icon.lineStyle(2, 0x6a9f58, 0.55)
+    icon.lineBetween(35, 9, 31, 52)
+    icon.lineBetween(50, 14, 46, 57)
+
+    const label = this.add
+      .text(width / 2, 60, '지도', {
+        fontSize: '16px',
+        fontFamily: "'Jua', 'Apple SD Gothic Neo', sans-serif",
+        color: '#4f4431',
+        stroke: '#fff8e8',
+        strokeThickness: 4,
+        resolution: 2,
+      })
+      .setOrigin(0.5, 0)
+    container.add([icon, label])
+
+    this.minimap = {
+      container,
+      collapsed: true,
+      mapIconBounds: new Phaser.Geom.Rectangle(0, 0, width, height),
+      worldWidth,
+      worldHeight,
+    }
+    this.refreshVillageFuelNoticePosition()
+  }
+
+  private createVillageFuelNotice() {
+    const width = 74
+    const height = 76
+    const container = this.add
+      .container(0, VILLAGE_MINIMAP.marginY)
+      .setDepth(VILLAGE_MINIMAP.depth)
+      .setScrollFactor(0)
+      .setSize(width, height)
+
+    const icon = this.add.graphics()
+    icon.fillStyle(0x000000, 0.16)
+    icon.fillEllipse(38, 51, 58, 12)
+    icon.fillStyle(0xfffefa, 1)
+    icon.fillRoundedRect(8, 15, 58, 40, 8)
+    icon.lineStyle(3, 0x8f7c54, 0.95)
+    icon.strokeRoundedRect(8, 15, 58, 40, 8)
+    icon.lineStyle(2.8, 0x8f7c54, 0.95)
+    icon.lineBetween(12, 18, 38, 40)
+    icon.lineBetween(62, 18, 38, 40)
+    icon.lineBetween(12, 52, 32, 37)
+    icon.lineBetween(62, 52, 44, 37)
+
+    const noticeDot = this.add.circle(62, 15, 6, 0xff6f76, 1).setStrokeStyle(2, 0xffffff, 0.95)
+    const label = this.add
+      .text(width / 2, 60, '메시지', {
+        fontSize: '16px',
+        fontFamily: "'Jua', 'Apple SD Gothic Neo', sans-serif",
+        color: '#4f4431',
+        stroke: '#fff8e8',
+        strokeThickness: 4,
+        resolution: 2,
+      })
+      .setOrigin(0.5, 0)
+    const popupUi = this.createVillageFuelNoticePopup()
+    popupUi.popup.setVisible(false)
+
+    container.add([icon, noticeDot, label, popupUi.popup])
+
+    this.fuelNotice = {
+      container,
+      iconBounds: new Phaser.Geom.Rectangle(0, 0, width, height),
+      popupBounds: new Phaser.Geom.Rectangle(0, 0, popupUi.width, popupUi.height),
+      confirmBounds: popupUi.confirmBounds,
+      popup: popupUi.popup,
+    }
+    this.refreshVillageFuelNoticePosition()
+    this.refreshVillageFuelNoticeUi()
+  }
+
+  private createVillageFuelNoticePopup() {
+    const width = Math.min(
+      VILLAGE_FUEL_NOTICE_POPUP.designWidth,
+      Math.max(286, this.scale.width - 32),
+    )
+    const ui = width / VILLAGE_FUEL_NOTICE_POPUP.designWidth
+    const height = VILLAGE_FUEL_NOTICE_POPUP.designHeight * ui
+    const popup = this.add.container(0, 0).setSize(width, height)
+
+    const panel = this.add.graphics()
+    drawVillageFuelNoticePanelSurface(panel, width, height, ui)
+
+    const title = this.add
+      .text(width / 2, 24 * ui, '별빛 우편함', {
+        fontFamily: VILLAGE_NOTICE_FONT_FAMILY,
+        fontSize: `${Math.round(24 * ui)}px`,
+        fontStyle: '800',
+        color: VILLAGE_FUEL_NOTICE_COLORS.title,
+        align: 'center',
+        resolution: 2,
+      })
+      .setOrigin(0.5, 0)
+    const subText = this.add
+      .text(width / 2, 61 * ui, '별빛 에너지가 도착했어요', {
+        fontFamily: VILLAGE_NOTICE_FONT_FAMILY,
+        fontSize: `${Math.round(15 * ui)}px`,
+        fontStyle: '700',
+        color: VILLAGE_FUEL_NOTICE_COLORS.muted,
+        align: 'center',
+        resolution: 2,
+      })
+      .setOrigin(0.5, 0)
+
+    const messageBox = this.add.graphics()
+    drawVillageFuelNoticeMessageBox(messageBox, 24 * ui, 96 * ui, 312 * ui, 84 * ui, ui)
+    const messageText = this.add
+      .text(width / 2, 138 * ui, '별빛 항구에 가서 확인해보자', {
+        fontFamily: VILLAGE_NOTICE_FONT_FAMILY,
+        fontSize: `${Math.round(19 * ui)}px`,
+        fontStyle: '800',
+        color: VILLAGE_FUEL_NOTICE_COLORS.text,
+        align: 'center',
+        wordWrap: { width: 280 * ui },
+        resolution: 2,
+      })
+      .setOrigin(0.5)
+
+    const buttonWidth = 312 * ui
+    const buttonHeight = 40 * ui
+    const buttonY = 222 * ui
+    const buttonBg = this.add.graphics()
+    drawVillageFuelNoticeButton(buttonBg, width / 2, buttonY, buttonWidth, buttonHeight, ui)
+    const buttonText = this.add
+      .text(width / 2, buttonY, '확인', {
+        fontFamily: VILLAGE_NOTICE_FONT_FAMILY,
+        fontSize: `${Math.round(18 * ui)}px`,
+        fontStyle: '800',
+        color: '#ffffff',
+        resolution: 2,
+      })
+      .setOrigin(0.5)
+    const confirmBounds = new Phaser.Geom.Rectangle(
+      width / 2 - buttonWidth / 2,
+      buttonY - buttonHeight / 2,
+      buttonWidth,
+      buttonHeight,
+    )
+    const confirmButton = this.add
+      .zone(width / 2, buttonY, buttonWidth, buttonHeight)
+      .setInteractive({ useHandCursor: true })
+    confirmButton.on(
+      'pointerdown',
+      (
+        _pointer: Phaser.Input.Pointer,
+        _localX: number,
+        _localY: number,
+        event: Phaser.Types.Input.EventData,
+      ) => {
+        event.stopPropagation()
+        this.dismissVillageFuelNotice()
+      },
+    )
+
+    popup.add([panel, title, subText, messageBox, messageText, buttonBg, buttonText, confirmButton])
+    return { popup, width, height, confirmBounds }
+  }
+
+  private refreshVillageFuelNoticePosition() {
+    if (!this.fuelNotice) return
+
+    const iconWidth = this.fuelNotice.container.width || 66
+    const gap = 10
+    const minimapX = this.minimap?.container.x ?? this.scale.width - VILLAGE_MINIMAP.marginX
+    const minimapY = this.minimap?.container.y ?? VILLAGE_MINIMAP.marginY
+    const iconVisualTopOffset = 7
+    const y =
+      this.minimap && !this.minimap.collapsed
+        ? minimapY - iconVisualTopOffset
+        : VILLAGE_MINIMAP.marginY
+    const x = Math.max(VILLAGE_MINIMAP.marginX, minimapX - iconWidth - gap)
+    this.fuelNotice.container.setPosition(x, y)
+
+    const popupWidth = this.fuelNotice.popup.width || VILLAGE_FUEL_NOTICE_POPUP.designWidth
+    const popupHeight = this.fuelNotice.popup.height || VILLAGE_FUEL_NOTICE_POPUP.designHeight
+    const popupMaxX = Math.max(16, this.scale.width - popupWidth - 16)
+    const popupMaxY = Math.max(16, this.scale.height - popupHeight - 16)
+    const popupX = Phaser.Math.Clamp(
+      this.scale.width - popupWidth - VILLAGE_FUEL_NOTICE_POPUP.marginX,
+      16,
+      popupMaxX,
+    )
+    const popupY = Phaser.Math.Clamp(VILLAGE_FUEL_NOTICE_POPUP.marginY, 16, popupMaxY)
+    this.fuelNotice.popup.setPosition(popupX - x, popupY - y)
+    this.fuelNotice.popupBounds.setTo(
+      this.fuelNotice.popup.x,
+      this.fuelNotice.popup.y,
+      popupWidth,
+      popupHeight,
+    )
+  }
+
+  private refreshVillageFuelNoticeUi(forceVisible?: boolean) {
+    if (!this.fuelNotice) return
+
+    const fixedUiVisible =
+      forceVisible ??
+      !(
+        this.isVillagerDialogueOpen ||
+        this.settingsMenu.isOpen() ||
+        this.isGomokuOpen ||
+        this.isPhotoGalleryOpen
+      )
+    const visible = this.hasPendingFuelNotice && (forceVisible ?? true)
+    const popupVisible = visible && this.isFuelNoticeOpen
+    this.minimap?.container.setDepth(
+      popupVisible ? VILLAGE_MINIMAP.depth - 4 : VILLAGE_MINIMAP.depth,
+    )
+    this.minimap?.container.setVisible(fixedUiVisible && !popupVisible)
+    this.fuelNotice.container.setDepth(
+      popupVisible ? VILLAGE_MINIMAP.depth + 6 : VILLAGE_MINIMAP.depth,
+    )
+    this.fuelNotice.container.setVisible(visible)
+    this.fuelNotice.popup.setVisible(popupVisible)
+  }
+
+  private refreshVillageFixedUiAfterFontReady(worldWidth: number, worldHeight: number) {
+    const fonts = (document as Document & { fonts?: { ready: Promise<unknown> } }).fonts
+    if (!fonts) return
+
+    void fonts.ready.then(() => {
+      if (!this.scene.isActive()) return
+
+      const minimapVisible = this.minimap?.container.visible ?? true
+      this.minimap?.container.destroy()
+      this.minimap = null
+      this.createVillageMinimap(worldWidth, worldHeight)
+      ;(this.minimap as VillageMinimapUi | null)?.container.setVisible(minimapVisible)
+
+      const fuelNoticeVisible = this.fuelNotice?.container.visible ?? false
+      this.fuelNotice?.container.destroy()
+      this.fuelNotice = null
+      this.createVillageFuelNotice()
+      this.refreshVillageFuelNoticeUi(fuelNoticeVisible)
+    })
+  }
+
+  private async loadVillageFuelNoticeState() {
+    if (this.isFuelInboxNoticeRequestPending) return
+
+    this.isFuelInboxNoticeRequestPending = true
+    try {
+      const inboxResponse = await getFuelInbox()
+      if (!this.scene.isActive()) return
+
+      const pendingEvents = inboxResponse.data ?? []
+      const signature = pendingEvents.map(event => event.id).join(':')
+      this.currentFuelNoticeSignature = signature
+      if (!signature) {
+        this.dismissedFuelNoticeSignature = ''
+      }
+      this.hasPendingFuelNotice =
+        pendingEvents.length > 0 && signature !== this.dismissedFuelNoticeSignature
+      if (!this.hasPendingFuelNotice) {
+        this.isFuelNoticeOpen = false
+      }
+    } catch (error) {
+      console.warn('Failed to load village fuel inbox notice.', error)
+    } finally {
+      this.isFuelInboxNoticeRequestPending = false
+      this.refreshVillageFuelNoticeUi()
+    }
+  }
+
+  private createMinimapZoomButton(
+    container: Phaser.GameObjects.Container,
+    x: number,
+    y: number,
+    label: string,
+    delta: number,
+  ) {
+    const nextIndex = this.minimapZoomIndex + delta
+    const disabled = delta > 0 && nextIndex >= VILLAGE_MINIMAP_ZOOM_LEVELS.length
+    const size = 26
+    const radius = 11
+    const iconColor = disabled ? 0xb5a98a : 0x5a4a2c
+    const button = this.add.graphics()
+    button.fillStyle(disabled ? 0xf0e6cf : 0xfffff4, disabled ? 0.34 : 0.92)
+    button.fillCircle(x, y, radius)
+    button.lineStyle(1.4, disabled ? 0xd0c29c : 0xb59d64, disabled ? 0.38 : 0.9)
+    button.strokeCircle(x, y, radius)
+    button.lineStyle(2.4, iconColor, disabled ? 0.45 : 1)
+    button.lineBetween(x - 5, y, x + 5, y)
+    if (label === '+') {
+      button.lineBetween(x, y - 5, x, y + 5)
+    }
+
+    container.add(button)
+    return new Phaser.Geom.Rectangle(x - size / 2, y - size / 2, size, size)
+  }
+
+  private changeVillageMinimapZoom(delta: number) {
+    if (!this.minimap) return
+
+    const { worldWidth, worldHeight } = this.minimap
+    if (delta < 0 && this.minimapZoomIndex === 0) {
+      this.isMinimapCollapsed = true
+      this.minimap.container.destroy()
+      this.minimap = null
+      this.createVillageMinimap(worldWidth, worldHeight)
+      return
+    }
+
+    const nextIndex = Phaser.Math.Clamp(
+      this.minimapZoomIndex + delta,
+      0,
+      VILLAGE_MINIMAP_ZOOM_LEVELS.length - 1,
+    )
+    if (nextIndex === this.minimapZoomIndex) return
+
+    this.minimapZoomIndex = nextIndex
+    this.minimap.container.destroy()
+    this.minimap = null
+    this.createVillageMinimap(worldWidth, worldHeight)
+  }
+
+  private updateVillageMinimap() {
+    if (!this.minimap) return
+    if (this.minimap.collapsed) return
+
+    const { cameraRect, playerDot, worldWidth, worldHeight, mapX, mapY, mapWidth, mapHeight } =
+      this.minimap
+    const playerRatioX = Phaser.Math.Clamp(this.player.x / worldWidth, 0, 1)
+    const playerRatioY = Phaser.Math.Clamp(this.player.y / worldHeight, 0, 1)
+    playerDot.setPosition(mapX + playerRatioX * mapWidth, mapY + playerRatioY * mapHeight)
+
+    const camera = this.cameras.main
+    const cameraX = mapX + Phaser.Math.Clamp(camera.scrollX / worldWidth, 0, 1) * mapWidth
+    const cameraY = mapY + Phaser.Math.Clamp(camera.scrollY / worldHeight, 0, 1) * mapHeight
+    const cameraWidth = Phaser.Math.Clamp((camera.width / worldWidth) * mapWidth, 10, mapWidth)
+    const cameraHeight = Phaser.Math.Clamp((camera.height / worldHeight) * mapHeight, 10, mapHeight)
+
+    cameraRect.clear()
+    cameraRect.lineStyle(1.8, 0xffffff, 0.9)
+    cameraRect.strokeRoundedRect(cameraX, cameraY, cameraWidth, cameraHeight, 4)
+    cameraRect.lineStyle(1, 0x7a6b4c, 0.45)
+    cameraRect.strokeRoundedRect(cameraX + 1, cameraY + 1, cameraWidth - 2, cameraHeight - 2, 4)
+  }
+
+  private handleFuelNoticePointerDown(pointer: Phaser.Input.Pointer) {
+    if (!this.fuelNotice?.container.visible) return false
+
+    const { container, iconBounds, popupBounds } = this.fuelNotice
+    const localX = pointer.x - container.x
+    const localY = pointer.y - container.y
+
+    if (Phaser.Geom.Rectangle.Contains(iconBounds, localX, localY)) {
+      if (this.isFuelNoticeOpen) {
+        this.dismissVillageFuelNotice()
+        return true
+      }
+
+      this.isFuelNoticeOpen = true
+      this.refreshVillageFuelNoticeUi()
+      return true
+    }
+
+    const popupLocalX = localX - this.fuelNotice.popup.x
+    const popupLocalY = localY - this.fuelNotice.popup.y
+    if (
+      this.isFuelNoticeOpen &&
+      Phaser.Geom.Rectangle.Contains(this.fuelNotice.confirmBounds, popupLocalX, popupLocalY)
+    ) {
+      this.dismissVillageFuelNotice()
+      return true
+    }
+
+    if (this.isFuelNoticeOpen && Phaser.Geom.Rectangle.Contains(popupBounds, localX, localY)) {
+      return true
+    }
+
+    if (this.isFuelNoticeOpen) {
+      this.dismissVillageFuelNotice()
+      return true
+    }
+
+    return false
+  }
+
+  private dismissVillageFuelNotice() {
+    this.dismissedFuelNoticeSignature = this.currentFuelNoticeSignature
+    this.hasPendingFuelNotice = false
+    this.isFuelNoticeOpen = false
+    this.refreshVillageFuelNoticeUi()
+  }
+
+  private handleMinimapPointerDown(pointer: Phaser.Input.Pointer) {
+    if (!this.minimap?.container.visible) return false
+
+    const { container } = this.minimap
+    const localX = pointer.x - container.x
+    const localY = pointer.y - container.y
+
+    if (this.minimap.collapsed) {
+      if (Phaser.Geom.Rectangle.Contains(this.minimap.mapIconBounds, localX, localY)) {
+        this.isMinimapCollapsed = false
+        const { worldWidth, worldHeight } = this.minimap
+        this.minimap.container.destroy()
+        this.minimap = null
+        this.createVillageMinimap(worldWidth, worldHeight)
+        return true
+      }
+
+      return this.isPointerInsideMinimap(pointer)
+    }
+
+    if (Phaser.Geom.Rectangle.Contains(this.minimap.zoomOutBounds, localX, localY)) {
+      this.changeVillageMinimapZoom(-1)
+      return true
+    }
+
+    if (Phaser.Geom.Rectangle.Contains(this.minimap.zoomInBounds, localX, localY)) {
+      this.changeVillageMinimapZoom(1)
+      return true
+    }
+
+    return this.isPointerInsideMinimap(pointer)
+  }
+
+  private isPointerInsideMinimap(pointer: Phaser.Input.Pointer) {
+    if (!this.minimap?.container.visible) return false
+
+    const { container } = this.minimap
+    return (
+      pointer.x >= container.x &&
+      pointer.x <= container.x + container.width &&
+      pointer.y >= container.y &&
+      pointer.y <= container.y + container.height
+    )
   }
 
   private createPhotoGallery(worldWidth: number, worldHeight: number) {

@@ -22,5 +22,7 @@ public record TaekwondoSessionMotionSaveRequest(
                 Integer completedReps,
         @Schema(description = "저장 피드백", example = "동작 완료") @NotBlank @Size(max = 255)
                 String feedback,
+        @Schema(description = "해당 동작에서 처치한 몬스터 수", example = "3") @NotNull @PositiveOrZero
+                Integer monstersDefeated,
         @Schema(description = "수행 영상 S3 object key") @Size(max = 1024) String videoKey,
         @Schema(description = "수행 영상 썸네일 S3 object key") @Size(max = 1024) String thumbKey) {}

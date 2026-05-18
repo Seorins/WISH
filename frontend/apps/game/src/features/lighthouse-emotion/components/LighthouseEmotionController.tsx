@@ -27,7 +27,7 @@ const SAFE_FINAL_LINE = '오늘은 여기까지 해도 괜찮아.'
 const finishButtonAnchorStyle: CSSProperties = {
   position: 'fixed',
   left: '50%',
-  bottom: 'clamp(290px, 29vh, 340px)',
+  bottom: 'clamp(255px, 26vh, 305px)',
   transform: 'translateX(-50%)',
   zIndex: 41,
   pointerEvents: 'none',

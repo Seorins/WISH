@@ -3,10 +3,12 @@ import { playSceneBgm } from '@/game/systems/sceneBgm'
 import {
   createQuizRoom,
   ensureFreshAccessToken,
+  getWaitingQuizRooms,
   joinQuizRoom,
   leaveQuizRoom,
   startQuizRoom,
   type PromptAssignment,
+  type QuizRoomListItem,
   type QuizRoomSnapshot,
 } from '@wish/api-client'
 import { assetPath } from '@/game/assets/assetPath'
@@ -24,29 +26,27 @@ import { CUTE_CARD_PALETTES } from '@/game/ui/cuteCard'
  *
  * <ul>
  *   <li>{@code modeSelect} — Step1: 솔로 (AI) / 멀티 두 큰 버튼
- *   <li>{@code multiMethod} — Step2: 방 만들기 / 코드로 입장 두 큰 버튼
+ *   <li>{@code multiHub} — Step2: "방 만들기" + 입장 가능한 방 목록을 한 화면에 표시
  *   <li>{@code creating} — createQuizRoom 진행 중
- *   <li>{@code waitingCode} — React 오버레이가 코드 입력 받는 중
  *   <li>{@code joining} — joinQuizRoom 진행 중
  *   <li>{@code lobby} — WS 연결 + 멤버 슬롯 + 시작 버튼 (방장)
  *   <li>{@code leaving} — leaveQuizRoom + 미술실 복귀
  * </ul>
- *
- * <p>M1 단계: 시작 버튼은 자리만 잡아두고 실제 게임 전이는 M2 에서.
  */
 const FONT_FAMILY =
   '"Pretendard Variable", Pretendard, "Noto Sans KR", -apple-system, BlinkMacSystemFont, sans-serif'
 
 type LobbyState =
   | 'modeSelect'
-  | 'multiMethod'
+  | 'multiHub'
   | 'creating'
-  | 'waitingCode'
   | 'joining'
   | 'lobby'
   | 'starting'
   | 'transitioningToPlay'
   | 'leaving'
+
+const HUB_POLL_INTERVAL_MS = 5000
 
 export interface QuizLobbySceneInit {
   snapshot: QuizRoomSnapshot
@@ -61,13 +61,11 @@ const MIN_VISIBLE_PLAYER_SLOTS = 6
 const PALETTE_DANGER = CUTE_CARD_PALETTES.rose
 
 // 카드 팔레트 — 채도 톤다운된 코디네이션 페어. 이전엔 #f4a64a/#6aaa64/#4a8fc4 가 너무 쨍해서 산만했음.
-// 같은 채도/명도 패밀리에서 따뜻함(피치/테라코타) ↔ 차분함(세이지/슬레이트) 으로만 갈라줌.
+// 같은 채도/명도 패밀리에서 따뜻함(피치/테라코타) ↔ 차분함(세이지) 으로만 갈라줌.
 const COLOR_WARM = 0xe89865
 const COLOR_WARM_DARK = 0xb06840
 const COLOR_COOL = 0x82b596
 const COLOR_COOL_DARK = 0x517e64
-const COLOR_SLATE = 0x7c9bc0
-const COLOR_SLATE_DARK = 0x4f6c91
 
 // 슬롯 아바타 — QuizPlayScene 과 동일한 char1~9 (art/ui) 를 방마다 섞인 순서로 사용.
 // Math.random() 을 쓰면 클라이언트마다 다르게 보일 수 있어 roomId + joinOrder 로 고정 랜덤 매핑.
@@ -127,6 +125,21 @@ export class QuizLobbyScene extends Phaser.Scene {
   private menuContainer: Phaser.GameObjects.Container | null = null
   private lobbyContainer: Phaser.GameObjects.Container | null = null
 
+  // multiHub — 방 목록 + 방 만들기 통합 화면. fetch 결과/로딩/에러를 들고 있다가 화면을 다시 그릴 때 사용.
+  private hubRooms: QuizRoomListItem[] = []
+  private hubLoading = false
+  private hubError: string | null = null
+  private hubPollTimer: Phaser.Time.TimerEvent | null = null
+  private hubFetchToken = 0
+  // 방 목록 스크롤 — listContainer 안에 카드를 쌓고 mask 로 보이는 영역 클립.
+  // wheel 시 listContainer.y 를 minY..maxY 범위에서 조정. 스크롤바는 의도적으로 표시 안 함.
+  private hubListContainer: Phaser.GameObjects.Container | null = null
+  private hubListMask: Phaser.GameObjects.Graphics | null = null
+  private hubListArea: { left: number; top: number; right: number; bottom: number } | null = null
+  private hubListMinY = 0
+  private hubListMaxY = 0
+  private hubWheelBound = false
+
   constructor() {
     super('QuizLobbyScene')
   }
@@ -142,6 +155,16 @@ export class QuizLobbyScene extends Phaser.Scene {
       : DEFAULT_SELECTED_ROUNDS
     this.menuContainer = null
     this.lobbyContainer = null
+    this.hubRooms = []
+    this.hubLoading = false
+    this.hubError = null
+    this.hubPollTimer = null
+    this.hubFetchToken = 0
+    this.hubListContainer = null
+    this.hubListMask = null
+    this.hubListArea = null
+    this.hubListMinY = 0
+    this.hubListMaxY = 0
     this.initialLobbyData = data.snapshot
       ? {
           snapshot: data.snapshot,
@@ -194,8 +217,12 @@ export class QuizLobbyScene extends Phaser.Scene {
     this.scale.on('resize', this.layout, this)
     this.events.once('shutdown', this.handleShutdown, this)
 
-    this.game.events.on('quiz-join-code:submitted', this.handleCodeSubmitted, this)
-    this.game.events.on('quiz-join-code:cancelled', this.handleCodeCancelled, this)
+    if (!this.hubWheelBound) {
+      this.input.on('wheel', this.handleHubWheel, this)
+      this.hubWheelBound = true
+    }
+
+    this.input.keyboard?.on('keydown-ESC', this.handleEscKey, this)
 
     if (this.initialLobbyData) {
       this.enterTransferredLobby(this.initialLobbyData)
@@ -210,8 +237,8 @@ export class QuizLobbyScene extends Phaser.Scene {
       this.drawLobby()
     } else if (this.state === 'modeSelect') {
       this.drawModeSelect()
-    } else if (this.state === 'multiMethod') {
-      this.drawMultiMethod()
+    } else if (this.state === 'multiHub') {
+      this.drawMultiHub()
     }
     this.positionStatusText()
   }
@@ -220,6 +247,7 @@ export class QuizLobbyScene extends Phaser.Scene {
   // mode select (Step 1: 솔로 / 멀티)
 
   private showModeSelect() {
+    this.stopHubPolling()
     this.state = 'modeSelect'
     this.tearDownLobby()
     this.drawModeSelect()
@@ -262,7 +290,7 @@ export class QuizLobbyScene extends Phaser.Scene {
         desc: '친구들이랑 같이\n그리고 맞춰봐',
         fill: COLOR_COOL,
         shadow: COLOR_COOL_DARK,
-        onClick: () => this.showMultiMethod(),
+        onClick: () => this.showMultiHub(),
       }),
     )
 
@@ -280,19 +308,62 @@ export class QuizLobbyScene extends Phaser.Scene {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // multi method (Step 2: 방 만들기 / 코드 입장)
+  // multi hub (Step 2: 방 만들기 + 방 목록 한 화면)
 
-  private showMultiMethod() {
-    // 진입 경로: 멀티 버튼 클릭 / 코드 입력 취소 / 방 생성·입장 실패 복구.
-    // 가드는 lobby 진입 후 역행만 막으면 충분 — modeSelect-only 가드는 cancel/error 복구를 깨뜨려서 제거.
+  private showMultiHub() {
+    // 진입 경로: 멀티 버튼 클릭 / 방 생성·입장 실패 복구. lobby/leaving 에서만 진입 차단.
     if (this.state === 'lobby' || this.state === 'leaving') return
-    this.state = 'multiMethod'
+    this.state = 'multiHub'
     this.tearDownLobby()
-    this.drawMultiMethod()
+    this.drawMultiHub()
     this.setStatus('')
+    this.startHubPolling()
+    void this.fetchWaitingRooms()
   }
 
-  private drawMultiMethod() {
+  private startHubPolling() {
+    this.stopHubPolling()
+    this.hubPollTimer = this.time.addEvent({
+      delay: HUB_POLL_INTERVAL_MS,
+      loop: true,
+      callback: () => {
+        if (this.state !== 'multiHub') return
+        void this.fetchWaitingRooms({ silent: true })
+      },
+    })
+  }
+
+  private stopHubPolling() {
+    this.hubPollTimer?.remove(false)
+    this.hubPollTimer = null
+  }
+
+  private async fetchWaitingRooms(opts: { silent?: boolean } = {}) {
+    const token = ++this.hubFetchToken
+    if (!opts.silent) {
+      this.hubLoading = true
+      this.hubError = null
+      if (this.state === 'multiHub') this.drawMultiHub()
+    }
+    try {
+      const rooms = await getWaitingQuizRooms()
+      if (token !== this.hubFetchToken) return
+      this.hubRooms = rooms
+      this.hubError = null
+    } catch {
+      if (token !== this.hubFetchToken) return
+      if (!opts.silent) {
+        this.hubError = '방 목록을 불러오지 못했어요.'
+      }
+    } finally {
+      if (token === this.hubFetchToken) {
+        this.hubLoading = false
+        if (this.state === 'multiHub') this.drawMultiHub()
+      }
+    }
+  }
+
+  private drawMultiHub() {
     this.menuContainer?.destroy()
     const w = this.scale.width
     const h = this.scale.height
@@ -300,48 +371,374 @@ export class QuizLobbyScene extends Phaser.Scene {
     this.root.add(container)
     this.menuContainer = container
 
-    this.drawHeader(container, '멀티 모드', '방을 어떻게 잡을까?')
+    this.drawHeader(container, '멀티 모드')
 
-    const buttonW = Math.min(360, (w - 200) / 2)
-    const buttonH = 320
-    const gap = 56
-    const cy = h * 0.55
-    const leftX = w / 2 - buttonW / 2 - gap / 2
-    const rightX = w / 2 + buttonW / 2 + gap / 2
+    // 메인 패널 — cream 색 카드 안에 방 만들기 버튼 + 방 목록을 한 덩어리로 묶는다.
+    // 배경(미술실) 위에 단독으로 텍스트가 떠다니던 이전 안은 산만했어서 패널로 그룹화.
+    // 가로 비율은 화면 폭의 ~55% 를 목표로, 너무 작은 창에서도 양쪽 여백을 유지하도록 cap.
+    const panelW = Math.min(960, w - 160)
+    const panelTop = h * 0.26
+    const panelBottom = h - 110
+    const panelH = panelBottom - panelTop
+    const panelX = w / 2 - panelW / 2
 
+    this.drawCreamPanel(container, panelX, panelTop, panelW, panelH)
+
+    // 패널 내부 패딩.
+    const padX = 28
+    const innerX = panelX + padX
+    const innerW = panelW - padX * 2
+    let cursorY = panelTop + 24
+
+    // 방 만들기 — 컴팩트 사각 버튼. 패널 가로폭이 커졌으니 버튼도 비례로 키움.
+    const createBtnW = 360
+    const createBtnH = 68
     container.add(
-      this.createBigButton(leftX, cy, buttonW, buttonH, {
-        icon: '🏠',
-        title: '방 만들기',
-        desc: '코드를 받아서\n친구를 초대해',
-        fill: COLOR_WARM,
-        shadow: COLOR_WARM_DARK,
-        onClick: () => this.startCreate(),
+      this.createCompactActionButton(
+        w / 2,
+        cursorY + createBtnH / 2,
+        createBtnW,
+        createBtnH,
+        '+ 방 만들기',
+        COLOR_WARM,
+        COLOR_WARM_DARK,
+        () => this.startCreate(),
+      ),
+    )
+    cursorY += createBtnH + 20
+
+    // 구분선 — 패널 안에서 "만들기" / "참여" 두 영역 분리.
+    const divider = this.add.graphics()
+    divider.lineStyle(1, 0xa8845a, 0.4)
+    divider.lineBetween(innerX, cursorY, innerX + innerW, cursorY)
+    container.add(divider)
+    cursorY += 14
+
+    // 방 목록 헤더 — 좌측 라벨, 우측 새로고침.
+    const headerLabel = this.add
+      .text(innerX, cursorY + 14, this.hubLoading ? '방 목록 불러오는 중…' : '입장 가능한 방', {
+        fontFamily: FONT_FAMILY,
+        fontSize: '18px',
+        color: '#3a2614',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0, 0.5)
+    container.add(headerLabel)
+    container.add(
+      this.createMiniPillButton(innerX + innerW - 50, cursorY + 14, 96, 32, '새로고침', () => {
+        if (this.hubLoading) return
+        void this.fetchWaitingRooms()
       }),
     )
+    cursorY += 36
 
-    container.add(
-      this.createBigButton(rightX, cy, buttonW, buttonH, {
-        icon: '🔑',
-        title: '코드로 입장',
-        desc: '친구가 알려준\n방 코드를 입력',
-        fill: COLOR_SLATE,
-        shadow: COLOR_SLATE_DARK,
-        onClick: () => this.startJoinByCode(),
-      }),
-    )
+    // 방 목록 본문 — mask 로 visible 영역을 클립하고, 안쪽 컨테이너를 wheel 로 위아래 이동시켜 스크롤.
+    // 스크롤바는 의도적으로 그리지 않음. 카드가 영역 밖으로 잘리는 시각적 단서가 곧 "더 있음" 신호.
+    const listTop = cursorY
+    const listBottom = panelBottom - 24
+    const listH = Math.max(120, listBottom - listTop)
+    const listLeft = innerX
+    this.hubListArea = {
+      left: listLeft,
+      top: listTop,
+      right: listLeft + innerW,
+      bottom: listBottom,
+    }
 
+    // 옛 mask 정리. drawMultiHub 는 fetch / hover 시마다 재호출되므로 누수 막기 위해 매번 새로 만든다.
+    this.hubListMask?.destroy()
+    this.hubListMask = null
+    this.hubListContainer = null
+
+    if (this.hubRooms.length === 0) {
+      const emptyMsg = this.hubError
+        ? this.hubError
+        : this.hubLoading
+          ? '방 목록을 불러오는 중…'
+          : '아직 만들어진 방이 없어요.\n위에서 새 방을 만들어줘!'
+      const empty = this.add
+        .text(w / 2, listTop + listH / 2, emptyMsg, {
+          fontFamily: FONT_FAMILY,
+          fontSize: '17px',
+          color: '#8a6b3e',
+          align: 'center',
+        })
+        .setOrigin(0.5)
+      container.add(empty)
+      return
+    }
+
+    const cardH = 80
+    const gap = 12
+    const listContainer = this.add.container(w / 2, listTop)
+    container.add(listContainer)
+    this.hubListContainer = listContainer
+
+    let y = cardH / 2
+    this.hubRooms.forEach(room => {
+      listContainer.add(this.createRoomCard(0, y, innerW, cardH, room))
+      y += cardH + gap
+    })
+    const totalContentH = y - gap // 마지막 gap 빼기
+
+    const maskShape = this.make.graphics({})
+    maskShape.fillStyle(0xffffff, 1)
+    maskShape.fillRect(listLeft, listTop, innerW, listH)
+    this.hubListMask = maskShape
+    listContainer.setMask(maskShape.createGeometryMask())
+
+    // 스크롤 범위. 초기 listContainer.y = listTop (최상단). 위로 끝까지 스크롤하면 마지막 카드가 listBottom 에 닿음.
+    const overflow = Math.max(0, totalContentH - listH)
+    this.hubListMaxY = listTop
+    this.hubListMinY = listTop - overflow
+    listContainer.y = Phaser.Math.Clamp(listContainer.y, this.hubListMinY, this.hubListMaxY)
+
+    // 뒤로 버튼 — 패널 좌상단 안쪽에 통합. 좌하단에 두던 이전 안은 패널이 크면 시각적으로 가려졌음.
     container.add(
-      this.createPillButton(130, h - 90, 200, 56, '← 뒤로', PALETTE_DANGER, () =>
+      this.createPillButton(panelX + 64, panelTop + 30, 110, 38, '← 뒤로', PALETTE_DANGER, () =>
         this.showModeSelect(),
       ),
     )
   }
 
+  /** cream 톤 라운드 패널 — modeSelect 의 큰 카드와 톤 통일. drop shadow + 따뜻한 갈색 보더. */
+  private drawCreamPanel(
+    container: Phaser.GameObjects.Container,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+  ) {
+    const g = this.add.graphics()
+    const radius = 24
+    // shadow
+    for (let i = 0; i < 5; i++) {
+      const spread = i * 2
+      g.fillStyle(0x000000, 0.06)
+      g.fillRoundedRect(
+        x - spread,
+        y + 6 + spread * 0.6,
+        w + spread * 2,
+        h + spread,
+        radius + spread,
+      )
+    }
+    // surface
+    g.fillStyle(0xfcf8f0, 1)
+    g.fillRoundedRect(x, y, w, h, radius)
+    // border
+    g.lineStyle(3, 0xa8845a, 1)
+    g.strokeRoundedRect(x, y, w, h, radius)
+    // inner highlight band
+    g.lineStyle(1, 0xffffff, 0.5)
+    g.strokeRoundedRect(x + 4, y + 4, w - 8, h - 8, radius - 4)
+    container.add(g)
+  }
+
+  /** 컴팩트 사각 버튼 — drop shadow + accent fill. modeSelect 의 큰 카드를 축소한 형태. */
+  private createCompactActionButton(
+    cx: number,
+    cy: number,
+    w: number,
+    h: number,
+    label: string,
+    fill: number,
+    shadow: number,
+    onClick: () => void,
+  ): Phaser.GameObjects.Container {
+    const container = this.add.container(cx, cy)
+    const radius = 18
+    const thickness = 6
+
+    const hit = this.add.rectangle(0, 0, w + 4, h + thickness + 4, 0xffffff, 0.001).setOrigin(0.5)
+    hit.setInteractive({ useHandCursor: true })
+
+    const g = this.add.graphics()
+    const draw = (hovered: boolean) => {
+      g.clear()
+      g.fillStyle(shadow, 1)
+      g.fillRoundedRect(-w / 2, -h / 2, w, h + thickness, radius)
+      g.fillStyle(hovered ? brighten(fill) : fill, 1)
+      g.fillRoundedRect(-w / 2, -h / 2 - (hovered ? 2 : 0), w, h, radius)
+    }
+    draw(false)
+
+    const text = this.add
+      .text(0, 0, label, {
+        fontFamily: FONT_FAMILY,
+        fontSize: '22px',
+        color: '#ffffff',
+        fontStyle: 'bold',
+        stroke: '#1a0e05',
+        strokeThickness: 4,
+      })
+      .setOrigin(0.5)
+    container.add([hit, g, text])
+
+    hit.on(Phaser.Input.Events.POINTER_OVER, () => draw(true))
+    hit.on(Phaser.Input.Events.POINTER_OUT, () => draw(false))
+    hit.on(Phaser.Input.Events.POINTER_DOWN, onClick)
+    return container
+  }
+
+  /** 작은 라운드 pill 버튼 — 패널 안 새로고침 등 보조 액션. */
+  private createMiniPillButton(
+    cx: number,
+    cy: number,
+    w: number,
+    h: number,
+    label: string,
+    onClick: () => void,
+  ): Phaser.GameObjects.Container {
+    const container = this.add.container(cx, cy)
+    const radius = h / 2
+
+    const hit = this.add.rectangle(0, 0, w, h, 0xffffff, 0.001).setOrigin(0.5)
+    hit.setInteractive({ useHandCursor: true })
+
+    const g = this.add.graphics()
+    const draw = (hovered: boolean) => {
+      g.clear()
+      g.fillStyle(hovered ? 0xfcf8f0 : 0xfff8e7, 1)
+      g.fillRoundedRect(-w / 2, -h / 2, w, h, radius)
+      g.lineStyle(2, 0xa8845a, 1)
+      g.strokeRoundedRect(-w / 2, -h / 2, w, h, radius)
+    }
+    draw(false)
+
+    const text = this.add
+      .text(0, 0, label, {
+        fontFamily: FONT_FAMILY,
+        fontSize: '13px',
+        color: '#6a4a26',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5)
+    container.add([hit, g, text])
+
+    hit.on(Phaser.Input.Events.POINTER_OVER, () => draw(true))
+    hit.on(Phaser.Input.Events.POINTER_OUT, () => draw(false))
+    hit.on(Phaser.Input.Events.POINTER_DOWN, onClick)
+    return container
+  }
+
+  private createRoomCard(
+    cx: number,
+    cy: number,
+    w: number,
+    h: number,
+    room: QuizRoomListItem,
+  ): Phaser.GameObjects.Container {
+    const container = this.add.container(cx, cy)
+    const full = room.memberCount >= room.maxPlayers
+    const radius = 16
+
+    const hit = this.add.rectangle(0, 0, w, h, 0xffffff, 0.001).setOrigin(0.5)
+    hit.setInteractive({ useHandCursor: !full })
+
+    const g = this.add.graphics()
+    const draw = (hovered: boolean) => {
+      g.clear()
+      // cream 패널 위에 올라가는 카드 — 같은 워밍 톤 패밀리. full 일 땐 채도/대비를 죽임.
+      g.fillStyle(full ? 0xefe7d4 : hovered ? 0xfff8e7 : 0xfff3da, 1)
+      g.fillRoundedRect(-w / 2, -h / 2, w, h, radius)
+      g.lineStyle(2, full ? 0xc9b890 : hovered ? 0xd76a1f : 0xc9a888, 1)
+      g.strokeRoundedRect(-w / 2, -h / 2, w, h, radius)
+    }
+    draw(false)
+
+    const padLeft = -w / 2 + 22
+    const padRight = w / 2 - 18
+    const hostName = this.add
+      .text(padLeft, -10, `${room.hostNickname || '이름없음'}의 방`, {
+        fontFamily: FONT_FAMILY,
+        fontSize: '19px',
+        color: full ? '#9a8966' : '#3a2614',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0, 0.5)
+    const meta = this.add
+      .text(padLeft, 14, `${room.memberCount} / ${room.maxPlayers}명`, {
+        fontFamily: FONT_FAMILY,
+        fontSize: '13px',
+        color: full ? '#a8956d' : '#8a5a1a',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0, 0.5)
+
+    // 우측 입장 pill.
+    const pillW = 80
+    const pillH = 36
+    const pillX = padRight - pillW / 2
+    const pillFill = full ? 0xb8a98a : 0xd76a1f
+    const pillG = this.add.graphics()
+    pillG.fillStyle(pillFill, 1)
+    pillG.fillRoundedRect(pillX - pillW / 2, -pillH / 2, pillW, pillH, pillH / 2)
+    const pillLabel = this.add
+      .text(pillX, 0, full ? '꽉 참' : '입장', {
+        fontFamily: FONT_FAMILY,
+        fontSize: '15px',
+        color: '#ffffff',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5)
+
+    container.add([hit, g, hostName, meta, pillG, pillLabel])
+
+    if (!full) {
+      hit.on(Phaser.Input.Events.POINTER_OVER, () => draw(true))
+      hit.on(Phaser.Input.Events.POINTER_OUT, () => draw(false))
+      hit.on(Phaser.Input.Events.POINTER_DOWN, () => this.handleRoomCardClick(room))
+    }
+    return container
+  }
+
+  private handleRoomCardClick(room: QuizRoomListItem) {
+    if (this.state !== 'multiHub') return
+    this.stopHubPolling()
+    this.state = 'joining'
+    this.setStatus('방에 입장하는 중…')
+    void this.joinRoomWithStaleCleanup(room.roomId)
+  }
+
+  /**
+   * ESC 키 — 현재 화면 단계에서 한 단계 뒤로. multiHub → modeSelect → 미술실, 로비에서는 방 나가기.
+   * 작업 진행 중 상태(creating/joining/starting/transitioningToPlay/leaving) 에선 무시.
+   */
+  private handleEscKey() {
+    if (this.state === 'multiHub') {
+      this.showModeSelect()
+    } else if (this.state === 'modeSelect') {
+      this.backToArtRoom()
+    } else if (this.state === 'lobby') {
+      void this.handleLeave()
+    }
+  }
+
+  /**
+   * 방 목록 영역 안에서만 wheel 을 받아 listContainer 를 위아래로 이동. 영역 밖이거나 multiHub 가 아닐 땐 무시.
+   * 스크롤바는 그리지 않고, 카드가 영역 가장자리로 잘리는 모습이 곧 시각 단서가 된다.
+   */
+  private handleHubWheel(
+    pointer: Phaser.Input.Pointer,
+    _gameObjects: Phaser.GameObjects.GameObject[],
+    _dx: number,
+    dy: number,
+  ) {
+    if (this.state !== 'multiHub') return
+    const area = this.hubListArea
+    const list = this.hubListContainer
+    if (!area || !list) return
+    if (pointer.x < area.left || pointer.x > area.right) return
+    if (pointer.y < area.top || pointer.y > area.bottom) return
+    const next = list.y - dy * 0.5
+    list.y = Phaser.Math.Clamp(next, this.hubListMinY, this.hubListMaxY)
+  }
+
   private drawHeader(
     container: Phaser.GameObjects.Container,
     titleText: string,
-    subtitleText: string,
+    subtitleText?: string,
   ) {
     const w = this.scale.width
     const h = this.scale.height
@@ -357,20 +754,24 @@ export class QuizLobbyScene extends Phaser.Scene {
         shadow: { offsetX: 0, offsetY: 4, color: '#000', blur: 8, fill: true },
       })
       .setOrigin(0.5)
-    const subtitle = this.add
-      .text(w / 2, titleY + 70, subtitleText, {
-        fontFamily: FONT_FAMILY,
-        fontSize: '22px',
-        color: '#ffe9c2',
-        stroke: '#1a0e05',
-        strokeThickness: 4,
-      })
-      .setOrigin(0.5)
-    container.add([title, subtitle])
+    container.add(title)
+    if (subtitleText) {
+      const subtitle = this.add
+        .text(w / 2, titleY + 70, subtitleText, {
+          fontFamily: FONT_FAMILY,
+          fontSize: '22px',
+          color: '#ffe9c2',
+          stroke: '#1a0e05',
+          strokeThickness: 4,
+        })
+        .setOrigin(0.5)
+      container.add(subtitle)
+    }
   }
 
   private startCreate() {
-    if (this.state !== 'multiMethod') return
+    if (this.state !== 'multiHub') return
+    this.stopHubPolling()
     this.state = 'creating'
     this.setStatus('방 만드는 중…')
     this.tearDownMenu()
@@ -394,55 +795,38 @@ export class QuizLobbyScene extends Phaser.Scene {
           return
         } catch (retryError) {
           this.setStatus(extractMessage(retryError, '방 생성에 실패했어요. 잠시 후 다시 시도해줘.'))
-          this.showMultiMethod()
+          this.showMultiHub()
           return
         }
       }
       this.setStatus(extractMessage(error, '방 생성에 실패했어요. 잠시 후 다시 시도해줘.'))
-      this.showMultiMethod()
+      this.showMultiHub()
     }
   }
 
-  private startJoinByCode() {
-    if (this.state !== 'multiMethod') return
-    this.state = 'waitingCode'
-    this.tearDownMenu()
-    this.setStatus('코드 입력 창을 띄웠어요')
-    this.game.events.emit('quiz-join-code:open')
-  }
-
-  private handleCodeCancelled() {
-    if (this.state !== 'waitingCode') return
-    this.showMultiMethod()
-  }
-
-  private handleCodeSubmitted(payload: { code: string }) {
-    if (this.state !== 'waitingCode') return
-    this.state = 'joining'
-    this.setStatus('방에 입장하는 중…')
-    void this.joinRoomWithStaleCleanup(payload.code)
-  }
-
-  /** 입장 시 Q-004 가 떨어지면 stale 정리 후 재시도 — createRoomWithStaleCleanup 과 동일 사유. */
-  private async joinRoomWithStaleCleanup(code: string) {
+  /**
+   * 입장 시 Q-004 가 떨어지면 stale 정리 후 재시도 — createRoomWithStaleCleanup 과 동일 사유.
+   * BE 의 roomId 와 code 는 같은 값이므로 joinQuizRoom(code) 에 그대로 roomId 를 넘긴다.
+   */
+  private async joinRoomWithStaleCleanup(roomId: string) {
     try {
-      const snapshot = await joinQuizRoom(code)
+      const snapshot = await joinQuizRoom(roomId)
       await this.enterLobby(snapshot)
     } catch (error) {
       if (isAlreadyInRoomError(error)) {
         try {
           await leaveQuizRoom()
-          const snapshot = await joinQuizRoom(code)
+          const snapshot = await joinQuizRoom(roomId)
           await this.enterLobby(snapshot)
           return
         } catch (retryError) {
-          this.setStatus(extractMessage(retryError, '입장에 실패했어요. 코드를 확인해줘.'))
-          this.showMultiMethod()
+          this.setStatus(extractMessage(retryError, '입장에 실패했어요. 다른 방을 골라줘.'))
+          this.showMultiHub()
           return
         }
       }
-      this.setStatus(extractMessage(error, '입장에 실패했어요. 코드를 확인해줘.'))
-      this.showMultiMethod()
+      this.setStatus(extractMessage(error, '입장에 실패했어요. 다른 방을 골라줘.'))
+      this.showMultiHub()
     }
   }
 
@@ -450,6 +834,8 @@ export class QuizLobbyScene extends Phaser.Scene {
   // lobby
 
   private async enterLobby(snapshot: QuizRoomSnapshot) {
+    this.stopHubPolling()
+    this.tearDownMenu()
     this.snapshot = snapshot
     this.currentUserId = await this.resolveCurrentUserId()
     this.selectedTotalRounds = normalizeRoundOption(snapshot.totalRounds)
@@ -460,6 +846,8 @@ export class QuizLobbyScene extends Phaser.Scene {
   }
 
   private enterTransferredLobby(data: QuizLobbySceneInit) {
+    this.stopHubPolling()
+    this.tearDownMenu()
     this.snapshot = data.snapshot
     this.currentUserId = data.currentUserId
     this.realtimeClient = data.realtimeClient
@@ -630,24 +1018,32 @@ export class QuizLobbyScene extends Phaser.Scene {
     this.root.add(container)
     this.lobbyContainer = container
 
-    // 헤더 — 모드 선택 화면과 같은 톤(흰 텍스트 + 짙은 외곽선) 으로 배경과 분리.
-    const headerY = h * 0.15
+    // 헤더 — 방장 닉네임을 노출해 "○○의 방" 로 알아볼 수 있게. 코드 공유 흐름이 사라져서
+    // 이전의 6자리 코드 박스는 제거.
+    const hostMember = this.snapshot.members.find(m => m.userId === this.snapshot?.hostUserId)
+    const hostNickname = hostMember?.nickname ?? ''
+    const headerY = h * 0.16
     const header = this.add
-      .text(w / 2, headerY, '방 코드', {
+      .text(w / 2, headerY, hostNickname ? `${hostNickname}의 방` : '멀티 퀴즈 방', {
         fontFamily: FONT_FAMILY,
-        fontSize: '18px',
+        fontSize: '40px',
+        color: '#ffffff',
+        fontStyle: 'bold',
+        stroke: '#1a0e05',
+        strokeThickness: 6,
+        shadow: { offsetX: 0, offsetY: 4, color: '#000', blur: 8, fill: true },
+      })
+      .setOrigin(0.5)
+    const subtitle = this.add
+      .text(w / 2, headerY + 48, '친구들이 들어오면 게임을 시작할 수 있어요', {
+        fontFamily: FONT_FAMILY,
+        fontSize: '16px',
         color: '#ffe9c2',
         stroke: '#1a0e05',
         strokeThickness: 3,
       })
       .setOrigin(0.5)
-    container.add(header)
-
-    // 코드 박스 — 두툼한 라운드 사각형 + 큰 모노스페이스 같은 굵은 글자.
-    const codeBoxW = 360
-    const codeBoxH = 92
-    const codeBoxY = headerY + 22
-    this.drawCodeBox(container, w / 2, codeBoxY, codeBoxW, codeBoxH, this.snapshot.code)
+    container.add([header, subtitle])
 
     // 멤버 슬롯 — 기존 4인 스냅샷으로 들어와도 6인 룸 기준 슬롯을 먼저 보여준다.
     const visibleSlots = Math.max(
@@ -692,101 +1088,6 @@ export class QuizLobbyScene extends Phaser.Scene {
 
     // 우측 상단 X 버튼 — 방 나가기. 모달의 close 패턴.
     container.add(this.createCloseButton(w - 28, 28, () => this.handleLeave()))
-  }
-
-  /**
-   * 코드 박스 — 클릭하면 클립보드에 방 코드 복사. 호버 시 살짝 밝아지고, 복사 직후 박스 아래
-   * "복사됨!" 토스트가 1.4s 동안 뜨고 사라진다. (Phaser graphic 위에 hit zone Rectangle 을
-   * 깔아두는 패턴은 본 씬의 다른 큰 버튼과 동일 — 시각=클릭 영역 일치.)
-   */
-  private drawCodeBox(
-    container: Phaser.GameObjects.Container,
-    cx: number,
-    cy: number,
-    w: number,
-    h: number,
-    code: string,
-  ) {
-    const hit = this.add.rectangle(cx, cy + h / 2, w, h, 0xffffff, 0.001).setOrigin(0.5)
-    hit.setInteractive({ useHandCursor: true })
-
-    const g = this.add.graphics()
-    const draw = (hovered: boolean) => {
-      g.clear()
-      // 짙은 배경 + 밝은 외곽선으로 게임 HUD 톤.
-      g.fillStyle(hovered ? 0x243049 : 0x1a2230, 0.96)
-      g.fillRoundedRect(cx - w / 2, cy, w, h, 18)
-      g.lineStyle(3, hovered ? 0xffffff : 0xffe9c2, hovered ? 1 : 0.95)
-      g.strokeRoundedRect(cx - w / 2, cy, w, h, 18)
-    }
-    draw(false)
-
-    const text = this.add
-      .text(cx, cy + h / 2, code, {
-        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-        fontSize: '52px',
-        color: '#ffd96b',
-        fontStyle: 'bold',
-      })
-      .setOrigin(0.5)
-    text.setLetterSpacing(8)
-
-    container.add([hit, g, text])
-
-    hit.on(Phaser.Input.Events.POINTER_OVER, () => draw(true))
-    hit.on(Phaser.Input.Events.POINTER_OUT, () => draw(false))
-    hit.on(Phaser.Input.Events.POINTER_DOWN, () => this.copyCodeToClipboard(code, cx, cy + h + 12))
-  }
-
-  private async copyCodeToClipboard(code: string, toastX: number, toastY: number) {
-    let ok = false
-    try {
-      if (navigator?.clipboard?.writeText) {
-        await navigator.clipboard.writeText(code)
-        ok = true
-      }
-    } catch {
-      ok = false
-    }
-    if (!ok) {
-      // 폴백 — 안전 컨텍스트 외/권한 거절 등. 임시 textarea 로 execCommand.
-      try {
-        const ta = document.createElement('textarea')
-        ta.value = code
-        ta.style.position = 'fixed'
-        ta.style.opacity = '0'
-        document.body.appendChild(ta)
-        ta.select()
-        ok = document.execCommand('copy')
-        document.body.removeChild(ta)
-      } catch {
-        ok = false
-      }
-    }
-    this.showCopyToast(ok ? '복사됨!' : '복사 실패', toastX, toastY)
-  }
-
-  private showCopyToast(label: string, cx: number, cy: number) {
-    const toast = this.add
-      .text(cx, cy, label, {
-        fontFamily: FONT_FAMILY,
-        fontSize: '16px',
-        color: '#1a0e05',
-        backgroundColor: '#ffe9c2',
-        padding: { x: 12, y: 6 },
-        fontStyle: 'bold',
-      })
-      .setOrigin(0.5, 0)
-      .setDepth(50)
-    this.root.add(toast)
-    this.tweens.add({
-      targets: toast,
-      alpha: { from: 1, to: 0 },
-      y: cy - 8,
-      duration: 1400,
-      ease: 'Sine.easeOut',
-      onComplete: () => toast.destroy(),
-    })
   }
 
   /**
@@ -1113,6 +1414,12 @@ export class QuizLobbyScene extends Phaser.Scene {
   private tearDownMenu() {
     this.menuContainer?.destroy()
     this.menuContainer = null
+    // hub 잔여 자원 정리 — 로비/모드선택으로 전환 시 mask graphic 이 남아 있으면
+    // 다음 화면 위에 hub 패널이 유령처럼 겹쳐 보이던 버그가 있었다.
+    this.hubListMask?.destroy()
+    this.hubListMask = null
+    this.hubListContainer = null
+    this.hubListArea = null
   }
 
   private tearDownLobby() {
@@ -1122,8 +1429,14 @@ export class QuizLobbyScene extends Phaser.Scene {
 
   private handleShutdown() {
     this.scale.off('resize', this.layout, this)
-    this.game.events.off('quiz-join-code:submitted', this.handleCodeSubmitted, this)
-    this.game.events.off('quiz-join-code:cancelled', this.handleCodeCancelled, this)
+    this.stopHubPolling()
+    if (this.hubWheelBound) {
+      this.input.off('wheel', this.handleHubWheel, this)
+      this.hubWheelBound = false
+    }
+    this.input.keyboard?.off('keydown-ESC', this.handleEscKey, this)
+    this.hubListMask?.destroy()
+    this.hubListMask = null
     void this.tearDownRealtime()
   }
 

@@ -18,7 +18,8 @@ import { AuthOverlay } from './features/auth'
 import { ExerciseSessionListOverlay } from './features/exerciseSessions'
 import { GomokuOverlay } from './features/gomoku'
 import { PhotoGalleryOverlay } from './features/photoGallery'
-import { QuizGuessOverlay, QuizJoinCodeOverlay } from './features/quiz-realtime'
+import { QuizGuessOverlay } from './features/quiz-realtime'
+import { NicknameEditOverlay } from './features/settings'
 import { LighthouseEmotionController } from './features/lighthouse-emotion/components/LighthouseEmotionController'
 import { VillagerDialogueController } from './features/village-dialogue/components/VillagerDialogueController'
 import type { VillagerDialogueOpenPayload, VillagerNpcId } from './features/village-dialogue/types'
@@ -53,8 +54,11 @@ function App() {
   const [showExerciseSessions, setShowExerciseSessions] = useState(false)
   const [showGomoku, setShowGomoku] = useState(false)
   const [showPhotoGallery, setShowPhotoGallery] = useState(false)
-  const [showQuizJoinCode, setShowQuizJoinCode] = useState(false)
   const [showQuizGuess, setShowQuizGuess] = useState(false)
+  const [nicknameEdit, setNicknameEdit] = useState<{
+    open: boolean
+    current: string | null
+  }>({ open: false, current: null })
   const [villagerNpcId, setVillagerNpcId] = useState<VillagerNpcId | null>(null)
   const [isLighthouseEmotionOpen, setIsLighthouseEmotionOpen] = useState(false)
   const [patientProfileId, setPatientProfileId] = useState<number | undefined>(undefined)
@@ -104,9 +108,11 @@ function App() {
     game.events.on('exercise-sessions:open', () => setShowExerciseSessions(true))
     game.events.on('gomoku:open', () => setShowGomoku(true))
     game.events.on('photo-gallery:open', () => setShowPhotoGallery(true))
-    game.events.on('quiz-join-code:open', () => setShowQuizJoinCode(true))
     game.events.on('quiz-guess:open', () => setShowQuizGuess(true))
     game.events.on('quiz-guess:close', () => setShowQuizGuess(false))
+    game.events.on('settings:nickname-edit-open', ({ current }: { current: string | null }) => {
+      setNicknameEdit({ open: true, current })
+    })
     game.events.on('villager-dialogue:open', ({ npcId }: VillagerDialogueOpenPayload) => {
       setVillagerNpcId(npcId)
     })
@@ -291,17 +297,6 @@ function App() {
         />
         <PhotoGalleryOverlay open={showPhotoGallery} onClose={handlePhotoGalleryClose} />
       </QueryClientProvider>
-      <QuizJoinCodeOverlay
-        open={showQuizJoinCode}
-        onSubmit={code => {
-          setShowQuizJoinCode(false)
-          gameRef.current?.events.emit('quiz-join-code:submitted', { code })
-        }}
-        onCancel={() => {
-          setShowQuizJoinCode(false)
-          gameRef.current?.events.emit('quiz-join-code:cancelled')
-        }}
-      />
       <QuizGuessOverlay
         open={showQuizGuess}
         onSubmit={text => {
@@ -309,6 +304,19 @@ function App() {
         }}
         onLeave={() => {
           gameRef.current?.events.emit('quiz-guess:leave')
+        }}
+      />
+      <NicknameEditOverlay
+        open={nicknameEdit.open}
+        patientProfileId={patientProfileId}
+        currentNickname={nicknameEdit.current}
+        onSaved={nickname => {
+          setNicknameEdit({ open: false, current: nickname })
+          gameRef.current?.events.emit('settings:nickname-updated', { nickname })
+        }}
+        onCancel={() => {
+          setNicknameEdit(prev => ({ open: false, current: prev.current }))
+          gameRef.current?.events.emit('settings:nickname-edit-cancelled')
         }}
       />
     </>

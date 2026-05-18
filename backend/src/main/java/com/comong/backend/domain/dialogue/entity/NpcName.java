@@ -54,4 +54,20 @@ public enum NpcName {
     public Optional<String> catalogId() {
         return Optional.ofNullable(CATALOG_IDS.get(this));
     }
+
+    /**
+     * 보호자/사용자에게 보여줄 한글 표시명 fallback. 카탈로그 displayName 이 있는 NPC 는 그쪽이 우선이며, 카탈로그가 없는 등대지기(LLM)나 카탈로그
+     * 미로드 시에 사용된다.
+     */
+    public String displayName() {
+        return switch (this) {
+            case YEONGCHEOL -> "등대지기 영철";
+            case JOEUN -> "간호사 조은";
+            case DAIN -> "다인";
+            case GEONBIN -> "건빈";
+            case SEORIN -> "코몽";
+            case JEONGHO -> "정호";
+            case SEHYEON -> "세현";
+        };
+    }
 }

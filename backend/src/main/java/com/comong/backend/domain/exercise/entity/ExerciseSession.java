@@ -76,6 +76,15 @@ public class ExerciseSession {
         this.createdAt = LocalDateTime.now();
     }
 
+    public void recordMotion(int motionDurationSec, double motionAccuracy) {
+        validateNonNegative(motionDurationSec, "motionDurationSec");
+        validateAccuracy(motionAccuracy, "motionAccuracy");
+        double accuracySum = this.averageAccuracy * this.completedMotionCount + motionAccuracy;
+        this.durationSec += motionDurationSec;
+        this.completedMotionCount += 1;
+        this.averageAccuracy = accuracySum / this.completedMotionCount;
+    }
+
     private void validateNonNegative(int value, String fieldName) {
         if (value < 0) {
             throw new IllegalArgumentException(fieldName + " must not be negative");

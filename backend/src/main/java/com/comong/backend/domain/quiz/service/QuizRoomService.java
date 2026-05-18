@@ -22,6 +22,7 @@ import com.comong.backend.domain.quiz.dto.PromptAssignment;
 import com.comong.backend.domain.quiz.dto.QuizGameStartedResponse;
 import com.comong.backend.domain.quiz.dto.QuizMemberDto;
 import com.comong.backend.domain.quiz.dto.QuizRoomEvent;
+import com.comong.backend.domain.quiz.dto.QuizRoomListItem;
 import com.comong.backend.domain.quiz.dto.QuizRoomSnapshot;
 import com.comong.backend.domain.quiz.dto.QuizStrokeMessage;
 import com.comong.backend.domain.quiz.exception.QuizNotRoomHostException;
@@ -122,6 +123,10 @@ public class QuizRoomService {
                     room.resetToWaiting();
                     return new RoomReset(room.hostUserId(), message, membersOf(room));
                 });
+    }
+
+    public List<QuizRoomListItem> findWaitingRooms() {
+        return roomRegistry.findJoinableRooms().stream().map(QuizRoomListItem::of).toList();
     }
 
     public QuizRoomSnapshot snapshot(String roomId) {
