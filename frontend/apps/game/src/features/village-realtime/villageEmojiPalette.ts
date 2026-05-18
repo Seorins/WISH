@@ -120,15 +120,16 @@ export function createVillageEmojiPalette(
       })
       .setOrigin(0, 0)
 
-    // Rectangle 자체 geometry 를 hit area 로 자동 사용 (이전엔 container 좌표를 직접 hit area 에 박아 클릭 영역이
-    // 어긋나 있었음). useHandCursor 로 클릭 가능 affordance 도 함께.
-    bg.setInteractive({ useHandCursor: true })
-    bg.on('pointerdown', (event: Phaser.Types.Input.EventData) => {
-      ;(event as unknown as { stopPropagation?: () => void }).stopPropagation?.()
+    const hitZone = scene.add
+      .zone(buttonX, buttonY, BUTTON_SIZE, BUTTON_SIZE)
+      .setOrigin(0.5, 0.5)
+      .setInteractive({ useHandCursor: true })
+    hitZone.on('pointerdown', (...args: unknown[]) => {
+      stopPointerEventPropagation(args)
       triggerByIndex(index)
     })
 
-    container.add([bg, text, beltImage, sparkles, keyText])
+    container.add([bg, text, beltImage, sparkles, keyText, hitZone])
     buttons.push({ bg, text, beltImage, sparkles })
   })
 
@@ -241,4 +242,9 @@ function drawSparkle(graphics: Phaser.GameObjects.Graphics, x: number, y: number
   graphics.moveTo(x - radius, y)
   graphics.lineTo(x + radius, y)
   graphics.strokePath()
+}
+
+function stopPointerEventPropagation(args: unknown[]) {
+  const event = args[args.length - 1] as { stopPropagation?: () => void } | undefined
+  event?.stopPropagation?.()
 }
