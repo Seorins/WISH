@@ -1039,7 +1039,7 @@ export class FerrySelectScene extends Phaser.Scene {
         .setOrigin(0.5, 0)
         .setPosition(180 * ui, 24 * ui)
         .setAlign('center')
-        .setText('별빛 연료 충전 완료')
+        .setText('별빛 에너지 충전 완료')
       panel.subText
         .setVisible(true)
         .setOrigin(0.5, 0)
@@ -1054,7 +1054,7 @@ export class FerrySelectScene extends Phaser.Scene {
         .setPosition(112 * ui, 116 * ui)
         .setAlign('left')
         .setWordWrapWidth(190 * ui, true)
-      panel.messageBodyText.setText(`현재 별빛 연료 ${this.currentFuelPercent}%`)
+      panel.messageBodyText.setText(`현재 별빛 에너지 ${this.currentFuelPercent}%`)
       panel.progressTrack.setVisible(true)
       panel.progressTrack.setPosition(112 * ui, 156 * ui).setSize(188 * ui, 12 * ui)
       panel.progressFill.setVisible(true)
@@ -1122,7 +1122,7 @@ export class FerrySelectScene extends Phaser.Scene {
         .setOrigin(0.5)
         .setPosition(180 * ui, 228 * ui)
         .setAlign('center')
-      panel.rewardText.setText(`+${this.lastReceivedAmount}% 연료 충전`)
+      panel.rewardText.setText(`+${this.lastReceivedAmount}% 에너지 충전`)
       panel.buttonText.setText('별빛 받기')
       return
     }
@@ -1133,7 +1133,7 @@ export class FerrySelectScene extends Phaser.Scene {
         .setOrigin(0.5, 0)
         .setPosition(180 * ui, 24 * ui)
         .setAlign('center')
-        .setText('별빛 연료 충전 완료')
+        .setText('별빛 에너지 충전 완료')
       panel.subText
         .setOrigin(0.5, 0)
         .setPosition(180 * ui, 64 * ui)
@@ -1147,7 +1147,7 @@ export class FerrySelectScene extends Phaser.Scene {
         .setPosition(112 * ui, 116 * ui)
         .setAlign('left')
         .setWordWrapWidth(190 * ui, true)
-      panel.messageBodyText.setText(`현재 별빛 연료 ${this.currentFuelPercent}%`)
+      panel.messageBodyText.setText(`현재 별빛 에너지 ${this.currentFuelPercent}%`)
       panel.progressTrack.setVisible(true)
       panel.progressTrack.setPosition(112 * ui, 156 * ui).setSize(188 * ui, 12 * ui)
       panel.progressFill.setVisible(true)
@@ -1170,7 +1170,7 @@ export class FerrySelectScene extends Phaser.Scene {
         .setOrigin(0.5, 0)
         .setPosition(180 * ui, 24 * ui)
         .setAlign('center')
-        .setText('별빛 연료가 가득해요')
+        .setText('별빛 에너지가 가득해요')
       panel.subText
         .setOrigin(0.5, 0)
         .setPosition(180 * ui, 64 * ui)
@@ -1362,6 +1362,6 @@ export class FerrySelectScene extends Phaser.Scene {
   }
 
   private onFuelCompleted() {
-    console.info('별빛 연료 100% 완료. 배 출발 연출 실행 가능.')
+    console.info('별빛 에너지 100% 완료. 배 출발 연출 실행 가능.')
   }
 }
