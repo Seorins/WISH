@@ -18,7 +18,7 @@ import { AuthOverlay } from './features/auth'
 import { ExerciseSessionListOverlay } from './features/exerciseSessions'
 import { GomokuOverlay } from './features/gomoku'
 import { PhotoGalleryOverlay } from './features/photoGallery'
-import { QuizGuessOverlay, QuizJoinCodeOverlay } from './features/quiz-realtime'
+import { QuizGuessOverlay } from './features/quiz-realtime'
 import { LighthouseEmotionController } from './features/lighthouse-emotion/components/LighthouseEmotionController'
 import { VillagerDialogueController } from './features/village-dialogue/components/VillagerDialogueController'
 import type { VillagerDialogueOpenPayload, VillagerNpcId } from './features/village-dialogue/types'
@@ -53,7 +53,6 @@ function App() {
   const [showExerciseSessions, setShowExerciseSessions] = useState(false)
   const [showGomoku, setShowGomoku] = useState(false)
   const [showPhotoGallery, setShowPhotoGallery] = useState(false)
-  const [showQuizJoinCode, setShowQuizJoinCode] = useState(false)
   const [showQuizGuess, setShowQuizGuess] = useState(false)
   const [villagerNpcId, setVillagerNpcId] = useState<VillagerNpcId | null>(null)
   const [isLighthouseEmotionOpen, setIsLighthouseEmotionOpen] = useState(false)
@@ -104,7 +103,6 @@ function App() {
     game.events.on('exercise-sessions:open', () => setShowExerciseSessions(true))
     game.events.on('gomoku:open', () => setShowGomoku(true))
     game.events.on('photo-gallery:open', () => setShowPhotoGallery(true))
-    game.events.on('quiz-join-code:open', () => setShowQuizJoinCode(true))
     game.events.on('quiz-guess:open', () => setShowQuizGuess(true))
     game.events.on('quiz-guess:close', () => setShowQuizGuess(false))
     game.events.on('villager-dialogue:open', ({ npcId }: VillagerDialogueOpenPayload) => {
@@ -291,17 +289,6 @@ function App() {
         />
         <PhotoGalleryOverlay open={showPhotoGallery} onClose={handlePhotoGalleryClose} />
       </QueryClientProvider>
-      <QuizJoinCodeOverlay
-        open={showQuizJoinCode}
-        onSubmit={code => {
-          setShowQuizJoinCode(false)
-          gameRef.current?.events.emit('quiz-join-code:submitted', { code })
-        }}
-        onCancel={() => {
-          setShowQuizJoinCode(false)
-          gameRef.current?.events.emit('quiz-join-code:cancelled')
-        }}
-      />
       <QuizGuessOverlay
         open={showQuizGuess}
         onSubmit={text => {
