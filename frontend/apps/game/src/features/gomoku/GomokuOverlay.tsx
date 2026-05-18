@@ -335,6 +335,7 @@ export function GomokuOverlay({
       const response = await createGomokuRoom({
         ruleSet: toApiRuleSet(ONLINE_RULE_SET),
         timerSeconds,
+        textureKey: selectedOnlineOutfit.textureKey,
       })
       if (!response.data) {
         throw new Error(text.onlineActionFailed)
@@ -351,7 +352,12 @@ export function GomokuOverlay({
     } finally {
       setOnlineBusy(false)
     }
-  }, [ensureOnlinePatientProfile, loadOnlineDashboard, timerSeconds])
+  }, [
+    ensureOnlinePatientProfile,
+    loadOnlineDashboard,
+    selectedOnlineOutfit.textureKey,
+    timerSeconds,
+  ])
 
   const handleOnlineRefresh = useCallback(async () => {
     setOnlineBusy(true)
@@ -371,7 +377,9 @@ export function GomokuOverlay({
       setOnlineBusy(true)
       try {
         if (!(await ensureOnlinePatientProfile())) return
-        const response = await joinGomokuRoom(roomId)
+        const response = await joinGomokuRoom(roomId, {
+          textureKey: selectedOnlineOutfit.textureKey,
+        })
         if (!response.data) {
           throw new Error(text.onlineActionFailed)
         }
@@ -388,7 +396,7 @@ export function GomokuOverlay({
         setOnlineBusy(false)
       }
     },
-    [ensureOnlinePatientProfile, loadOnlineDashboard],
+    [ensureOnlinePatientProfile, loadOnlineDashboard, selectedOnlineOutfit.textureKey],
   )
 
   const handleOnlineResign = useCallback(async () => {
@@ -1255,9 +1263,7 @@ function OnlineVersusPanel({
           stone="black"
           player={blackPlayer}
           fallbackName={room ? text.black : text.me}
-          outfit={
-            blackIsMe ? selectedOutfit : getOnlineFallbackOutfit(blackPlayer?.patientProfileId, 0)
-          }
+          outfit={blackIsMe ? selectedOutfit : getOnlinePlayerOutfit(blackPlayer, 0)}
           isMe={blackIsMe}
           isTurn={isPlaying && currentTurn === 'black'}
         />
@@ -1266,9 +1272,7 @@ function OnlineVersusPanel({
           stone="white"
           player={whitePlayer}
           fallbackName={room ? text.waiting : text.opponent}
-          outfit={
-            whiteIsMe ? selectedOutfit : getOnlineFallbackOutfit(whitePlayer?.patientProfileId, 1)
-          }
+          outfit={whiteIsMe ? selectedOutfit : getOnlinePlayerOutfit(whitePlayer, 1)}
           isMe={whiteIsMe}
           isTurn={isPlaying && currentTurn === 'white'}
           isWaiting={Boolean(room && !whitePlayer)}
@@ -1512,6 +1516,14 @@ function getStatusPresentation({
 function getSelectedOnlineOutfit() {
   const characterId = getSelectedPlayerCharacterId()
   return getPlayerOutfit(getSelectedPlayerOutfitId(characterId))
+}
+
+function getOnlinePlayerOutfit(player: GomokuRoom['blackPlayer'] | null, fallbackIndex: number) {
+  const selectedOutfit = PLAYER_OUTFITS.find(outfit => outfit.textureKey === player?.textureKey)
+  if (selectedOutfit) {
+    return selectedOutfit
+  }
+  return getOnlineFallbackOutfit(player?.patientProfileId, fallbackIndex)
 }
 
 function getOnlineFallbackOutfit(patientProfileId: number | undefined, fallbackIndex: number) {

@@ -18,6 +18,7 @@ import com.comong.backend.domain.gomoku.dto.GomokuMoveRequest;
 import com.comong.backend.domain.gomoku.dto.GomokuRankingEntryResponse;
 import com.comong.backend.domain.gomoku.dto.GomokuRankingResponse;
 import com.comong.backend.domain.gomoku.dto.GomokuRoomCreateRequest;
+import com.comong.backend.domain.gomoku.dto.GomokuRoomJoinRequest;
 import com.comong.backend.domain.gomoku.dto.GomokuRoomResponse;
 import com.comong.backend.domain.gomoku.dto.GomokuStatsResponse;
 import com.comong.backend.domain.gomoku.entity.GomokuEndReason;
@@ -67,6 +68,7 @@ public class GomokuService {
                         GomokuMatch.builder()
                                 .roomCode(generateRoomCode())
                                 .blackPatientProfile(patientProfile)
+                                .blackTextureKey(request.textureKey())
                                 .ruleSet(request.ruleSet())
                                 .timerSeconds(request.timerSeconds())
                                 .build());
@@ -85,7 +87,7 @@ public class GomokuService {
     }
 
     @Transactional
-    public GomokuRoomResponse joinRoom(Long userId, Long roomId) {
+    public GomokuRoomResponse joinRoom(Long userId, Long roomId, GomokuRoomJoinRequest request) {
         PatientProfile patientProfile = findPatientProfileOrThrow(userId);
         GomokuMatch match = findRoomForUpdateOrThrow(roomId);
         if (match.getStatus() != GomokuMatchStatus.WAITING) {
@@ -97,7 +99,7 @@ public class GomokuService {
         if (match.getBlackPatientProfile().getId().equals(patientProfile.getId())) {
             throw new BusinessException(GomokuErrorCode.GOMOKU_SELF_PLAY_NOT_ALLOWED);
         }
-        match.joinAsWhite(patientProfile);
+        match.joinAsWhite(patientProfile, request == null ? null : request.textureKey());
         return toRoomResponse(match, patientProfile.getId());
     }
 

@@ -126,6 +126,56 @@ class GomokuControllerIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
+    void roomResponses_includePlayerTextureKeys() throws Exception {
+        TestUser black =
+                setupUserWithProfile("gomoku-texture-black@example.com", "texture-black", "black");
+        TestUser white =
+                setupUserWithProfile("gomoku-texture-white@example.com", "texture-white", "white");
+
+        long roomId =
+                objectMapper
+                        .readTree(
+                                mockMvc.perform(
+                                                post("/gomoku/rooms")
+                                                        .header(
+                                                                "Authorization",
+                                                                "Bearer " + black.token())
+                                                        .contentType(MediaType.APPLICATION_JSON)
+                                                        .content(
+                                                                createRoomRequest(
+                                                                        "FREESTYLE",
+                                                                        "character-outfit-man3")))
+                                        .andExpect(status().isCreated())
+                                        .andExpect(
+                                                jsonPath("$.data.blackPlayer.textureKey")
+                                                        .value("character-outfit-man3"))
+                                        .andReturn()
+                                        .getResponse()
+                                        .getContentAsString())
+                        .get("data")
+                        .get("id")
+                        .asLong();
+
+        mockMvc.perform(
+                        post("/gomoku/rooms/{roomId}/join", roomId)
+                                .header("Authorization", "Bearer " + white.token())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(joinRoomRequest("character-outfit-girl4")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.blackPlayer.textureKey").value("character-outfit-man3"))
+                .andExpect(
+                        jsonPath("$.data.whitePlayer.textureKey").value("character-outfit-girl4"));
+
+        mockMvc.perform(
+                        get("/gomoku/rooms/{roomId}", roomId)
+                                .header("Authorization", "Bearer " + black.token()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.blackPlayer.textureKey").value("character-outfit-man3"))
+                .andExpect(
+                        jsonPath("$.data.whitePlayer.textureKey").value("character-outfit-girl4"));
+    }
+
+    @Test
     void joinRoom_rejectsSelfPlay() throws Exception {
         TestUser user = setupUserWithProfile("gomoku-self@example.com", "gomoku-self", "self");
         long roomId =
@@ -429,6 +479,18 @@ class GomokuControllerIntegrationTest extends IntegrationTestSupport {
 
     private String createRoomRequest(String ruleSet) {
         return "{\"ruleSet\":\"" + ruleSet + "\",\"timerSeconds\":300}";
+    }
+
+    private String createRoomRequest(String ruleSet, String textureKey) {
+        return "{\"ruleSet\":\""
+                + ruleSet
+                + "\",\"timerSeconds\":300,\"textureKey\":\""
+                + textureKey
+                + "\"}";
+    }
+
+    private String joinRoomRequest(String textureKey) {
+        return "{\"textureKey\":\"" + textureKey + "\"}";
     }
 
     private record TestUser(String token, Long patientProfileId) {}

@@ -93,6 +93,7 @@ const createdRoom: GomokuRoom = {
   blackPlayer: {
     patientProfileId: 7,
     nickname: 'black',
+    textureKey: 'character',
   },
   whitePlayer: null,
   currentTurn: 'BLACK',
@@ -116,6 +117,7 @@ const finishedRoom: GomokuRoom = {
   whitePlayer: {
     patientProfileId: 8,
     nickname: 'white',
+    textureKey: 'character-outfit-girl1',
   },
   result: 'BLACK_WIN',
   endReason: 'FIVE',
@@ -154,6 +156,7 @@ describe('GomokuOverlay online room creation', () => {
       expect(createGomokuRoom).toHaveBeenCalledWith({
         ruleSet: 'RENJU_LITE',
         timerSeconds: 300,
+        textureKey: 'character',
       })
     })
     expect(await screen.findByText('ABC123')).toBeTruthy()

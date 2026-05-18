@@ -234,6 +234,7 @@ export type {
   GomokuRankingEntry,
   GomokuRoom,
   GomokuRoomCreateRequest,
+  GomokuRoomJoinRequest,
   GomokuRoomPage,
   GomokuRuleSet,
   GomokuStats,
