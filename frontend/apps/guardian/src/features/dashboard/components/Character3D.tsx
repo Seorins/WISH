@@ -30,16 +30,8 @@ const MODEL_OFFSET_Y = -0.95
 const KP_SCALE = 0.43
 const HIP_LOCAL_Y = 0.85
 // Front-facing replay should be driven mostly by x/y; z is noisy and can twist limbs backward.
-const RETARGET_DEPTH_DAMPING_RATIO = 0.15
-const RETARGET_DEPTH_SCALE = KP_SCALE * RETARGET_DEPTH_DAMPING_RATIO
-// Smooths replay bone rotation across render frames.
-const RETARGET_SLERP_FACTOR = 0.45
 const RETARGET_MIN_DIRECTION_LENGTH = 0.001
-const RETARGET_UPPER_LIMB_MAX_ROTATION_RAD = Math.PI * 0.68
-const RETARGET_LOWER_LIMB_MAX_ROTATION_RAD = Math.PI * 0.78
 const TORSO_GUARD_VERTICAL_PADDING = 0.04
-const TORSO_GUARD_SIDE_MARGIN_RATIO = 0.1
-const TORSO_GUARD_FORWARD_Z = 0.08
 const TORSO_MIN_SHOULDER_SPAN = 0.08
 /**
  * Cross-body 의도 인식:
@@ -48,31 +40,21 @@ const TORSO_MIN_SHOULDER_SPAN = 0.08
  *  - factor 가 커질수록 z forward push 도 비례로 약화 (이미 앞으로 뻗는 동작은 guard 가 더 끼어들면 짧아 보임).
  *  - 대각선 몸통 지르기, 반대 어깨 터치 같은 cross-body 운동에서 팔이 꺾여 끝나는 현상 방지.
  */
-const CROSS_BODY_ENGAGE_FACTOR = 0.2
-const CROSS_BODY_FORWARD_Z_FALLOFF = 1.0
+// 디버그 슬라이더로 runtime 조정: crossBodyEngageFactor, crossBodyForwardZFalloff.
 // Keep a small reach margin because replay landmarks and GLB arm length are not identical.
-const ARM_IK_MAX_REACH_RATIO = 1.15
+// 디버그 슬라이더로 runtime 조정: armIk* / *SlerpFactor 들 — TUNABLE_PARAMS 참조.
 const ARM_IK_MIN_REACH_RATIO = 0.18
-const ARM_IK_OBSERVED_POLE_WEIGHT = 0.72
 const ARM_IK_CROSS_BODY_OBSERVED_POLE_WEIGHT = 0.45
-const ARM_IK_ELBOW_SIDE_BIAS = 0.7
-const ARM_IK_ELBOW_FORWARD_BIAS = 0.18
-const UPPER_BODY_SLERP_FACTOR = 0.28
-const HEAD_RETARGET_SLERP_FACTOR = 0.24
-const SHOULDER_RETARGET_SLERP_FACTOR = 0.32
-// Yaw/roll/pitch 클램프: 너무 빡빡하면 정면 고정처럼 보임. 0.2π ≈ 36°.
-const TORSO_MAX_YAW_RAD = Math.PI * 0.2
+// Yaw/roll/pitch 클램프: 너무 빡빡하면 정면 고정처럼 보임.
+// torsoMaxYawRad / torsoPitchScale 은 디버그 슬라이더(TUNABLE_PARAMS)에서 매 frame 읽음.
 const TORSO_MAX_ROLL_RAD = Math.PI * 0.1
 const TORSO_MAX_PITCH_RAD = Math.PI * 0.18
 const TORSO_YAW_SCALE = 0.55
 const TORSO_ROLL_SCALE = 0.5
-// Depth damping(0.15)을 보상하기 위해 pitch 스케일을 크게 잡되, 클램프로 막음.
-const TORSO_PITCH_SCALE = 3.2
-const SHOULDER_MAX_ROTATION_RAD = Math.PI * 0.18
+// 디버그 슬라이더로 runtime 조정: shoulderMaxRotationRad, upperLimbMaxRotationRad, lowerLimbMaxRotationRad, handSlerpFactor.
 const NECK_MAX_ROTATION_RAD = Math.PI * 0.14
 const HEAD_MAX_ROTATION_RAD = Math.PI * 0.12
 const HAND_MAX_ROTATION_RAD = Math.PI * 0.55
-const HAND_RETARGET_SLERP_FACTOR = 0.3
 const LOCAL_X_AXIS = new Vector3(1, 0, 0)
 const LOCAL_Y_AXIS = new Vector3(0, 1, 0)
 const LOCAL_Z_AXIS = new Vector3(0, 0, 1)
@@ -83,7 +65,7 @@ const LOCAL_Z_AXIS = new Vector3(0, 0, 1)
  *  - INTERPOLATION_MAX_GAP_MS: 이 시간 이상 떨어진 frame은 보간하지 않고 가장 가까운 값 사용
  *    (긴 트래킹 결손 구간에서 잘못된 직선 보간 방지).
  */
-const LM_FILTER_OPTIONS: OneEuroFilterOptions = { minCutoff: 1.2, beta: 0.02, dCutoff: 1.0 }
+const LM_FILTER_OPTIONS: OneEuroFilterOptions = { minCutoff: 1.0, beta: 0.03, dCutoff: 1.0 }
 const INTERPOLATION_MAX_GAP_MS = 500
 
 /**
@@ -107,6 +89,49 @@ const HIP_Y_OFFSET = -0.18
  * 실제 mocap 데이터(아이별)가 들어오는 시점에 다시 활성화해서 좌표·정규화 검증 후 안정화 작업.
  */
 const ENABLE_BONE_RETARGETING = true
+
+/**
+ * 길 2 실험 결과를 default 로 반영한 retargeting 메커니즘 토글.
+ *  - restCalibration (default: false): 시작 6프레임으로 사용자 rest 자세를 추정해 GLB rest 에 매핑.
+ *    실측 결과 시작 자세가 "박혀버려" 다리 들림/팔 T-포즈 등 부작용 발생 → 기본 OFF.
+ *    구현 코드는 유지 — 추후 부분 적용(예: 상체만) 등 개선 시도 시 다시 켜볼 수 있게.
+ *  - lmFilter (default: true): 1-Euro 필터로 landmark 시계열 떨림 평활화. 다양한 동작에서 떨림 제거 효과 확인 → 기본 ON.
+ *
+ * 디버그 패널은 dev 모드(`import.meta.env.DEV`) 에서만 표시. production 빌드에는 노출 안 됨.
+ * Module-level mutable object 라서 useFrame 이 매 frame 최신 값을 즉시 읽음 (React re-render 불필요).
+ */
+/**
+ * 캘리브레이션 on/off:
+ *  - 시작 6프레임으로 사용자 rest 자세를 추정해 GLB rest 에 매핑.
+ *  - 실측 결과 다리 들림/팔 T-포즈 부작용이 있어 기본 비활성화.
+ *  - 구현 코드(accumulateCalibration / buildCalibrationDeltas 등)는 유지 — 추후 부분 적용 시 재활용.
+ */
+const ENABLE_REST_CALIBRATION = false
+
+// ── 깊이/척추/슬러프 ──
+const DEPTH_DAMPING_RATIO = 0.4
+const TORSO_PITCH_SCALE = 1.5
+const TORSO_MAX_YAW_RAD = Math.PI * 0.33
+const RETARGET_SLERP_FACTOR = 0.55
+// ── 팔 IK ──
+const ARM_IK_MAX_REACH_RATIO = 1.25
+const ARM_IK_ELBOW_SIDE_BIAS = 0.7
+const ARM_IK_ELBOW_FORWARD_BIAS = 0.3
+const ARM_IK_OBSERVED_POLE_WEIGHT = 0.85
+// ── 몸통 보호 가드 / cross-body ──
+const CROSS_BODY_ENGAGE_FACTOR = 0.12
+const CROSS_BODY_FORWARD_Z_FALLOFF = 1.0
+const TORSO_GUARD_FORWARD_Z = 0.04
+const TORSO_GUARD_SIDE_MARGIN_RATIO = 0.05
+// ── 부위별 부드러움 (slerp) ──
+const UPPER_BODY_SLERP_FACTOR = 0.28
+const SHOULDER_RETARGET_SLERP_FACTOR = 0.32
+const HEAD_RETARGET_SLERP_FACTOR = 0.24
+const HAND_RETARGET_SLERP_FACTOR = 0.3
+// ── 어깨/사지 회전 한계 ──
+const RETARGET_UPPER_LIMB_MAX_ROTATION_RAD = Math.PI * 0.83
+const RETARGET_LOWER_LIMB_MAX_ROTATION_RAD = Math.PI * 0.86
+const SHOULDER_MAX_ROTATION_RAD = Math.PI * 0.25
 
 /**
  * sin 기반 더미 마커 motion playback on/off.
@@ -230,31 +255,13 @@ const BONE_CHAINS: ReadonlyArray<{
   },
 ]
 
+// 이 chain 들은 rest direction 계산(useEffect)에만 쓰이고, runtime maxRotation/slerp 는
+// applyUpperBodyRetargeting 함수 본문에서 TUNABLE_PARAMS 를 직접 참조하므로 필드 불필요.
 const UPPER_BODY_DIRECTION_CHAINS = [
-  {
-    bone: 'LeftShoulder',
-    childBone: 'LeftArm',
-    maxRotationRad: SHOULDER_MAX_ROTATION_RAD,
-    slerpFactor: SHOULDER_RETARGET_SLERP_FACTOR,
-  },
-  {
-    bone: 'RightShoulder',
-    childBone: 'RightArm',
-    maxRotationRad: SHOULDER_MAX_ROTATION_RAD,
-    slerpFactor: SHOULDER_RETARGET_SLERP_FACTOR,
-  },
-  {
-    bone: 'neck',
-    childBone: 'Head',
-    maxRotationRad: NECK_MAX_ROTATION_RAD,
-    slerpFactor: HEAD_RETARGET_SLERP_FACTOR,
-  },
-  {
-    bone: 'Head',
-    childBone: 'headfront',
-    maxRotationRad: HEAD_MAX_ROTATION_RAD,
-    slerpFactor: HEAD_RETARGET_SLERP_FACTOR,
-  },
+  { bone: 'LeftShoulder', childBone: 'LeftArm' },
+  { bone: 'RightShoulder', childBone: 'RightArm' },
+  { bone: 'neck', childBone: 'Head' },
+  { bone: 'Head', childBone: 'headfront' },
 ] as const
 
 const UPPER_BODY_LOCAL_BONES = ['Spine', 'Spine01', 'Spine02'] as const
@@ -904,7 +911,7 @@ function tryReadRetargetKp(
     out.set(0, 0, 0)
     return false
   }
-  out.set(lm[0] * KP_SCALE, HIP_LOCAL_Y - lm[1] * KP_SCALE, -lm[2] * RETARGET_DEPTH_SCALE)
+  out.set(lm[0] * KP_SCALE, HIP_LOCAL_Y - lm[1] * KP_SCALE, -lm[2] * KP_SCALE * DEPTH_DAMPING_RATIO)
   return true
 }
 
@@ -1059,7 +1066,7 @@ function getCalibratedKp(acc: CalibrationAccumulator, landmarkIdx: number, out: 
   const x = bucket[0] / bucket[3]
   const y = bucket[1] / bucket[3]
   const z = bucket[2] / bucket[3]
-  out.set(x * KP_SCALE, HIP_LOCAL_Y - y * KP_SCALE, -z * RETARGET_DEPTH_SCALE)
+  out.set(x * KP_SCALE, HIP_LOCAL_Y - y * KP_SCALE, -z * KP_SCALE * DEPTH_DAMPING_RATIO)
   return true
 }
 
@@ -1511,7 +1518,7 @@ function CharacterModel({
 
     // 3) 캘리브레이션 — 첫 N프레임 동안은 사용자 rest 자세를 누적만 하고 retarget 은 보류.
     //    N프레임이 차면 본 chain 별 보정 quaternion 계산.
-    if (calibrationFrameCountRef.current < CALIBRATION_FRAME_COUNT) {
+    if (ENABLE_REST_CALIBRATION && calibrationFrameCountRef.current < CALIBRATION_FRAME_COUNT) {
       accumulateCalibration(
         calibrationAccRef.current,
         interpolatedFrame.lm as ReadonlyArray<
@@ -1624,7 +1631,7 @@ function CharacterModel({
       if (!normalizeDirection(tmpDesiredDir.current)) continue
 
       // 캘리브레이션 보정: 사용자 rest 좌표계에서 본 GLB rest 좌표계로 정렬.
-      const calibration = calibrationDeltas.get(c.bone)
+      const calibration = ENABLE_REST_CALIBRATION ? calibrationDeltas.get(c.bone) : undefined
       if (calibration) {
         tmpDesiredDir.current.applyQuaternion(calibration)
         if (!normalizeDirection(tmpDesiredDir.current)) continue
@@ -1636,7 +1643,20 @@ function CharacterModel({
         continue
       }
       if (!normalizeDirection(tmpRestDir.current)) continue
-      limitDirectionFromRest(tmpRestDir.current, tmpDesiredDir.current, c.maxRotationRad)
+      // 본 회전 한계: 하부 사지(팔뚝/종아리) / 상부 사지(윗팔/대퇴) / 손 으로 분기.
+      // BONE_CHAINS 정의의 maxRotationRad 는 default 값(빌드 타임 상수) 일 뿐이고 runtime 에서는 무시.
+      const isLowerLimb =
+        c.bone === 'LeftForeArm' ||
+        c.bone === 'RightForeArm' ||
+        c.bone === 'LeftLeg' ||
+        c.bone === 'RightLeg'
+      const isHand = c.bone === 'LeftHand' || c.bone === 'RightHand'
+      const maxRotationRad = isHand
+        ? HAND_MAX_ROTATION_RAD
+        : isLowerLimb
+          ? RETARGET_LOWER_LIMB_MAX_ROTATION_RAD
+          : RETARGET_UPPER_LIMB_MAX_ROTATION_RAD
+      limitDirectionFromRest(tmpRestDir.current, tmpDesiredDir.current, maxRotationRad)
       tmpDelta.current.setFromUnitVectors(tmpRestDir.current, tmpDesiredDir.current)
 
       tmpTargetRot.current.copy(tmpDelta.current).multiply(restQuat)
