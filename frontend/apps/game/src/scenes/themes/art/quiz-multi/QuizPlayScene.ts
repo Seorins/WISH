@@ -261,6 +261,7 @@ export class QuizPlayScene extends Phaser.Scene {
     // 나가기도 같은 오버레이 안에 두어 input focus 와 Phaser 클릭이 첫 탭에서 꼬이는 문제 해결.
     this.game.events.on('quiz-guess:submit', this.handleGuessOverlaySubmit, this)
     this.game.events.on('quiz-guess:leave', this.handleLeave, this)
+    this.input.keyboard?.on('keydown-ESC', this.handleEscKey, this)
     this.events.once('shutdown', this.handleShutdown, this)
 
     // 진입 시점에 이미 라운드가 진행 중이고 본인이 정답자라면 오버레이 즉시 노출.
@@ -334,9 +335,51 @@ export class QuizPlayScene extends Phaser.Scene {
       'right',
     )
 
+    // 우상단 닫기 버튼 — 게임 도중 명시적으로 나가기. ESC 키와 동등.
+    // drawer 의 "나가기" 버튼은 하단 도구바에만 있고 추측자는 HTML 오버레이 안에만 있어서, 어느
+    // 역할이든 항상 보이는 공통 닫기 진입점이 필요해서 우상단에 둠.
+    container.add(this.createCloseButton(w - 28, 28, () => void this.handleLeave()))
+
     if (this.finalMembers) {
       this.drawResultModal(container)
     }
+  }
+
+  /** 우상단 ✕ 버튼 — 모달 close 패턴. 빨강 톤으로 종료 신호. */
+  private createCloseButton(cx: number, cy: number, onClick: () => void) {
+    const container = this.add.container(cx, cy)
+    const size = 36
+    const radius = 8
+
+    const hit = this.add.rectangle(0, 0, size + 4, size + 4, 0xffffff, 0.001)
+    hit.setInteractive({ useHandCursor: true })
+
+    const g = this.add.graphics()
+    const draw = (hovered: boolean) => {
+      g.clear()
+      g.fillStyle(0x000000, 0.18)
+      g.fillRoundedRect(-size / 2 + 1, -size / 2 + 2, size, size, radius)
+      g.fillStyle(0xc98477, hovered ? 1 : 0.92)
+      g.fillRoundedRect(-size / 2, -size / 2, size, size, radius)
+      g.lineStyle(1.5, 0xffffff, hovered ? 1 : 0.85)
+      g.strokeRoundedRect(-size / 2, -size / 2, size, size, radius)
+    }
+    draw(false)
+
+    const x = this.add
+      .text(0, 1, '✕', {
+        fontFamily: FONT_FAMILY,
+        fontSize: '18px',
+        color: '#ffffff',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5)
+    container.add([hit, g, x])
+
+    hit.on(Phaser.Input.Events.POINTER_OVER, () => draw(true))
+    hit.on(Phaser.Input.Events.POINTER_OUT, () => draw(false))
+    hit.on(Phaser.Input.Events.POINTER_DOWN, onClick)
+    return container
   }
 
   private drawTopBar(
@@ -1559,6 +1602,17 @@ export class QuizPlayScene extends Phaser.Scene {
     fadeToScene(this, 'ArtSelectScene', { duration: 220 })
   }
 
+  /**
+   * ESC — 게임 중 어디서든 안전하게 빠져나가도록. HTML 추측 오버레이가 떠 있을 때(추측자가
+   * input 에 focus 한 상태) 는 그쪽 ESC 가 먼저 처리되도록 키 처리를 양보(=무시)하지 않아도
+   * Phaser 키보드 이벤트는 게임 캔버스로 focus 있을 때만 들어오므로 충돌 없음.
+   * 결과 모달이 떠 있는 finished 상태 / 이미 leaving 중이면 noop.
+   */
+  private handleEscKey() {
+    if (this.isLeaving) return
+    void this.handleLeave()
+  }
+
   private async restart() {
     if (this.isLeaving) return
     this.isLeaving = true
@@ -1602,6 +1656,7 @@ export class QuizPlayScene extends Phaser.Scene {
     this.input.off(Phaser.Input.Events.POINTER_UP_OUTSIDE, this.handlePointerUp, this)
     this.game.events.off('quiz-guess:submit', this.handleGuessOverlaySubmit, this)
     this.game.events.off('quiz-guess:leave', this.handleLeave, this)
+    this.input.keyboard?.off('keydown-ESC', this.handleEscKey, this)
     this.setGuessOverlay(false)
     this.timerEvent?.remove(false)
     this.cancelWordLengthReveal()
