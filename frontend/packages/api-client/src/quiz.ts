@@ -49,7 +49,7 @@ export type QuizGameStartedResponse = {
 }
 
 export type StartQuizRoomRequest = {
-  totalRounds?: 3 | 6 | 9
+  totalRounds?: 3 | 6 | 9 | 12 | 15
 }
 
 export async function createQuizRoom(): Promise<QuizRoomSnapshot> {

@@ -55,8 +55,9 @@ export interface QuizLobbySceneInit {
   statusMessage?: string
 }
 
-const ROUND_OPTIONS = [3, 6, 9] as const
+const ROUND_OPTIONS = [3, 6, 9, 12, 15] as const
 const DEFAULT_SELECTED_ROUNDS = 3
+const MIN_VISIBLE_PLAYER_SLOTS = 6
 const PALETTE_DANGER = CUTE_CARD_PALETTES.rose
 
 // 카드 팔레트 — 채도 톤다운된 코디네이션 페어. 이전엔 #f4a64a/#6aaa64/#4a8fc4 가 너무 쨍해서 산만했음.
@@ -68,19 +69,38 @@ const COLOR_COOL_DARK = 0x517e64
 const COLOR_SLATE = 0x7c9bc0
 const COLOR_SLATE_DARK = 0x4f6c91
 
-// 슬롯 아바타 — QuizPlayScene 과 동일한 char1~4 (art/ui) 를 joinOrder 기준 1~4 순환으로 사용.
-// 게임 화면과 로비에서 같은 캐릭터가 같은 자리에 보이도록 매핑 동기화.
-const SLOT_CHAR_NUMBERS = [1, 2, 3, 4] as const
+// 슬롯 아바타 — QuizPlayScene 과 동일한 char1~9 (art/ui) 를 방마다 섞인 순서로 사용.
+// Math.random() 을 쓰면 클라이언트마다 다르게 보일 수 있어 roomId + joinOrder 로 고정 랜덤 매핑.
+const SLOT_CHAR_NUMBERS = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const
 const SLOT_CHAR_CROP_RATIO = 0.55
+const SLOT_CHAR_STEPS = [1, 2, 4, 5, 7, 8] as const
 
-function slotCharKey(joinOrder: number): string {
-  const n = SLOT_CHAR_NUMBERS[(joinOrder < 0 ? 0 : joinOrder) % SLOT_CHAR_NUMBERS.length]
-  return `quiz-lobby-char${n}`
+function slotCharKey(charNumber: number): string {
+  return `quiz-lobby-char${charNumber}`
 }
 
-function slotCharPath(joinOrder: number): string {
-  const n = SLOT_CHAR_NUMBERS[(joinOrder < 0 ? 0 : joinOrder) % SLOT_CHAR_NUMBERS.length]
-  return `images/themes/art/ui/char${n}.png`
+function slotCharPath(charNumber: number): string {
+  return `images/themes/art/ui/char${charNumber}.png`
+}
+
+function hashString(value: string): number {
+  let hash = 2166136261
+  for (let i = 0; i < value.length; i++) {
+    hash = Math.imul(hash ^ value.charCodeAt(i), 16777619)
+  }
+  return hash >>> 0
+}
+
+function slotCharNumber(joinOrder: number, roomId: string): number {
+  const seed = hashString(roomId || 'quiz-room')
+  const normalizedOrder = Math.max(0, Math.trunc(joinOrder))
+  const step = SLOT_CHAR_STEPS[(seed >>> 8) % SLOT_CHAR_STEPS.length]
+  const index = (seed + normalizedOrder * step) % SLOT_CHAR_NUMBERS.length
+  return SLOT_CHAR_NUMBERS[index]
+}
+
+function slotCharKeyForMember(joinOrder: number, roomId: string): string {
+  return slotCharKey(slotCharNumber(joinOrder, roomId))
 }
 
 export class QuizLobbyScene extends Phaser.Scene {
@@ -141,10 +161,10 @@ export class QuizLobbyScene extends Phaser.Scene {
       )
     }
     // 슬롯 아바타 — 멤버 슬롯에 NPC 캐릭터 상반신을 노출. 게임 씬과 같은 char1~4.
-    SLOT_CHAR_NUMBERS.forEach((_, index) => {
-      const key = slotCharKey(index)
+    SLOT_CHAR_NUMBERS.forEach(charNumber => {
+      const key = slotCharKey(charNumber)
       if (!this.textures.exists(key)) {
-        this.load.image(key, assetPath(slotCharPath(index)))
+        this.load.image(key, assetPath(slotCharPath(charNumber)))
       }
     })
   }
@@ -168,6 +188,7 @@ export class QuizLobbyScene extends Phaser.Scene {
         color: '#ffe9c2',
       })
       .setOrigin(0.5)
+      .setVisible(false)
     this.root.add(this.statusText)
 
     this.scale.on('resize', this.layout, this)
@@ -192,7 +213,7 @@ export class QuizLobbyScene extends Phaser.Scene {
     } else if (this.state === 'multiMethod') {
       this.drawMultiMethod()
     }
-    this.statusText.setPosition(this.scale.width / 2, this.scale.height - 48)
+    this.positionStatusText()
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -628,15 +649,20 @@ export class QuizLobbyScene extends Phaser.Scene {
     const codeBoxY = headerY + 22
     this.drawCodeBox(container, w / 2, codeBoxY, codeBoxW, codeBoxH, this.snapshot.code)
 
-    // 멤버 슬롯 — 최대 정원만큼 가로 정렬, 게임 메뉴 톤(다크 카드 + 강조 보더).
-    const slotW = Math.min(180, (w - 80) / this.snapshot.maxPlayers - 20)
+    // 멤버 슬롯 — 기존 4인 스냅샷으로 들어와도 6인 룸 기준 슬롯을 먼저 보여준다.
+    const visibleSlots = Math.max(
+      MIN_VISIBLE_PLAYER_SLOTS,
+      this.snapshot.maxPlayers,
+      this.snapshot.members.length,
+    )
+    const slotW = Math.min(180, (w - 80) / visibleSlots - 20)
     const slotH = 220
     const slotGap = 20
-    const totalW = this.snapshot.maxPlayers * slotW + (this.snapshot.maxPlayers - 1) * slotGap
+    const totalW = visibleSlots * slotW + (visibleSlots - 1) * slotGap
     const slotY = h * 0.56
     let cursorX = w / 2 - totalW / 2 + slotW / 2
 
-    for (let i = 0; i < this.snapshot.maxPlayers; i++) {
+    for (let i = 0; i < visibleSlots; i++) {
       const member = this.snapshot.members[i] ?? null
       const slot = this.createMemberSlot(cursorX, slotY, slotW, slotH, member, i)
       container.add(slot)
@@ -968,7 +994,7 @@ export class QuizLobbyScene extends Phaser.Scene {
     }
 
     // 게임 씬과 동일하게 char1~4 상반신만 setCrop 으로 노출. 텍스처 미로드 시 글자 폴백.
-    const avatarKey = slotCharKey(member.joinOrder)
+    const avatarKey = slotCharKeyForMember(member.joinOrder, this.snapshot?.roomId ?? '')
     const avatarSize = Math.min(96, w * 0.6)
     if (this.textures.exists(avatarKey)) {
       const source = this.textures.get(avatarKey).getSourceImage() as HTMLImageElement
@@ -1106,7 +1132,13 @@ export class QuizLobbyScene extends Phaser.Scene {
 
   private setStatus(text: string) {
     this.statusText.setText(text)
-    this.statusText.setPosition(this.scale.width / 2, this.scale.height - 56)
+    this.statusText.setVisible(text.trim().length > 0)
+    this.positionStatusText()
+  }
+
+  private positionStatusText() {
+    const y = this.state === 'lobby' ? this.scale.height - 24 : this.scale.height - 56
+    this.statusText.setPosition(this.scale.width / 2, y)
   }
 
   /**

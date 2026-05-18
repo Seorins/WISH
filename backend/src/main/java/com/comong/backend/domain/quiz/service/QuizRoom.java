@@ -18,7 +18,7 @@ public class QuizRoom {
 
     static final int DEFAULT_TOTAL_ROUNDS = 3;
     static final int MIN_TOTAL_ROUNDS = 3;
-    static final int MAX_TOTAL_ROUNDS = 9;
+    static final int MAX_TOTAL_ROUNDS = 15;
 
     private final String roomId;
     private final String code;
@@ -163,7 +163,11 @@ public class QuizRoom {
         if (requestedTotalRounds == null) {
             return DEFAULT_TOTAL_ROUNDS;
         }
-        if (requestedTotalRounds != 3 && requestedTotalRounds != 6 && requestedTotalRounds != 9) {
+        if (requestedTotalRounds != 3
+                && requestedTotalRounds != 6
+                && requestedTotalRounds != 9
+                && requestedTotalRounds != 12
+                && requestedTotalRounds != 15) {
             throw new QuizRoomNotReadyToStartException();
         }
         return requestedTotalRounds;
