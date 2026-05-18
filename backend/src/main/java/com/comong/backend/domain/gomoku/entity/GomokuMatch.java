@@ -85,6 +85,10 @@ public class GomokuMatch {
     @JoinColumn(name = "winner_patient_profile_id")
     private PatientProfile winnerPatientProfile;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "rematch_source_match_id")
+    private GomokuMatch rematchSourceMatch;
+
     @Column(name = "move_count", nullable = false)
     private int moveCount;
 
@@ -111,14 +115,21 @@ public class GomokuMatch {
             String roomCode,
             PatientProfile blackPatientProfile,
             String blackTextureKey,
+            PatientProfile whitePatientProfile,
+            String whiteTextureKey,
             GomokuRuleSet ruleSet,
-            int timerSeconds) {
+            int timerSeconds,
+            GomokuMatch rematchSourceMatch) {
         this.roomCode = Objects.requireNonNull(roomCode, "roomCode must not be null");
         this.blackPatientProfile =
                 Objects.requireNonNull(blackPatientProfile, "blackPatientProfile must not be null");
         this.blackTextureKey = normalizeTextureKey(blackTextureKey);
+        this.whitePatientProfile = whitePatientProfile;
+        this.whiteTextureKey =
+                whitePatientProfile == null ? null : normalizeTextureKey(whiteTextureKey);
         this.ruleSet = Objects.requireNonNull(ruleSet, "ruleSet must not be null");
         this.timerSeconds = timerSeconds;
+        this.rematchSourceMatch = rematchSourceMatch;
         this.status = GomokuMatchStatus.WAITING;
         this.currentTurn = GomokuStone.BLACK;
         this.movesJson = "[]";
@@ -141,6 +152,19 @@ public class GomokuMatch {
     public void removeWhiteBeforeStart() {
         this.whitePatientProfile = null;
         this.whiteTextureKey = null;
+    }
+
+    public void swapPlayersBeforeStart() {
+        PatientProfile previousBlackPatientProfile = this.blackPatientProfile;
+        String previousBlackTextureKey = this.blackTextureKey;
+
+        this.blackPatientProfile =
+                Objects.requireNonNull(
+                        this.whitePatientProfile, "whitePatientProfile must not be null");
+        this.blackTextureKey = normalizeTextureKey(this.whiteTextureKey);
+        this.whitePatientProfile = previousBlackPatientProfile;
+        this.whiteTextureKey = normalizeTextureKey(previousBlackTextureKey);
+        this.currentTurn = GomokuStone.BLACK;
     }
 
     public void applyMove(String movesJson, GomokuStone nextTurn, int moveCount) {

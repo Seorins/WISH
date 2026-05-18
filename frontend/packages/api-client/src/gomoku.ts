@@ -140,6 +140,18 @@ export async function startGomokuRoom(roomId: number) {
   return response.data
 }
 
+export async function swapGomokuRoomStones(roomId: number) {
+  const response = await apiClient.post<ApiResponse<GomokuRoom>>(
+    `/gomoku/rooms/${roomId}/swap-stones`,
+  )
+  return response.data
+}
+
+export async function rematchGomokuRoom(roomId: number) {
+  const response = await apiClient.post<ApiResponse<GomokuRoom>>(`/gomoku/rooms/${roomId}/rematch`)
+  return response.data
+}
+
 export async function playGomokuMove(roomId: number, request: GomokuMoveRequest) {
   const response = await apiClient.post<ApiResponse<GomokuRoom>>(
     `/gomoku/rooms/${roomId}/moves`,

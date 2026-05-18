@@ -132,6 +132,37 @@ describe('gomoku rules', () => {
     }
   })
 
+  it('allows a black exact-five winning move even when it also makes two four threats', () => {
+    const board = withStones(createEmptyBoard(), 'black', [
+      { row: 7, col: 3 },
+      { row: 7, col: 4 },
+      { row: 7, col: 5 },
+      { row: 7, col: 6 },
+      { row: 4, col: 7 },
+      { row: 5, col: 7 },
+      { row: 6, col: 7 },
+      { row: 4, col: 4 },
+      { row: 5, col: 5 },
+      { row: 6, col: 6 },
+    ])
+
+    expect(detectForbiddenMove(board, center, 'black', 'renju-lite')).toBeNull()
+    expect(
+      deriveStatusFromMoves(
+        [
+          ...moves('black', [
+            { row: 7, col: 3 },
+            { row: 7, col: 4 },
+            { row: 7, col: 5 },
+            { row: 7, col: 6 },
+          ]),
+          { position: center, stone: 'black', source: 'human' },
+        ],
+        'renju-lite',
+      ).status,
+    ).toMatchObject({ phase: 'won', winner: 'black' })
+  })
+
   it('allows the same broken double-three shape outside renju-lite mode', () => {
     const board = withStones(createEmptyBoard(), 'black', [
       { row: 7, col: 6 },

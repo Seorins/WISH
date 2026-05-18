@@ -166,6 +166,10 @@ export function detectForbiddenMove(
     return { type: 'overline', message: FORBIDDEN_MESSAGES.overline }
   }
 
+  if (getGameStatus(nextBoard, position, ruleSet).phase === 'won') {
+    return null
+  }
+
   const openThrees = DIRECTIONS.filter(direction =>
     hasOpenThree(nextBoard, position, stone, direction),
   ).length
