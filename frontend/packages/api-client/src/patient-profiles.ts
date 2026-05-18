@@ -10,6 +10,13 @@ export type PatientProfileCreateRequest = {
   gender: Gender
 }
 
+export type PatientProfileUpdateRequest = Partial<{
+  name: string
+  nickname: string
+  birthDate: string
+  gender: Gender
+}>
+
 export type PatientProfile = {
   id: number
   name: string
@@ -25,5 +32,13 @@ export async function createPatientProfile(request: PatientProfileCreateRequest)
 
 export async function listPatientProfiles() {
   const response = await apiClient.get<ApiResponse<PatientProfile[]>>('/patient-profiles')
+  return response.data
+}
+
+export async function updatePatientProfile(id: number, request: PatientProfileUpdateRequest) {
+  const response = await apiClient.patch<ApiResponse<PatientProfile>>(
+    `/patient-profiles/${id}`,
+    request,
+  )
   return response.data
 }

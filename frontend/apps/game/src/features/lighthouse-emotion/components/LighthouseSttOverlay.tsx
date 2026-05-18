@@ -1,5 +1,6 @@
 import { useEffect, type CSSProperties } from 'react'
-import { useSpeechRecognition } from '../useSpeechRecognition'
+import { transcribeLighthouseAudio } from '../lighthouseEmotionClient'
+import { useWhisperRecorder } from '../useWhisperRecorder'
 
 type LighthouseSttOverlayProps = {
   visible: boolean
@@ -63,7 +64,7 @@ const statusTextStyle: CSSProperties = {
   minHeight: 24,
 }
 
-const transcriptBoxStyle: CSSProperties = {
+const hintBoxStyle: CSSProperties = {
   width: '100%',
   minHeight: 48,
   padding: '10px 14px',
@@ -85,17 +86,8 @@ const errorTextStyle: CSSProperties = {
 }
 
 export function LighthouseSttOverlay({ visible, disabled, onSubmit }: LighthouseSttOverlayProps) {
-  const {
-    supported,
-    status,
-    finalTranscript,
-    interimTranscript,
-    errorMessage,
-    start,
-    stop,
-    reset,
-  } = useSpeechRecognition({
-    lang: 'ko-KR',
+  const { supported, status, errorMessage, start, stop, reset } = useWhisperRecorder({
+    transcribe: audio => transcribeLighthouseAudio(audio),
     onFinalResult: transcript => {
       onSubmit(transcript)
       reset()
@@ -108,25 +100,33 @@ export function LighthouseSttOverlay({ visible, disabled, onSubmit }: Lighthouse
 
   if (!visible) return null
 
-  const isListening = status === 'listening'
-  const liveText = (finalTranscript + ' ' + interimTranscript).trim()
-  const buttonDisabled = disabled || !supported || status === 'denied'
+  const isRecording = status === 'recording'
+  const isTranscribing = status === 'transcribing'
+  const buttonDisabled = disabled || !supported || status === 'denied' || isTranscribing
 
   const statusLine = !supported
     ? '여기서는 마이크로 말하기를 쓸 수 없어요.'
     : status === 'denied'
       ? '마이크를 쓸 수 있게 허락해 주세요.'
-      : isListening
-        ? '듣고 있어요. 하고 싶은 말을 말해봐!'
-        : '마이크 그림을 누르고 말해봐!'
+      : isTranscribing
+        ? '하고 싶은 말을 글자로 바꾸고 있어요...'
+        : isRecording
+          ? '듣고 있어요. 다 말한 다음에 다시 마이크를 눌러줘!'
+          : '마이크 그림을 누르고 말해봐!'
+
+  const hintLine = isRecording
+    ? '천천히 말해도 괜찮아.'
+    : isTranscribing
+      ? '잠시만 기다려줘.'
+      : '마이크를 누르고 말한 다음, 다시 누르면 영철 할아버지에게 전해져요.'
 
   const handleClick = () => {
     if (buttonDisabled) return
-    if (isListening) {
+    if (isRecording) {
       stop()
       return
     }
-    start()
+    void start()
   }
 
   return (
@@ -135,23 +135,23 @@ export function LighthouseSttOverlay({ visible, disabled, onSubmit }: Lighthouse
         <button
           type="button"
           disabled={buttonDisabled}
-          aria-pressed={isListening}
-          aria-label={isListening ? '말하기 멈추기' : '말하기 시작하기'}
+          aria-pressed={isRecording}
+          aria-label={isRecording ? '말하기 멈추기' : '말하기 시작하기'}
           style={{
             ...micButtonBase,
-            ...(isListening ? micButtonListening : null),
+            ...(isRecording ? micButtonListening : null),
             opacity: buttonDisabled ? 0.55 : 1,
             cursor: buttonDisabled ? 'not-allowed' : 'pointer',
           }}
           onClick={handleClick}
         >
-          {isListening ? '■' : '🎤'}
+          {isRecording ? '■' : '🎤'}
         </button>
         <div style={statusTextStyle} aria-live="polite">
           {statusLine}
         </div>
-        <div style={transcriptBoxStyle} aria-live="polite">
-          {liveText || '말하면 여기에 글자로 보여요.'}
+        <div style={hintBoxStyle} aria-live="polite">
+          {hintLine}
         </div>
         {errorMessage ? <div style={errorTextStyle}>{errorMessage}</div> : null}
       </div>
