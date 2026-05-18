@@ -227,6 +227,11 @@ export class QuizLobbyScene extends Phaser.Scene {
     if (this.initialLobbyData) {
       this.enterTransferredLobby(this.initialLobbyData)
     } else {
+      // 그림 퀴즈를 새로 진입한 경우, BE 가 들고 있을 수 있는 stale 방을 silent 로 정리.
+      // 사용자가 의도치 않은 경로(브라우저 새로고침, 다른 메뉴 이동 등)로 빠져나갔을 때 BE 에
+      // 자기 방이 남아있어 다음 진입에서 "이미 방에 있음" 상태로 잡히던 문제 방지.
+      // 이미 방이 없으면 404 가 떨어지므로 그냥 무시.
+      leaveQuizRoom().catch(() => {})
       this.showModeSelect()
     }
   }
