@@ -29,6 +29,7 @@ vi.mock('@wish/api-client', () => ({
 const ONLINE_LABEL = '\uC628\uB77C\uC778'
 const CREATE_ROOM_LABEL = '\uBC29 \uB9CC\uB4E4\uAE30'
 const RANKING_LABEL = '\uB7AD\uD0B9'
+const GAME_END_LABEL = '\uB300\uAD6D \uC885\uB8CC'
 const AUTH_REQUIRED_MESSAGE =
   '\uC628\uB77C\uC778 \uB300\uC804\uC740 \uB85C\uADF8\uC778\uC774 \uD544\uC694\uD574\uC694.'
 
@@ -177,6 +178,7 @@ describe('GomokuOverlay online room creation', () => {
     fireEvent.click(screen.getByRole('button', { name: CREATE_ROOM_LABEL }))
 
     expect(await screen.findByText('FIN123')).toBeTruthy()
+    expect(screen.getAllByText(GAME_END_LABEL).length).toBeGreaterThan(0)
 
     const createNextRoomButton = screen.getByRole('button', { name: CREATE_ROOM_LABEL })
     expect((createNextRoomButton as HTMLButtonElement).disabled).toBe(false)

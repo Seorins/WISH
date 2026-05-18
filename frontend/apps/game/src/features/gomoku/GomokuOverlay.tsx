@@ -16,6 +16,7 @@ import {
   type GomokuStats,
   type GomokuStone as ApiGomokuStone,
 } from '@wish/api-client'
+import { assetPath } from '@/game/assets/assetPath'
 import { hasValidAuthToken } from '../auth'
 import { resolvePatientProfileIdOrFetch } from '../exerciseSessions/patientProfile'
 import {
@@ -123,7 +124,16 @@ const text = {
   ranked: '\uB7AD\uD0B9 \uBC18\uC601',
   emptyRanking: '\uC544\uC9C1 \uB7AD\uD0B9\uC774 \uC5C6\uC5B4\uC694.',
   finishedRoomNextGame:
-    '\uB300\uAD6D\uC774 \uB05D\uB0AC\uC5B4\uC694. \uB2E4\uC74C\uD310\uC744 \uB9CC\uB4E4\uAC70\uB098 \uB300\uAE30 \uC911\uC778 \uBC29\uC5D0 \uC785\uC7A5\uD574\uBCF4\uC138\uC694.',
+    '\uB300\uAD6D\uC774 \uB05D\uB0AC\uC5B4\uC694. \uB2E4\uC74C \uB300\uAD6D \uC900\uBE44 \uC644\uB8CC.',
+  onlineMatch: '\uC628\uB77C\uC778 \uB300\uC804',
+  onlineLobbyGuide: '\uC628\uB77C\uC778 \uB85C\uBE44 \uC900\uBE44 \uC644\uB8CC',
+  gameStart: '\uB300\uAD6D \uC2DC\uC791',
+  onlineGameStart: '\uC628\uB77C\uC778 \uB300\uAD6D \uC2DC\uC791',
+  gameEnd: '\uB300\uAD6D \uC885\uB8CC',
+  finished: '\uC885\uB8CC',
+  me: '\uB098',
+  opponent: '\uC0C1\uB300',
+  versus: 'VS',
 } as const
 
 const timerOptions = [
@@ -133,6 +143,14 @@ const timerOptions = [
 ] as const
 
 const starPoints = new Set(['3:3', '3:11', '7:7', '11:3', '11:11'])
+const onlineCharacterImages = [
+  assetPath('images/village/background/character/sehyun.png'),
+  assetPath('images/village/background/character/joeun.png'),
+  assetPath('images/village/background/character/geonbin.png'),
+  assetPath('images/village/background/character/dain.png'),
+  assetPath('images/village/background/character/komonge.png'),
+  assetPath('images/village/background/character/jungho.png'),
+] as const
 
 export function GomokuOverlay({
   open,
@@ -666,7 +684,7 @@ export function GomokuOverlay({
 
   return (
     <div className="gomoku-backdrop" role="dialog" aria-modal="true" aria-label={text.title}>
-      <section className="gomoku-shell">
+      <section className={`gomoku-shell ${mode === 'online' ? 'online' : ''}`}>
         <header className="gomoku-topbar">
           <div>
             <h1>{text.title}</h1>
@@ -683,6 +701,10 @@ export function GomokuOverlay({
               status={effectiveStatus}
               currentTurn={currentTurn}
               isComputerThinking={mode === 'computer' && isComputerThinking}
+              mode={mode}
+              room={onlineRoom}
+              myOnlineStone={myOnlineStone}
+              moveCount={activeMoves.length}
               message={
                 mode === 'online'
                   ? onlineError ||
@@ -733,6 +755,15 @@ export function GomokuOverlay({
                   }),
                 )}
               </div>
+              <BoardPhaseOverlay
+                status={effectiveStatus}
+                mode={mode}
+                room={onlineRoom}
+                currentTurn={currentTurn}
+                myOnlineStone={myOnlineStone}
+                moveCount={activeMoves.length}
+                message={mode === 'online' ? onlineStatusMessage : statusMessage}
+              />
             </div>
           </section>
 
@@ -749,6 +780,13 @@ export function GomokuOverlay({
               onTimerEnabledChange={setTimerEnabled}
               onTimerSecondsChange={setTimerSeconds}
             />
+            {mode === 'online' ? (
+              <OnlineVersusPanel
+                room={onlineRoom}
+                currentTurn={currentTurn}
+                myOnlineStone={myOnlineStone}
+              />
+            ) : null}
             <MatchPanel
               currentTurn={currentTurn}
               timers={mode === 'online' ? onlineTimers : timers}
@@ -1161,40 +1199,277 @@ function OnlinePanel({
   )
 }
 
+function OnlineVersusPanel({
+  room,
+  currentTurn,
+  myOnlineStone,
+}: {
+  room: GomokuRoom | null
+  currentTurn: Stone
+  myOnlineStone: Stone | null
+}) {
+  const blackPlayer = room?.blackPlayer ?? null
+  const whitePlayer = room?.whitePlayer ?? null
+  const isPlaying = room?.status === 'PLAYING'
+
+  return (
+    <section className="gomoku-panel gomoku-online-versus">
+      <div className="gomoku-online-versus-heading">
+        <h2>{text.onlineMatch}</h2>
+        <span>{room ? `${text.roomCode} ${room.roomCode}` : text.onlineLobbyGuide}</span>
+      </div>
+      <div className="gomoku-versus-grid">
+        <OnlinePlayerCard
+          stone="black"
+          player={blackPlayer}
+          fallbackName={room ? text.black : text.me}
+          fallbackAvatarIndex={0}
+          isMe={myOnlineStone === 'black'}
+          isTurn={isPlaying && currentTurn === 'black'}
+        />
+        <span className="gomoku-versus-mark">{text.versus}</span>
+        <OnlinePlayerCard
+          stone="white"
+          player={whitePlayer}
+          fallbackName={room ? text.waiting : text.opponent}
+          fallbackAvatarIndex={1}
+          isMe={myOnlineStone === 'white'}
+          isTurn={isPlaying && currentTurn === 'white'}
+          isWaiting={Boolean(room && !whitePlayer)}
+        />
+      </div>
+    </section>
+  )
+}
+
+function OnlinePlayerCard({
+  stone,
+  player,
+  fallbackName,
+  fallbackAvatarIndex,
+  isMe,
+  isTurn,
+  isWaiting = false,
+}: {
+  stone: Stone
+  player: GomokuRoom['blackPlayer'] | null
+  fallbackName: string
+  fallbackAvatarIndex: number
+  isMe: boolean
+  isTurn: boolean
+  isWaiting?: boolean
+}) {
+  const stoneLabel = stone === 'black' ? text.black : text.white
+  const avatarSrc = getOnlineCharacterImage(player?.patientProfileId, fallbackAvatarIndex)
+
+  return (
+    <div
+      className={[
+        'gomoku-versus-player',
+        stone,
+        isMe ? 'me' : '',
+        isTurn ? 'active' : '',
+        isWaiting ? 'waiting' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
+    >
+      <div className="gomoku-versus-avatar">
+        <img src={avatarSrc} alt="" aria-hidden="true" />
+      </div>
+      <div>
+        <span>{isMe ? text.me : isWaiting ? text.waiting : text.opponent}</span>
+        <strong>{player?.nickname ?? fallbackName}</strong>
+        <em>
+          {stoneLabel}
+          {isTurn ? ` · ${text.current}` : ''}
+        </em>
+      </div>
+    </div>
+  )
+}
+
 function StatusBanner({
   status,
   currentTurn,
   isComputerThinking,
+  mode,
+  room,
+  myOnlineStone,
+  moveCount,
   message,
 }: {
   status: GameStatus
   currentTurn: Stone
   isComputerThinking: boolean
+  mode: GameMode
+  room: GomokuRoom | null
+  myOnlineStone: Stone | null
+  moveCount: number
   message: string
 }) {
-  let headline: string = text.playing
-  let detail: string = currentTurn === 'black' ? text.black : text.white
+  const presentation = getStatusPresentation({
+    status,
+    currentTurn,
+    isComputerThinking,
+    mode,
+    room,
+    myOnlineStone,
+    moveCount,
+    message,
+  })
 
-  if (isComputerThinking) {
-    detail = text.computerThinking
+  return (
+    <div className={`gomoku-status ${presentation.tone}`}>
+      <div className="gomoku-status-copy">
+        <em>{presentation.label}</em>
+        <strong>{presentation.headline}</strong>
+      </div>
+      <p>{presentation.detail}</p>
+    </div>
+  )
+}
+
+function BoardPhaseOverlay({
+  status,
+  mode,
+  room,
+  currentTurn,
+  myOnlineStone,
+  moveCount,
+  message,
+}: {
+  status: GameStatus
+  mode: GameMode
+  room: GomokuRoom | null
+  currentTurn: Stone
+  myOnlineStone: Stone | null
+  moveCount: number
+  message: string
+}) {
+  const shouldShow =
+    status.phase !== 'playing' ||
+    moveCount === 0 ||
+    (mode === 'online' && (!room || room.status !== 'PLAYING'))
+
+  if (!shouldShow) return null
+
+  const presentation = getStatusPresentation({
+    status,
+    currentTurn,
+    isComputerThinking: false,
+    mode,
+    room,
+    myOnlineStone,
+    moveCount,
+    message,
+  })
+
+  return (
+    <div className={`gomoku-board-phase ${presentation.tone}`}>
+      <span>{presentation.label}</span>
+      <strong>{presentation.headline}</strong>
+      <em>{presentation.detail}</em>
+    </div>
+  )
+}
+
+function getStatusPresentation({
+  status,
+  currentTurn,
+  isComputerThinking,
+  mode,
+  room,
+  myOnlineStone,
+  moveCount,
+  message,
+}: {
+  status: GameStatus
+  currentTurn: Stone
+  isComputerThinking: boolean
+  mode: GameMode
+  room: GomokuRoom | null
+  myOnlineStone: Stone | null
+  moveCount: number
+  message: string
+}) {
+  const turnDetail =
+    mode === 'online' && myOnlineStone
+      ? myOnlineStone === currentTurn
+        ? text.myTurn
+        : text.opponentTurn
+      : `${currentTurn === 'black' ? text.black : text.white} ${text.current}`
+
+  if (mode === 'online' && !room) {
+    return {
+      tone: 'online',
+      label: text.onlineMatch,
+      headline: text.lobby,
+      detail: text.onlineLobbyGuide,
+    } as const
+  }
+
+  if (room?.status === 'CANCELLED') {
+    return {
+      tone: 'ended',
+      label: text.finished,
+      headline: text.cancelled,
+      detail: text.finishedRoomNextGame,
+    } as const
   }
 
   if (status.phase === 'won') {
-    headline = status.winner === 'black' ? text.blackWins : text.whiteWins
-    detail = status.reason === 'timeout' ? text.timeout : text.five
+    const winner = status.winner === 'black' ? text.blackWins : text.whiteWins
+    const reason = message || (status.reason === 'timeout' ? text.timeout : text.five)
+    return {
+      tone: 'ended',
+      label: text.finished,
+      headline: text.gameEnd,
+      detail: `${winner} · ${reason}`,
+    } as const
   }
 
   if (status.phase === 'draw') {
-    headline = text.draw
-    detail = '\uBC14\uB451\uD310\uC774 \uAC00\uB4DD \uCC3C\uC5B4\uC694.'
+    return {
+      tone: 'ended',
+      label: text.finished,
+      headline: text.gameEnd,
+      detail: `${text.draw} · ${message || '\uBC14\uB451\uD310\uC774 \uAC00\uB4DD \uCC3C\uC5B4\uC694.'}`,
+    } as const
   }
 
-  return (
-    <div className="gomoku-status">
-      <strong>{headline}</strong>
-      <span>{message || detail}</span>
-    </div>
-  )
+  if (mode === 'online' && room?.status === 'WAITING') {
+    return {
+      tone: 'online',
+      label: `${text.roomCode} ${room.roomCode}`,
+      headline: text.waitingOpponent,
+      detail: text.onlineLobbyGuide,
+    } as const
+  }
+
+  if (mode === 'online' && room?.status === 'PLAYING') {
+    return {
+      tone: 'online',
+      label: `${text.roomCode} ${room.roomCode}`,
+      headline: moveCount === 0 ? text.onlineGameStart : text.playing,
+      detail: message || turnDetail,
+    } as const
+  }
+
+  return {
+    tone: 'playing',
+    label: mode === 'computer' ? text.computer : text.local,
+    headline: moveCount === 0 ? text.gameStart : text.playing,
+    detail: isComputerThinking ? text.computerThinking : message || turnDetail,
+  } as const
+}
+
+function getOnlineCharacterImage(patientProfileId: number | undefined, fallbackIndex: number) {
+  const imageIndex =
+    patientProfileId === undefined
+      ? fallbackIndex
+      : Math.abs(patientProfileId) % onlineCharacterImages.length
+  return onlineCharacterImages[imageIndex]
 }
 
 function MoveHistory({ moves }: { moves: GomokuMove[] }) {
