@@ -15,15 +15,26 @@ import com.comong.backend.global.storage.ImageStorage;
  * <p>{@code imageUrl} 은 {@link ImageStorage#toPublicUrl} 을 거친 값.
  */
 public record PublicPhotoBoothResponse(
-        Long id, String frameId, String imageUrl, LocalDateTime createdAt, Author author) {
+        Long id,
+        String frameId,
+        String imageUrl,
+        String thumbnailUrl,
+        LocalDateTime createdAt,
+        Author author) {
 
     public record Author(String nickname) {}
 
     public static PublicPhotoBoothResponse from(PhotoBoothPhoto photo, ImageStorage imageStorage) {
+        String imageUrl = imageStorage.toPublicUrl(photo.getImageUrl());
+        String thumbnailUrl =
+                photo.getThumbnailUrl() == null || photo.getThumbnailUrl().isBlank()
+                        ? imageUrl
+                        : imageStorage.toPublicUrl(photo.getThumbnailUrl());
         return new PublicPhotoBoothResponse(
                 photo.getId(),
                 photo.getFrameId(),
-                imageStorage.toPublicUrl(photo.getImageUrl()),
+                imageUrl,
+                thumbnailUrl,
                 photo.getCreatedAt(),
                 new Author(photo.getPatientProfile().getNickname()));
     }
