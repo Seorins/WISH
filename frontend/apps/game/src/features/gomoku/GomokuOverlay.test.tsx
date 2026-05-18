@@ -32,6 +32,7 @@ const LOCAL_LABEL = '2\uC778'
 const CREATE_ROOM_LABEL = '\uBC29 \uB9CC\uB4E4\uAE30'
 const RANKING_LABEL = '\uB7AD\uD0B9'
 const GAME_END_LABEL = '\uB300\uAD6D \uC885\uB8CC'
+const NO_OPPONENT_LABEL = '\uC544\uC9C1 \uC5C6\uC74C'
 const COMPUTER_LEVEL_LABEL = '\uCEF4\uD4E8\uD130 \uB09C\uC774\uB3C4'
 const RULE_LABEL = '\uB8F0'
 const FREESTYLE_LABEL = '\uC790\uC720\uB8F0'
@@ -161,6 +162,7 @@ describe('GomokuOverlay online room creation', () => {
       })
     })
     expect(await screen.findByText('ABC123')).toBeTruthy()
+    expect(screen.getByText(NO_OPPONENT_LABEL)).toBeTruthy()
   })
 
   it('requests authentication instead of creating a room without a patient profile', async () => {

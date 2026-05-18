@@ -112,6 +112,7 @@ const text = {
   waitingRooms: '\uB300\uAE30 \uC911\uC778 \uBC29',
   waiting: '\uB300\uAE30',
   waitingOpponent: '\uC0C1\uB300\uB97C \uAE30\uB2E4\uB9AC\uB294 \uC911',
+  noOpponent: '\uC544\uC9C1 \uC5C6\uC74C',
   waitingHostStart:
     '\uBC29\uC7A5\uC774 \uB300\uAD6D\uC744 \uC2DC\uC791\uD560 \uB54C\uAE4C\uC9C0 \uB300\uAE30',
   readyToStart: '\uC0C1\uB300 \uC785\uC7A5 \uC644\uB8CC',
@@ -1399,7 +1400,7 @@ function OnlineVersusPanel({
         <OnlinePlayerCard
           stone="white"
           player={whitePlayer}
-          fallbackName={room ? text.waiting : text.opponent}
+          fallbackName={room ? text.noOpponent : text.opponent}
           outfit={whiteIsMe ? selectedOutfit : getOnlinePlayerOutfit(whitePlayer, 1)}
           isMe={whiteIsMe}
           isTurn={isPlaying && currentTurn === 'white'}
@@ -1461,7 +1462,7 @@ function OnlinePlayerCard({
         />
       </div>
       <div>
-        <span>{isMe ? text.me : isWaiting ? text.waiting : text.opponent}</span>
+        <span>{isMe ? text.me : text.opponent}</span>
         <strong>{player?.nickname ?? fallbackName}</strong>
         <em>{stoneLabel}</em>
         <time>{timerLabel}</time>
