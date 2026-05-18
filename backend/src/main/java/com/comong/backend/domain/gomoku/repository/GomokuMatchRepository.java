@@ -26,6 +26,8 @@ public interface GomokuMatchRepository extends JpaRepository<GomokuMatch, Long> 
     Page<GomokuMatch> findByStatusAndWhitePatientProfileIsNullOrderByCreatedAtDesc(
             GomokuMatchStatus status, Pageable pageable);
 
+    Optional<GomokuMatch> findByRematchSourceMatchId(Long rematchSourceMatchId);
+
     @Query(
             value =
                     "select m from GomokuMatch m "

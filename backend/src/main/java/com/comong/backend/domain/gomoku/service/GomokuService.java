@@ -120,6 +120,38 @@ public class GomokuService {
     }
 
     @Transactional
+    public GomokuRoomResponse swapStones(Long userId, Long roomId) {
+        PatientProfile patientProfile = findPatientProfileOrThrow(userId);
+        GomokuMatch match = findRoomForUpdateOrThrow(roomId);
+        if (match.getStatus() != GomokuMatchStatus.WAITING
+                || match.getWhitePatientProfile() == null) {
+            throw new BusinessException(GomokuErrorCode.GOMOKU_INVALID_ROOM_STATE);
+        }
+        if (!match.getBlackPatientProfile().getId().equals(patientProfile.getId())) {
+            throw new BusinessException(GomokuErrorCode.GOMOKU_NOT_PARTICIPANT);
+        }
+        match.swapPlayersBeforeStart();
+        return toRoomResponse(match, patientProfile.getId());
+    }
+
+    @Transactional
+    public GomokuRoomResponse rematchRoom(Long userId, Long roomId) {
+        PatientProfile patientProfile = findPatientProfileOrThrow(userId);
+        GomokuMatch match = findRoomForUpdateOrThrow(roomId);
+        if (match.getStatus() != GomokuMatchStatus.FINISHED
+                || match.getWhitePatientProfile() == null) {
+            throw new BusinessException(GomokuErrorCode.GOMOKU_INVALID_ROOM_STATE);
+        }
+        ensureParticipant(match, patientProfile.getId());
+
+        GomokuMatch rematch =
+                gomokuMatchRepository
+                        .findByRematchSourceMatchId(match.getId())
+                        .orElseGet(() -> createSwappedRematch(match));
+        return toRoomResponse(rematch, patientProfile.getId());
+    }
+
+    @Transactional
     public GomokuRoomResponse findRoom(Long userId, Long roomId) {
         Long myPatientProfileId =
                 patientProfileService
@@ -301,6 +333,20 @@ public class GomokuService {
         return GomokuRoomResponse.of(match, parseMoves(match.getMovesJson()), myPatientProfileId);
     }
 
+    private GomokuMatch createSwappedRematch(GomokuMatch match) {
+        return gomokuMatchRepository.save(
+                GomokuMatch.builder()
+                        .roomCode(generateRoomCode())
+                        .blackPatientProfile(match.getWhitePatientProfile())
+                        .blackTextureKey(match.getWhiteTextureKey())
+                        .whitePatientProfile(match.getBlackPatientProfile())
+                        .whiteTextureKey(match.getBlackTextureKey())
+                        .ruleSet(match.getRuleSet())
+                        .timerSeconds(match.getTimerSeconds())
+                        .rematchSourceMatch(match)
+                        .build());
+    }
+
     private void finishByForfeit(
             GomokuMatch match, GomokuStone loserStone, GomokuEndReason endReason) {
         GomokuStone winnerStone = loserStone.opponent();
@@ -402,11 +448,15 @@ public class GomokuService {
         board[row][col] = stone;
         try {
             int maxLine = 0;
+            boolean exactFive = false;
             int openThrees = 0;
             int fours = 0;
             for (Direction direction : DIRECTIONS) {
                 int length = countLine(board, row, col, stone, direction);
                 maxLine = Math.max(maxLine, length);
+                if (length == 5) {
+                    exactFive = true;
+                }
                 if (hasOpenThree(board, row, col, stone, direction)) {
                     openThrees += 1;
                 }
@@ -414,7 +464,13 @@ public class GomokuService {
                     fours += 1;
                 }
             }
-            return maxLine > 5 || openThrees >= 2 || fours >= 2;
+            if (maxLine > 5) {
+                return true;
+            }
+            if (exactFive) {
+                return false;
+            }
+            return openThrees >= 2 || fours >= 2;
         } finally {
             board[row][col] = null;
         }

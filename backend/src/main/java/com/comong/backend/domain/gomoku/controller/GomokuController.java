@@ -79,6 +79,22 @@ public class GomokuController {
                 ApiResponse.success(gomokuService.startRoom(currentUser.userId(), roomId)));
     }
 
+    @Operation(summary = "Swap online Gomoku room stones before start")
+    @PostMapping("/rooms/{roomId}/swap-stones")
+    public ResponseEntity<ApiResponse<GomokuRoomResponse>> swapStones(
+            @AuthenticationPrincipal AuthenticatedUser currentUser, @PathVariable Long roomId) {
+        return ResponseEntity.ok(
+                ApiResponse.success(gomokuService.swapStones(currentUser.userId(), roomId)));
+    }
+
+    @Operation(summary = "Create swapped rematch for finished online Gomoku room")
+    @PostMapping("/rooms/{roomId}/rematch")
+    public ResponseEntity<ApiResponse<GomokuRoomResponse>> rematchRoom(
+            @AuthenticationPrincipal AuthenticatedUser currentUser, @PathVariable Long roomId) {
+        return ResponseEntity.ok(
+                ApiResponse.success(gomokuService.rematchRoom(currentUser.userId(), roomId)));
+    }
+
     @Operation(summary = "Get online Gomoku room state")
     @GetMapping("/rooms/{roomId}")
     public ResponseEntity<ApiResponse<GomokuRoomResponse>> findRoom(

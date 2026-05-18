@@ -8,8 +8,10 @@ import {
   joinGomokuRoom,
   leaveGomokuRoom,
   playGomokuMove,
+  rematchGomokuRoom,
   resignGomokuRoom,
   startGomokuRoom,
+  swapGomokuRoomStones,
   type GomokuEndReason,
   type GomokuRanking,
   type GomokuRoom,
@@ -54,8 +56,7 @@ type GomokuOverlayProps = {
 type GameMode = 'local' | 'computer' | 'online'
 type OnlinePanelTab = 'rooms' | 'stats' | 'ranking'
 
-const HUMAN_STONE: Stone = 'black'
-const COMPUTER_STONE: Stone = 'white'
+const DEFAULT_HUMAN_STONE: Stone = 'black'
 const DEFAULT_TIMER_SECONDS = 30
 const ONLINE_RULE_SET: RuleSet = 'renju-lite'
 const ONLINE_AVATAR_SIZE = 54
@@ -105,6 +106,7 @@ const text = {
   five: '5\uBAA9\uC744 \uC644\uC131\uD588\uC5B4\uC694.',
   lobby: '\uB85C\uBE44',
   createRoom: '\uBC29 \uB9CC\uB4E4\uAE30',
+  nextOnlineGame: '\uB2E4\uC74C \uB300\uAD6D',
   refresh: '\uC0C8\uB85C\uACE0\uCE68',
   join: '\uC785\uC7A5',
   leaveRoom: '\uBC29 \uB098\uAC00\uAE30',
@@ -117,6 +119,7 @@ const text = {
     '\uBC29\uC7A5\uC774 \uB300\uAD6D\uC744 \uC2DC\uC791\uD560 \uB54C\uAE4C\uC9C0 \uB300\uAE30',
   readyToStart: '\uC0C1\uB300 \uC785\uC7A5 \uC644\uB8CC',
   startRoom: '\uAC8C\uC784 \uC2DC\uC791',
+  swapStones: '\uD751\uBC31 \uBCC0\uACBD',
   noRooms: '\uC785\uC7A5\uD560 \uBC29\uC774 \uC5C6\uC5B4\uC694.',
   roomCode: '\uBC29 \uCF54\uB4DC',
   myStats: '\uB0B4 \uC804\uC801',
@@ -140,7 +143,7 @@ const text = {
   ranked: '\uB7AD\uD0B9 \uBC18\uC601',
   emptyRanking: '\uC544\uC9C1 \uB7AD\uD0B9\uC774 \uC5C6\uC5B4\uC694.',
   finishedRoomNextGame:
-    '\uB300\uAD6D\uC774 \uB05D\uB0AC\uC5B4\uC694. \uB2E4\uC74C \uB300\uAD6D \uC900\uBE44 \uC644\uB8CC.',
+    '\uB300\uAD6D\uC774 \uB05D\uB0AC\uC5B4\uC694. \uB2E4\uC74C \uB300\uAD6D\uC740 \uD751\uBC31\uC744 \uBC14\uAFC0 \uAC70\uC608\uC694.',
   onlineMatch: '\uC628\uB77C\uC778 \uB300\uC804',
   onlineLobbyGuide: '\uC628\uB77C\uC778 \uB85C\uBE44 \uC900\uBE44 \uC644\uB8CC',
   gameStart: '\uB300\uAD6D \uC2DC\uC791',
@@ -179,6 +182,7 @@ export function GomokuOverlay({
   const [statusMessage, setStatusMessage] = useState('')
   const [timeoutWinner, setTimeoutWinner] = useState<Stone | null>(null)
   const [isComputerThinking, setIsComputerThinking] = useState(false)
+  const [computerHumanStone, setComputerHumanStone] = useState<Stone>(DEFAULT_HUMAN_STONE)
   const [hintMove, setHintMove] = useState<Position | null>(null)
   const [scoreboard, setScoreboard] = useState({ black: 0, white: 0, draw: 0 })
   const [onlineRoom, setOnlineRoom] = useState<GomokuRoom | null>(null)
@@ -236,6 +240,7 @@ export function GomokuOverlay({
     : isResolvingOnlineProfile
       ? text.onlinePreparing
       : getOnlineRequirementMessage()
+  const computerStone = opponentOf(computerHumanStone)
   const canHumanPlay =
     mode === 'online'
       ? Boolean(
@@ -244,7 +249,8 @@ export function GomokuOverlay({
           myOnlineStone === currentTurn &&
           effectiveStatus.phase === 'playing',
         )
-      : effectiveStatus.phase === 'playing' && (mode === 'local' || currentTurn === HUMAN_STONE)
+      : effectiveStatus.phase === 'playing' &&
+        (mode === 'local' || currentTurn === computerHumanStone)
   const onlineTimers = useMemo(
     () =>
       onlineRoom
@@ -424,6 +430,46 @@ export function GomokuOverlay({
     }
   }, [loadOnlineDashboard, onlineRoomId])
 
+  const handleOnlineSwapStones = useCallback(async () => {
+    if (!onlineRoomId) return
+    setOnlineBusy(true)
+    try {
+      const response = await swapGomokuRoomStones(onlineRoomId)
+      if (!response.data) {
+        throw new Error(text.onlineActionFailed)
+      }
+      setOnlineRoom(response.data)
+      setOnlineError('')
+      await loadOnlineDashboard()
+    } catch (error) {
+      setOnlineError(getApiErrorMessage(error, text.onlineActionFailed))
+    } finally {
+      setOnlineBusy(false)
+    }
+  }, [loadOnlineDashboard, onlineRoomId])
+
+  const handleOnlineRematch = useCallback(async () => {
+    if (!onlineRoomId) return
+    setOnlineBusy(true)
+    try {
+      const response = await rematchGomokuRoom(onlineRoomId)
+      if (!response.data) {
+        throw new Error(text.onlineActionFailed)
+      }
+      const roomPatientProfileId = getMyPatientProfileIdFromRoom(response.data)
+      if (roomPatientProfileId) {
+        setResolvedPatientProfileId(roomPatientProfileId)
+      }
+      setOnlineRoom(response.data)
+      setOnlineError('')
+      await loadOnlineDashboard()
+    } catch (error) {
+      setOnlineError(getApiErrorMessage(error, text.onlineActionFailed))
+    } finally {
+      setOnlineBusy(false)
+    }
+  }, [loadOnlineDashboard, onlineRoomId])
+
   const handleOnlineResign = useCallback(async () => {
     if (!onlineRoomId) return
     setOnlineBusy(true)
@@ -541,7 +587,7 @@ export function GomokuOverlay({
     if (
       !open ||
       mode !== 'computer' ||
-      currentTurn !== COMPUTER_STONE ||
+      currentTurn !== computerStone ||
       effectiveStatus.phase !== 'playing'
     ) {
       setIsComputerThinking(false)
@@ -550,10 +596,10 @@ export function GomokuOverlay({
 
     setIsComputerThinking(true)
     const timeoutId = window.setTimeout(() => {
-      const nextMove = chooseComputerMove(board, computerLevel, COMPUTER_STONE, ruleSet)
+      const nextMove = chooseComputerMove(board, computerLevel, computerStone, ruleSet)
       setMoves(previousMoves => {
         if (!nextMove || previousMoves.length !== moves.length) return previousMoves
-        return [...previousMoves, { position: nextMove, stone: COMPUTER_STONE, source: 'computer' }]
+        return [...previousMoves, { position: nextMove, stone: computerStone, source: 'computer' }]
       })
       setStatusMessage('')
       setHintMove(null)
@@ -561,7 +607,17 @@ export function GomokuOverlay({
     }, COMPUTER_THINK_DELAY_MS)
 
     return () => window.clearTimeout(timeoutId)
-  }, [board, computerLevel, currentTurn, effectiveStatus.phase, mode, moves.length, open, ruleSet])
+  }, [
+    board,
+    computerLevel,
+    computerStone,
+    currentTurn,
+    effectiveStatus.phase,
+    mode,
+    moves.length,
+    open,
+    ruleSet,
+  ])
 
   useEffect(() => {
     if (mode === 'online') return
@@ -686,6 +742,13 @@ export function GomokuOverlay({
     onlineRoom?.status === 'WAITING' &&
     Boolean(onlineRoom.whitePlayer) &&
     myOnlineStone === 'black'
+  const canSwapOnlineStones =
+    mode === 'online' &&
+    onlineRoom?.status === 'WAITING' &&
+    Boolean(onlineRoom.whitePlayer) &&
+    myOnlineStone === 'black'
+  const canRematchOnlineRoom =
+    mode === 'online' && Boolean(onlineRoom?.status === 'FINISHED' && onlineRoom.whitePlayer)
 
   const handleCellClick = (position: Position) => {
     if (mode === 'online') {
@@ -722,6 +785,12 @@ export function GomokuOverlay({
     setHintMove(null)
     setTimeoutWinner(null)
     recordedResultRef.current = null
+  }
+
+  const handleSwapComputerStones = () => {
+    if (mode !== 'computer') return
+    setComputerHumanStone(previous => opponentOf(previous))
+    resetGame()
   }
 
   const handleHint = () => {
@@ -845,6 +914,7 @@ export function GomokuOverlay({
                   busy={onlineBusy}
                   profileNotice={onlineProfileNotice}
                   onCreateRoom={handleOnlineCreate}
+                  onRematchRoom={handleOnlineRematch}
                   onRefreshRooms={handleOnlineRefresh}
                   onJoinRoom={handleOnlineJoin}
                 />
@@ -865,6 +935,7 @@ export function GomokuOverlay({
                 scoreboard={scoreboard}
                 timerEnabled={timerEnabled}
                 computerLevel={computerLevel}
+                humanStone={computerHumanStone}
                 selectedOutfit={selectedOnlineOutfit}
               />
             ) : null}
@@ -883,23 +954,33 @@ export function GomokuOverlay({
             ) : null}
             {mode === 'online' ? (
               <div className="gomoku-actions" aria-label="\uB300\uAD6D \uBA85\uB839">
+                {canRematchOnlineRoom ? (
+                  <button type="button" onClick={handleOnlineRematch} disabled={onlineBusy}>
+                    {text.nextOnlineGame}
+                  </button>
+                ) : null}
                 <button type="button" onClick={handleOnlineRefresh} disabled={onlineBusy}>
                   {text.refresh}
                 </button>
-                <button
-                  type="button"
-                  onClick={handleOnlineStart}
-                  disabled={!canStartOnlineRoom || onlineBusy}
-                >
-                  {text.startRoom}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleOnlineResign}
-                  disabled={!onlineRoom || onlineRoom.status !== 'PLAYING' || onlineBusy}
-                >
-                  {text.resign}
-                </button>
+                {!canRematchOnlineRoom ? (
+                  <button
+                    type="button"
+                    onClick={handleOnlineStart}
+                    disabled={!canStartOnlineRoom || onlineBusy}
+                  >
+                    {text.startRoom}
+                  </button>
+                ) : null}
+                {canSwapOnlineStones ? (
+                  <button type="button" onClick={handleOnlineSwapStones} disabled={onlineBusy}>
+                    {text.swapStones}
+                  </button>
+                ) : null}
+                {onlineRoom?.status === 'PLAYING' ? (
+                  <button type="button" onClick={handleOnlineResign} disabled={onlineBusy}>
+                    {text.resign}
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   onClick={handleOnlineLeave}
@@ -913,6 +994,11 @@ export function GomokuOverlay({
                 <button type="button" onClick={resetGame}>
                   {text.restart}
                 </button>
+                {mode === 'computer' ? (
+                  <button type="button" onClick={handleSwapComputerStones}>
+                    {text.swapStones}
+                  </button>
+                ) : null}
                 <button type="button" onClick={handleUndo} disabled={moves.length === 0}>
                   {text.undo}
                 </button>
@@ -1098,6 +1184,7 @@ function PracticeVersusPanel({
   scoreboard,
   timerEnabled,
   computerLevel,
+  humanStone,
   selectedOutfit,
 }: {
   mode: Exclude<GameMode, 'online'>
@@ -1106,10 +1193,12 @@ function PracticeVersusPanel({
   scoreboard: Record<Stone, number> & { draw: number }
   timerEnabled: boolean
   computerLevel: ComputerLevel
+  humanStone: Stone
   selectedOutfit: PlayerOutfit
 }) {
   const opponent = computerOpponents[computerLevel]
-  const whiteName = mode === 'computer' ? opponent.name : text.white
+  const blackIsHuman = mode === 'computer' ? humanStone === 'black' : true
+  const whiteIsHuman = mode === 'computer' ? humanStone === 'white' : false
 
   return (
     <section className="gomoku-panel gomoku-online-versus gomoku-practice-versus">
@@ -1122,20 +1211,22 @@ function PracticeVersusPanel({
       <div className="gomoku-versus-grid">
         <PracticePlayerCard
           stone="black"
-          name={mode === 'computer' ? text.me : text.black}
+          name={mode === 'computer' ? (blackIsHuman ? text.me : opponent.name) : text.black}
           isTurn={currentTurn === 'black'}
           timerLabel={timerEnabled ? formatTime(timers.black) : '--:--'}
           resultLabel={`${scoreboard.black}${text.wins}`}
-          outfit={selectedOutfit}
+          outfit={blackIsHuman ? selectedOutfit : undefined}
+          imagePath={mode === 'computer' && !blackIsHuman ? opponent.imagePath : undefined}
         />
         <span className="gomoku-versus-mark">{text.versus}</span>
         <PracticePlayerCard
           stone="white"
-          name={whiteName}
+          name={mode === 'computer' ? (whiteIsHuman ? text.me : opponent.name) : text.white}
           isTurn={currentTurn === 'white'}
           timerLabel={timerEnabled ? formatTime(timers.white) : '--:--'}
           resultLabel={`${scoreboard.white}${text.wins} / ${scoreboard.draw}${text.draw}`}
-          imagePath={mode === 'computer' ? opponent.imagePath : undefined}
+          outfit={whiteIsHuman ? selectedOutfit : undefined}
+          imagePath={mode === 'computer' && !whiteIsHuman ? opponent.imagePath : undefined}
         />
       </div>
     </section>
@@ -1199,6 +1290,7 @@ function OnlinePanel({
   ranking,
   busy,
   onCreateRoom,
+  onRematchRoom,
   onRefreshRooms,
   onJoinRoom,
   profileNotice,
@@ -1210,11 +1302,13 @@ function OnlinePanel({
   busy: boolean
   profileNotice: string
   onCreateRoom: () => void
+  onRematchRoom: () => void
   onRefreshRooms: () => void
   onJoinRoom: (roomId: number) => void
 }) {
   const [activeTab, setActiveTab] = useState<OnlinePanelTab>('rooms')
   const canChooseNextRoom = !room || isClosedOnlineRoom(room)
+  const canRematchRoom = Boolean(room?.status === 'FINISHED' && room.whitePlayer)
 
   return (
     <section className="gomoku-panel gomoku-online-panel">
@@ -1272,10 +1366,18 @@ function OnlinePanel({
             </p>
           ) : (
             <>
-              {room ? <p className="gomoku-online-message">{text.finishedRoomNextGame}</p> : null}
+              {room ? (
+                <p className="gomoku-online-message">
+                  {canRematchRoom ? text.finishedRoomNextGame : formatRoomStatus(room)}
+                </p>
+              ) : null}
               <div className="gomoku-online-actions">
-                <button type="button" onClick={onCreateRoom} disabled={busy}>
-                  {text.createRoom}
+                <button
+                  type="button"
+                  onClick={canRematchRoom ? onRematchRoom : onCreateRoom}
+                  disabled={busy}
+                >
+                  {canRematchRoom ? text.nextOnlineGame : text.createRoom}
                 </button>
                 <button type="button" onClick={onRefreshRooms} disabled={busy}>
                   {text.refresh}
@@ -1345,8 +1447,11 @@ function OnlinePanel({
                 {ranking.entries.map(entry => (
                   <li key={entry.patientProfileId} className={entry.isMe ? 'me' : ''}>
                     <span>{entry.rank}</span>
-                    <strong>{entry.nickname}</strong>
-                    <em>{`${entry.wins}${text.wins}`}</em>
+                    <div className="gomoku-ranking-player">
+                      <strong>{entry.nickname}</strong>
+                      <span>{`${entry.wins}${text.wins} ${entry.draws}${text.draws} ${entry.losses}${text.losses}`}</span>
+                    </div>
+                    <em>{formatPercent(entry.winRate)}</em>
                   </li>
                 ))}
               </ol>

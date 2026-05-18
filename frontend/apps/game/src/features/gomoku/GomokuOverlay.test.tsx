@@ -1,10 +1,12 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import {
   createGomokuRoom,
   getGomokuRanking,
   getMyGomokuStats,
   getWaitingGomokuRooms,
   listPatientProfiles,
+  rematchGomokuRoom,
+  swapGomokuRoomStones,
   type GomokuRanking,
   type GomokuRoom,
   type GomokuRoomPage,
@@ -23,20 +25,30 @@ vi.mock('@wish/api-client', () => ({
   leaveGomokuRoom: vi.fn(),
   listPatientProfiles: vi.fn(),
   playGomokuMove: vi.fn(),
+  rematchGomokuRoom: vi.fn(),
   resignGomokuRoom: vi.fn(),
   startGomokuRoom: vi.fn(),
+  swapGomokuRoomStones: vi.fn(),
 }))
 
 const ONLINE_LABEL = '\uC628\uB77C\uC778'
+const COMPUTER_LABEL = '\uCEF4\uD4E8\uD130'
 const LOCAL_LABEL = '2\uC778'
 const CREATE_ROOM_LABEL = '\uBC29 \uB9CC\uB4E4\uAE30'
+const NEXT_ONLINE_GAME_LABEL = '\uB2E4\uC74C \uB300\uAD6D'
+const SWAP_STONES_LABEL = '\uD751\uBC31 \uBCC0\uACBD'
 const RANKING_LABEL = '\uB7AD\uD0B9'
 const GAME_END_LABEL = '\uB300\uAD6D \uC885\uB8CC'
+const GAME_START_LABEL = '\uB300\uAD6D \uC2DC\uC791'
+const RESTART_LABEL = '\uC0C8 \uB300\uAD6D'
+const BEGINNER_LABEL = '\uCD08\uAE09'
 const NO_OPPONENT_LABEL = '\uC544\uC9C1 \uC5C6\uC74C'
 const COMPUTER_LEVEL_LABEL = '\uCEF4\uD4E8\uD130 \uB09C\uC774\uB3C4'
 const RULE_LABEL = '\uB8F0'
 const FREESTYLE_LABEL = '\uC790\uC720\uB8F0'
 const WINS_LABEL = '\uC2B9'
+const DRAWS_LABEL = '\uBB34'
+const LOSSES_LABEL = '\uD328'
 const AUTH_REQUIRED_MESSAGE =
   '\uC628\uB77C\uC778 \uB300\uC804\uC740 \uB85C\uADF8\uC778\uC774 \uD544\uC694\uD574\uC694.'
 
@@ -130,6 +142,33 @@ const finishedRoom: GomokuRoom = {
   finishedAt: '2026-05-15T00:05:00',
 }
 
+const readyRoom: GomokuRoom = {
+  ...createdRoom,
+  id: 12,
+  roomCode: 'RDY123',
+  whitePlayer: {
+    patientProfileId: 8,
+    nickname: 'white',
+    textureKey: 'character-outfit-girl1',
+  },
+}
+
+const swappedRoom: GomokuRoom = {
+  ...readyRoom,
+  blackPlayer: readyRoom.whitePlayer!,
+  whitePlayer: readyRoom.blackPlayer,
+  myStone: 'WHITE',
+}
+
+const rematchRoom: GomokuRoom = {
+  ...readyRoom,
+  id: 13,
+  roomCode: 'REM123',
+  blackPlayer: finishedRoom.whitePlayer!,
+  whitePlayer: finishedRoom.blackPlayer,
+  myStone: 'WHITE',
+}
+
 describe('GomokuOverlay online room creation', () => {
   beforeEach(() => {
     window.localStorage.clear()
@@ -192,10 +231,62 @@ describe('GomokuOverlay online room creation', () => {
     expect(screen.queryByText(RULE_LABEL)).toBeNull()
   })
 
-  it('allows creating the next online room after a room finishes', async () => {
-    vi.mocked(createGomokuRoom)
-      .mockResolvedValueOnce(apiResponse(finishedRoom))
-      .mockResolvedValueOnce(apiResponse(createdRoom))
+  it('finishes a computer match on five-in-a-row and restarts with an empty board', async () => {
+    vi.useFakeTimers()
+    const randomSpy = vi.spyOn(Math, 'random').mockReturnValue(0)
+
+    try {
+      render(<GomokuOverlay open onClose={vi.fn()} patientProfileId={7} />)
+
+      fireEvent.click(screen.getByRole('button', { name: BEGINNER_LABEL }))
+
+      for (const cellName of ['11, 4', '11, 5', '11, 6', '11, 7']) {
+        fireEvent.click(screen.getByRole('gridcell', { name: cellName }))
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(500)
+        })
+        expect(
+          (screen.getByRole('gridcell', { name: '11, 8' }) as HTMLButtonElement).disabled,
+        ).toBe(false)
+      }
+
+      fireEvent.click(screen.getByRole('gridcell', { name: '11, 8' }))
+
+      expect(screen.getAllByText(GAME_END_LABEL).length).toBeGreaterThan(0)
+
+      fireEvent.click(screen.getByRole('button', { name: RESTART_LABEL }))
+
+      expect(screen.getAllByText(GAME_START_LABEL).length).toBeGreaterThan(0)
+      expect(screen.getByRole('button', { name: COMPUTER_LABEL }).className).toContain('active')
+    } finally {
+      randomSpy.mockRestore()
+      vi.useRealTimers()
+    }
+  })
+
+  it('lets the player swap stones against the computer and makes the computer open as black', async () => {
+    vi.useFakeTimers()
+
+    try {
+      render(<GomokuOverlay open onClose={vi.fn()} patientProfileId={7} />)
+
+      fireEvent.click(screen.getByRole('button', { name: SWAP_STONES_LABEL }))
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(500)
+      })
+
+      expect(screen.getByRole('gridcell', { name: '8, 8' }).className).toContain('stone-black')
+      expect((screen.getByRole('gridcell', { name: '8, 9' }) as HTMLButtonElement).disabled).toBe(
+        false,
+      )
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('creates the next online match as a swapped rematch after a room finishes', async () => {
+    vi.mocked(createGomokuRoom).mockResolvedValueOnce(apiResponse(finishedRoom))
+    vi.mocked(rematchGomokuRoom).mockResolvedValueOnce(apiResponse(rematchRoom))
 
     render(<GomokuOverlay open onClose={vi.fn()} patientProfileId={7} />)
 
@@ -205,14 +296,35 @@ describe('GomokuOverlay online room creation', () => {
     expect(await screen.findByText('FIN123')).toBeTruthy()
     expect(screen.getAllByText(GAME_END_LABEL).length).toBeGreaterThan(0)
 
-    const createNextRoomButton = screen.getByRole('button', { name: CREATE_ROOM_LABEL })
+    const createNextRoomButton = screen.getAllByRole('button', { name: NEXT_ONLINE_GAME_LABEL })[0]
     expect((createNextRoomButton as HTMLButtonElement).disabled).toBe(false)
     fireEvent.click(createNextRoomButton)
 
     await waitFor(() => {
-      expect(createGomokuRoom).toHaveBeenCalledTimes(2)
+      expect(rematchGomokuRoom).toHaveBeenCalledWith(finishedRoom.id)
     })
-    expect(await screen.findByText('ABC123')).toBeTruthy()
+    expect(createGomokuRoom).toHaveBeenCalledTimes(1)
+    expect(await screen.findByText('REM123')).toBeTruthy()
+    expect(screen.getAllByText('white').length).toBeGreaterThan(0)
+  })
+
+  it('lets the host swap black and white before starting an online room', async () => {
+    vi.mocked(createGomokuRoom).mockResolvedValueOnce(apiResponse(readyRoom))
+    vi.mocked(swapGomokuRoomStones).mockResolvedValueOnce(apiResponse(swappedRoom))
+
+    render(<GomokuOverlay open onClose={vi.fn()} patientProfileId={7} />)
+
+    fireEvent.click(screen.getByRole('button', { name: ONLINE_LABEL }))
+    fireEvent.click(screen.getByRole('button', { name: CREATE_ROOM_LABEL }))
+
+    expect(await screen.findByText('RDY123')).toBeTruthy()
+    const swapButton = screen.getByRole('button', { name: SWAP_STONES_LABEL })
+    expect((swapButton as HTMLButtonElement).disabled).toBe(false)
+    fireEvent.click(swapButton)
+
+    await waitFor(() => {
+      expect(swapGomokuRoomStones).toHaveBeenCalledWith(readyRoom.id)
+    })
   })
 
   it('shows online ranking on the ranking tab', async () => {
@@ -243,6 +355,7 @@ describe('GomokuOverlay online room creation', () => {
     fireEvent.click(screen.getByRole('button', { name: RANKING_LABEL }))
 
     expect(await screen.findByText('ranker')).toBeTruthy()
-    expect(screen.getByText(`4${WINS_LABEL}`)).toBeTruthy()
+    expect(screen.getByText(`4${WINS_LABEL} 0${DRAWS_LABEL} 1${LOSSES_LABEL}`)).toBeTruthy()
+    expect(screen.getByText('80%')).toBeTruthy()
   })
 })

@@ -5,6 +5,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.time.LocalDateTime;
+import java.util.List;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -13,6 +16,9 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
+import com.comong.backend.domain.gomoku.dto.GomokuMoveRecord;
+import com.comong.backend.domain.gomoku.entity.GomokuMatch;
+import com.comong.backend.domain.gomoku.entity.GomokuStone;
 import com.comong.backend.domain.gomoku.repository.GomokuMatchRepository;
 import com.comong.backend.domain.patient.repository.PatientProfileRepository;
 import com.comong.backend.domain.user.repository.UserRepository;
@@ -184,6 +190,84 @@ class GomokuControllerIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
+    void swapStones_beforeStartSwapsPlayersAndNewBlackCanStart() throws Exception {
+        TestUser black =
+                setupUserWithProfile("gomoku-swap-black@example.com", "swap-black", "black");
+        TestUser white =
+                setupUserWithProfile("gomoku-swap-white@example.com", "swap-white", "white");
+
+        long roomId = createWaitingJoinedRoom(black, white, "FREESTYLE");
+
+        mockMvc.perform(
+                        post("/gomoku/rooms/{roomId}/swap-stones", roomId)
+                                .header("Authorization", "Bearer " + black.token()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("WAITING"))
+                .andExpect(
+                        jsonPath("$.data.blackPlayer.patientProfileId")
+                                .value(white.patientProfileId()))
+                .andExpect(
+                        jsonPath("$.data.whitePlayer.patientProfileId")
+                                .value(black.patientProfileId()))
+                .andExpect(jsonPath("$.data.myStone").value("WHITE"));
+
+        mockMvc.perform(
+                        post("/gomoku/rooms/{roomId}/start", roomId)
+                                .header("Authorization", "Bearer " + white.token()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("PLAYING"))
+                .andExpect(jsonPath("$.data.currentTurn").value("BLACK"))
+                .andExpect(jsonPath("$.data.myStone").value("BLACK"));
+    }
+
+    @Test
+    void rematchRoom_afterFinishCreatesWaitingRoomWithSwappedPlayers() throws Exception {
+        TestUser black =
+                setupUserWithProfile("gomoku-rematch-black@example.com", "rematch-black", "black");
+        TestUser white =
+                setupUserWithProfile("gomoku-rematch-white@example.com", "rematch-white", "white");
+
+        long roomId = createJoinedRoom(black, white, "FREESTYLE");
+        play(black.token(), roomId, 7, 7);
+        play(white.token(), roomId, 0, 0);
+        play(black.token(), roomId, 7, 8);
+        play(white.token(), roomId, 0, 1);
+        play(black.token(), roomId, 7, 9);
+        play(white.token(), roomId, 0, 2);
+        play(black.token(), roomId, 7, 10);
+        play(white.token(), roomId, 0, 3);
+        play(black.token(), roomId, 7, 11).andExpect(jsonPath("$.data.status").value("FINISHED"));
+
+        String rematchBody =
+                mockMvc.perform(
+                                post("/gomoku/rooms/{roomId}/rematch", roomId)
+                                        .header("Authorization", "Bearer " + black.token()))
+                        .andExpect(status().isOk())
+                        .andExpect(jsonPath("$.data.status").value("WAITING"))
+                        .andExpect(
+                                jsonPath("$.data.blackPlayer.patientProfileId")
+                                        .value(white.patientProfileId()))
+                        .andExpect(
+                                jsonPath("$.data.whitePlayer.patientProfileId")
+                                        .value(black.patientProfileId()))
+                        .andExpect(jsonPath("$.data.currentTurn").value("BLACK"))
+                        .andExpect(jsonPath("$.data.myStone").value("WHITE"))
+                        .andExpect(jsonPath("$.data.moveCount").value(0))
+                        .andExpect(jsonPath("$.data.ranked").value(false))
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString();
+        long rematchId = objectMapper.readTree(rematchBody).get("data").get("id").asLong();
+
+        mockMvc.perform(
+                        post("/gomoku/rooms/{roomId}/start", rematchId)
+                                .header("Authorization", "Bearer " + white.token()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("PLAYING"))
+                .andExpect(jsonPath("$.data.myStone").value("BLACK"));
+    }
+
+    @Test
     void joinRoom_rejectsSelfPlay() throws Exception {
         TestUser user = setupUserWithProfile("gomoku-self@example.com", "gomoku-self", "self");
         long roomId =
@@ -212,7 +296,7 @@ class GomokuControllerIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
-    void ranking_ordersByWinsBeforeWinRate() throws Exception {
+    void ranking_ordersByWinsThenWinRate() throws Exception {
         TestUser alpha =
                 setupUserWithProfile("gomoku-rank-alpha@example.com", "rank-alpha", "alpha");
         TestUser beta = setupUserWithProfile("gomoku-rank-beta@example.com", "rank-beta", "beta");
@@ -223,6 +307,7 @@ class GomokuControllerIntegrationTest extends IntegrationTestSupport {
         finishBlackWin(alpha, gamma);
         finishBlackWin(gamma, alpha);
         finishBlackWin(beta, gamma);
+        finishBlackWin(beta, gamma);
 
         mockMvc.perform(
                         get("/gomoku/ranking")
@@ -231,10 +316,13 @@ class GomokuControllerIntegrationTest extends IntegrationTestSupport {
                                 .header("Authorization", "Bearer " + alpha.token()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.totalPlayers").value(3))
-                .andExpect(jsonPath("$.data.entries[0].nickname").value("alpha"))
+                .andExpect(jsonPath("$.data.entries[0].nickname").value("beta"))
                 .andExpect(jsonPath("$.data.entries[0].wins").value(2))
-                .andExpect(jsonPath("$.data.entries[1].nickname").value("beta"))
-                .andExpect(jsonPath("$.data.entries[1].wins").value(1));
+                .andExpect(jsonPath("$.data.entries[0].winRate").value(1.0))
+                .andExpect(jsonPath("$.data.entries[1].nickname").value("alpha"))
+                .andExpect(jsonPath("$.data.entries[1].wins").value(2))
+                .andExpect(jsonPath("$.data.entries[2].nickname").value("gamma"))
+                .andExpect(jsonPath("$.data.entries[2].wins").value(1));
     }
 
     @Test
@@ -380,6 +468,51 @@ class GomokuControllerIntegrationTest extends IntegrationTestSupport {
                 .andExpect(jsonPath("$.data.moveCount").value(11));
     }
 
+    @Test
+    void renjuLite_allowsBlackExactFiveEvenWhenItAlsoCreatesDoubleFour() throws Exception {
+        TestUser black =
+                setupUserWithProfile(
+                        "gomoku-exact-five-black@example.com",
+                        "gomoku-exact-five-black",
+                        "exact-five-black");
+        TestUser white =
+                setupUserWithProfile(
+                        "gomoku-exact-five-white@example.com",
+                        "gomoku-exact-five-white",
+                        "exact-five-white");
+
+        long roomId = createJoinedRoom(black, white, "RENJU_LITE");
+
+        seedMoves(
+                roomId,
+                List.of(
+                        move(7, 3, GomokuStone.BLACK),
+                        move(0, 0, GomokuStone.WHITE),
+                        move(7, 4, GomokuStone.BLACK),
+                        move(0, 2, GomokuStone.WHITE),
+                        move(7, 5, GomokuStone.BLACK),
+                        move(0, 4, GomokuStone.WHITE),
+                        move(7, 6, GomokuStone.BLACK),
+                        move(0, 6, GomokuStone.WHITE),
+                        move(4, 7, GomokuStone.BLACK),
+                        move(0, 8, GomokuStone.WHITE),
+                        move(5, 7, GomokuStone.BLACK),
+                        move(1, 0, GomokuStone.WHITE),
+                        move(6, 7, GomokuStone.BLACK),
+                        move(1, 3, GomokuStone.WHITE),
+                        move(4, 4, GomokuStone.BLACK),
+                        move(1, 5, GomokuStone.WHITE),
+                        move(5, 5, GomokuStone.BLACK),
+                        move(1, 7, GomokuStone.WHITE),
+                        move(6, 6, GomokuStone.BLACK),
+                        move(1, 9, GomokuStone.WHITE)));
+
+        play(black.token(), roomId, 7, 7)
+                .andExpect(jsonPath("$.data.status").value("FINISHED"))
+                .andExpect(jsonPath("$.data.result").value("BLACK_WIN"))
+                .andExpect(jsonPath("$.data.endReason").value("FIVE"));
+    }
+
     private void finishBlackWin(TestUser black, TestUser white) throws Exception {
         long roomId = createJoinedRoom(black, white, "FREESTYLE");
         play(black.token(), roomId, 7, 7);
@@ -394,6 +527,18 @@ class GomokuControllerIntegrationTest extends IntegrationTestSupport {
     }
 
     private long createJoinedRoom(TestUser black, TestUser white, String ruleSet) throws Exception {
+        long roomId = createWaitingJoinedRoom(black, white, ruleSet);
+
+        mockMvc.perform(
+                        post("/gomoku/rooms/{roomId}/start", roomId)
+                                .header("Authorization", "Bearer " + black.token()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("PLAYING"));
+        return roomId;
+    }
+
+    private long createWaitingJoinedRoom(TestUser black, TestUser white, String ruleSet)
+            throws Exception {
         long roomId =
                 objectMapper
                         .readTree(
@@ -418,12 +563,18 @@ class GomokuControllerIntegrationTest extends IntegrationTestSupport {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("WAITING"));
 
-        mockMvc.perform(
-                        post("/gomoku/rooms/{roomId}/start", roomId)
-                                .header("Authorization", "Bearer " + black.token()))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.status").value("PLAYING"));
         return roomId;
+    }
+
+    private void seedMoves(Long roomId, List<GomokuMoveRecord> moves) throws Exception {
+        GomokuMatch match = gomokuMatchRepository.findById(roomId).orElseThrow();
+        match.applyMove(objectMapper.writeValueAsString(moves), GomokuStone.BLACK, moves.size());
+        gomokuMatchRepository.save(match);
+        gomokuMatchRepository.flush();
+    }
+
+    private GomokuMoveRecord move(int row, int col, GomokuStone stone) {
+        return new GomokuMoveRecord(row, col, stone, LocalDateTime.now());
     }
 
     private org.springframework.test.web.servlet.ResultActions play(
