@@ -23,10 +23,11 @@ const SAFE_EMPTY_LINE = '괜찮아. 천천히 말해도 된단다.'
 const SAFE_FINAL_LINE = '오늘은 여기까지 해도 괜찮아.'
 
 // STT 오버레이 (bottom: clamp(300px, 32vh, 360px)) 와 화면 하단 다이얼로그 박스 사이 빈 영역에 종료 버튼을 띄운다.
+// 박스 상단과 겹치지 않도록 박스 위쪽 여유를 충분히 확보하고, STT 오버레이 하단과는 살짝 떨어지도록 조정.
 const finishButtonAnchorStyle: CSSProperties = {
   position: 'fixed',
   left: '50%',
-  bottom: 'clamp(230px, 24vh, 290px)',
+  bottom: 'clamp(290px, 29vh, 340px)',
   transform: 'translateX(-50%)',
   zIndex: 41,
   pointerEvents: 'none',

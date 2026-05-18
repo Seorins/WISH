@@ -13,3 +13,6 @@ fastdtw==0.3.4
 # RAG (784)
 sentence-transformers==3.4.1
 faiss-cpu==1.10.0
+
+# STT (Whisper 프록시: FastAPI UploadFile 처리)
+python-multipart==0.0.20

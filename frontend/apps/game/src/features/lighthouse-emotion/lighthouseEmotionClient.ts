@@ -238,6 +238,37 @@ export async function finishLighthouseEmotionSession(
   }
 }
 
+/**
+ * GMS Whisper 프록시 (AI 서버 `/dialogue/transcribe`) 로 오디오 → 텍스트 변환.
+ * 빈 텍스트 또는 fallback 응답이면 빈 문자열을 돌려준다. 호출 측이 fallback UX 로 흐르도록.
+ */
+export async function transcribeLighthouseAudio(
+  audio: Blob,
+  signal?: AbortSignal,
+): Promise<string> {
+  const formData = new FormData()
+  const filename = audio.type.includes('mp4')
+    ? 'audio.mp4'
+    : audio.type.includes('ogg')
+      ? 'audio.ogg'
+      : 'audio.webm'
+  formData.append('file', audio, filename)
+
+  const response = await fetch(`${AI_BASE_URL}/dialogue/transcribe`, {
+    method: 'POST',
+    body: formData,
+    signal,
+  })
+
+  if (!response.ok) {
+    throw new Error('Failed to transcribe lighthouse audio.')
+  }
+
+  const body = (await response.json()) as { text?: string; is_fallback?: boolean }
+  if (body.is_fallback) return ''
+  return typeof body.text === 'string' ? body.text : ''
+}
+
 export async function chatWithLighthouseLlm(
   patientProfileId: number,
   userMessage: string,
