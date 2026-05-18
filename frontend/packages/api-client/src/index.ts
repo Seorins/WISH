@@ -41,10 +41,9 @@ export {
   updateExerciseMotion,
 } from './exercise-motions'
 export {
-  calculateAverageCompletionRate,
-  calculateAverageAccuracy,
   CREATE_EXERCISE_SESSION_ERROR_MESSAGE,
   createExerciseSession,
+  createExerciseSessionMotion,
   EXERCISE_MOTION_MOVEMENT_ANALYSIS_ERROR_MESSAGE,
   EXERCISE_SESSION_DETAIL_ERROR_MESSAGE,
   EXERCISE_SESSION_ERROR_MESSAGE,
@@ -54,7 +53,7 @@ export {
   getExerciseSessionDetail,
   getExerciseSessions,
   getMyExerciseSessions,
-  toCreateExerciseSessionRequest,
+  validateCreateExerciseSessionMotionRequest,
   validateCreateExerciseSessionRequest,
 } from './exercise-sessions'
 export {
@@ -123,9 +122,8 @@ export {
   TAEKWONDO_BELT_COLORS,
 } from './taekwondo-belt-history'
 export {
-  calculateTaekwondoAverageAccuracy,
-  calculateTaekwondoMonstersDefeated,
   createTaekwondoSession,
+  createTaekwondoSessionMotion,
   formatTaekwondoAiFeedback,
   getMyTaekwondoSessions,
   getTaekwondoSessions,
@@ -201,11 +199,10 @@ export type {
   UpdateExerciseMotionRequest,
 } from './exercise-motions'
 export type {
-  CreateExerciseMotionRecord,
-  CreateExerciseMotionResultRequest,
-  CreateExerciseSessionRecord,
+  CreateExerciseSessionMotionRequest,
   CreateExerciseSessionRequest,
   ExerciseSessionDetail,
+  ExerciseSessionMotionSaveResponse,
   ExerciseMotionMovementAnalysisJointRange,
   ExerciseMotionMovementAnalysisResponse,
   ExerciseMotionMovementAnalysisSegment,
@@ -320,11 +317,13 @@ export type {
 } from './taekwondo-motions'
 export type { TaekwondoBeltColor, TaekwondoBeltHistory } from './taekwondo-belt-history'
 export type {
+  BeltPromotionResponse,
   CreateTaekwondoSessionMotionRequest,
   CreateTaekwondoSessionRequest,
   GetMyTaekwondoSessionsParams,
   TaekwondoSessionDetail,
   TaekwondoSessionMotionResult,
+  TaekwondoSessionMotionSaveResponse,
   TaekwondoSessionPage,
   ToCreateTaekwondoSessionMotionRequestParams,
   TaekwondoSessionSummary,

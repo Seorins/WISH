@@ -24,9 +24,8 @@ import {
 } from '@/game/systems/musicRecorder'
 import {
   analyzeTaegeuk1Motion,
-  calculateTaekwondoAverageAccuracy,
-  calculateTaekwondoMonstersDefeated,
   createTaekwondoSession,
+  createTaekwondoSessionMotion,
   DEFAULT_TAEKWONDO_BELT_COLOR,
   getTaekwondoBeltHistory,
   getTaekwondoPoomsaeNumber,
@@ -35,7 +34,6 @@ import {
   toCreateTaekwondoSessionMotionRequest,
   uploadToPresignedUrl,
   type CreateTaekwondoSessionMotionRequest,
-  type CreateTaekwondoSessionRequest,
   type Poomsae,
   type TaegeukAnalyzeResponse,
   type TaekwondoBeltColor,
@@ -165,6 +163,8 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
   private recordedMotionIndexes = new Set<number>()
   private motionRecorderHandle: ScreenRecorderHandle | null = null
   private pendingMotionUploads: Promise<void>[] = []
+  private taekwondoSessionIdPromise: Promise<number> | null = null
+  private taekwondoSessionPatientProfileId: number | null = null
   private currentMotionIndex = 0
   private practiceStartedAtMs = 0
   private motionStartedAtMs = 0
@@ -234,6 +234,8 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     this.bestAiAnalysis = null
     this.countdownTimer = null
     this.lastPoseDetectTimeMs = -1
+    this.taekwondoSessionIdPromise = null
+    this.taekwondoSessionPatientProfileId = null
     this.sessionId =
       typeof crypto !== 'undefined' && 'randomUUID' in crypto
         ? crypto.randomUUID()
@@ -1044,8 +1046,8 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
 
     const handle = this.motionRecorderHandle
     this.motionRecorderHandle = null
-    if (handle) {
-      const uploadPromise = (async () => {
+    const persistPromise = (async () => {
+      if (handle) {
         try {
           const rec = await handle.stop()
           const presigned = await requestPresignedUploadUrls({
@@ -1063,51 +1065,35 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
         } catch (err) {
           console.warn('[TaekwondoPoomsaePracticeScene] motion recording upload failed', err)
         }
-      })()
-      this.pendingMotionUploads.push(uploadPromise)
-    }
+      }
+      try {
+        const sessionId = await this.ensureTaekwondoSessionId()
+        await createTaekwondoSessionMotion(sessionId, motionResult)
+      } catch (err) {
+        console.warn('[TaekwondoPoomsaePracticeScene] motion persist failed', err)
+      }
+    })()
+    this.pendingMotionUploads.push(persistPromise)
 
     this.updatePoomsaeProgress()
   }
 
-  private async buildTaekwondoSessionPayload(): Promise<CreateTaekwondoSessionRequest | null> {
-    const patientProfileId = await resolvePatientProfileIdOrFetch()
-    if (!patientProfileId) {
-      console.warn(
-        '[TaekwondoPoomsaePracticeScene] Skip taekwondo session save: missing patientProfileId.',
-        {
-          search: window.location.search,
-          storedPatientProfileId: window.localStorage.getItem('wish_patient_profile_id'),
-          envPatientProfileId: import.meta.env.VITE_PATIENT_PROFILE_ID,
-        },
-      )
-      return null
+  private ensureTaekwondoSessionId(): Promise<number> {
+    if (!this.taekwondoSessionIdPromise) {
+      this.taekwondoSessionIdPromise = (async () => {
+        const patientProfileId = await resolvePatientProfileIdOrFetch()
+        if (!patientProfileId) {
+          throw new Error('환자 정보가 올바르지 않습니다.')
+        }
+        this.taekwondoSessionPatientProfileId = patientProfileId
+        const session = await createTaekwondoSession({
+          patientProfileId,
+          poomsae: this.getPoomsaeForApi(),
+        })
+        return session.id
+      })()
     }
-
-    if (this.motionResults.length === 0) {
-      console.warn(
-        '[TaekwondoPoomsaePracticeScene] Skip taekwondo session save: no motion results.',
-        {
-          loadedMotionCount: this.motions.length,
-          currentMotionIndex: this.currentMotionIndex,
-        },
-      )
-      return null
-    }
-
-    const durationSec = Math.max(
-      1,
-      this.motionResults.reduce((total, result) => total + result.durationSec, 0),
-    )
-
-    return {
-      patientProfileId,
-      poomsae: this.getPoomsaeForApi(),
-      durationSec,
-      averageAccuracy: calculateTaekwondoAverageAccuracy(this.motionResults),
-      monstersDefeated: calculateTaekwondoMonstersDefeated(this.motionResults),
-      motions: this.motionResults,
-    }
+    return this.taekwondoSessionIdPromise
   }
 
   private async finishPracticeSession(recordCurrentMotion: boolean) {
@@ -1129,13 +1115,14 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
       this.recordCurrentMotionResult()
     }
 
-    if (this.pendingMotionUploads.length > 0) {
-      await Promise.allSettled(this.pendingMotionUploads)
-      this.pendingMotionUploads = []
-    }
-
-    const payload = await this.buildTaekwondoSessionPayload()
-    if (!payload) {
+    if (this.motionResults.length === 0 && !this.taekwondoSessionIdPromise) {
+      console.warn(
+        '[TaekwondoPoomsaePracticeScene] Skip taekwondo session save: no motion results.',
+        {
+          loadedMotionCount: this.motions.length,
+          currentMotionIndex: this.currentMotionIndex,
+        },
+      )
       this.stopPractice()
       return
     }
@@ -1146,14 +1133,20 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     let shouldStopPractice = true
 
     try {
-      console.log('[TaekwondoPoomsaePracticeScene] Saving taekwondo session.', payload)
-      await createTaekwondoSession(payload)
-      console.log('[TaekwondoPoomsaePracticeScene] Saved taekwondo session.')
+      // 동작 단건 저장이 fire-and-forget 으로 진행되므로 남은 persist 만 대기. 별도 세션 종료 API 호출 없음.
+      await this.ensureTaekwondoSessionId()
+      if (this.pendingMotionUploads.length > 0) {
+        await Promise.allSettled(this.pendingMotionUploads)
+        this.pendingMotionUploads = []
+      }
       this.showFeedback('저장 완료')
-      shouldStopPractice = !(await this.showBeltPromotionIfNeeded(payload.patientProfileId))
+      const patientProfileId = this.taekwondoSessionPatientProfileId
+      if (patientProfileId) {
+        shouldStopPractice = !(await this.showBeltPromotionIfNeeded(patientProfileId))
+      }
     } catch (error) {
       this.hasSubmittedSession = false
-      console.warn('[TaekwondoPoomsaePracticeScene] Failed to save taekwondo session.', {
+      console.warn('[TaekwondoPoomsaePracticeScene] Failed to finalize taekwondo session.', {
         error,
         apiBaseUrl: import.meta.env.VITE_API_BASE_URL,
         hasAccessToken: Boolean(window.localStorage.getItem('wish_access_token')),
@@ -2037,6 +2030,8 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     this.motionRecorderHandle?.cancel()
     this.motionRecorderHandle = null
     this.pendingMotionUploads = []
+    this.taekwondoSessionIdPromise = null
+    this.taekwondoSessionPatientProfileId = null
     this.stopCamera()
     this.cleanupCameraEffects()
 

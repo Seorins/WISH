@@ -1,13 +1,12 @@
 ﻿import Phaser from 'phaser'
 import { playSceneBgm } from '@/game/systems/sceneBgm'
 import {
-  calculateAverageCompletionRate,
   createExerciseSession,
+  createExerciseSessionMotion,
   listExerciseMotions,
   requestPresignedUploadUrls,
-  toCreateExerciseSessionRequest,
   uploadToPresignedUrl,
-  type CreateExerciseSessionRecord,
+  type CreateExerciseSessionMotionRequest,
   type ExerciseMotion,
   type ExerciseMotionReplayClip,
   type ExerciseType,
@@ -613,6 +612,8 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
   private motionRecords: LocalExerciseMotionRecord[] = []
   private motionRecorderHandle: ScreenRecorderHandle | null = null
   private pendingMotionUploads: Promise<void>[] = []
+  private sessionIdPromise: Promise<number> | null = null
+  private exerciseSessionPatientProfileId: number | null = null
   private hasSubmittedSession = false
   private saveState: 'idle' | 'saving' | 'success' | 'error' = 'idle'
   private saveRetryButton?: Phaser.GameObjects.Text
@@ -692,6 +693,8 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     this.motionRecords = []
     this.motionRecorderHandle = null
     this.pendingMotionUploads = []
+    this.sessionIdPromise = null
+    this.exerciseSessionPatientProfileId = null
     this.hasSubmittedSession = false
     this.saveState = 'idle'
     this.lastTtsKey = null
@@ -3174,8 +3177,8 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
 
     const handle = this.motionRecorderHandle
     this.motionRecorderHandle = null
-    if (handle) {
-      const uploadPromise = (async () => {
+    const persistPromise = (async () => {
+      if (handle) {
         try {
           const rec = await handle.stop()
           const presigned = await requestPresignedUploadUrls({
@@ -3193,30 +3196,52 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
         } catch (error) {
           console.warn('[GymnasticsPlayScene] motion recording upload failed', error)
         }
-      })()
-      this.pendingMotionUploads.push(uploadPromise)
+      }
+      try {
+        const sessionId = await this.ensureExerciseSessionId()
+        await createExerciseSessionMotion(sessionId, this.toMotionRequest(motionRecord))
+      } catch (error) {
+        console.warn('[GymnasticsPlayScene] motion persist failed', error)
+      }
+    })()
+    this.pendingMotionUploads.push(persistPromise)
+  }
+
+  private toMotionRequest(record: LocalExerciseMotionRecord): CreateExerciseSessionMotionRequest {
+    return {
+      exerciseMotionId: record.exerciseMotionId,
+      durationSec: record.durationSec,
+      accuracy: record.completionRate,
+      completedReps: record.completedCount,
+      feedback: record.feedback,
+      ...(record.videoKey ? { videoKey: record.videoKey } : {}),
+      ...(record.thumbKey ? { thumbKey: record.thumbKey } : {}),
+      ...(record.poseReplay ? { poseReplay: record.poseReplay } : {}),
+      ...(record.compactPoseReplay ? { compactPoseReplay: record.compactPoseReplay } : {}),
     }
+  }
+
+  private ensureExerciseSessionId(): Promise<number> {
+    if (!this.sessionIdPromise) {
+      this.sessionIdPromise = (async () => {
+        const patientProfileId = await resolvePatientProfileIdOrFetch()
+        if (!patientProfileId) {
+          throw new Error('환자 정보가 올바르지 않습니다.')
+        }
+        this.exerciseSessionPatientProfileId = patientProfileId
+        const session = await createExerciseSession({
+          patientProfileId,
+          exerciseType: this.exerciseType,
+        })
+        return session.id
+      })()
+    }
+    return this.sessionIdPromise
   }
 
   private normalizeSessionFeedback(feedback: string | null | undefined) {
     const trimmedFeedback = feedback?.trim()
     return trimmedFeedback ? trimmedFeedback.slice(0, 255) : '\uC6B4\uB3D9 \uC644\uB8CC'
-  }
-
-  private async buildExerciseSessionRecord(): Promise<CreateExerciseSessionRecord> {
-    const patientProfileId = await resolvePatientProfileIdOrFetch()
-    if (!patientProfileId) {
-      throw new Error('환자 정보가 올바르지 않습니다.')
-    }
-
-    const durationSec = this.motionRecords.reduce((total, record) => total + record.durationSec, 0)
-    return {
-      patientProfileId,
-      exerciseType: this.exerciseType,
-      durationSec,
-      averageCompletionRate: calculateAverageCompletionRate(this.motionRecords),
-      motions: this.motionRecords,
-    }
   }
 
   private async finishExerciseSession() {
@@ -3233,25 +3258,29 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     this.renderSaveState()
 
     try {
+      // 동작 단건 저장이 fire-and-forget 으로 진행되었으므로, 남은 persist 들이 끝나길 기다린다.
+      // 한 번도 motion 이 저장 안 됐다면 lazy 생성으로 빈 세션이라도 만들어 둔다.
+      await this.ensureExerciseSessionId()
       if (this.pendingMotionUploads.length > 0) {
         await Promise.allSettled(this.pendingMotionUploads)
         this.pendingMotionUploads = []
       }
-      const payload = toCreateExerciseSessionRequest(await this.buildExerciseSessionRecord())
-      const savedSession = await createExerciseSession(payload)
       this.saveState = 'success'
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: [EXERCISE_SESSIONS_QUERY_KEY, savedSession.patientProfileId],
-        }),
-        queryClient.invalidateQueries({
-          queryKey: [EXERCISE_SESSION_REPORT_QUERY_KEY, savedSession.patientProfileId],
-        }),
-      ])
+      const patientProfileId = this.exerciseSessionPatientProfileId
+      if (patientProfileId) {
+        await Promise.all([
+          queryClient.invalidateQueries({
+            queryKey: [EXERCISE_SESSIONS_QUERY_KEY, patientProfileId],
+          }),
+          queryClient.invalidateQueries({
+            queryKey: [EXERCISE_SESSION_REPORT_QUERY_KEY, patientProfileId],
+          }),
+        ])
+      }
       this.renderSaveState()
       this.time.delayedCall(1500, () => fadeToScene(this, 'GymnasticsSelectScene'))
     } catch (error) {
-      console.warn('[GymnasticsPlayScene] Failed to save exercise session.', {
+      console.warn('[GymnasticsPlayScene] Failed to finalize exercise session.', {
         error,
         apiBaseUrl: import.meta.env.VITE_API_BASE_URL,
         hasAccessToken: Boolean(window.localStorage.getItem('wish_access_token')),
@@ -3935,6 +3964,8 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     this.cancelCurrentMotionRecording()
     this.resetCurrentMotionReplay()
     this.pendingMotionUploads = []
+    this.sessionIdPromise = null
+    this.exerciseSessionPatientProfileId = null
   }
 }
 
