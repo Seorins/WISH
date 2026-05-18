@@ -5,8 +5,6 @@ import { getGameSettings } from '@/game/settings/gameSettings'
 const FADE_IN_MS = 900
 const FADE_OUT_MS = 650
 const FADE_STEP_MS = 40
-const RESTART_CROSSFADE_MS = 5_000
-const RESTART_CHECK_MS = 250
 
 const BGM_TRACKS = {
   start: {
@@ -90,8 +88,6 @@ class SceneBgmController {
   private pendingTrackKey: SceneBgmTrackKey | null = null
   private fadeInHandle: FadeHandle | null = null
   private fadeOutHandle: FadeHandle | null = null
-  private restartCheckHandle: FadeHandle | null = null
-  private restartWatchAudio: HTMLAudioElement | null = null
   private fadingOutAudio: HTMLAudioElement | null = null
   private isUnlocked = false
   private hasUnlockListeners = false
@@ -150,7 +146,7 @@ class SceneBgmController {
     const track = BGM_TRACKS[trackKey]
     const audio = new Audio(assetPath(track.path))
 
-    audio.loop = false
+    audio.loop = true
     audio.preload = 'auto'
     audio.volume = 0
 
@@ -174,49 +170,15 @@ class SceneBgmController {
     this.currentAudio = audio
     this.currentTrackKey = trackKey
     this.fadeIn(audio, getTargetVolume(trackKey), FADE_IN_MS)
-    this.watchForRestart(audio, trackKey, requestId)
+    this.restartSameAudioOnEnded(audio, trackKey, requestId)
 
     if (previousAudio) {
       this.fadeOut(previousAudio, FADE_OUT_MS)
     }
   }
 
-  private async restartTrack(audioToReplace: HTMLAudioElement, trackKey: SceneBgmTrackKey) {
-    if (!getGameSettings().bgmEnabled || this.currentAudio !== audioToReplace) return
-
-    const requestId = this.requestSerial
-    const track = BGM_TRACKS[trackKey]
-    const audio = new Audio(assetPath(track.path))
-
-    audio.loop = false
-    audio.preload = 'auto'
-    audio.volume = 0
-
-    try {
-      await audio.play()
-    } catch {
-      return
-    }
-
-    if (
-      requestId !== this.requestSerial ||
-      this.currentAudio !== audioToReplace ||
-      this.pendingTrackKey !== trackKey
-    ) {
-      releaseAudio(audio)
-      return
-    }
-
-    this.currentAudio = audio
-    this.currentTrackKey = trackKey
-    this.fadeIn(audio, getTargetVolume(trackKey), RESTART_CROSSFADE_MS)
-    this.fadeOut(audioToReplace, RESTART_CROSSFADE_MS)
-    this.watchForRestart(audio, trackKey, requestId)
-  }
-
   private stop() {
     this.requestSerial += 1
-    this.clearRestartWatcher()
 
     if (!this.currentAudio) {
       this.currentTrackKey = null
@@ -256,54 +218,24 @@ class SceneBgmController {
     })
   }
 
-  private watchForRestart(audio: HTMLAudioElement, trackKey: SceneBgmTrackKey, requestId: number) {
-    this.clearRestartWatcher()
-
-    const restartIfCurrent = () => {
+  private restartSameAudioOnEnded(
+    audio: HTMLAudioElement,
+    trackKey: SceneBgmTrackKey,
+    requestId: number,
+  ) {
+    audio.addEventListener('ended', () => {
       if (
         requestId !== this.requestSerial ||
         this.currentAudio !== audio ||
         this.currentTrackKey !== trackKey ||
         !getGameSettings().bgmEnabled
       ) {
-        if (this.restartWatchAudio === audio) this.clearRestartWatcher()
         return
       }
 
-      void this.restartTrack(audio, trackKey)
-    }
-
-    audio.addEventListener('ended', restartIfCurrent, { once: true })
-    this.restartWatchAudio = audio
-
-    this.restartCheckHandle = window.setInterval(() => {
-      if (
-        requestId !== this.requestSerial ||
-        this.currentAudio !== audio ||
-        this.currentTrackKey !== trackKey ||
-        !getGameSettings().bgmEnabled
-      ) {
-        if (this.restartWatchAudio === audio) this.clearRestartWatcher()
-        return
-      }
-
-      if (!Number.isFinite(audio.duration) || audio.duration <= RESTART_CROSSFADE_MS / 1000) {
-        return
-      }
-
-      if (audio.currentTime >= audio.duration - RESTART_CROSSFADE_MS / 1000) {
-        this.clearRestartWatcher()
-        void this.restartTrack(audio, trackKey)
-      }
-    }, RESTART_CHECK_MS)
-  }
-
-  private clearRestartWatcher() {
-    if (this.restartCheckHandle) {
-      window.clearInterval(this.restartCheckHandle)
-      this.restartCheckHandle = null
-    }
-    this.restartWatchAudio = null
+      audio.currentTime = 0
+      void audio.play()
+    })
   }
 
   private ensureUnlockListeners() {
