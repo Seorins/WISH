@@ -676,164 +676,151 @@ export class QuizPlayScene extends Phaser.Scene {
     const container = this.add.container(cx, cy).setDepth(100)
     this.answerBanner = container
 
-    // 정답자가 있을 땐 황금 톤(승리감), 시간초과일 땐 차분한 cream 톤(공개감) 으로 분기.
+    // 정답자가 있을 땐 오렌지 accent 띠 + cream 본문(모던 톤), 시간초과는 차분한 갈색 띠.
+    // 이전 빈티지 황금 보더 + 별 ⭐ 양쪽 박힌 디자인이 촌스러워서 모바일 게임 톤으로 다듬음.
     const hasWinner = !!nickname
     const palette = hasWinner
       ? {
           shadow: 0x000000,
-          base: 0xc0701c, // 두께 표현용 짙은 주황
-          fill: 0xffb84a, // 메인 황금 주황
-          highlight: 0xffe28a, // 윗 하이라이트
-          border: 0x6a3a18, // 짙은 갈색 보더
-          title: '#fff7df',
-          titleStroke: '#6a3a18',
-          answer: '#ffffff',
-          answerStroke: '#6a3a18',
-          banner: 0xffd96b,
+          topBand: 0xff9a3c, // 윗 액센트 띠 — 따뜻한 오렌지
+          body: 0xfff8e7, // 본문 cream
+          bodyInset: 0xfef0d0,
+          title: '#ffffff',
+          titleStroke: '#c2620e',
+          answer: '#5a3818',
+          pillFill: 0xffd96b,
+          pillShadow: 0xe6b250,
+          pillText: '#8a5a1a',
         }
       : {
           shadow: 0x000000,
-          base: 0xa8845a,
-          fill: 0xfff3da,
-          highlight: 0xfff8e7,
-          border: 0x6a4a26,
-          title: '#3a2614',
-          titleStroke: '#fff8e7',
+          topBand: 0xa8845a,
+          body: 0xfff8e7,
+          bodyInset: 0xefe1bf,
+          title: '#fff8e7',
+          titleStroke: '#5d4528',
           answer: '#3a2614',
-          answerStroke: '#fff8e7',
-          banner: 0xa8845a,
+          pillFill: 0xa8845a,
+          pillShadow: 0x6a4a26,
+          pillText: '#fff8e7',
         }
 
-    const maxBannerW = Math.max(320, Math.min(w * 0.86, 820))
-    const titleLabel = hasWinner ? `🎉  ${nickname}  정답!` : '⏱  정답 공개'
+    const maxBannerW = Math.max(320, Math.min(w * 0.82, 760))
+    const titleLabel = hasWinner ? `🎉 ${nickname} 정답!` : '⏱ 정답 공개'
     const titleText = this.add
       .text(0, 0, titleLabel, {
         fontFamily: FONT_FAMILY,
-        fontSize: '30px',
+        fontSize: '24px',
         color: palette.title,
         fontStyle: 'bold',
         stroke: palette.titleStroke,
-        strokeThickness: 4,
+        strokeThickness: 3,
       })
       .setOrigin(0.5)
 
-    let answerFontSize = Math.min(92, Math.max(54, Math.floor(w * 0.072)))
+    let answerFontSize = Math.min(84, Math.max(48, Math.floor(w * 0.064)))
     const answerText = this.add
       .text(0, 0, answer, {
         fontFamily: FONT_FAMILY,
         fontSize: `${answerFontSize}px`,
         color: palette.answer,
         fontStyle: 'bold',
-        stroke: palette.answerStroke,
-        strokeThickness: 8,
-        shadow: { offsetX: 0, offsetY: 3, color: '#000', blur: 6, fill: true },
       })
       .setOrigin(0.5)
 
-    const maxTextW = maxBannerW - 96
+    const maxTextW = maxBannerW - 88
     if (answerText.width > maxTextW) {
-      answerFontSize = Math.max(40, Math.floor(answerFontSize * (maxTextW / answerText.width)))
+      answerFontSize = Math.max(36, Math.floor(answerFontSize * (maxTextW / answerText.width)))
       answerText.setFontSize(`${answerFontSize}px`)
-      answerText.setStroke(palette.answerStroke, Math.max(5, Math.floor(answerFontSize * 0.1)))
     }
 
-    // 점수 pill — 정답자 한정. "+2점" 작은 알약 표시로 게임 보상감.
+    // 점수 pill — 정답자 한정. 슬림한 노랑 pill.
+    const pillH = 30
     const scorePill = hasWinner ? this.add.container(0, 0) : null
     if (scorePill) {
-      const pillW = 86
-      const pillH = 34
+      const pillW = 76
       const pg = this.add.graphics()
-      pg.fillStyle(0x6a3a18, 1)
+      pg.fillStyle(palette.pillShadow, 1)
       pg.fillRoundedRect(-pillW / 2, -pillH / 2 + 2, pillW, pillH, pillH / 2)
-      pg.fillStyle(0xfff7df, 1)
+      pg.fillStyle(palette.pillFill, 1)
       pg.fillRoundedRect(-pillW / 2, -pillH / 2, pillW, pillH, pillH / 2)
       const pt = this.add
         .text(0, 0, '+2점', {
           fontFamily: FONT_FAMILY,
-          fontSize: '17px',
-          color: '#8a3d10',
+          fontSize: '14px',
+          color: palette.pillText,
           fontStyle: 'bold',
         })
         .setOrigin(0.5)
       scorePill.add([pg, pt])
     }
 
-    // 콘텐츠 전체 높이를 먼저 계산해서 -totalH/2 부터 cursor 식으로 쌓아 올린다.
-    // pill 을 위치 계산에 안 넣었던 이전 안은 위/아래 패딩이 비대칭이었음.
-    const titleGap = 8
-    const scoreGap = 12
-    const pillH = 34
-    const totalH =
-      titleText.height + titleGap + answerText.height + (scorePill ? scoreGap + pillH : 0)
-    let cursor = -totalH / 2
-    titleText.setPosition(0, cursor + titleText.height / 2)
-    cursor += titleText.height + titleGap
-    answerText.setPosition(0, cursor + answerText.height / 2)
-    cursor += answerText.height
-    if (scorePill) {
-      cursor += scoreGap
-      scorePill.setPosition(0, cursor + pillH / 2)
-    }
+    // 카드 레이아웃 — 상단 accent 띠 + cream 본문. 두 영역 분리는 색상 대비로만, 두꺼운 보더는 안 씀.
+    const bandH = 56
+    const bodyPadTop = 24
+    const bodyPadBottom = scorePill ? 18 : 24
+    const scoreGap = scorePill ? 14 : 0
 
     const paddingX = 56
-    const paddingY = 34
-    const contentH = totalH
-    const contentW = Math.max(titleText.width, answerText.width, 280)
-    const bw = Math.min(maxBannerW, Math.max(contentW + paddingX * 2, 360))
-    const bh = contentH + paddingY * 2
-    const radius = Math.min(38, bh / 2)
+    const contentW = Math.max(titleText.width, answerText.width, 240)
+    const bw = Math.min(maxBannerW, Math.max(contentW + paddingX * 2, 320))
+    const bodyH =
+      bodyPadTop + answerText.height + (scorePill ? scoreGap + pillH : 0) + bodyPadBottom
+    const bh = bandH + bodyH
+    const radius = 22
 
-    // 카드 본체 — 1) drop shadow 다층, 2) 짙은 base(두께감), 3) 메인 fill, 4) 윗 하이라이트, 5) 두꺼운 보더.
     const g = this.add.graphics()
-    for (let i = 0; i < 5; i++) {
-      const spread = i * 2.4
-      g.fillStyle(palette.shadow, 0.07)
+    // soft drop shadow 다층 — 두꺼운 갈색 보더 대신 부유감으로 시각 분리.
+    for (let i = 0; i < 6; i++) {
+      const spread = i * 2.6
+      g.fillStyle(palette.shadow, 0.06)
       g.fillRoundedRect(
         -bw / 2 - spread,
-        -bh / 2 + 10 + spread * 0.6,
+        -bh / 2 + 12 + spread * 0.6,
         bw + spread * 2,
         bh + spread,
         radius + spread,
       )
     }
-    // 두께(아래쪽이 살짝 더 진하게 깔리는 3D 효과)
-    g.fillStyle(palette.base, 1)
-    g.fillRoundedRect(-bw / 2, -bh / 2 + 6, bw, bh, radius)
-    // 메인 면
-    g.fillStyle(palette.fill, 1)
-    g.fillRoundedRect(-bw / 2, -bh / 2, bw, bh - 6, radius)
-    // 윗 하이라이트 — 카드 상단에 살짝 밝은 띠.
-    g.fillStyle(palette.highlight, 0.7)
-    g.fillRoundedRect(-bw / 2 + 6, -bh / 2 + 6, bw - 12, bh * 0.35, radius - 4)
-    // 보더
-    g.lineStyle(4, palette.border, 1)
-    g.strokeRoundedRect(-bw / 2, -bh / 2, bw, bh - 6, radius)
-
+    // 본문 (전체 cream)
+    g.fillStyle(palette.body, 1)
+    g.fillRoundedRect(-bw / 2, -bh / 2, bw, bh, radius)
+    // 본문 안쪽 옅은 라인 — 미세한 입체감.
+    g.lineStyle(2, palette.bodyInset, 0.7)
+    g.strokeRoundedRect(-bw / 2 + 3, -bh / 2 + 3, bw - 6, bh - 6, radius - 3)
+    // 윗 accent 띠 — 라운드 사각의 윗부분만 채우려고 위쪽 라운드 사각 + 아래쪽 직사각 합성.
+    g.fillStyle(palette.topBand, 1)
+    g.fillRoundedRect(-bw / 2, -bh / 2, bw, bandH + radius, radius)
+    g.fillRect(-bw / 2, -bh / 2 + bandH, bw, radius)
+    // 띠 하단 미세 라인 — 본문과의 경계 강조.
+    g.lineStyle(2, palette.shadow, 0.1)
+    g.lineBetween(-bw / 2 + 8, -bh / 2 + bandH, bw / 2 - 8, -bh / 2 + bandH)
     container.add(g)
 
-    // 양옆 별 장식 — 정답자가 있을 때만. emoji 사용 (이전 게임씬과 톤 통일).
-    if (hasWinner) {
-      const starL = this.add
-        .text(-bw / 2 + 28, -bh / 2 + 26, '⭐', { fontSize: '30px' })
-        .setOrigin(0.5)
-      const starR = this.add
-        .text(bw / 2 - 28, -bh / 2 + 26, '⭐', { fontSize: '30px' })
-        .setOrigin(0.5)
-      container.add([starL, starR])
-      // 별이 살짝 흔들리는 트윈 — 게임 느낌 부스트.
-      this.tweens.add({
-        targets: [starL, starR],
-        angle: { from: -10, to: 10 },
-        duration: 320,
-        yoyo: true,
-        repeat: 3,
-        ease: 'Sine.inOut',
-      })
+    // title 은 accent 띠 가운데, answer / pill 은 cream 본문 가운데.
+    titleText.setPosition(0, -bh / 2 + bandH / 2)
+    const bodyTop = -bh / 2 + bandH
+    answerText.setPosition(0, bodyTop + bodyPadTop + answerText.height / 2)
+    if (scorePill) {
+      scorePill.setPosition(0, answerText.y + answerText.height / 2 + scoreGap + pillH / 2)
     }
 
     container.add(titleText)
     container.add(answerText)
     if (scorePill) container.add(scorePill)
+
+    // 정답자 케이스 — 등장 후 부드러운 펄스 한 번. 별 흔들림보다 절제된 보상감.
+    if (hasWinner) {
+      this.time.delayedCall(380, () => {
+        if (!container.active) return
+        this.tweens.add({
+          targets: container,
+          scale: { from: 1.04, to: 1 },
+          duration: 280,
+          ease: 'Sine.out',
+        })
+      })
+    }
 
     // 등장: 작게 시작해서 살짝 오버슈팅하며 펑! 가운데로 — 게임 보상 모먼트의 통통튀는 느낌.
     container.setAlpha(0)
