@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/game/settings/gameSettings', () => ({
-  getGameSettings: () => ({ masterVolume: 0.8 }),
+  getGameSettings: () => ({ bgmEnabled: true, masterVolume: 0.8 }),
 }))
 
-const { getBgmTrackForScene } = await import('./sceneBgm')
+const { getBgmTrackForScene, playSceneBgm } = await import('./sceneBgm')
 
 describe('scene BGM mapping', () => {
   it('maps major screens to their BGM groups', () => {
@@ -26,4 +26,54 @@ describe('scene BGM mapping', () => {
   it('does not play BGM for unknown scenes', () => {
     expect(getBgmTrackForScene('UnknownScene')).toBeNull()
   })
+
+  it('restarts long BGM on the same looped audio element', async () => {
+    vi.useFakeTimers()
+
+    const audioInstances: FakeAudio[] = []
+    class FakeAudio extends EventTarget {
+      loop = false
+      preload = ''
+      volume = 0
+      paused = true
+      currentTime = 12
+      src: string
+      play = vi.fn(() => {
+        this.paused = false
+        return Promise.resolve()
+      })
+      pause = vi.fn(() => {
+        this.paused = true
+      })
+
+      constructor(src: string) {
+        super()
+        this.src = src
+        audioInstances.push(this)
+      }
+    }
+
+    vi.stubGlobal('Audio', FakeAudio)
+
+    playSceneBgm({ scene: { key: 'StartScene' } } as Phaser.Scene)
+    window.dispatchEvent(new Event('pointerdown'))
+    await Promise.resolve()
+
+    expect(audioInstances).toHaveLength(1)
+    expect(audioInstances[0].loop).toBe(true)
+
+    audioInstances[0].dispatchEvent(new Event('ended'))
+    await Promise.resolve()
+
+    expect(audioInstances).toHaveLength(1)
+    expect(audioInstances[0].currentTime).toBe(0)
+    expect(audioInstances[0].play).toHaveBeenCalledTimes(2)
+
+    playSceneBgm({ scene: { key: 'UnknownScene' } } as Phaser.Scene)
+    vi.advanceTimersByTime(FADE_TEST_DURATION_MS)
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
 })
+
+const FADE_TEST_DURATION_MS = 1_000
