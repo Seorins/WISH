@@ -41,7 +41,7 @@ export class PhotoBoothSaveScene extends Phaser.Scene {
   private captures: string[] = []
   private allCaptures: string[] = []
   private slotDisplays: SlotDisplay[] = []
-  private isPublic = false
+  private isPublic = true
   private publicToggleBgGraphics!: Phaser.GameObjects.Graphics
   private publicToggleHitArea!: Phaser.GameObjects.Rectangle
   private publicToggleKnob!: Phaser.GameObjects.Arc
@@ -69,7 +69,7 @@ export class PhotoBoothSaveScene extends Phaser.Scene {
     this.captures = data.captures ?? []
     this.allCaptures = data.allCaptures ?? data.captures ?? []
     this.slotDisplays = []
-    this.isPublic = false
+    this.isPublic = true
 
     this.add.rectangle(0, 0, vw, vh, 0xffffff).setOrigin(0)
 
@@ -170,10 +170,10 @@ export class PhotoBoothSaveScene extends Phaser.Scene {
       })
       .setOrigin(0, 0)
     this.publicLabel = this.add
-      .text(panelLeftX + 24, cardCenterY - cardH / 2 + 56, '비공개 (나만 보기)', {
+      .text(panelLeftX + 24, cardCenterY - cardH / 2 + 56, '공개 (모두 보기)', {
         fontFamily: FONT,
         fontSize: '14px',
-        color: '#b39e8d',
+        color: '#ff7aa3',
         resolution: 2,
       })
       .setOrigin(0, 0)
@@ -196,7 +196,7 @@ export class PhotoBoothSaveScene extends Phaser.Scene {
       .setInteractive({ useHandCursor: true })
     const knobOffset = (this.toggleW - this.toggleH) / 2
     this.publicToggleKnob = this.add.circle(
-      this.toggleCenterX - knobOffset,
+      this.toggleCenterX + (this.isPublic ? knobOffset : -knobOffset),
       this.toggleCenterY,
       this.toggleH / 2 - 3,
       0xffffff,
@@ -238,7 +238,7 @@ export class PhotoBoothSaveScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.cleanupTextures())
 
     document.fonts
-      .load("32px 'Jua'", '5 저장하기 다운로드 공개 비공개 필터 다시 고르기 확인 나만 보기')
+      .load("32px 'Jua'", '5 저장하기 다운로드 공개 비공개 필터 다시 고르기 확인 나만 모두 보기')
       .then(() => {
         if (!this.scene.isActive()) return
         this.children.list.forEach(obj => {
