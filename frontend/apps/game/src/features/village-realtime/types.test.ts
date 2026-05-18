@@ -1,0 +1,38 @@
+import { describe, expect, it } from 'vitest'
+
+import {
+  createTaekwondoBeltBoastEmoji,
+  createVillageEmojisForBelt,
+  getTaekwondoBeltColorFromBoastEmoji,
+  isTaekwondoBeltBoastEmoji,
+  VILLAGE_EMOJI_SLOT_COUNT,
+} from './types'
+
+describe('village realtime emote types', () => {
+  it('shifts the palette after removing 힘내 and puts belt boast at 0 slot', () => {
+    const emojis = createVillageEmojisForBelt('BLACK')
+
+    expect(emojis).toHaveLength(VILLAGE_EMOJI_SLOT_COUNT)
+    expect(emojis).toEqual([
+      '안녕',
+      '따라와',
+      '좋아',
+      '고마워',
+      '😄',
+      '😢',
+      '👍',
+      '❤️',
+      '❓',
+      '🥋검은띠',
+    ])
+  })
+
+  it('detects taekwondo belt boast emotes', () => {
+    const emote = createTaekwondoBeltBoastEmoji('RED')
+
+    expect(emote).toBe('🥋빨간띠')
+    expect(isTaekwondoBeltBoastEmoji(emote)).toBe(true)
+    expect(getTaekwondoBeltColorFromBoastEmoji(emote)).toBe('RED')
+    expect(isTaekwondoBeltBoastEmoji('힘내')).toBe(false)
+  })
+})

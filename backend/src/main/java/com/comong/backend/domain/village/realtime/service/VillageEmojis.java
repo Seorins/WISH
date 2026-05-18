@@ -12,7 +12,9 @@ import java.util.Set;
 public final class VillageEmojis {
 
     public static final Set<String> ALLOWED =
-            Set.of("안녕", "따라와", "좋아", "고마워", "힘내", "❓", "😄", "😢", "👍", "❤️");
+            Set.of(
+                    "안녕", "따라와", "좋아", "고마워", "😄", "😢", "👍", "❤️", "❓", "🥋흰띠", "🥋노란띠", "🥋주황띠",
+                    "🥋초록띠", "🥋파란띠", "🥋보라띠", "🥋갈색띠", "🥋빨간띠", "🥋검은띠");
 
     private VillageEmojis() {}
 

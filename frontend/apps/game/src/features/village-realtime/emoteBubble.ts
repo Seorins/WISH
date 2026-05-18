@@ -1,4 +1,11 @@
 import Phaser from 'phaser'
+import type { TaekwondoBeltColor } from '@wish/api-client'
+
+import {
+  getTaekwondoBeltColorFromBoastEmoji,
+  getTaekwondoBeltLabel,
+  isTaekwondoBeltBoastEmoji,
+} from './types'
 
 /** sprite 좌표 + 높이만 알면 되는 최소 인터페이스 — 로컬 player 와 원격 sprite 모두 매칭. */
 export interface EmoteBubbleTarget {
@@ -13,6 +20,22 @@ const EMOTE_FONT_SIZE_EMOJI = 40
 const EMOTE_FONT_SIZE_TEXT = 26
 /** 한글 (Hangul 음절 + Jamo) 포함 여부 — 폰트 크기 분기에 사용. */
 const HANGUL_PATTERN = /[㄰-㆏가-힣]/
+const BELT_BADGE_LABEL_FONT_SIZE = 14
+
+const BELT_BADGE_COLORS: Record<
+  TaekwondoBeltColor,
+  { ribbon: number; stroke: number; text: string }
+> = {
+  WHITE: { ribbon: 0xf8fafc, stroke: 0xcbd5e1, text: '#111827' },
+  YELLOW: { ribbon: 0xfacc15, stroke: 0xfef08a, text: '#3b2f00' },
+  ORANGE: { ribbon: 0xfb923c, stroke: 0xfed7aa, text: '#321400' },
+  GREEN: { ribbon: 0x22c55e, stroke: 0xbbf7d0, text: '#ffffff' },
+  BLUE: { ribbon: 0x3b82f6, stroke: 0xbfdbfe, text: '#ffffff' },
+  PURPLE: { ribbon: 0xa855f7, stroke: 0xe9d5ff, text: '#ffffff' },
+  BROWN: { ribbon: 0x92400e, stroke: 0xfcd34d, text: '#ffffff' },
+  RED: { ribbon: 0xef4444, stroke: 0xfecaca, text: '#ffffff' },
+  BLACK: { ribbon: 0x111827, stroke: 0xf5c451, text: '#ffffff' },
+}
 
 /**
  * 매 프레임 sprite 좌표로 lerp 하는 비율. 1.0 정확 추적은 walk anim + 서브픽셀 렌더링이 합쳐져 텍스트가 "흔들려" 식별이 어려움 —
@@ -43,17 +66,10 @@ export function emitEmoteBubble(
   emoji: string,
   depth: number,
 ): void {
-  const fontSize = HANGUL_PATTERN.test(emoji) ? EMOTE_FONT_SIZE_TEXT : EMOTE_FONT_SIZE_EMOJI
   const bubblePosition = computePosition(target)
-  const bubble = scene.add
-    .text(bubblePosition.x, bubblePosition.y, emoji, {
-      fontSize: `${fontSize}px`,
-      fontFamily: "'Jua', 'Apple SD Gothic Neo', sans-serif",
-      resolution: 2,
-    })
-    .setOrigin(0.5, 1)
-    .setDepth(depth)
-    .setScale(0.5)
+  const bubble = isTaekwondoBeltBoastEmoji(emoji)
+    ? createBeltBadgeBubble(scene, bubblePosition.x, bubblePosition.y, emoji, depth)
+    : createTextBubble(scene, bubblePosition.x, bubblePosition.y, emoji, depth)
 
   // sprite 가 움직일 때마다 버블이 같이 움직이도록.
   const follow = () => {
@@ -93,6 +109,77 @@ export function emitEmoteBubble(
       },
     })
   })
+}
+
+function createTextBubble(scene: Phaser.Scene, x: number, y: number, emoji: string, depth: number) {
+  const fontSize = HANGUL_PATTERN.test(emoji) ? EMOTE_FONT_SIZE_TEXT : EMOTE_FONT_SIZE_EMOJI
+  return scene.add
+    .text(x, y, emoji, {
+      fontSize: `${fontSize}px`,
+      fontFamily: "'Jua', 'Apple SD Gothic Neo', sans-serif",
+      resolution: 2,
+    })
+    .setOrigin(0.5, 1)
+    .setDepth(depth)
+    .setScale(0.5)
+}
+
+function createBeltBadgeBubble(
+  scene: Phaser.Scene,
+  x: number,
+  y: number,
+  emoji: string,
+  depth: number,
+) {
+  const beltColor = getTaekwondoBeltColorFromBoastEmoji(emoji)
+  const beltLabel = beltColor ? getTaekwondoBeltLabel(beltColor) : emoji.replace(/^🥋/, '')
+  const colors = beltColor
+    ? BELT_BADGE_COLORS[beltColor]
+    : { ribbon: 0x1f2937, stroke: 0xf5c451, text: '#ffffff' }
+
+  const container = scene.add.container(x, y).setDepth(depth).setScale(0.5)
+  const shadow = scene.add.graphics()
+  shadow.fillStyle(0x000000, 0.26)
+  shadow.fillEllipse(0, -30, 132, 58)
+
+  const crest = scene.add.graphics()
+  crest.fillStyle(0x0f172a, 0.94)
+  crest.lineStyle(3, 0xf5c451, 1)
+  crest.beginPath()
+  crest.moveTo(0, -76)
+  crest.lineTo(48, -61)
+  crest.lineTo(60, -23)
+  crest.lineTo(0, 0)
+  crest.lineTo(-60, -23)
+  crest.lineTo(-48, -61)
+  crest.closePath()
+  crest.fillPath()
+  crest.strokePath()
+
+  crest.lineStyle(2, colors.stroke, 0.88)
+  crest.fillStyle(colors.ribbon, 0.96)
+  crest.fillRoundedRect(-44, -34, 88, 21, 9)
+  crest.strokeRoundedRect(-44, -34, 88, 21, 9)
+
+  const icon = scene.add
+    .text(0, -52, '🥋', {
+      fontSize: '26px',
+      fontFamily: "'Jua', 'Apple SD Gothic Neo', sans-serif",
+      resolution: 2,
+    })
+    .setOrigin(0.5, 0.5)
+
+  const label = scene.add
+    .text(0, -23, beltLabel, {
+      fontSize: `${BELT_BADGE_LABEL_FONT_SIZE}px`,
+      fontFamily: "'Jua', 'Apple SD Gothic Neo', sans-serif",
+      color: colors.text,
+      resolution: 2,
+    })
+    .setOrigin(0.5, 0.5)
+
+  container.add([shadow, crest, icon, label])
+  return container
 }
 
 function computePosition(target: EmoteBubbleTarget): { x: number; y: number } {

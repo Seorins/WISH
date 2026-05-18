@@ -1,6 +1,13 @@
 import Phaser from 'phaser'
+import type { TaekwondoBeltColor } from '@wish/api-client'
 
-import { VILLAGE_EMOJIS, type VillageEmoji } from './types'
+import {
+  getTaekwondoBeltColorFromBoastEmoji,
+  getTaekwondoBeltLabel,
+  isTaekwondoBeltBoastEmoji,
+  VILLAGE_EMOJIS,
+  type VillageEmoji,
+} from './types'
 
 /** 우하단 화면 가장자리에서 안쪽으로 띄울 여백 (px). */
 const PALETTE_MARGIN = 18
@@ -11,11 +18,27 @@ const BUTTON_GAP = 8
 const FONT_SIZE_EMOJI = 28
 /** 한글 단축 메시지용 작은 폰트. */
 const FONT_SIZE_TEXT = 16
+/** 0번 태권도 띠 자랑 슬롯은 두 줄 배지로 보여 좁은 버튼 안에 맞춘다. */
+const FONT_SIZE_BELT = 13
 const HANGUL_PATTERN = /[㄰-㆏가-힣]/
+
+const BELT_STROKE_COLORS: Record<TaekwondoBeltColor, number> = {
+  WHITE: 0xf8fafc,
+  YELLOW: 0xfacc15,
+  ORANGE: 0xfb923c,
+  GREEN: 0x22c55e,
+  BLUE: 0x3b82f6,
+  PURPLE: 0xa855f7,
+  BROWN: 0x92400e,
+  RED: 0xef4444,
+  BLACK: 0xf5c451,
+}
 
 export interface VillageEmojiPaletteHandle {
   /** 키보드 1\~9, 0 단축키 또는 외부 트리거에서 호출 — 시각 피드백 + onSelect 발화. index 범위 밖이면 no-op. */
   triggerByIndex(index: number): void
+  /** 비동기 사용자 정보 조회 후 0번 띠 자랑 슬롯처럼 팔레트 내용을 갱신한다. */
+  setEmojis(emojis: readonly VillageEmoji[]): void
   setVisible(visible: boolean): void
   isVisible(): boolean
   destroy(): void
@@ -23,6 +46,7 @@ export interface VillageEmojiPaletteHandle {
 
 interface CreateOptions {
   onSelect: (emoji: VillageEmoji) => void
+  emojis?: readonly VillageEmoji[]
   /** 초기 visibility. 미지정 시 false (Q 토글로 열어야 보임). */
   initiallyVisible?: boolean
 }
@@ -38,7 +62,8 @@ export function createVillageEmojiPalette(
   options: CreateOptions,
 ): VillageEmojiPaletteHandle {
   const { width: vw, height: vh } = scene.scale
-  const totalWidth = VILLAGE_EMOJIS.length * BUTTON_SIZE + (VILLAGE_EMOJIS.length - 1) * BUTTON_GAP
+  let emojis = options.emojis ?? VILLAGE_EMOJIS
+  const totalWidth = emojis.length * BUTTON_SIZE + (emojis.length - 1) * BUTTON_GAP
   const startX = vw - PALETTE_MARGIN - totalWidth
   const y = vh - PALETTE_MARGIN - BUTTON_SIZE
   const depth = 100
@@ -49,21 +74,23 @@ export function createVillageEmojiPalette(
     .setDepth(depth)
     .setVisible(options.initiallyVisible ?? false)
 
-  const buttons: Phaser.GameObjects.Text[] = []
+  const buttons: { bg: Phaser.GameObjects.Rectangle; text: Phaser.GameObjects.Text }[] = []
 
-  VILLAGE_EMOJIS.forEach((emoji, index) => {
+  emojis.forEach((emoji, index) => {
     const buttonX = index * (BUTTON_SIZE + BUTTON_GAP) + BUTTON_SIZE / 2
     const buttonY = BUTTON_SIZE / 2
-    const fontSize = HANGUL_PATTERN.test(emoji) ? FONT_SIZE_TEXT : FONT_SIZE_EMOJI
+    const fontSize = getButtonFontSize(emoji)
 
     const bg = scene.add
       .rectangle(buttonX, buttonY, BUTTON_SIZE, BUTTON_SIZE, 0x000000, 0.32)
-      .setStrokeStyle(2, 0xffffff, 0.7)
+      .setStrokeStyle(2, getButtonStrokeColor(emoji), 0.7)
 
     const text = scene.add
-      .text(buttonX, buttonY, emoji, {
+      .text(buttonX, buttonY, getButtonLabel(emoji), {
         fontSize: `${fontSize}px`,
         fontFamily: "'Jua', 'Apple SD Gothic Neo', sans-serif",
+        align: 'center',
+        fixedWidth: BUTTON_SIZE - 8,
         resolution: 2,
       })
       .setOrigin(0.5, 0.5)
@@ -88,14 +115,14 @@ export function createVillageEmojiPalette(
     })
 
     container.add([bg, text, keyText])
-    buttons.push(text)
+    buttons.push({ bg, text })
   })
 
   function triggerByIndex(index: number) {
-    if (index < 0 || index >= VILLAGE_EMOJIS.length) return
-    const emoji = VILLAGE_EMOJIS[index]
+    if (index < 0 || index >= emojis.length) return
+    const emoji = emojis[index]
     // 살짝 통통 피드백.
-    const target = buttons[index]
+    const target = buttons[index].text
     scene.tweens.add({
       targets: target,
       scale: 1.35,
@@ -108,6 +135,16 @@ export function createVillageEmojiPalette(
 
   return {
     triggerByIndex,
+    setEmojis(nextEmojis: readonly VillageEmoji[]) {
+      emojis = nextEmojis
+      buttons.forEach(({ bg, text }, index) => {
+        const emoji = emojis[index]
+        if (!emoji) return
+        bg.setStrokeStyle(2, getButtonStrokeColor(emoji), 0.7)
+        text.setText(getButtonLabel(emoji))
+        text.setFontSize(getButtonFontSize(emoji))
+      })
+    },
     setVisible(visible: boolean) {
       container.setVisible(visible)
     },
@@ -118,4 +155,24 @@ export function createVillageEmojiPalette(
       container.destroy()
     },
   }
+}
+
+function getButtonLabel(emoji: VillageEmoji) {
+  if (!isTaekwondoBeltBoastEmoji(emoji)) {
+    return emoji
+  }
+
+  const beltColor = getTaekwondoBeltColorFromBoastEmoji(emoji)
+  const beltLabel = beltColor ? getTaekwondoBeltLabel(beltColor).replace(/\s/g, '') : '띠'
+  return `🥋\n${beltLabel}`
+}
+
+function getButtonFontSize(emoji: VillageEmoji) {
+  if (isTaekwondoBeltBoastEmoji(emoji)) return FONT_SIZE_BELT
+  return HANGUL_PATTERN.test(emoji) ? FONT_SIZE_TEXT : FONT_SIZE_EMOJI
+}
+
+function getButtonStrokeColor(emoji: VillageEmoji) {
+  const beltColor = getTaekwondoBeltColorFromBoastEmoji(emoji)
+  return beltColor ? BELT_STROKE_COLORS[beltColor] : 0xffffff
 }
