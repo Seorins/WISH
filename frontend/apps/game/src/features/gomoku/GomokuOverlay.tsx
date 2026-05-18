@@ -56,8 +56,7 @@ type GomokuOverlayProps = {
 type GameMode = 'local' | 'computer' | 'online'
 type OnlinePanelTab = 'rooms' | 'stats' | 'ranking'
 
-const HUMAN_STONE: Stone = 'black'
-const COMPUTER_STONE: Stone = 'white'
+const DEFAULT_HUMAN_STONE: Stone = 'black'
 const DEFAULT_TIMER_SECONDS = 30
 const ONLINE_RULE_SET: RuleSet = 'renju-lite'
 const ONLINE_AVATAR_SIZE = 54
@@ -183,6 +182,7 @@ export function GomokuOverlay({
   const [statusMessage, setStatusMessage] = useState('')
   const [timeoutWinner, setTimeoutWinner] = useState<Stone | null>(null)
   const [isComputerThinking, setIsComputerThinking] = useState(false)
+  const [computerHumanStone, setComputerHumanStone] = useState<Stone>(DEFAULT_HUMAN_STONE)
   const [hintMove, setHintMove] = useState<Position | null>(null)
   const [scoreboard, setScoreboard] = useState({ black: 0, white: 0, draw: 0 })
   const [onlineRoom, setOnlineRoom] = useState<GomokuRoom | null>(null)
@@ -240,6 +240,7 @@ export function GomokuOverlay({
     : isResolvingOnlineProfile
       ? text.onlinePreparing
       : getOnlineRequirementMessage()
+  const computerStone = opponentOf(computerHumanStone)
   const canHumanPlay =
     mode === 'online'
       ? Boolean(
@@ -248,7 +249,8 @@ export function GomokuOverlay({
           myOnlineStone === currentTurn &&
           effectiveStatus.phase === 'playing',
         )
-      : effectiveStatus.phase === 'playing' && (mode === 'local' || currentTurn === HUMAN_STONE)
+      : effectiveStatus.phase === 'playing' &&
+        (mode === 'local' || currentTurn === computerHumanStone)
   const onlineTimers = useMemo(
     () =>
       onlineRoom
@@ -585,7 +587,7 @@ export function GomokuOverlay({
     if (
       !open ||
       mode !== 'computer' ||
-      currentTurn !== COMPUTER_STONE ||
+      currentTurn !== computerStone ||
       effectiveStatus.phase !== 'playing'
     ) {
       setIsComputerThinking(false)
@@ -594,10 +596,10 @@ export function GomokuOverlay({
 
     setIsComputerThinking(true)
     const timeoutId = window.setTimeout(() => {
-      const nextMove = chooseComputerMove(board, computerLevel, COMPUTER_STONE, ruleSet)
+      const nextMove = chooseComputerMove(board, computerLevel, computerStone, ruleSet)
       setMoves(previousMoves => {
         if (!nextMove || previousMoves.length !== moves.length) return previousMoves
-        return [...previousMoves, { position: nextMove, stone: COMPUTER_STONE, source: 'computer' }]
+        return [...previousMoves, { position: nextMove, stone: computerStone, source: 'computer' }]
       })
       setStatusMessage('')
       setHintMove(null)
@@ -605,7 +607,17 @@ export function GomokuOverlay({
     }, COMPUTER_THINK_DELAY_MS)
 
     return () => window.clearTimeout(timeoutId)
-  }, [board, computerLevel, currentTurn, effectiveStatus.phase, mode, moves.length, open, ruleSet])
+  }, [
+    board,
+    computerLevel,
+    computerStone,
+    currentTurn,
+    effectiveStatus.phase,
+    mode,
+    moves.length,
+    open,
+    ruleSet,
+  ])
 
   useEffect(() => {
     if (mode === 'online') return
@@ -775,6 +787,12 @@ export function GomokuOverlay({
     recordedResultRef.current = null
   }
 
+  const handleSwapComputerStones = () => {
+    if (mode !== 'computer') return
+    setComputerHumanStone(previous => opponentOf(previous))
+    resetGame()
+  }
+
   const handleHint = () => {
     if (mode === 'online' || effectiveStatus.phase !== 'playing') return
     const move = chooseComputerMove(board, 'advanced', currentTurn, ruleSet)
@@ -917,6 +935,7 @@ export function GomokuOverlay({
                 scoreboard={scoreboard}
                 timerEnabled={timerEnabled}
                 computerLevel={computerLevel}
+                humanStone={computerHumanStone}
                 selectedOutfit={selectedOnlineOutfit}
               />
             ) : null}
@@ -975,6 +994,11 @@ export function GomokuOverlay({
                 <button type="button" onClick={resetGame}>
                   {text.restart}
                 </button>
+                {mode === 'computer' ? (
+                  <button type="button" onClick={handleSwapComputerStones}>
+                    {text.swapStones}
+                  </button>
+                ) : null}
                 <button type="button" onClick={handleUndo} disabled={moves.length === 0}>
                   {text.undo}
                 </button>
@@ -1160,6 +1184,7 @@ function PracticeVersusPanel({
   scoreboard,
   timerEnabled,
   computerLevel,
+  humanStone,
   selectedOutfit,
 }: {
   mode: Exclude<GameMode, 'online'>
@@ -1168,10 +1193,12 @@ function PracticeVersusPanel({
   scoreboard: Record<Stone, number> & { draw: number }
   timerEnabled: boolean
   computerLevel: ComputerLevel
+  humanStone: Stone
   selectedOutfit: PlayerOutfit
 }) {
   const opponent = computerOpponents[computerLevel]
-  const whiteName = mode === 'computer' ? opponent.name : text.white
+  const blackIsHuman = mode === 'computer' ? humanStone === 'black' : true
+  const whiteIsHuman = mode === 'computer' ? humanStone === 'white' : false
 
   return (
     <section className="gomoku-panel gomoku-online-versus gomoku-practice-versus">
@@ -1184,20 +1211,22 @@ function PracticeVersusPanel({
       <div className="gomoku-versus-grid">
         <PracticePlayerCard
           stone="black"
-          name={mode === 'computer' ? text.me : text.black}
+          name={mode === 'computer' ? (blackIsHuman ? text.me : opponent.name) : text.black}
           isTurn={currentTurn === 'black'}
           timerLabel={timerEnabled ? formatTime(timers.black) : '--:--'}
           resultLabel={`${scoreboard.black}${text.wins}`}
-          outfit={selectedOutfit}
+          outfit={blackIsHuman ? selectedOutfit : undefined}
+          imagePath={mode === 'computer' && !blackIsHuman ? opponent.imagePath : undefined}
         />
         <span className="gomoku-versus-mark">{text.versus}</span>
         <PracticePlayerCard
           stone="white"
-          name={whiteName}
+          name={mode === 'computer' ? (whiteIsHuman ? text.me : opponent.name) : text.white}
           isTurn={currentTurn === 'white'}
           timerLabel={timerEnabled ? formatTime(timers.white) : '--:--'}
           resultLabel={`${scoreboard.white}${text.wins} / ${scoreboard.draw}${text.draw}`}
-          imagePath={mode === 'computer' ? opponent.imagePath : undefined}
+          outfit={whiteIsHuman ? selectedOutfit : undefined}
+          imagePath={mode === 'computer' && !whiteIsHuman ? opponent.imagePath : undefined}
         />
       </div>
     </section>

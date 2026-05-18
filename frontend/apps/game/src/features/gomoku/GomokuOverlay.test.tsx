@@ -264,6 +264,26 @@ describe('GomokuOverlay online room creation', () => {
     }
   })
 
+  it('lets the player swap stones against the computer and makes the computer open as black', async () => {
+    vi.useFakeTimers()
+
+    try {
+      render(<GomokuOverlay open onClose={vi.fn()} patientProfileId={7} />)
+
+      fireEvent.click(screen.getByRole('button', { name: SWAP_STONES_LABEL }))
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(500)
+      })
+
+      expect(screen.getByRole('gridcell', { name: '8, 8' }).className).toContain('stone-black')
+      expect((screen.getByRole('gridcell', { name: '8, 9' }) as HTMLButtonElement).disabled).toBe(
+        false,
+      )
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('creates the next online match as a swapped rematch after a room finishes', async () => {
     vi.mocked(createGomokuRoom).mockResolvedValueOnce(apiResponse(finishedRoom))
     vi.mocked(rematchGomokuRoom).mockResolvedValueOnce(apiResponse(rematchRoom))
