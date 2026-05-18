@@ -237,8 +237,8 @@ public class QuizRoomRegistry {
     }
 
     /**
-     * 입장 가능한 (WAITING + 정원 미만) 방을 createdAt 내림차순으로 반환. 룸 lock 미보호 — 멤버 수/상태가 호출
-     * 사이에 미세하게 흔들릴 수 있지만 목록 UI 용도이므로 허용.
+     * 입장 가능한 (WAITING + 정원 미만) 방을 createdAt 내림차순으로 반환. 룸 lock 미보호 — 멤버 수/상태가 호출 사이에 미세하게 흔들릴 수 있지만
+     * 목록 UI 용도이므로 허용.
      */
     public List<QuizRoom> findJoinableRooms() {
         return rooms.values().stream()
