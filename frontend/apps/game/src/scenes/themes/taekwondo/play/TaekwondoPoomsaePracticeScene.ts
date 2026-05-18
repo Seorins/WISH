@@ -96,7 +96,7 @@ const AI_ADVANCE_THRESHOLD = 60
 const MOTION_COUNTDOWN_FROM = 3
 const MOTION_COUNTDOWN_TICK_MS = 1000
 const MOTION_COUNTDOWN_READY_FEEDBACK = '곧 시작해요!'
-const READY_TUTORIAL_DURATION_SEC = 10
+const READY_TUTORIAL_DURATION_SEC = 5
 const READY_TUTORIAL_MOTION_LABEL = '카메라 준비'
 const READY_TUTORIAL_FEEDBACK = '전신이 보이게 서주세요'
 const GUIDE_INTRO_PLAY_COUNT = 2
@@ -882,6 +882,7 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     this.capturedSequence = []
     this.lastPoseDetectTimeMs = -1
     this.bestAiAnalysis = null
+    this.spawnNextMotionEnemies()
     this.isCapturing = true
     this.analysisInFlight = false
     this.lastAnalysisStartedAtMs = 0
