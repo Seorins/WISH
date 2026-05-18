@@ -28,8 +28,8 @@ import lombok.NoArgsConstructor;
 /**
  * 환자별 태권도 진행 상태 스냅샷 (1:1).
  *
- * <p>현재 띠와 누적 카운터를 들고 있다. 첫 태권도 세션 저장 시점에 lazy 로 INSERT 되며 ({@link #firstSession}), 이후 매 세션 저장 트랜잭션
- * 안에서 {@link #applySession} 으로 누적값이 갱신된다. 승급 판정/적용은 서비스 레이어가 {@link Belt#canPromoteWith(int)} 와
+ * <p>현재 띠와 누적 카운터를 들고 있다. 환자의 첫 동작 저장 시점에 lazy 로 INSERT 되며 ({@link #firstSession}), 이후 매 동작 저장 트랜잭션
+ * 안에서 {@link #applyMotion} 으로 누적값이 갱신된다. 승급 판정/적용은 서비스 레이어가 {@link Belt#canPromoteWith(int)} 와
  * {@link #promote} 를 조합하여 진행한다.
  */
 @Entity
@@ -80,13 +80,18 @@ public class TaekwondoProgress {
         return new TaekwondoProgress(patientProfile);
     }
 
-    /** 한 세션 결과를 누적 카운터에 반영. 승급 판정은 호출자가 별도로 수행한다. */
-    public void applySession(int sessionMonstersDefeated) {
-        if (sessionMonstersDefeated < 0) {
-            throw new IllegalArgumentException("sessionMonstersDefeated must not be negative");
+    /**
+     * 한 동작 결과를 누적 카운터에 반영. 동작 단위 저장으로 전환되어, monsters 누적은 매 동작마다 일어나지만 sessionCount 는 세션의 첫 동작 저장
+     * 시점에만 1 증가한다 — 빈 세션만 만들고 아무 동작도 안 한 경우는 시도로 치지 않는다. 승급 판정은 호출자가 별도로 수행한다.
+     */
+    public void applyMotion(int motionMonstersDefeated, boolean firstMotionOfSession) {
+        if (motionMonstersDefeated < 0) {
+            throw new IllegalArgumentException("motionMonstersDefeated must not be negative");
         }
-        this.totalMonstersDefeated += sessionMonstersDefeated;
-        this.sessionCount += 1;
+        this.totalMonstersDefeated += motionMonstersDefeated;
+        if (firstMotionOfSession) {
+            this.sessionCount += 1;
+        }
     }
 
     /**
