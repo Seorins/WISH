@@ -40,6 +40,7 @@ const BELT_STROKE_COLORS: Record<TaekwondoBeltColor, number> = {
 export interface VillageEmojiPaletteHandle {
   /** 키보드 1\~9, 0 단축키 또는 외부 트리거에서 호출 — 시각 피드백 + onSelect 발화. index 범위 밖이면 no-op. */
   triggerByIndex(index: number): void
+  consumePointerDown(pointer: Phaser.Input.Pointer): boolean
   /** 비동기 사용자 정보 조회 후 0번 띠 자랑 슬롯처럼 팔레트 내용을 갱신한다. */
   setEmojis(emojis: readonly VillageEmoji[]): void
   setVisible(visible: boolean): void
@@ -83,6 +84,7 @@ export function createVillageEmojiPalette(
     beltImage: Phaser.GameObjects.Image
     sparkles: Phaser.GameObjects.Graphics
   }[] = []
+  let lastConsumedPointerKey: string | null = null
 
   emojis.forEach((emoji, index) => {
     const buttonX = index * (BUTTON_SIZE + BUTTON_GAP) + BUTTON_SIZE / 2
@@ -124,10 +126,18 @@ export function createVillageEmojiPalette(
       .zone(buttonX, buttonY, BUTTON_SIZE, BUTTON_SIZE)
       .setOrigin(0.5, 0.5)
       .setInteractive({ useHandCursor: true })
-    hitZone.on('pointerdown', (...args: unknown[]) => {
-      stopPointerEventPropagation(args)
-      triggerByIndex(index)
-    })
+    hitZone.on(
+      'pointerdown',
+      (
+        pointer: Phaser.Input.Pointer,
+        _localX: number,
+        _localY: number,
+        event?: Phaser.Types.Input.EventData,
+      ) => {
+        event?.stopPropagation()
+        consumePointerDown(pointer, index)
+      },
+    )
 
     container.add([bg, text, beltImage, sparkles, keyText, hitZone])
     buttons.push({ bg, text, beltImage, sparkles })
@@ -149,8 +159,46 @@ export function createVillageEmojiPalette(
     options.onSelect(emoji)
   }
 
+  function consumePointerDown(pointer: Phaser.Input.Pointer, knownIndex?: number) {
+    if (!container.visible) return false
+
+    const index = knownIndex ?? getPointerEmojiIndex(pointer)
+    if (index === null) return false
+
+    const pointerKey = getPointerEventKey(pointer, index)
+    if (lastConsumedPointerKey === pointerKey) {
+      return true
+    }
+
+    lastConsumedPointerKey = pointerKey
+    triggerByIndex(index)
+    return true
+  }
+
+  function getPointerEmojiIndex(pointer: Phaser.Input.Pointer) {
+    const localX = pointer.x - container.x
+    const localY = pointer.y - container.y
+    const currentTotalWidth =
+      emojis.length * BUTTON_SIZE + Math.max(0, emojis.length - 1) * BUTTON_GAP
+
+    if (localX < 0 || localX > currentTotalWidth || localY < 0 || localY > BUTTON_SIZE) {
+      return null
+    }
+
+    const stride = BUTTON_SIZE + BUTTON_GAP
+    const index = Math.floor(localX / stride)
+    const slotX = localX - index * stride
+
+    if (index < 0 || index >= emojis.length || slotX > BUTTON_SIZE) {
+      return null
+    }
+
+    return index
+  }
+
   return {
     triggerByIndex,
+    consumePointerDown,
     setEmojis(nextEmojis: readonly VillageEmoji[]) {
       emojis = nextEmojis
       buttons.forEach(({ bg, text, beltImage, sparkles }, index) => {
@@ -219,6 +267,10 @@ function getTweenTarget(
   return isTaekwondoBeltBoastEmoji(emoji) ? button.beltImage : button.text
 }
 
+function getPointerEventKey(pointer: Phaser.Input.Pointer, index: number) {
+  return `${pointer.id}:${pointer.downTime}:${index}`
+}
+
 function drawPaletteSparkles(
   sparkles: Phaser.GameObjects.Graphics,
   beltColor: TaekwondoBeltColor,
@@ -242,9 +294,4 @@ function drawSparkle(graphics: Phaser.GameObjects.Graphics, x: number, y: number
   graphics.moveTo(x - radius, y)
   graphics.lineTo(x + radius, y)
   graphics.strokePath()
-}
-
-function stopPointerEventPropagation(args: unknown[]) {
-  const event = args[args.length - 1] as { stopPropagation?: () => void } | undefined
-  event?.stopPropagation?.()
 }

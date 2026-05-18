@@ -27,6 +27,7 @@ interface AttachEmojiPaletteOptions {
 export interface AttachedEmojiPalette {
   /** scene.update() 매 tick 에 호출 — 오버레이 상태에 맞춰 팔레트/힌트 visibility 동기화. */
   update(): void
+  consumePointerDown(pointer: Phaser.Input.Pointer): boolean
   destroy(): void
 }
 
@@ -115,6 +116,9 @@ export function attachEmojiPalette(
       hint.setText(paletteVisible ? HINT_OPEN_TEXT : HINT_TEXT)
       hint.setY(paletteVisible ? vh - HINT_MARGIN - HINT_OPEN_OFFSET_Y : vh - HINT_MARGIN)
       hint.setVisible(!overlaysOpen)
+    },
+    consumePointerDown(pointer: Phaser.Input.Pointer) {
+      return palette.consumePointerDown(pointer)
     },
     destroy() {
       disposeBeltEmojiSync()

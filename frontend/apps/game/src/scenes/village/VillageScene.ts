@@ -464,6 +464,10 @@ export class VillageScene extends Phaser.Scene {
         return
       }
 
+      if (this.emojiPalette?.consumePointerDown(pointer)) {
+        return
+      }
+
       if (this.obstacleManager?.handlePointerDown(pointer)) {
         return
       }
