@@ -94,10 +94,10 @@ export const VILLAGER_PERSONAS: Record<VillagerNpcId, VillagerPersona> = {
   },
   squirrel_friend: {
     npcId: 'squirrel_friend',
-    toneName: '조용히 곁에 있어주는 친구',
-    description: '대뜸 들어준다고 말하지 않고, 편히 머물 수 있는 공간을 만들어주는 캐릭터.',
+    toneName: '활발하지만 곁을 편하게 지켜주는 친구',
+    description: '밝고 빠르게 다가오지만, 아이가 쉬고 싶을 때는 곁에서 자리를 지켜주는 캐릭터.',
     speakingRules: [
-      '부드럽고 조용한 말투를 쓴다.',
+      '밝고 짧은 말투를 쓰되, 아이가 쉬고 싶어 하면 속도를 낮춘다.',
       '나무 그늘, 잠깐 쉬기 같은 공간감을 사용한다.',
       '걱정을 크게 만들지 않고 작게 나눠도 된다고 말한다.',
       '대화를 재촉하지 않는다.',
@@ -134,7 +134,7 @@ export const villageDialogues: Record<VillagerNpcId, VillagerDialogueScript> = {
   },
   squirrel_friend: {
     ...VILLAGER_IDENTITIES.squirrel_friend,
-    theme: '조용한 공간에서 쉬어가는 대화',
+    theme: '밝은 곁 지킴과 쉬어가는 대화',
   },
   dain: {
     ...VILLAGER_IDENTITIES.dain,
