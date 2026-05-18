@@ -10,6 +10,7 @@ export type GomokuEndReason = 'FIVE' | 'RESIGN' | 'LEAVE' | 'TIMEOUT' | 'BOARD_F
 export type GomokuPlayer = {
   patientProfileId: number
   nickname: string
+  textureKey: string
 }
 
 export type GomokuMoveRecord = {
@@ -43,6 +44,11 @@ export type GomokuRoom = {
 export type GomokuRoomCreateRequest = {
   ruleSet: GomokuRuleSet
   timerSeconds: number
+  textureKey?: string
+}
+
+export type GomokuRoomJoinRequest = {
+  textureKey?: string
 }
 
 export type GomokuMoveRequest = {
@@ -121,8 +127,16 @@ export async function getGomokuRoom(roomId: number) {
   return response.data
 }
 
-export async function joinGomokuRoom(roomId: number) {
-  const response = await apiClient.post<ApiResponse<GomokuRoom>>(`/gomoku/rooms/${roomId}/join`)
+export async function joinGomokuRoom(roomId: number, request: GomokuRoomJoinRequest = {}) {
+  const response = await apiClient.post<ApiResponse<GomokuRoom>>(
+    `/gomoku/rooms/${roomId}/join`,
+    request,
+  )
+  return response.data
+}
+
+export async function startGomokuRoom(roomId: number) {
+  const response = await apiClient.post<ApiResponse<GomokuRoom>>(`/gomoku/rooms/${roomId}/start`)
   return response.data
 }
 

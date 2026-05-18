@@ -23,7 +23,8 @@ public interface GomokuMatchRepository extends JpaRepository<GomokuMatch, Long> 
     @Query("select m from GomokuMatch m where m.id = :id")
     Optional<GomokuMatch> findByIdForUpdate(@Param("id") Long id);
 
-    Page<GomokuMatch> findByStatusOrderByCreatedAtDesc(GomokuMatchStatus status, Pageable pageable);
+    Page<GomokuMatch> findByStatusAndWhitePatientProfileIsNullOrderByCreatedAtDesc(
+            GomokuMatchStatus status, Pageable pageable);
 
     @Query(
             value =

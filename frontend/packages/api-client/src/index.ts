@@ -70,6 +70,7 @@ export {
   leaveGomokuRoom,
   playGomokuMove,
   resignGomokuRoom,
+  startGomokuRoom,
 } from './gomoku'
 export {
   getChartRanking,
@@ -236,6 +237,7 @@ export type {
   GomokuRankingEntry,
   GomokuRoom,
   GomokuRoomCreateRequest,
+  GomokuRoomJoinRequest,
   GomokuRoomPage,
   GomokuRuleSet,
   GomokuStats,

@@ -35,6 +35,8 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class GomokuMatch {
 
+    private static final String DEFAULT_TEXTURE_KEY = "character";
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -46,9 +48,15 @@ public class GomokuMatch {
     @JoinColumn(name = "black_patient_profile_id", nullable = false)
     private PatientProfile blackPatientProfile;
 
+    @Column(name = "black_texture_key", nullable = false, length = 80)
+    private String blackTextureKey;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "white_patient_profile_id")
     private PatientProfile whitePatientProfile;
+
+    @Column(name = "white_texture_key", length = 80)
+    private String whiteTextureKey;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
@@ -102,11 +110,13 @@ public class GomokuMatch {
     private GomokuMatch(
             String roomCode,
             PatientProfile blackPatientProfile,
+            String blackTextureKey,
             GomokuRuleSet ruleSet,
             int timerSeconds) {
         this.roomCode = Objects.requireNonNull(roomCode, "roomCode must not be null");
         this.blackPatientProfile =
                 Objects.requireNonNull(blackPatientProfile, "blackPatientProfile must not be null");
+        this.blackTextureKey = normalizeTextureKey(blackTextureKey);
         this.ruleSet = Objects.requireNonNull(ruleSet, "ruleSet must not be null");
         this.timerSeconds = timerSeconds;
         this.status = GomokuMatchStatus.WAITING;
@@ -116,11 +126,21 @@ public class GomokuMatch {
         this.ranked = false;
     }
 
-    public void joinAsWhite(PatientProfile patientProfile) {
+    public void joinAsWhite(PatientProfile patientProfile, String textureKey) {
         this.whitePatientProfile =
                 Objects.requireNonNull(patientProfile, "patientProfile must not be null");
+        this.whiteTextureKey = normalizeTextureKey(textureKey);
+    }
+
+    public void start() {
         this.status = GomokuMatchStatus.PLAYING;
+        this.currentTurn = GomokuStone.BLACK;
         this.startedAt = LocalDateTime.now();
+    }
+
+    public void removeWhiteBeforeStart() {
+        this.whitePatientProfile = null;
+        this.whiteTextureKey = null;
     }
 
     public void applyMove(String movesJson, GomokuStone nextTurn, int moveCount) {
@@ -156,6 +176,20 @@ public class GomokuMatch {
         return stone == GomokuStone.BLACK ? blackPatientProfile : whitePatientProfile;
     }
 
+    public String textureKeyOf(PatientProfile patientProfile) {
+        if (patientProfile == null) {
+            return null;
+        }
+        if (blackPatientProfile.getId().equals(patientProfile.getId())) {
+            return blackTextureKey;
+        }
+        if (whitePatientProfile != null
+                && whitePatientProfile.getId().equals(patientProfile.getId())) {
+            return whiteTextureKey;
+        }
+        return DEFAULT_TEXTURE_KEY;
+    }
+
     public GomokuStone stoneOf(Long patientProfileId) {
         if (blackPatientProfile.getId().equals(patientProfileId)) {
             return GomokuStone.BLACK;
@@ -176,5 +210,9 @@ public class GomokuMatch {
     @PreUpdate
     void preUpdate() {
         this.updatedAt = LocalDateTime.now();
+    }
+
+    private String normalizeTextureKey(String textureKey) {
+        return textureKey == null || textureKey.isBlank() ? DEFAULT_TEXTURE_KEY : textureKey;
     }
 }

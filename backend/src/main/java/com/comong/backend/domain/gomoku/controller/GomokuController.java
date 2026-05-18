@@ -22,6 +22,7 @@ import com.comong.backend.domain.gomoku.dto.GomokuMatchSummaryResponse;
 import com.comong.backend.domain.gomoku.dto.GomokuMoveRequest;
 import com.comong.backend.domain.gomoku.dto.GomokuRankingResponse;
 import com.comong.backend.domain.gomoku.dto.GomokuRoomCreateRequest;
+import com.comong.backend.domain.gomoku.dto.GomokuRoomJoinRequest;
 import com.comong.backend.domain.gomoku.dto.GomokuRoomResponse;
 import com.comong.backend.domain.gomoku.dto.GomokuStatsResponse;
 import com.comong.backend.domain.gomoku.service.GomokuService;
@@ -63,9 +64,19 @@ public class GomokuController {
     @Operation(summary = "Join online Gomoku room")
     @PostMapping("/rooms/{roomId}/join")
     public ResponseEntity<ApiResponse<GomokuRoomResponse>> joinRoom(
+            @AuthenticationPrincipal AuthenticatedUser currentUser,
+            @PathVariable Long roomId,
+            @Valid @RequestBody(required = false) GomokuRoomJoinRequest request) {
+        return ResponseEntity.ok(
+                ApiResponse.success(gomokuService.joinRoom(currentUser.userId(), roomId, request)));
+    }
+
+    @Operation(summary = "Start online Gomoku room")
+    @PostMapping("/rooms/{roomId}/start")
+    public ResponseEntity<ApiResponse<GomokuRoomResponse>> startRoom(
             @AuthenticationPrincipal AuthenticatedUser currentUser, @PathVariable Long roomId) {
         return ResponseEntity.ok(
-                ApiResponse.success(gomokuService.joinRoom(currentUser.userId(), roomId)));
+                ApiResponse.success(gomokuService.startRoom(currentUser.userId(), roomId)));
     }
 
     @Operation(summary = "Get online Gomoku room state")

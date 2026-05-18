@@ -18,6 +18,7 @@ import com.comong.backend.domain.gomoku.dto.GomokuMoveRequest;
 import com.comong.backend.domain.gomoku.dto.GomokuRankingEntryResponse;
 import com.comong.backend.domain.gomoku.dto.GomokuRankingResponse;
 import com.comong.backend.domain.gomoku.dto.GomokuRoomCreateRequest;
+import com.comong.backend.domain.gomoku.dto.GomokuRoomJoinRequest;
 import com.comong.backend.domain.gomoku.dto.GomokuRoomResponse;
 import com.comong.backend.domain.gomoku.dto.GomokuStatsResponse;
 import com.comong.backend.domain.gomoku.entity.GomokuEndReason;
@@ -67,6 +68,7 @@ public class GomokuService {
                         GomokuMatch.builder()
                                 .roomCode(generateRoomCode())
                                 .blackPatientProfile(patientProfile)
+                                .blackTextureKey(request.textureKey())
                                 .ruleSet(request.ruleSet())
                                 .timerSeconds(request.timerSeconds())
                                 .build());
@@ -80,12 +82,13 @@ public class GomokuService {
                         .map(PatientProfile::getId)
                         .orElse(null);
         return gomokuMatchRepository
-                .findByStatusOrderByCreatedAtDesc(GomokuMatchStatus.WAITING, pageable)
+                .findByStatusAndWhitePatientProfileIsNullOrderByCreatedAtDesc(
+                        GomokuMatchStatus.WAITING, pageable)
                 .map(match -> toRoomResponse(match, myPatientProfileId));
     }
 
     @Transactional
-    public GomokuRoomResponse joinRoom(Long userId, Long roomId) {
+    public GomokuRoomResponse joinRoom(Long userId, Long roomId, GomokuRoomJoinRequest request) {
         PatientProfile patientProfile = findPatientProfileOrThrow(userId);
         GomokuMatch match = findRoomForUpdateOrThrow(roomId);
         if (match.getStatus() != GomokuMatchStatus.WAITING) {
@@ -97,7 +100,22 @@ public class GomokuService {
         if (match.getBlackPatientProfile().getId().equals(patientProfile.getId())) {
             throw new BusinessException(GomokuErrorCode.GOMOKU_SELF_PLAY_NOT_ALLOWED);
         }
-        match.joinAsWhite(patientProfile);
+        match.joinAsWhite(patientProfile, request == null ? null : request.textureKey());
+        return toRoomResponse(match, patientProfile.getId());
+    }
+
+    @Transactional
+    public GomokuRoomResponse startRoom(Long userId, Long roomId) {
+        PatientProfile patientProfile = findPatientProfileOrThrow(userId);
+        GomokuMatch match = findRoomForUpdateOrThrow(roomId);
+        if (match.getStatus() != GomokuMatchStatus.WAITING
+                || match.getWhitePatientProfile() == null) {
+            throw new BusinessException(GomokuErrorCode.GOMOKU_INVALID_ROOM_STATE);
+        }
+        if (!match.getBlackPatientProfile().getId().equals(patientProfile.getId())) {
+            throw new BusinessException(GomokuErrorCode.GOMOKU_NOT_PARTICIPANT);
+        }
+        match.start();
         return toRoomResponse(match, patientProfile.getId());
     }
 
@@ -189,10 +207,11 @@ public class GomokuService {
         GomokuMatch match = findRoomForUpdateOrThrow(roomId);
         GomokuStone myStone = ensureParticipant(match, patientProfile.getId());
         if (match.getStatus() == GomokuMatchStatus.WAITING) {
-            if (myStone != GomokuStone.BLACK) {
-                throw new BusinessException(GomokuErrorCode.GOMOKU_NOT_PARTICIPANT);
+            if (myStone == GomokuStone.BLACK) {
+                match.cancel(GomokuEndReason.LEAVE);
+            } else {
+                match.removeWhiteBeforeStart();
             }
-            match.cancel(GomokuEndReason.LEAVE);
             return toRoomResponse(match, patientProfile.getId());
         }
         if (match.getStatus() == GomokuMatchStatus.PLAYING) {
@@ -308,34 +327,17 @@ public class GomokuService {
             return null;
         }
 
-        long blackElapsedSeconds = 0;
-        long whiteElapsedSeconds = 0;
         LocalDateTime turnStartedAt = match.getStartedAt();
         for (GomokuMoveRecord move : moves) {
             if (move.playedAt() == null) {
                 continue;
             }
-            long elapsedSeconds = secondsBetween(turnStartedAt, move.playedAt());
-            if (move.stone() == GomokuStone.BLACK) {
-                blackElapsedSeconds += elapsedSeconds;
-            } else {
-                whiteElapsedSeconds += elapsedSeconds;
-            }
             turnStartedAt = move.playedAt();
         }
 
         long currentTurnElapsedSeconds = secondsBetween(turnStartedAt, LocalDateTime.now());
-        if (match.getCurrentTurn() == GomokuStone.BLACK) {
-            blackElapsedSeconds += currentTurnElapsedSeconds;
-        } else {
-            whiteElapsedSeconds += currentTurnElapsedSeconds;
-        }
-
-        if (blackElapsedSeconds >= match.getTimerSeconds()) {
-            return GomokuStone.BLACK;
-        }
-        if (whiteElapsedSeconds >= match.getTimerSeconds()) {
-            return GomokuStone.WHITE;
+        if (currentTurnElapsedSeconds >= match.getTimerSeconds()) {
+            return match.getCurrentTurn();
         }
         return null;
     }

@@ -38,13 +38,19 @@ public record GomokuRoomResponse(
                 match.getStatus(),
                 match.getRuleSet(),
                 match.getTimerSeconds(),
-                GomokuPlayerResponse.from(match.getBlackPatientProfile()),
-                GomokuPlayerResponse.from(match.getWhitePatientProfile()),
+                GomokuPlayerResponse.from(
+                        match.getBlackPatientProfile(),
+                        match.textureKeyOf(match.getBlackPatientProfile())),
+                GomokuPlayerResponse.from(
+                        match.getWhitePatientProfile(),
+                        match.textureKeyOf(match.getWhitePatientProfile())),
                 match.getCurrentTurn(),
                 myStone,
                 match.getResult(),
                 match.getEndReason(),
-                GomokuPlayerResponse.from(match.getWinnerPatientProfile()),
+                GomokuPlayerResponse.from(
+                        match.getWinnerPatientProfile(),
+                        match.textureKeyOf(match.getWinnerPatientProfile())),
                 match.getMoveCount(),
                 moves,
                 match.isRanked(),
