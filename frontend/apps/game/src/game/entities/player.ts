@@ -120,29 +120,48 @@ export const PLAYER_CHARACTERS: PlayerCharacter[] = [
 export const PLAYER_OUTFITS: PlayerOutfit[] = PLAYER_CHARACTERS.flatMap(
   character => character.outfits,
 )
-const TAEKWONDO_BELT_PLAYER_SHEET_PATHS: Record<TaekwondoBeltColor, string> = {
-  WHITE: assetPath('images/common/player/character_white.png'),
-  YELLOW: assetPath('images/common/player/character_yellow.png'),
-  ORANGE: assetPath('images/common/player/character_orange.png'),
-  GREEN: assetPath('images/common/player/character_green.png'),
-  BLUE: assetPath('images/common/player/character_blue.png'),
-  PURPLE: assetPath('images/common/player/character_purple.png'),
-  BROWN: assetPath('images/common/player/character_brown.png'),
-  RED: assetPath('images/common/player/character_red.png'),
-  BLACK: assetPath('images/common/player/character_black.png'),
+
+const TAEKWONDO_BELT_FILE_SUFFIXES: Record<TaekwondoBeltColor, string> = {
+  WHITE: 'white',
+  YELLOW: 'yellow',
+  ORANGE: 'orange',
+  GREEN: 'green',
+  BLUE: 'blue',
+  PURPLE: 'purple',
+  BROWN: 'brown',
+  RED: 'red',
+  BLACK: 'black',
 }
 
-export const TAEKWONDO_BELT_PLAYER_TEXTURE_KEYS: Record<TaekwondoBeltColor, string> = {
-  WHITE: 'character-white',
-  YELLOW: 'character-yellow',
-  ORANGE: 'character-orange',
-  GREEN: 'character-green',
-  BLUE: 'character-blue',
-  PURPLE: 'character-purple',
-  BROWN: 'character-brown',
-  RED: 'character-red',
-  BLACK: 'character-black',
-}
+const TAEKWONDO_BELT_PLAYER_SHEET_PATHS: Record<
+  PlayerCharacterId,
+  Record<TaekwondoBeltColor, string>
+> = Object.fromEntries(
+  PLAYER_CHARACTERS.map(character => [
+    character.id,
+    Object.fromEntries(
+      Object.entries(TAEKWONDO_BELT_FILE_SUFFIXES).map(([beltColor, suffix]) => [
+        beltColor,
+        assetPath(`images/common/player/taekwondo/${character.id}/${character.id}_${suffix}.png`),
+      ]),
+    ),
+  ]),
+) as Record<PlayerCharacterId, Record<TaekwondoBeltColor, string>>
+
+export const TAEKWONDO_BELT_PLAYER_TEXTURE_KEYS: Record<
+  PlayerCharacterId,
+  Record<TaekwondoBeltColor, string>
+> = Object.fromEntries(
+  PLAYER_CHARACTERS.map(character => [
+    character.id,
+    Object.fromEntries(
+      Object.entries(TAEKWONDO_BELT_FILE_SUFFIXES).map(([beltColor, suffix]) => [
+        beltColor,
+        `character-taekwondo-${character.id}-${suffix}`,
+      ]),
+    ),
+  ]),
+) as Record<PlayerCharacterId, Record<TaekwondoBeltColor, string>>
 
 const PLAYER_WALK_ANIMATIONS: Array<{
   key: `walk-${PlayerDirection}`
@@ -162,8 +181,11 @@ export function getPlayerWalkAnimationKey(
   return textureKey === PLAYER_TEXTURE_KEY ? `walk-${direction}` : `walk-${direction}-${textureKey}`
 }
 
-export function getTaekwondoBeltPlayerTextureKey(beltColor: TaekwondoBeltColor) {
-  return TAEKWONDO_BELT_PLAYER_TEXTURE_KEYS[beltColor]
+export function getTaekwondoBeltPlayerTextureKey(
+  beltColor: TaekwondoBeltColor,
+  characterId = getSelectedPlayerCharacterId(),
+) {
+  return TAEKWONDO_BELT_PLAYER_TEXTURE_KEYS[characterId][beltColor]
 }
 
 export function getPlayerOutfit(outfitId: PlayerOutfitId) {
@@ -271,12 +293,17 @@ export function loadPlayerSpritesheets(scene: Phaser.Scene) {
 }
 
 export function loadTaekwondoBeltPlayerSpritesheets(scene: Phaser.Scene) {
-  Object.entries(TAEKWONDO_BELT_PLAYER_SHEET_PATHS).forEach(([beltColor, sheetPath]) => {
-    loadPlayerSpritesheet(
-      scene,
-      getTaekwondoBeltPlayerTextureKey(beltColor as TaekwondoBeltColor),
-      sheetPath,
-    )
+  Object.entries(TAEKWONDO_BELT_PLAYER_SHEET_PATHS).forEach(([characterId, sheetPaths]) => {
+    Object.entries(sheetPaths).forEach(([beltColor, sheetPath]) => {
+      loadPlayerSpritesheet(
+        scene,
+        getTaekwondoBeltPlayerTextureKey(
+          beltColor as TaekwondoBeltColor,
+          characterId as PlayerCharacterId,
+        ),
+        sheetPath,
+      )
+    })
   })
 }
 
