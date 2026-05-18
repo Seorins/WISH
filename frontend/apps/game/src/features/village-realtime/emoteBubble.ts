@@ -21,16 +21,16 @@ const EMOTE_FONT_SIZE_TEXT = 26
 /** 한글 (Hangul 음절 + Jamo) 포함 여부 — 폰트 크기 분기에 사용. */
 const HANGUL_PATTERN = /[㄰-㆏가-힣]/
 
-const BELT_BADGE_COLORS: Record<TaekwondoBeltColor, { glow: number; stroke: number }> = {
-  WHITE: { glow: 0xf8fafc, stroke: 0xcbd5e1 },
-  YELLOW: { glow: 0xfacc15, stroke: 0xfef08a },
-  ORANGE: { glow: 0xfb923c, stroke: 0xfed7aa },
-  GREEN: { glow: 0x22c55e, stroke: 0xbbf7d0 },
-  BLUE: { glow: 0x3b82f6, stroke: 0xbfdbfe },
-  PURPLE: { glow: 0xa855f7, stroke: 0xe9d5ff },
-  BROWN: { glow: 0x92400e, stroke: 0xfcd34d },
-  RED: { glow: 0xef4444, stroke: 0xfecaca },
-  BLACK: { glow: 0x111827, stroke: 0xf5c451 },
+const BELT_BADGE_COLORS: Record<TaekwondoBeltColor, { glow: number; sparkle: number }> = {
+  WHITE: { glow: 0xf8fafc, sparkle: 0xffffff },
+  YELLOW: { glow: 0xfacc15, sparkle: 0xfef08a },
+  ORANGE: { glow: 0xfb923c, sparkle: 0xfed7aa },
+  GREEN: { glow: 0x22c55e, sparkle: 0xbbf7d0 },
+  BLUE: { glow: 0x3b82f6, sparkle: 0xbfdbfe },
+  PURPLE: { glow: 0xa855f7, sparkle: 0xe9d5ff },
+  BROWN: { glow: 0x92400e, sparkle: 0xfcd34d },
+  RED: { glow: 0xef4444, sparkle: 0xfecaca },
+  BLACK: { glow: 0x111827, sparkle: 0xf5c451 },
 }
 
 /**
@@ -128,40 +128,70 @@ function createBeltBadgeBubble(
   depth: number,
 ) {
   const beltColor = getTaekwondoBeltColorFromBoastEmoji(emoji)
-  const colors = beltColor ? BELT_BADGE_COLORS[beltColor] : { glow: 0x1f2937, stroke: 0xf5c451 }
+  const colors = beltColor ? BELT_BADGE_COLORS[beltColor] : { glow: 0x1f2937, sparkle: 0xf5c451 }
 
   const container = scene.add.container(x, y).setDepth(depth).setScale(0.5)
   const shadow = scene.add.graphics()
-  shadow.fillStyle(0x000000, 0.26)
-  shadow.fillEllipse(0, -30, 132, 58)
+  shadow.fillStyle(0x000000, 0.2)
+  shadow.fillEllipse(0, -25, 108, 42)
 
-  const crest = scene.add.graphics()
-  crest.fillStyle(colors.glow, 0.3)
-  crest.fillEllipse(0, -39, 130, 92)
-
-  crest.fillStyle(0x0f172a, 0.94)
-  crest.lineStyle(3, 0xf5c451, 1)
-  crest.beginPath()
-  crest.moveTo(0, -76)
-  crest.lineTo(48, -61)
-  crest.lineTo(60, -23)
-  crest.lineTo(0, 0)
-  crest.lineTo(-60, -23)
-  crest.lineTo(-48, -61)
-  crest.closePath()
-  crest.fillPath()
-  crest.strokePath()
-
-  crest.lineStyle(2, colors.stroke, 0.9)
-  crest.strokeRoundedRect(-51, -57, 102, 52, 16)
+  const aura = scene.add.graphics()
+  aura.fillStyle(colors.glow, 0.24)
+  aura.fillEllipse(0, -34, 112, 66)
+  aura.fillStyle(0xffffff, 0.14)
+  aura.fillEllipse(0, -34, 82, 44)
 
   const beltImage = scene.add.image(0, -32, getTaekwondoBeltEmoteTextureKey('YELLOW'))
   if (beltColor) {
-    setTaekwondoBeltImageDisplay(beltImage, beltColor, 112, 72)
+    setTaekwondoBeltImageDisplay(beltImage, beltColor, 98, 62)
   }
 
-  container.add([shadow, crest, beltImage])
+  const sparkles = [
+    createSparkle(scene, -49, -55, 7, colors.sparkle, 0.95),
+    createSparkle(scene, 49, -47, 5, 0xffffff, 0.9),
+    createSparkle(scene, -38, -18, 4, 0xffffff, 0.7),
+    createSparkle(scene, 38, -18, 3.5, colors.sparkle, 0.8),
+  ]
+
+  sparkles.forEach((sparkle, index) => {
+    scene.tweens.add({
+      targets: sparkle,
+      alpha: index % 2 === 0 ? 0.35 : 1,
+      scaleX: index % 2 === 0 ? 0.78 : 1.22,
+      scaleY: index % 2 === 0 ? 0.78 : 1.22,
+      angle: index % 2 === 0 ? 18 : -18,
+      duration: 520 + index * 120,
+      ease: 'Sine.easeInOut',
+      yoyo: true,
+      repeat: -1,
+    })
+  })
+
+  container.add([shadow, aura, beltImage, ...sparkles])
   return container
+}
+
+function createSparkle(
+  scene: Phaser.Scene,
+  x: number,
+  y: number,
+  radius: number,
+  color: number,
+  alpha: number,
+) {
+  const sparkle = scene.add.graphics({ x, y })
+  sparkle.lineStyle(2, color, alpha)
+  sparkle.beginPath()
+  sparkle.moveTo(0, -radius)
+  sparkle.lineTo(0, radius)
+  sparkle.moveTo(-radius, 0)
+  sparkle.lineTo(radius, 0)
+  sparkle.moveTo(-radius * 0.6, -radius * 0.6)
+  sparkle.lineTo(radius * 0.6, radius * 0.6)
+  sparkle.moveTo(radius * 0.6, -radius * 0.6)
+  sparkle.lineTo(-radius * 0.6, radius * 0.6)
+  sparkle.strokePath()
+  return sparkle
 }
 
 function computePosition(target: EmoteBubbleTarget): { x: number; y: number } {

@@ -22,8 +22,8 @@ const FONT_SIZE_EMOJI = 28
 /** 한글 단축 메시지용 작은 폰트. */
 const FONT_SIZE_TEXT = 16
 const HANGUL_PATTERN = /[㄰-㆏가-힣]/
-const BELT_IMAGE_MAX_WIDTH = 44
-const BELT_IMAGE_MAX_HEIGHT = 32
+const BELT_IMAGE_MAX_WIDTH = 40
+const BELT_IMAGE_MAX_HEIGHT = 29
 
 const BELT_STROKE_COLORS: Record<TaekwondoBeltColor, number> = {
   WHITE: 0xf8fafc,
@@ -81,6 +81,7 @@ export function createVillageEmojiPalette(
     bg: Phaser.GameObjects.Rectangle
     text: Phaser.GameObjects.Text
     beltImage: Phaser.GameObjects.Image
+    sparkles: Phaser.GameObjects.Graphics
   }[] = []
 
   emojis.forEach((emoji, index) => {
@@ -105,7 +106,8 @@ export function createVillageEmojiPalette(
     const beltImage = scene.add
       .image(buttonX, buttonY + 2, getTaekwondoBeltEmoteTextureKey('YELLOW'))
       .setOrigin(0.5, 0.5)
-    applyButtonEmoji(bg, text, beltImage, emoji)
+    const sparkles = scene.add.graphics()
+    applyButtonEmoji(bg, text, beltImage, sparkles, emoji)
 
     // 1\~9, 0 매핑 키 라벨 — 사용자가 단축키 학습할 수 있게 작은 글씨로 좌상단.
     const keyLabel = (index + 1) % 10
@@ -126,8 +128,8 @@ export function createVillageEmojiPalette(
       triggerByIndex(index)
     })
 
-    container.add([bg, text, beltImage, keyText])
-    buttons.push({ bg, text, beltImage })
+    container.add([bg, text, beltImage, sparkles, keyText])
+    buttons.push({ bg, text, beltImage, sparkles })
   })
 
   function triggerByIndex(index: number) {
@@ -150,10 +152,10 @@ export function createVillageEmojiPalette(
     triggerByIndex,
     setEmojis(nextEmojis: readonly VillageEmoji[]) {
       emojis = nextEmojis
-      buttons.forEach(({ bg, text, beltImage }, index) => {
+      buttons.forEach(({ bg, text, beltImage, sparkles }, index) => {
         const emoji = emojis[index]
         if (!emoji) return
-        applyButtonEmoji(bg, text, beltImage, emoji)
+        applyButtonEmoji(bg, text, beltImage, sparkles, emoji)
       })
     },
     setVisible(visible: boolean) {
@@ -172,12 +174,16 @@ function applyButtonEmoji(
   bg: Phaser.GameObjects.Rectangle,
   text: Phaser.GameObjects.Text,
   beltImage: Phaser.GameObjects.Image,
+  sparkles: Phaser.GameObjects.Graphics,
   emoji: VillageEmoji,
 ) {
-  bg.setStrokeStyle(2, getButtonStrokeColor(emoji), 0.7)
+  const isBelt = isTaekwondoBeltBoastEmoji(emoji)
+  bg.setStrokeStyle(isBelt ? 1 : 2, getButtonStrokeColor(emoji), isBelt ? 0.32 : 0.7)
 
-  if (!isTaekwondoBeltBoastEmoji(emoji)) {
+  if (!isBelt) {
     beltImage.setVisible(false)
+    sparkles.clear()
+    sparkles.setVisible(false)
     text.setText(emoji)
     text.setFontSize(getButtonFontSize(emoji))
     text.setScale(1)
@@ -192,6 +198,8 @@ function applyButtonEmoji(
   beltImage.setScale(1)
   setTaekwondoBeltImageDisplay(beltImage, beltColor, BELT_IMAGE_MAX_WIDTH, BELT_IMAGE_MAX_HEIGHT)
   beltImage.setVisible(true)
+  drawPaletteSparkles(sparkles, beltColor, beltImage.x, beltImage.y)
+  sparkles.setVisible(true)
 }
 
 function getButtonFontSize(emoji: VillageEmoji) {
@@ -208,4 +216,29 @@ function getTweenTarget(
   emoji: VillageEmoji,
 ) {
   return isTaekwondoBeltBoastEmoji(emoji) ? button.beltImage : button.text
+}
+
+function drawPaletteSparkles(
+  sparkles: Phaser.GameObjects.Graphics,
+  beltColor: TaekwondoBeltColor,
+  centerX: number,
+  centerY: number,
+) {
+  sparkles.clear()
+  const color = getButtonStrokeColor(`taekwondo-belt:${beltColor}`)
+  sparkles.lineStyle(1.4, color, 0.95)
+  drawSparkle(sparkles, centerX - 18, centerY - 11, 4)
+  sparkles.lineStyle(1.1, 0xffffff, 0.85)
+  drawSparkle(sparkles, centerX + 18, centerY - 9, 3)
+  sparkles.lineStyle(1, color, 0.75)
+  drawSparkle(sparkles, centerX + 13, centerY + 12, 2.4)
+}
+
+function drawSparkle(graphics: Phaser.GameObjects.Graphics, x: number, y: number, radius: number) {
+  graphics.beginPath()
+  graphics.moveTo(x, y - radius)
+  graphics.lineTo(x, y + radius)
+  graphics.moveTo(x - radius, y)
+  graphics.lineTo(x + radius, y)
+  graphics.strokePath()
 }
