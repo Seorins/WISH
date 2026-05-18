@@ -56,6 +56,10 @@ type GomokuOverlayProps = {
 type GameMode = 'local' | 'computer' | 'online'
 type OnlinePanelTab = 'rooms' | 'stats' | 'ranking'
 
+const DEFAULT_MODE: GameMode = 'computer'
+const DEFAULT_COMPUTER_LEVEL: ComputerLevel = 'intermediate'
+const DEFAULT_RULE_SET: RuleSet = 'renju-lite'
+const DEFAULT_TIMER_ENABLED = true
 const DEFAULT_HUMAN_STONE: Stone = 'black'
 const DEFAULT_TIMER_SECONDS = 30
 const ONLINE_RULE_SET: RuleSet = 'renju-lite'
@@ -169,10 +173,10 @@ export function GomokuOverlay({
   patientProfileId,
   onAuthRequired,
 }: GomokuOverlayProps) {
-  const [mode, setMode] = useState<GameMode>('computer')
-  const [computerLevel, setComputerLevel] = useState<ComputerLevel>('intermediate')
-  const [ruleSet, setRuleSet] = useState<RuleSet>('renju-lite')
-  const [timerEnabled, setTimerEnabled] = useState(true)
+  const [mode, setMode] = useState<GameMode>(DEFAULT_MODE)
+  const [computerLevel, setComputerLevel] = useState<ComputerLevel>(DEFAULT_COMPUTER_LEVEL)
+  const [ruleSet, setRuleSet] = useState<RuleSet>(DEFAULT_RULE_SET)
+  const [timerEnabled, setTimerEnabled] = useState(DEFAULT_TIMER_ENABLED)
   const [timerSeconds, setTimerSeconds] = useState(DEFAULT_TIMER_SECONDS)
   const [moves, setMoves] = useState<GomokuMove[]>([])
   const [timers, setTimers] = useState<Record<Stone, number>>({
@@ -197,6 +201,9 @@ export function GomokuOverlay({
   const [selectedOnlineOutfit, setSelectedOnlineOutfit] = useState(() => getSelectedOnlineOutfit())
   const recordedResultRef = useRef<string | null>(null)
   const syncedOnlineResultRef = useRef<number | null>(null)
+  const closeHandledRef = useRef(false)
+  const wasOpenRef = useRef(open)
+  const leavingRoomIdsRef = useRef(new Set<number>())
 
   const effectivePatientProfileId = isValidPatientProfileId(patientProfileId)
     ? patientProfileId
@@ -267,6 +274,53 @@ export function GomokuOverlay({
     setIsComputerThinking(false)
     recordedResultRef.current = null
   }, [timerSeconds])
+
+  const resetOverlayState = useCallback(() => {
+    setMode(DEFAULT_MODE)
+    setComputerLevel(DEFAULT_COMPUTER_LEVEL)
+    setRuleSet(DEFAULT_RULE_SET)
+    setTimerEnabled(DEFAULT_TIMER_ENABLED)
+    setTimerSeconds(DEFAULT_TIMER_SECONDS)
+    setMoves([])
+    setTimers({ black: DEFAULT_TIMER_SECONDS, white: DEFAULT_TIMER_SECONDS })
+    setStatusMessage('')
+    setTimeoutWinner(null)
+    setIsComputerThinking(false)
+    setComputerHumanStone(DEFAULT_HUMAN_STONE)
+    setHintMove(null)
+    setScoreboard({ black: 0, white: 0, draw: 0 })
+    setOnlineRoom(null)
+    setWaitingRooms([])
+    setOnlineStats(null)
+    setOnlineRanking(null)
+    setOnlineBusy(false)
+    setOnlineError('')
+    setResolvedPatientProfileId(undefined)
+    setIsResolvingOnlineProfile(false)
+    setOnlineTick(Date.now())
+    setSelectedOnlineOutfit(getSelectedOnlineOutfit())
+    recordedResultRef.current = null
+    syncedOnlineResultRef.current = null
+  }, [])
+
+  const leaveOnlineRoomSilently = useCallback((room: GomokuRoom | null) => {
+    if (!room || room.status === 'FINISHED' || room.status === 'CANCELLED') return
+    if (leavingRoomIdsRef.current.has(room.id)) return
+
+    leavingRoomIdsRef.current.add(room.id)
+    void Promise.resolve(leaveGomokuRoom(room.id))
+      .catch(() => undefined)
+      .finally(() => {
+        leavingRoomIdsRef.current.delete(room.id)
+      })
+  }, [])
+
+  const handleClose = useCallback(() => {
+    closeHandledRef.current = true
+    leaveOnlineRoomSilently(onlineRoom)
+    resetOverlayState()
+    onClose()
+  }, [leaveOnlineRoomSilently, onClose, onlineRoom, resetOverlayState])
 
   useEffect(() => {
     if (!open) return
@@ -502,7 +556,7 @@ export function GomokuOverlay({
       if (!response.data) {
         throw new Error(text.onlineActionFailed)
       }
-      setOnlineRoom(response.data.myStone ? response.data : null)
+      setOnlineRoom(null)
       setOnlineError('')
       await loadOnlineDashboard()
     } catch (error) {
@@ -550,13 +604,36 @@ export function GomokuOverlay({
       if (event.key === 'Escape') {
         event.preventDefault()
         event.stopPropagation()
-        onClose()
+        handleClose()
       }
     }
 
     window.addEventListener('keydown', handleKeyDown, { capture: true })
     return () => window.removeEventListener('keydown', handleKeyDown, { capture: true })
-  }, [onClose, open])
+  }, [handleClose, open])
+
+  useEffect(() => {
+    if (open) {
+      closeHandledRef.current = false
+      wasOpenRef.current = true
+      return
+    }
+
+    if (wasOpenRef.current) {
+      if (!closeHandledRef.current) {
+        closeHandledRef.current = true
+        leaveOnlineRoomSilently(onlineRoom)
+      }
+      resetOverlayState()
+    }
+    wasOpenRef.current = false
+  }, [leaveOnlineRoomSilently, onlineRoom, open, resetOverlayState])
+
+  useEffect(() => {
+    if (open || !onlineRoom) return
+    leaveOnlineRoomSilently(onlineRoom)
+    resetOverlayState()
+  }, [leaveOnlineRoomSilently, onlineRoom, open, resetOverlayState])
 
   useEffect(() => {
     if (
@@ -812,7 +889,7 @@ export function GomokuOverlay({
             <h1>{text.title}</h1>
             <p>{text.subtitle}</p>
           </div>
-          <button type="button" className="gomoku-close-button" onClick={onClose}>
+          <button type="button" className="gomoku-close-button" onClick={handleClose}>
             {text.close}
           </button>
         </header>
