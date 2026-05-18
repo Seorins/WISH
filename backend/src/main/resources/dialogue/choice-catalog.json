@@ -314,11 +314,11 @@
         },
         "nurse_check_02b_dizzy": {
           "nodeId": "nurse_check_02b_dizzy",
-          "questionText": "지금 어떻게 보여?",
+          "questionText": "어떤 식으로 어지러워?",
           "npcLines": [
             "어지러운 건 꼭 알려야 해.",
             "(가까이 와서 작은 목소리로) 조은이가 옆에 있을게.",
-            "지금 어떻게 보여?"
+            "어떤 식으로 어지러워?"
           ],
           "choices": ["nurse_check_spinning", "nurse_check_brief_dizzy", "nurse_check_mild_dizzy"]
         },
@@ -366,11 +366,11 @@
         },
         "nurse_curious_02b_med": {
           "nodeId": "nurse_curious_02b_med",
-          "questionText": "어떤 게 제일 궁금해?",
+          "questionText": "어떤 부분부터 궁금해?",
           "npcLines": [
             "약은 다 이유가 있지.",
             "조은이도 약 처음 받았을 때 통 안에 든 거 다 까봤어.",
-            "어떤 게 제일 궁금해?"
+            "어떤 부분부터 궁금해?"
           ],
           "choices": ["nurse_cur_med_why", "nurse_cur_med_when", "nurse_cur_med_good"]
         },
@@ -506,10 +506,10 @@
         },
         "sleep_pace_02b_quick": {
           "nodeId": "sleep_pace_02b_quick",
-          "questionText": "한 가지만 더 들어줄래?",
+          "questionText": "그럼 빨리 가는 방법 하나만 같이 정해볼래?",
           "npcLines": [
             "빨리 끝내고 싶은 마음, 건빈이도 알아.",
-            "그런데 한 가지만 더 들어줄래?"
+            "그래도 한 가지만 같이 정하고 가자."
           ],
           "choices": ["sleep_pace_quick_stop", "sleep_pace_quick_safe", "sleep_pace_quick_pause"]
         },
@@ -594,7 +594,7 @@
         },
         "garden_tend_02a_what": {
           "nodeId": "garden_tend_02a_what",
-          "questionText": "뭐 같이 할까?",
+          "questionText": "어떤 거 골라볼래?",
           "npcLines": [
             "(작게 끄덕) 오늘 정호 할 일이 셋이거든.",
             "같이 골라줘."
@@ -609,10 +609,10 @@
         },
         "garden_tend_02b_brief": {
           "nodeId": "garden_tend_02b_brief",
-          "questionText": "뭐 같이 할까?",
+          "questionText": "잠깐 할 일 하나 골라줄래?",
           "npcLines": [
             "(작게 끄덕) 잠깐도 좋아.",
-            "뭐 같이 할까?"
+            "짧게 할 수 있는 일도 셋 있어."
           ],
           "choices": ["garden_tend_weed", "garden_tend_smell", "garden_tend_beside"]
         },
@@ -704,8 +704,8 @@
         },
         "squirrel_shade_02b_brief": {
           "nodeId": "squirrel_shade_02b_brief",
-          "questionText": "어디 가게?",
-          "npcLines": ["오, 어디 가게?", "(꼬리로 신호)"],
+          "questionText": "그 다음엔 어디 가게?",
+          "npcLines": ["오, 그 다음엔 어디 가게?", "(꼬리로 신호)"],
           "choices": ["squirrel_shade_treat", "squirrel_shade_family", "squirrel_shade_just_go"]
         },
         "squirrel_shade_02c_more": {
@@ -839,8 +839,8 @@
         },
         "dain_miss_03a_how_send": {
           "nodeId": "dain_miss_03a_how_send",
-          "questionText": "어떻게 보낼까?",
-          "npcLines": ["어떻게 보낼까?"],
+          "questionText": "뭐라고 보낼까?",
+          "npcLines": ["뭐라고 보낼까?"],
           "choices": ["dain_miss_say_miss", "dain_miss_say_meet", "dain_miss_letter"]
         },
         "dain_miss_02b_sometimes": {
@@ -897,8 +897,8 @@
         },
         "dain_school_02b_sometimes": {
           "nodeId": "dain_school_02b_sometimes",
-          "questionText": "어떤 게 제일 궁금해?",
-          "npcLines": ["어떤 게 제일 궁금해?"],
+          "questionText": "그럴 때 뭐가 떠올라?",
+          "npcLines": ["그럴 때 뭐가 떠올라?"],
           "choices": ["dain_school_some_friends", "dain_school_some_class", "dain_school_some_all"]
         },
         "dain_school_02c_no": {
@@ -921,11 +921,11 @@
       "nodes": {
         "dain_greet_01_entry": {
           "nodeId": "dain_greet_01_entry",
-          "questionText": "너는 보낼 사람 있어?",
+          "questionText": "너는 어떤 한 마디 보내고 싶어?",
           "npcLines": [
             "(펜 굴리며) 야, 다인이 어제 친구한테 '잘 지내?' 한 줄 보냈는데 답장 왔어.",
             "우리 같이 인사 게임 어때?",
-            "너는 보낼 사람 있어?"
+            "너는 어떤 한 마디 보내고 싶어?"
           ],
           "choices": ["dain_greet_miss", "dain_greet_well", "dain_greet_meet"]
         },
@@ -952,10 +952,10 @@
         },
         "dain_greet_02c_meet_when": {
           "nodeId": "dain_greet_02c_meet_when",
-          "questionText": "언제 어떻게 만날까?",
+          "questionText": "어떤 약속이면 좋을까?",
           "npcLines": [
             "다음에 만나자, 좋은 약속이야.",
-            "언제 어떻게 만날까?"
+            "어떤 약속이면 좋을까?"
           ],
           "choices": ["dain_greet_meet_soon", "dain_greet_meet_school", "dain_greet_meet_home"]
         }
@@ -2162,7 +2162,7 @@
       "endingType": "GO_LIGHT_ACTIVITY",
       "endingNpcLines": [
         "(작게 끄덕) 좋아.",
-        "조은이는 여기서 노트 정리하고 있을게."
+        "가벼운 거면 뭐든. 마음 가는 대로 보내."
       ],
       "closingLine": "또 와."
     },
@@ -2320,8 +2320,8 @@
       "topicKeywords": ["약"], "sentimentWords": [],
       "endingType": "ASK_MEDICAL_FIRST",
       "endingNpcLines": [
-        "기간 보이면 마음이 가벼워.",
-        "잘 골랐어."
+        "선생님께 '언제까지 먹어요?' 라고 물어봐.",
+        "기간 보이면 마음이 가벼워."
       ],
       "closingLine": "또 와."
     },
@@ -2334,8 +2334,8 @@
       "topicKeywords": ["약"], "sentimentWords": [],
       "endingType": "ASK_MEDICAL_FIRST",
       "endingNpcLines": [
-        "(작게 웃으며) 그것도 좋은 질문이야.",
-        "조은이도 옆에서 같이 들을게."
+        "(작게 웃으며) 그것도 좋은 질문.",
+        "선생님께 같이 가서 물어보자."
       ],
       "closingLine": "또 와줘."
     },
@@ -3387,11 +3387,11 @@
       "topicKeywords": ["그늘"], "sentimentWords": []
     },
     "squirrel_shade_brief": {
-      "choiceIntentId": "squirrel_shade_brief", "text": "잠깐만이요",
+      "choiceIntentId": "squirrel_shade_brief", "text": "잠깐만 있고 갈게요",
       "nextNodeId": "squirrel_shade_02b_brief", "isEnding": false,
       "valence": "NEUTRAL", "tone": "CALM", "intensity": 0,
       "concernFlags": [],
-      "protectiveFactors": ["sets_boundary"],
+      "protectiveFactors": ["sets_boundary", "agency_coping"],
       "topicKeywords": ["그늘"], "sentimentWords": []
     },
     "squirrel_shade_more": {
