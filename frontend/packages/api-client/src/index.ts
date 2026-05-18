@@ -85,7 +85,7 @@ export {
   listGuardianDialogueSessions,
 } from './guardian-dialogue'
 export { requestPresignedUploadUrls, uploadToPresignedUrl } from './uploads'
-export { createPatientProfile, listPatientProfiles } from './patient-profiles'
+export { createPatientProfile, listPatientProfiles, updatePatientProfile } from './patient-profiles'
 export { endLoginSession, heartbeatLoginSession, startLoginSession } from './login-sessions'
 export {
   endContent,
@@ -285,7 +285,12 @@ export type {
   PresignedUploadRequest,
   PresignedUploadResponse,
 } from './uploads'
-export type { Gender, PatientProfile, PatientProfileCreateRequest } from './patient-profiles'
+export type {
+  Gender,
+  PatientProfile,
+  PatientProfileCreateRequest,
+  PatientProfileUpdateRequest,
+} from './patient-profiles'
 export type { LoginSession, LoginSessionStartRequest } from './login-sessions'
 export type {
   ActiveLiveSessionResponse,
