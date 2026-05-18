@@ -56,6 +56,9 @@ public class TaekwondoSessionMotion {
     @Column(nullable = false, length = 255)
     private String feedback;
 
+    @Column(name = "monsters_defeated", nullable = false)
+    private int monstersDefeated;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "performance_video_id")
     private PerformanceVideo performanceVideo;
@@ -71,6 +74,7 @@ public class TaekwondoSessionMotion {
             double accuracy,
             int completedReps,
             String feedback,
+            int monstersDefeated,
             PerformanceVideo performanceVideo) {
         this.session = Objects.requireNonNull(session, "session must not be null");
         this.motion = Objects.requireNonNull(motion, "motion must not be null");
@@ -78,10 +82,12 @@ public class TaekwondoSessionMotion {
         validateNonNegative(durationSec, "durationSec");
         validateAccuracy(accuracy);
         validateNonNegative(completedReps, "completedReps");
+        validateNonNegative(monstersDefeated, "monstersDefeated");
         this.durationSec = durationSec;
         this.accuracy = accuracy;
         this.completedReps = completedReps;
         this.feedback = Objects.requireNonNull(feedback, "feedback must not be null");
+        this.monstersDefeated = monstersDefeated;
         this.performanceVideo = performanceVideo;
     }
 
