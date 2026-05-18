@@ -24,6 +24,7 @@ const FONT_SIZE_TEXT = 16
 const HANGUL_PATTERN = /[㄰-㆏가-힣]/
 const BELT_IMAGE_MAX_WIDTH = 40
 const BELT_IMAGE_MAX_HEIGHT = 29
+const BUTTON_PULSE_SCALE = 1.35
 
 const BELT_STROKE_COLORS: Record<TaekwondoBeltColor, number> = {
   WHITE: 0xf8fafc,
@@ -83,6 +84,8 @@ export function createVillageEmojiPalette(
     text: Phaser.GameObjects.Text
     beltImage: Phaser.GameObjects.Image
     sparkles: Phaser.GameObjects.Graphics
+    pulseBaseScaleX: number
+    pulseBaseScaleY: number
   }[] = []
   let lastConsumedPointerKey: string | null = null
 
@@ -110,6 +113,7 @@ export function createVillageEmojiPalette(
       .setOrigin(0.5, 0.5)
     const sparkles = scene.add.graphics()
     applyButtonEmoji(bg, text, beltImage, sparkles, emoji)
+    const pulseBaseScale = getCurrentPulseScale({ text, beltImage }, emoji)
 
     // 1\~9, 0 매핑 키 라벨 — 사용자가 단축키 학습할 수 있게 작은 글씨로 좌상단.
     const keyLabel = (index + 1) % 10
@@ -140,21 +144,34 @@ export function createVillageEmojiPalette(
     )
 
     container.add([bg, text, beltImage, sparkles, keyText, hitZone])
-    buttons.push({ bg, text, beltImage, sparkles })
+    buttons.push({
+      bg,
+      text,
+      beltImage,
+      sparkles,
+      pulseBaseScaleX: pulseBaseScale.x,
+      pulseBaseScaleY: pulseBaseScale.y,
+    })
   })
 
   function triggerByIndex(index: number) {
     if (index < 0 || index >= emojis.length) return
     const emoji = emojis[index]
     // 살짝 통통 피드백.
-    const target = getTweenTarget(buttons[index], emoji)
+    const button = buttons[index]
+    const target = getTweenTarget(button, emoji)
+    scene.tweens.killTweensOf(target)
+    target.setScale(button.pulseBaseScaleX, button.pulseBaseScaleY)
     scene.tweens.add({
       targets: target,
-      scaleX: target.scaleX * 1.35,
-      scaleY: target.scaleY * 1.35,
+      scaleX: button.pulseBaseScaleX * BUTTON_PULSE_SCALE,
+      scaleY: button.pulseBaseScaleY * BUTTON_PULSE_SCALE,
       duration: 90,
       yoyo: true,
       ease: 'Quad.Out',
+      onComplete: () => {
+        target.setScale(button.pulseBaseScaleX, button.pulseBaseScaleY)
+      },
     })
     options.onSelect(emoji)
   }
@@ -201,10 +218,15 @@ export function createVillageEmojiPalette(
     consumePointerDown,
     setEmojis(nextEmojis: readonly VillageEmoji[]) {
       emojis = nextEmojis
-      buttons.forEach(({ bg, text, beltImage, sparkles }, index) => {
+      buttons.forEach((button, index) => {
+        const { bg, text, beltImage, sparkles } = button
         const emoji = emojis[index]
         if (!emoji) return
+        scene.tweens.killTweensOf([text, beltImage])
         applyButtonEmoji(bg, text, beltImage, sparkles, emoji)
+        const pulseBaseScale = getCurrentPulseScale(button, emoji)
+        button.pulseBaseScaleX = pulseBaseScale.x
+        button.pulseBaseScaleY = pulseBaseScale.y
       })
     },
     setVisible(visible: boolean) {
@@ -265,6 +287,14 @@ function getTweenTarget(
   emoji: VillageEmoji,
 ) {
   return isTaekwondoBeltBoastEmoji(emoji) ? button.beltImage : button.text
+}
+
+function getCurrentPulseScale(
+  button: { text: Phaser.GameObjects.Text; beltImage: Phaser.GameObjects.Image },
+  emoji: VillageEmoji,
+) {
+  const target = getTweenTarget(button, emoji)
+  return { x: target.scaleX, y: target.scaleY }
 }
 
 function getPointerEventKey(pointer: Phaser.Input.Pointer, index: number) {
