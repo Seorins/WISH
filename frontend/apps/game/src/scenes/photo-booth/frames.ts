@@ -50,10 +50,10 @@ export const PHOTO_BOOTH_FRAMES: PhotoFrame[] = [
     overlayKey: 'photo-booth-frame-3',
     overlayPath: 'images/photo-booth/frames/frame3.png',
     slots: [
-      { xRatio: 0.2455, yRatio: 0.1477, wRatio: 0.5048, hRatio: 0.1776 },
-      { xRatio: 0.2455, yRatio: 0.3421, wRatio: 0.5027, hRatio: 0.1758 },
-      { xRatio: 0.2444, yRatio: 0.5347, wRatio: 0.5069, hRatio: 0.177 },
-      { xRatio: 0.2455, yRatio: 0.7279, wRatio: 0.5037, hRatio: 0.1531 },
+      { xRatio: 0.2359, yRatio: 0.1423, wRatio: 0.5218, hRatio: 0.1806 },
+      { xRatio: 0.2359, yRatio: 0.3421, wRatio: 0.5218, hRatio: 0.1794 },
+      { xRatio: 0.2349, yRatio: 0.5407, wRatio: 0.5228, hRatio: 0.18 },
+      { xRatio: 0.2359, yRatio: 0.7386, wRatio: 0.5218, hRatio: 0.1549 },
     ],
   },
   {
@@ -63,10 +63,10 @@ export const PHOTO_BOOTH_FRAMES: PhotoFrame[] = [
     overlayKey: 'photo-booth-frame-4',
     overlayPath: 'images/photo-booth/frames/frame4.png',
     slots: [
-      { xRatio: 0.2295, yRatio: 0.1495, wRatio: 0.5409, hRatio: 0.1824 },
-      { xRatio: 0.2317, yRatio: 0.3451, wRatio: 0.5388, hRatio: 0.183 },
-      { xRatio: 0.2317, yRatio: 0.5419, wRatio: 0.5388, hRatio: 0.1705 },
-      { xRatio: 0.2317, yRatio: 0.7255, wRatio: 0.5388, hRatio: 0.1675 },
+      { xRatio: 0.2253, yRatio: 0.1489, wRatio: 0.5494, hRatio: 0.1848 },
+      { xRatio: 0.2274, yRatio: 0.3481, wRatio: 0.5473, hRatio: 0.186 },
+      { xRatio: 0.2274, yRatio: 0.5484, wRatio: 0.5473, hRatio: 0.174 },
+      { xRatio: 0.2274, yRatio: 0.7356, wRatio: 0.5473, hRatio: 0.1621 },
     ],
   },
 ]
