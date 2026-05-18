@@ -53,6 +53,9 @@ public class PhotoBoothPhoto {
     @Column(name = "image_url", nullable = false, length = 500)
     private String imageUrl;
 
+    @Column(name = "thumbnail_url", length = 500)
+    private String thumbnailUrl;
+
     /** 공개 갤러리 노출 여부. false 면 본인만 조회 가능. */
     @Column(name = "is_public", nullable = false)
     private boolean isPublic;
@@ -65,13 +68,18 @@ public class PhotoBoothPhoto {
 
     @Builder
     private PhotoBoothPhoto(
-            PatientProfile patientProfile, String frameId, String imageUrl, boolean isPublic) {
+            PatientProfile patientProfile,
+            String frameId,
+            String imageUrl,
+            String thumbnailUrl,
+            boolean isPublic) {
         // 빌더 단계 invariant — @ManyToOne(optional=false) / @Column(nullable=false) 만으로는 build()
         // 시점에 null 차단이 안 되므로 fail-fast.
         this.patientProfile =
                 Objects.requireNonNull(patientProfile, "patientProfile must not be null");
         this.frameId = Objects.requireNonNull(frameId, "frameId must not be null");
         this.imageUrl = Objects.requireNonNull(imageUrl, "imageUrl must not be null");
+        this.thumbnailUrl = thumbnailUrl;
         if (frameId.isBlank()) {
             throw new IllegalArgumentException("frameId must not be blank");
         }
