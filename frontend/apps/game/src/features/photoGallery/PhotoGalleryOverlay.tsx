@@ -1,4 +1,10 @@
-import { useEffect, useState, type CSSProperties } from 'react'
+import {
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type PointerEvent as ReactPointerEvent,
+} from 'react'
 import type { PublicPhotoBooth } from '@wish/api-client'
 import { usePublicPhotoBooths } from './hooks'
 
@@ -8,6 +14,21 @@ type PhotoGalleryOverlayProps = {
 }
 
 const FONT = "'Jua', 'Apple SD Gothic Neo', sans-serif"
+const MIN_ZOOM = 1
+const DETAIL_ZOOM = 2.35
+
+type Point = {
+  x: number
+  y: number
+}
+
+type DragState = {
+  pointerId: number
+  startClientX: number
+  startClientY: number
+  startPan: Point
+  moved: boolean
+}
 
 const styles = {
   backdrop: {
@@ -71,13 +92,15 @@ const styles = {
   },
   grid: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(4, 1fr)',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))',
     gap: 16,
+    alignItems: 'start',
   },
   card: {
     display: 'flex',
     flexDirection: 'column',
     gap: 8,
+    minWidth: 0,
     padding: 10,
     borderRadius: 16,
     background: '#ffffff',
@@ -89,15 +112,17 @@ const styles = {
   },
   thumbWrap: {
     width: '100%',
+    aspectRatio: '1 / 1',
     borderRadius: 10,
     background: '#fdeef3',
     overflow: 'hidden',
     display: 'flex',
+    alignItems: 'center',
     justifyContent: 'center',
   },
   thumb: {
     width: '100%',
-    height: 'auto',
+    height: '100%',
     objectFit: 'contain' as CSSProperties['objectFit'],
     display: 'block',
   },
@@ -142,18 +167,38 @@ const styles = {
   },
   detailPanel: {
     position: 'relative',
-    maxWidth: 'min(560px, calc(100vw - 48px))',
+    width: 'min(920px, calc(100vw - 48px))',
     maxHeight: 'calc(100vh - 48px)',
     display: 'flex',
     flexDirection: 'column',
-    gap: 12,
+    gap: 10,
     alignItems: 'center',
+  },
+  detailStage: {
+    width: '100%',
+    height: 'min(720px, calc(100vh - 170px))',
+    minHeight: 'min(320px, calc(100vh - 180px))',
+    overflow: 'hidden',
+    display: 'flex',
+    borderRadius: 16,
+    touchAction: 'none',
+  },
+  detailImageFrame: {
+    width: '100%',
+    height: '100%',
+    boxSizing: 'border-box',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    margin: 'auto',
   },
   detailImage: {
     maxWidth: '100%',
-    maxHeight: '70vh',
-    borderRadius: 16,
-    boxShadow: '0 18px 36px rgba(0,0,0,0.35)',
+    maxHeight: '100%',
+    borderRadius: 12,
+    display: 'block',
+    userSelect: 'none',
+    willChange: 'transform',
   },
   detailInfo: {
     color: '#fff7fa',
@@ -177,6 +222,10 @@ const styles = {
   },
 } satisfies Record<string, CSSProperties>
 
+function clampPercent(value: number) {
+  return Math.min(100, Math.max(0, value))
+}
+
 function formatDate(iso: string) {
   const date = new Date(iso)
   if (Number.isNaN(date.getTime())) return ''
@@ -188,11 +237,30 @@ function formatDate(iso: string) {
 
 export function PhotoGalleryOverlay({ open, onClose }: PhotoGalleryOverlayProps) {
   const [selected, setSelected] = useState<PublicPhotoBooth | null>(null)
-  const { data, isLoading, isError, refetch } = usePublicPhotoBooths({ page: 0, size: 36 })
+  const [zoom, setZoom] = useState(MIN_ZOOM)
+  const [zoomOrigin, setZoomOrigin] = useState<Point>({ x: 50, y: 50 })
+  const [pan, setPan] = useState<Point>({ x: 0, y: 0 })
+  const [isDragging, setIsDragging] = useState(false)
+  const detailImageRef = useRef<HTMLImageElement | null>(null)
+  const dragStateRef = useRef<DragState | null>(null)
+  const ignoreNextClickRef = useRef(false)
+  const { data, isLoading, isError, refetch } = usePublicPhotoBooths({
+    page: 0,
+    size: 36,
+    enabled: open,
+  })
+
+  useEffect(() => {
+    if (!open) return
+    void refetch()
+  }, [open, refetch])
 
   useEffect(() => {
     if (!open) {
       setSelected(null)
+      setZoom(MIN_ZOOM)
+      setPan({ x: 0, y: 0 })
+      setZoomOrigin({ x: 50, y: 50 })
       return
     }
 
@@ -215,10 +283,92 @@ export function PhotoGalleryOverlay({ open, onClose }: PhotoGalleryOverlayProps)
     return () => window.removeEventListener('keydown', handleKeyDown, { capture: true })
   }, [onClose, open, selected])
 
+  useEffect(() => {
+    setZoom(MIN_ZOOM)
+    setPan({ x: 0, y: 0 })
+    setZoomOrigin({ x: 50, y: 50 })
+    setIsDragging(false)
+    dragStateRef.current = null
+    ignoreNextClickRef.current = false
+  }, [selected?.id])
+
   if (!open) return null
 
   // 백엔드 응답은 { code, message, data: PageResponse } 래핑이라 한 단계 더 들어가야 함.
   const photos = data?.data?.content ?? []
+
+  const handleDetailPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (zoom <= MIN_ZOOM) return
+
+    event.currentTarget.setPointerCapture(event.pointerId)
+    dragStateRef.current = {
+      pointerId: event.pointerId,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      startPan: pan,
+      moved: false,
+    }
+    setIsDragging(true)
+  }
+
+  const handleDetailPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const dragState = dragStateRef.current
+    if (!dragState || dragState.pointerId !== event.pointerId) return
+
+    const dx = event.clientX - dragState.startClientX
+    const dy = event.clientY - dragState.startClientY
+    if (Math.hypot(dx, dy) > 3) dragState.moved = true
+    setPan({ x: dragState.startPan.x + dx, y: dragState.startPan.y + dy })
+  }
+
+  const handleDetailPointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const dragState = dragStateRef.current
+    if (!dragState || dragState.pointerId !== event.pointerId) return
+
+    if (dragState.moved) {
+      ignoreNextClickRef.current = true
+      window.setTimeout(() => {
+        ignoreNextClickRef.current = false
+      }, 0)
+    }
+
+    event.currentTarget.releasePointerCapture(event.pointerId)
+    dragStateRef.current = null
+    setIsDragging(false)
+  }
+
+  const handleDetailClick = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (ignoreNextClickRef.current) {
+      ignoreNextClickRef.current = false
+      return
+    }
+
+    const image = detailImageRef.current
+    if (!image) return
+
+    const rect = image.getBoundingClientRect()
+    if (
+      event.clientX < rect.left ||
+      event.clientX > rect.right ||
+      event.clientY < rect.top ||
+      event.clientY > rect.bottom
+    ) {
+      return
+    }
+
+    setZoomOrigin({
+      x: clampPercent(((event.clientX - rect.left) / rect.width) * 100),
+      y: clampPercent(((event.clientY - rect.top) / rect.height) * 100),
+    })
+    setPan({ x: 0, y: 0 })
+    setZoom(DETAIL_ZOOM)
+  }
+
+  const resetDetailZoom = () => {
+    setZoom(MIN_ZOOM)
+    setPan({ x: 0, y: 0 })
+    setZoomOrigin({ x: 50, y: 50 })
+  }
 
   return (
     <div style={styles.backdrop} role="dialog" aria-modal="true" onClick={onClose}>
@@ -284,7 +434,35 @@ export function PhotoGalleryOverlay({ open, onClose }: PhotoGalleryOverlayProps)
             >
               ×
             </button>
-            <img src={selected.imageUrl} alt="" style={styles.detailImage} />
+            <div
+              className="wish-gallery-detail-stage"
+              style={{
+                ...styles.detailStage,
+                cursor: zoom > MIN_ZOOM ? (isDragging ? 'grabbing' : 'grab') : 'zoom-in',
+              }}
+              onPointerDown={handleDetailPointerDown}
+              onPointerMove={handleDetailPointerMove}
+              onPointerUp={handleDetailPointerUp}
+              onPointerCancel={handleDetailPointerUp}
+              onClick={handleDetailClick}
+              onDoubleClick={resetDetailZoom}
+            >
+              <div style={styles.detailImageFrame}>
+                <img
+                  ref={detailImageRef}
+                  src={selected.imageUrl}
+                  alt=""
+                  draggable={false}
+                  style={{
+                    ...styles.detailImage,
+                    cursor: zoom > MIN_ZOOM ? (isDragging ? 'grabbing' : 'grab') : 'zoom-in',
+                    transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+                    transformOrigin: `${zoomOrigin.x}% ${zoomOrigin.y}%`,
+                    transition: isDragging ? 'none' : 'transform 160ms ease-out',
+                  }}
+                />
+              </div>
+            </div>
             <div style={styles.detailInfo}>
               <div style={{ fontSize: 18 }}>{selected.author.nickname}</div>
               <div style={{ fontSize: 14, color: '#ffd9e4' }}>{formatDate(selected.createdAt)}</div>
