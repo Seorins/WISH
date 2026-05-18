@@ -35,6 +35,18 @@ const MIN_VISIBLE_PLAYER_SLOTS = 6
 const BUBBLE_TTL_MS = 3200
 
 /**
+ * 라운드 길이 (ms) — BE 의 `quiz.realtime.round-duration-seconds` 와 동기화. 60s.
+ * 글자수 reveal 타이밍 계산에 사용. BE 설정이 바뀌면 같이 손봐야 함.
+ */
+const ROUND_DURATION_MS = 60_000
+
+/**
+ * 글자수 힌트가 추측자에게 노출되기까지 라운드 시작 후 대기하는 시간. 라운드 중반부 이후에만
+ * 표시되도록 30s 로 둠. 너무 빠르면 힌트가 강해서 그림을 안 보게 되고, 너무 늦으면 무쓸모.
+ */
+const WORD_LENGTH_REVEAL_MS = 30_000
+
+/**
  * 플레이어 슬롯 아바타 — themes/art/ui/char1~9.png 의 상반신만 setCrop 으로 잘라 노출.
  * roomId + joinOrder 기준으로 방마다 섞인 순서를 만들되, 모든 클라이언트가 같은 캐릭터를 보도록 고정 매핑한다.
  */
@@ -122,6 +134,13 @@ export class QuizPlayScene extends Phaser.Scene {
   private timerText: Phaser.GameObjects.Text | null = null
   private timerEvent: Phaser.Time.TimerEvent | null = null
 
+  /**
+   * 추측자에게 글자수 힌트를 30s 후에야 노출하기 위한 reveal 상태. true 가 되면 drawLayout 에서
+   * '○글자' 가 표시되고, 그 전엔 '그림을 맞춰봐!' 로 가린다.
+   */
+  private wordLengthRevealed = false
+  private wordLengthRevealTimer: Phaser.Time.TimerEvent | null = null
+
   private canvasBounds = new Phaser.Geom.Rectangle()
   private strokes: DrawSegment[] = []
   private remoteLastPoints = new Map<string, Point>()
@@ -190,6 +209,8 @@ export class QuizPlayScene extends Phaser.Scene {
     this.brushColor = BRUSH_COLORS[0].color
     this.selectedTool = 'brush'
     this.brushSize = 6
+    this.wordLengthRevealed = false
+    this.wordLengthRevealTimer = null
   }
 
   preload() {
@@ -240,11 +261,17 @@ export class QuizPlayScene extends Phaser.Scene {
     // 나가기도 같은 오버레이 안에 두어 input focus 와 Phaser 클릭이 첫 탭에서 꼬이는 문제 해결.
     this.game.events.on('quiz-guess:submit', this.handleGuessOverlaySubmit, this)
     this.game.events.on('quiz-guess:leave', this.handleLeave, this)
+    this.input.keyboard?.on('keydown-ESC', this.handleEscKey, this)
     this.events.once('shutdown', this.handleShutdown, this)
 
     // 진입 시점에 이미 라운드가 진행 중이고 본인이 정답자라면 오버레이 즉시 노출.
     if (this.snapshot.status === 'PLAYING' && !this.isDrawer()) {
       this.setGuessOverlay(true)
+    }
+    // 재진입(스냅샷이 PLAYING 인 상태로 시작) 시에도 글자수 reveal 타이밍을 맞춤. 이미 30s
+    // 지났으면 즉시 노출 / 아니면 남은 만큼 지연.
+    if (this.snapshot.status === 'PLAYING') {
+      this.scheduleWordLengthReveal(this.snapshot.roundEndsAtEpochMillis)
     }
     this.timerEvent = this.time.addEvent({
       delay: 250,
@@ -308,9 +335,51 @@ export class QuizPlayScene extends Phaser.Scene {
       'right',
     )
 
+    // 우상단 닫기 버튼 — 게임 도중 명시적으로 나가기. ESC 키와 동등.
+    // drawer 의 "나가기" 버튼은 하단 도구바에만 있고 추측자는 HTML 오버레이 안에만 있어서, 어느
+    // 역할이든 항상 보이는 공통 닫기 진입점이 필요해서 우상단에 둠.
+    container.add(this.createCloseButton(w - 28, 28, () => void this.handleLeave()))
+
     if (this.finalMembers) {
       this.drawResultModal(container)
     }
+  }
+
+  /** 우상단 ✕ 버튼 — 모달 close 패턴. 빨강 톤으로 종료 신호. */
+  private createCloseButton(cx: number, cy: number, onClick: () => void) {
+    const container = this.add.container(cx, cy)
+    const size = 36
+    const radius = 8
+
+    const hit = this.add.rectangle(0, 0, size + 4, size + 4, 0xffffff, 0.001)
+    hit.setInteractive({ useHandCursor: true })
+
+    const g = this.add.graphics()
+    const draw = (hovered: boolean) => {
+      g.clear()
+      g.fillStyle(0x000000, 0.18)
+      g.fillRoundedRect(-size / 2 + 1, -size / 2 + 2, size, size, radius)
+      g.fillStyle(0xc98477, hovered ? 1 : 0.92)
+      g.fillRoundedRect(-size / 2, -size / 2, size, size, radius)
+      g.lineStyle(1.5, 0xffffff, hovered ? 1 : 0.85)
+      g.strokeRoundedRect(-size / 2, -size / 2, size, size, radius)
+    }
+    draw(false)
+
+    const x = this.add
+      .text(0, 1, '✕', {
+        fontFamily: FONT_FAMILY,
+        fontSize: '18px',
+        color: '#ffffff',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5)
+    container.add([hit, g, x])
+
+    hit.on(Phaser.Input.Events.POINTER_OVER, () => draw(true))
+    hit.on(Phaser.Input.Events.POINTER_OUT, () => draw(false))
+    hit.on(Phaser.Input.Events.POINTER_DOWN, onClick)
+    return container
   }
 
   private drawTopBar(
@@ -381,11 +450,13 @@ export class QuizPlayScene extends Phaser.Scene {
       container.add(pip)
     }
 
+    // 추측자에겐 글자수가 강한 힌트라 라운드 시작 직후엔 가려두고, 30s 후에 reveal.
+    // 그 전엔 안내 문구만 노출. drawer 자신은 어차피 제시어를 알아 영향 없음.
     const promptText = this.isDrawer()
       ? this.prompt?.word
         ? `제시어: ${this.prompt.word}`
         : '제시어 확인 중'
-      : this.wordLength
+      : this.wordLength && this.wordLengthRevealed
         ? `${this.wordLength}글자`
         : '그림을 맞춰봐!'
     const promptBg = this.add.graphics()
@@ -1217,6 +1288,7 @@ export class QuizPlayScene extends Phaser.Scene {
       this.roundEndedAt = null
       this.strokes = []
       this.remoteLastPoints.clear()
+      this.scheduleWordLengthReveal(event.roundEndsAtEpochMillis)
       // 정답자(=출제자 아님) 한정으로 정답 입력 오버레이 노출.
       this.setGuessOverlay(!this.isDrawer())
       this.drawLayout()
@@ -1246,6 +1318,7 @@ export class QuizPlayScene extends Phaser.Scene {
       this.setGuessOverlay(false)
       this.timerExpiredAt = null
       this.roundEndedAt = Date.now()
+      this.cancelWordLengthReveal()
       this.drawLayout()
       this.showAnswerBanner(event.word, correctMember?.nickname ?? null)
     } else if (event.type === 'game_finished') {
@@ -1257,8 +1330,40 @@ export class QuizPlayScene extends Phaser.Scene {
       this.setGuessOverlay(false)
       this.timerExpiredAt = null
       this.roundEndedAt = null
+      this.cancelWordLengthReveal()
       this.drawLayout()
     }
+  }
+
+  /**
+   * 라운드 시작 후 일정 시간이 지나면 글자수 힌트를 노출하도록 타이머를 셋팅. roundEndsAt 으로부터
+   * 라운드 시작 시각을 역산해, 이미 reveal 시점이 지났으면 즉시 노출 / 아니면 남은 만큼 지연 호출.
+   * 재진입/재접속(예: snapshot.roundEndsAtEpochMillis 가 이미 30s 전에 시작된 라운드를 가리키는 경우)
+   * 에도 자연스럽게 동작.
+   */
+  private scheduleWordLengthReveal(roundEndsAtEpochMillis: number | null | undefined) {
+    this.wordLengthRevealTimer?.remove(false)
+    this.wordLengthRevealTimer = null
+    this.wordLengthRevealed = false
+    if (!roundEndsAtEpochMillis) return
+    const startedAt = roundEndsAtEpochMillis - ROUND_DURATION_MS
+    const revealAt = startedAt + WORD_LENGTH_REVEAL_MS
+    const delay = revealAt - Date.now()
+    if (delay <= 0) {
+      this.wordLengthRevealed = true
+      return
+    }
+    this.wordLengthRevealTimer = this.time.delayedCall(delay, () => {
+      this.wordLengthRevealTimer = null
+      this.wordLengthRevealed = true
+      this.drawLayout()
+    })
+  }
+
+  private cancelWordLengthReveal() {
+    this.wordLengthRevealTimer?.remove(false)
+    this.wordLengthRevealTimer = null
+    this.wordLengthRevealed = false
   }
 
   /** HTML 오버레이 표시/숨김 토글. 멱등 + 중복 emit 회피. */
@@ -1497,6 +1602,17 @@ export class QuizPlayScene extends Phaser.Scene {
     fadeToScene(this, 'ArtSelectScene', { duration: 220 })
   }
 
+  /**
+   * ESC — 게임 중 어디서든 안전하게 빠져나가도록. HTML 추측 오버레이가 떠 있을 때(추측자가
+   * input 에 focus 한 상태) 는 그쪽 ESC 가 먼저 처리되도록 키 처리를 양보(=무시)하지 않아도
+   * Phaser 키보드 이벤트는 게임 캔버스로 focus 있을 때만 들어오므로 충돌 없음.
+   * 결과 모달이 떠 있는 finished 상태 / 이미 leaving 중이면 noop.
+   */
+  private handleEscKey() {
+    if (this.isLeaving) return
+    void this.handleLeave()
+  }
+
   private async restart() {
     if (this.isLeaving) return
     this.isLeaving = true
@@ -1540,8 +1656,10 @@ export class QuizPlayScene extends Phaser.Scene {
     this.input.off(Phaser.Input.Events.POINTER_UP_OUTSIDE, this.handlePointerUp, this)
     this.game.events.off('quiz-guess:submit', this.handleGuessOverlaySubmit, this)
     this.game.events.off('quiz-guess:leave', this.handleLeave, this)
+    this.input.keyboard?.off('keydown-ESC', this.handleEscKey, this)
     this.setGuessOverlay(false)
     this.timerEvent?.remove(false)
+    this.cancelWordLengthReveal()
     if (!this.isLeaving) {
       this.realtimeClient?.setHandlers({
         onSnapshot: () => {},

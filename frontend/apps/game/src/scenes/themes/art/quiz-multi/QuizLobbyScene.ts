@@ -227,6 +227,11 @@ export class QuizLobbyScene extends Phaser.Scene {
     if (this.initialLobbyData) {
       this.enterTransferredLobby(this.initialLobbyData)
     } else {
+      // 그림 퀴즈를 새로 진입한 경우, BE 가 들고 있을 수 있는 stale 방을 silent 로 정리.
+      // 사용자가 의도치 않은 경로(브라우저 새로고침, 다른 메뉴 이동 등)로 빠져나갔을 때 BE 에
+      // 자기 방이 남아있어 다음 진입에서 "이미 방에 있음" 상태로 잡히던 문제 방지.
+      // 이미 방이 없으면 404 가 떨어지므로 그냥 무시.
+      leaveQuizRoom().catch(() => {})
       this.showModeSelect()
     }
   }
@@ -711,7 +716,8 @@ export class QuizLobbyScene extends Phaser.Scene {
     } else if (this.state === 'modeSelect') {
       this.backToArtRoom()
     } else if (this.state === 'lobby') {
-      void this.handleLeave()
+      // ESC = 한 단계 뒤로(방 떠나고 방 목록으로). 완전 종료(미술실)는 우상단 X 만 담당.
+      void this.leaveBackToHub()
     }
   }
 
@@ -1086,7 +1092,19 @@ export class QuizLobbyScene extends Phaser.Scene {
       container.add(waitText)
     }
 
-    // 우측 상단 X 버튼 — 방 나가기. 모달의 close 패턴.
+    // 좌상단 "← 뒤로" — 방을 떠나고 방 목록 화면으로 복귀. ESC 와 동일 동작.
+    container.add(
+      this.createPillButton(
+        80,
+        32,
+        110,
+        38,
+        '← 뒤로',
+        PALETTE_DANGER,
+        () => void this.leaveBackToHub(),
+      ),
+    )
+    // 우측 상단 X 버튼 — 방 떠나고 미술실로 완전 종료.
     container.add(this.createCloseButton(w - 28, 28, () => this.handleLeave()))
   }
 
@@ -1394,6 +1412,30 @@ export class QuizLobbyScene extends Phaser.Scene {
       // 이미 떠난 상태라면 무시. UX 상 그대로 art room 으로 복귀.
     }
     this.backToArtRoom()
+  }
+
+  /**
+   * "한 단계 뒤로" — 방을 떠나고 방 목록 화면으로 복귀. 완전 종료(미술실)와 분리해 두는 게
+   * 자연스러운 stack-back UX. ESC / 좌상단 뒤로 버튼 공통 진입점.
+   *
+   * 주의: showMultiHub() 는 state 가 'lobby' / 'leaving' 이면 가드로 return 한다. 본 함수는
+   * 의도적으로 hub 로 가야 하므로 leave 작업이 끝난 뒤 state 를 가드 통과 가능한 값으로
+   * 리셋한 다음 showMultiHub() 를 호출한다. 이 단계를 빼먹어서 버튼/ESC 가 "안 먹는" 것처럼
+   * 보이던 버그가 있었음.
+   */
+  private async leaveBackToHub() {
+    if (this.state !== 'lobby') return
+    this.state = 'leaving'
+    this.setStatus('방을 떠나는 중…')
+    await this.tearDownRealtime()
+    try {
+      await leaveQuizRoom()
+    } catch {
+      // 이미 떠난 상태라면 무시.
+    }
+    this.state = 'modeSelect'
+    this.tearDownLobby()
+    this.showMultiHub()
   }
 
   private backToArtRoom() {
