@@ -2,6 +2,7 @@ import { listPatientProfiles } from '@wish/api-client'
 
 const PATIENT_PROFILE_STORAGE_KEY = 'wish_patient_profile_id'
 const PATIENT_PROFILE_OWNER_STORAGE_KEY = 'wish_patient_profile_owner'
+const PATIENT_PROFILE_NICKNAME_STORAGE_KEY = 'wish_patient_profile_nickname'
 const ACCESS_TOKEN_STORAGE_KEY = 'wish_access_token'
 
 function parsePositiveInteger(value: string | null | undefined) {
@@ -97,9 +98,13 @@ export async function resolvePatientProfileIdOrFetch() {
 
   try {
     const response = await listPatientProfiles()
-    const patientProfileId = response.data?.[0]?.id
+    const profile = response.data?.[0]
+    const patientProfileId = profile?.id
     if (patientProfileId) {
       writeCachedPatientProfileId(patientProfileId, token)
+    }
+    if (profile?.nickname) {
+      setCachedPatientNickname(profile.nickname)
     }
     return patientProfileId
   } catch (error) {
@@ -108,7 +113,43 @@ export async function resolvePatientProfileIdOrFetch() {
   }
 }
 
+export function getCachedPatientNickname(): string | null {
+  const stored = window.localStorage.getItem(PATIENT_PROFILE_NICKNAME_STORAGE_KEY)
+  return stored && stored.trim() ? stored : null
+}
+
+export function setCachedPatientNickname(nickname: string) {
+  window.localStorage.setItem(PATIENT_PROFILE_NICKNAME_STORAGE_KEY, nickname)
+}
+
+/**
+ * 닉네임이 캐시에 없으면 한 번 fetch 해서 채운다. 기존 사용자의 경우 id 만 캐시돼 있고 nickname 은 비어있을 수 있어서
+ * settings 메뉴 등 닉네임을 표시해야 하는 진입점에서 호출한다. 캐시가 채워지면 onResolved 콜백으로 전달.
+ */
+export async function prefetchPatientNickname(
+  onResolved?: (nickname: string) => void,
+): Promise<void> {
+  const cached = getCachedPatientNickname()
+  if (cached) {
+    onResolved?.(cached)
+    return
+  }
+  const token = getAuthToken()
+  if (!token) return
+  try {
+    const response = await listPatientProfiles()
+    const profile = response.data?.[0]
+    if (profile?.nickname) {
+      setCachedPatientNickname(profile.nickname)
+      onResolved?.(profile.nickname)
+    }
+  } catch (error) {
+    console.warn('patient profile nickname 프리페치 실패.', error)
+  }
+}
+
 export function clearPatientProfileId() {
   window.localStorage.removeItem(PATIENT_PROFILE_STORAGE_KEY)
   window.localStorage.removeItem(PATIENT_PROFILE_OWNER_STORAGE_KEY)
+  window.localStorage.removeItem(PATIENT_PROFILE_NICKNAME_STORAGE_KEY)
 }

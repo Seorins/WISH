@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { playSceneBgm } from '@/game/systems/sceneBgm'
 import { createArtwork, updateArtwork } from '@wish/api-client'
 import { assetPath } from '@/game/assets/assetPath'
 import { createSceneWeatherLayer } from '@/features/weather/phaserWeatherLayer'
@@ -264,6 +265,7 @@ export class ArtColoringScene extends Phaser.Scene {
   }
 
   create() {
+    playSceneBgm(this)
     this.contentStartedAt = this.time.now
     this.isTransitioning = false
     this.isDrawing = false

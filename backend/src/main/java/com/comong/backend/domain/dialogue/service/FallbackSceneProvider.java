@@ -208,9 +208,10 @@ public class FallbackSceneProvider {
     }
 
     private static void requireBackendDriven(NpcName npcName) {
-        if (!npcName.isBackendDriven()) {
+        if (!npcName.isLlmDriven()) {
             throw new IllegalStateException(
-                    "FallbackSceneProvider only handles backend-driven NPC, got " + npcName);
+                    "FallbackSceneProvider only handles LLM-driven NPC (lighthouse), got "
+                            + npcName);
         }
     }
 }

@@ -1,6 +1,7 @@
 package com.comong.backend.domain.usage.service;
 
 import java.time.LocalDateTime;
+import java.util.Optional;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -82,6 +83,11 @@ public class LoginSessionService {
             clearContentStateAfterCommit(session.getId());
         }
         return LoginSessionResponse.from(session);
+    }
+
+    public Optional<LoginSession> findLatestActiveOwned(Long userId) {
+        return loginSessionRepository
+                .findFirstByPatientProfile_User_IdAndEndedAtIsNullOrderByStartedAtDesc(userId);
     }
 
     /** 다른 도메인 service 가 로그인 세션 기준으로 환자 소유권을 재사용할 때 사용. 존재하지 않거나 본인 소유가 아니면 동일하게 404 로 숨긴다. */

@@ -7,7 +7,6 @@ import com.comong.backend.domain.realtime.dto.RealtimeEventResponse;
 import com.comong.backend.domain.realtime.exception.RealtimeErrorCode;
 import com.comong.backend.domain.usage.entity.ContentType;
 import com.comong.backend.domain.usage.entity.LoginSession;
-import com.comong.backend.domain.usage.service.LoginSessionService;
 import com.comong.backend.global.exception.BusinessException;
 
 import lombok.RequiredArgsConstructor;
@@ -17,14 +16,14 @@ import lombok.RequiredArgsConstructor;
 @Transactional
 public class RealtimeContentService {
 
-    private final LoginSessionService loginSessionService;
+    private final RealtimeLoginSessionAccessService sessionAccessService;
     private final RealtimeContentStateService realtimeContentStateService;
     private final RealtimeEventService realtimeEventService;
     private final RealtimeLiveKitPermissionService realtimeLiveKitPermissionService;
 
     public void start(Long userId, Long loginSessionId, ContentType contentType) {
         validateRealtimeContentType(contentType);
-        LoginSession session = findActiveOwnedSession(userId, loginSessionId);
+        LoginSession session = sessionAccessService.findActiveOwnedSession(userId, loginSessionId);
         RealtimeContentStateService.ContentChange change =
                 realtimeContentStateService.start(session.getId(), contentType);
         if (change.changed()) {
@@ -40,7 +39,7 @@ public class RealtimeContentService {
     }
 
     public void end(Long userId, Long loginSessionId) {
-        LoginSession session = findActiveOwnedSession(userId, loginSessionId);
+        LoginSession session = sessionAccessService.findActiveOwnedSession(userId, loginSessionId);
         realtimeContentStateService
                 .end(session.getId())
                 .ifPresent(
@@ -57,14 +56,6 @@ public class RealtimeContentService {
                                             session.getPatientProfile().getId(),
                                             contentType.name()));
                         });
-    }
-
-    private LoginSession findActiveOwnedSession(Long userId, Long loginSessionId) {
-        LoginSession session = loginSessionService.findOwnedOrThrow(userId, loginSessionId);
-        if (session.isEnded()) {
-            throw new BusinessException(RealtimeErrorCode.LOGIN_SESSION_ALREADY_ENDED);
-        }
-        return session;
     }
 
     private static void validateRealtimeContentType(ContentType contentType) {

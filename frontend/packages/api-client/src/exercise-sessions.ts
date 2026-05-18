@@ -16,23 +16,11 @@ export type ExerciseSessionSummary = {
   createdAt: string
 }
 
-export type CreateExerciseMotionResultRequest = {
+export type CreateExerciseSessionMotionRequest = {
   exerciseMotionId: number
   durationSec: number
   accuracy: number
   completedReps: number
-  feedback?: string
-  videoKey?: string
-  thumbKey?: string
-  poseReplay?: ExerciseMotionReplayClip
-  compactPoseReplay?: ExerciseMotionReplayClip
-}
-
-export type CreateExerciseMotionRecord = {
-  exerciseMotionId: number
-  durationSec: number
-  completionRate: number
-  completedCount: number
   feedback?: string
   videoKey?: string
   thumbKey?: string
@@ -78,20 +66,47 @@ export type ExerciseMotionReplayResponse = {
   compactReplay?: ExerciseMotionReplayClip | null
 }
 
+export type ExerciseMotionMovementAnalysisJointRange = {
+  jointName: string
+  label: string
+  analysisAvailable: boolean
+  validFrameCount: number
+  coverageRate: number
+  minAngleDeg: number | null
+  maxAngleDeg: number | null
+  rangeDeg: number | null
+  averageConfidence: number | null
+}
+
+export type ExerciseMotionMovementAnalysisSegment = {
+  startMs: number | null
+  endMs: number | null
+  reason: string | null
+}
+
+export type ExerciseMotionMovementAnalysisResponse = {
+  motionResultId: number
+  exerciseMotionId: number
+  motionName: string
+  routineOrder: number
+  analysisAvailable: boolean
+  replaySource: 'RAW' | 'COMPACT' | 'NONE' | string
+  durationMs: number | null
+  totalFrameCount: number
+  analyzedFrameCount: number
+  excludedFrameCount: number
+  analyzedDurationMs: number | null
+  excludedDurationMs: number | null
+  confidenceThreshold: number
+  averageConfidence: number | null
+  joints: ExerciseMotionMovementAnalysisJointRange[]
+  excludedSegments: ExerciseMotionMovementAnalysisSegment[]
+  representativeSegment: ExerciseMotionMovementAnalysisSegment | null
+}
+
 export type CreateExerciseSessionRequest = {
   patientProfileId: number
   exerciseType: ExerciseSessionType
-  durationSec: number
-  averageAccuracy: number
-  motions: CreateExerciseMotionResultRequest[]
-}
-
-export type CreateExerciseSessionRecord = {
-  patientProfileId: number
-  exerciseType: ExerciseSessionType
-  durationSec: number
-  averageCompletionRate: number
-  motions: CreateExerciseMotionRecord[]
 }
 
 export type ExerciseSessionMotionResult = {
@@ -113,6 +128,14 @@ export type ExerciseSessionDetail = ExerciseSessionSummary & {
   motions: ExerciseSessionMotionResult[]
 }
 
+export type ExerciseSessionMotionSaveResponse = {
+  sessionId: number
+  sessionDurationSec: number
+  sessionAverageAccuracy: number
+  sessionCompletedMotionCount: number
+  savedMotion: ExerciseSessionMotionResult
+}
+
 export const EXERCISE_SESSION_ERROR_MESSAGE =
   '\uCCB4\uC870 \uC138\uC158 \uAE30\uB85D\uC744 \uBD88\uB7EC\uC624\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4. \uC7A0\uC2DC \uD6C4 \uB2E4\uC2DC \uC2DC\uB3C4\uD574\uC8FC\uC138\uC694.'
 
@@ -125,6 +148,9 @@ export const EXERCISE_SESSION_DETAIL_ERROR_MESSAGE =
 export const EXERCISE_MOTION_REPLAY_ERROR_MESSAGE =
   '\uCCB4\uC870 \uB3D9\uC791 \uB9AC\uD50C\uB808\uC774\uB97C \uBD88\uB7EC\uC624\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4. \uC7A0\uC2DC \uD6C4 \uB2E4\uC2DC \uC2DC\uB3C4\uD574\uC8FC\uC138\uC694.'
 
+export const EXERCISE_MOTION_MOVEMENT_ANALYSIS_ERROR_MESSAGE =
+  '\uCCB4\uC870 \uB3D9\uC791 \uC6C0\uC9C1\uC784 \uBD84\uC11D\uC744 \uBD88\uB7EC\uC624\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4. \uC7A0\uC2DC \uD6C4 \uB2E4\uC2DC \uC2DC\uB3C4\uD574\uC8FC\uC138\uC694.'
+
 const INVALID_PATIENT_PROFILE_ID_MESSAGE =
   'patientProfileId\uAC00 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.'
 const INVALID_EXERCISE_SESSION_ID_MESSAGE =
@@ -133,18 +159,14 @@ const INVALID_EXERCISE_MOTION_RESULT_ID_MESSAGE =
   '\uCCB4\uC870 \uB3D9\uC791 \uACB0\uACFC ID\uAC00 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.'
 const INVALID_EXERCISE_TYPE_MESSAGE =
   '\uC6B4\uB3D9 \uC885\uB958\uAC00 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.'
-const INVALID_DURATION_MESSAGE =
-  '\uC6B4\uB3D9 \uC2DC\uAC04\uC774 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.'
-const INVALID_AVERAGE_COMPLETION_RATE_MESSAGE =
-  '\uD3C9\uADE0 \uC218\uD589\uB960\uC774 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.'
-const EMPTY_MOTIONS_MESSAGE =
-  '\uC800\uC7A5\uD560 \uB3D9\uC791 \uACB0\uACFC\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.'
 const INVALID_SAVE_RESPONSE_MESSAGE =
   '\uCCB4\uC870 \uC138\uC158 \uC800\uC7A5 \uC751\uB2F5\uC774 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.'
 const INVALID_DETAIL_RESPONSE_MESSAGE =
   '\uCCB4\uC870 \uC138\uC158 \uC0C1\uC138 \uC751\uB2F5\uC774 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.'
 const INVALID_REPLAY_RESPONSE_MESSAGE =
   '\uCCB4\uC870 \uB3D9\uC791 \uB9AC\uD50C\uB808\uC774 \uC751\uB2F5\uC774 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.'
+const INVALID_MOVEMENT_ANALYSIS_RESPONSE_MESSAGE =
+  '\uCCB4\uC870 \uB3D9\uC791 \uC6C0\uC9C1\uC784 \uBD84\uC11D \uC751\uB2F5\uC774 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.'
 const INVALID_POSE_REPLAY_MESSAGE =
   '\uC88C\uD45C \uB9AC\uD50C\uB808\uC774 \uB370\uC774\uD130\uAC00 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.'
 
@@ -379,96 +401,44 @@ function getMotionMessage(
   return `${order}\uBC88\uC9F8 ${label}${particle} \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.`
 }
 
-function calculateAverageRate(values: number[]): number {
-  const validValues = values.filter(value => Number.isFinite(value))
-
-  if (validValues.length === 0) {
-    return 0
-  }
-
-  const sum = validValues.reduce((acc, value) => acc + value, 0)
-  return Math.round((sum / validValues.length) * 1000) / 1000
-}
-
-export function calculateAverageCompletionRate(motions: Array<{ completionRate: number }>): number {
-  return calculateAverageRate(motions.map(motion => motion.completionRate))
-}
-
-export function calculateAverageAccuracy(motions: Array<{ accuracy: number }>): number {
-  return calculateAverageRate(motions.map(motion => motion.accuracy))
-}
-
-export function toCreateExerciseSessionRequest(
-  record: CreateExerciseSessionRecord,
-): CreateExerciseSessionRequest {
-  return {
-    patientProfileId: record.patientProfileId,
-    exerciseType: record.exerciseType,
-    durationSec: record.durationSec,
-    averageAccuracy: record.averageCompletionRate,
-    motions: record.motions.map(motion => ({
-      exerciseMotionId: motion.exerciseMotionId,
-      durationSec: motion.durationSec,
-      accuracy: motion.completionRate,
-      completedReps: motion.completedCount,
-      feedback: motion.feedback,
-      ...(motion.videoKey ? { videoKey: motion.videoKey } : {}),
-      ...(motion.thumbKey ? { thumbKey: motion.thumbKey } : {}),
-      ...(motion.poseReplay ? { poseReplay: motion.poseReplay } : {}),
-      ...(motion.compactPoseReplay ? { compactPoseReplay: motion.compactPoseReplay } : {}),
-    })),
-  }
-}
-
 export function validateCreateExerciseSessionRequest(payload: CreateExerciseSessionRequest): void {
   assertValidPatientProfileId(payload.patientProfileId)
 
   if (!payload.exerciseType.trim()) {
     throw new Error(INVALID_EXERCISE_TYPE_MESSAGE)
   }
+}
 
-  assertFiniteNumber(payload.durationSec, INVALID_DURATION_MESSAGE)
-  if (payload.durationSec < 0) {
-    throw new Error(INVALID_DURATION_MESSAGE)
+export function validateCreateExerciseSessionMotionRequest(
+  motion: CreateExerciseSessionMotionRequest,
+): void {
+  if (!Number.isInteger(motion.exerciseMotionId) || motion.exerciseMotionId <= 0) {
+    throw new Error(getMotionMessage(1, 'info'))
   }
 
-  assertCompletionRate(payload.averageAccuracy, INVALID_AVERAGE_COMPLETION_RATE_MESSAGE)
-
-  if (!Array.isArray(payload.motions) || payload.motions.length === 0) {
-    throw new Error(EMPTY_MOTIONS_MESSAGE)
+  assertFiniteNumber(motion.durationSec, getMotionMessage(1, 'duration'))
+  if (motion.durationSec < 0) {
+    throw new Error(getMotionMessage(1, 'duration'))
   }
 
-  payload.motions.forEach((motion, index) => {
-    const order = index + 1
+  assertCompletionRate(motion.accuracy, getMotionMessage(1, 'completionRate'))
 
-    if (!Number.isInteger(motion.exerciseMotionId) || motion.exerciseMotionId <= 0) {
-      throw new Error(getMotionMessage(order, 'info'))
-    }
+  assertFiniteNumber(motion.completedReps, getMotionMessage(1, 'count'))
+  if (motion.completedReps < 0) {
+    throw new Error(getMotionMessage(1, 'count'))
+  }
 
-    assertFiniteNumber(motion.durationSec, getMotionMessage(order, 'duration'))
-    if (motion.durationSec < 0) {
-      throw new Error(getMotionMessage(order, 'duration'))
-    }
+  if (motion.feedback !== undefined && typeof motion.feedback !== 'string') {
+    throw new Error(getMotionMessage(1, 'feedback'))
+  }
 
-    assertCompletionRate(motion.accuracy, getMotionMessage(order, 'completionRate'))
+  if (motion.poseReplay) {
+    validatePoseReplay(motion.poseReplay, 'raw')
+  }
 
-    assertFiniteNumber(motion.completedReps, getMotionMessage(order, 'count'))
-    if (motion.completedReps < 0) {
-      throw new Error(getMotionMessage(order, 'count'))
-    }
-
-    if (motion.feedback !== undefined && typeof motion.feedback !== 'string') {
-      throw new Error(getMotionMessage(order, 'feedback'))
-    }
-
-    if (motion.poseReplay) {
-      validatePoseReplay(motion.poseReplay, 'raw')
-    }
-
-    if (motion.compactPoseReplay) {
-      validatePoseReplay(motion.compactPoseReplay, 'compact')
-    }
-  })
+  if (motion.compactPoseReplay) {
+    validatePoseReplay(motion.compactPoseReplay, 'compact')
+  }
 }
 
 export async function getExerciseSessions(
@@ -506,6 +476,41 @@ export async function createExerciseSession(
   try {
     const response = await client.post<ApiResponse<ExerciseSessionDetail | null>>(
       '/exercise-sessions',
+      payload,
+      {
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
+      },
+    )
+
+    const body = response.data
+    if (body.errors && Object.keys(body.errors).length > 0) {
+      throw new Error(CREATE_EXERCISE_SESSION_ERROR_MESSAGE)
+    }
+
+    if (!body.data) {
+      throw new Error(INVALID_SAVE_RESPONSE_MESSAGE)
+    }
+
+    return body.data
+  } catch (error) {
+    throw createExerciseSessionSaveError(error)
+  }
+}
+
+export async function createExerciseSessionMotion(
+  sessionId: number,
+  payload: CreateExerciseSessionMotionRequest,
+  client: AxiosInstance = apiClient,
+): Promise<ExerciseSessionMotionSaveResponse> {
+  assertValidExerciseSessionId(sessionId)
+  validateCreateExerciseSessionMotionRequest(payload)
+
+  try {
+    const response = await client.post<ApiResponse<ExerciseSessionMotionSaveResponse | null>>(
+      `/exercise-sessions/${sessionId}/motions`,
       payload,
       {
         headers: {
@@ -721,5 +726,37 @@ export async function getExerciseMotionReplay(
       throw error
     }
     throw new Error(EXERCISE_MOTION_REPLAY_ERROR_MESSAGE)
+  }
+}
+
+export async function getExerciseMotionMovementAnalysis(
+  motionResultId: number,
+  client: AxiosInstance = apiClient,
+): Promise<ExerciseMotionMovementAnalysisResponse> {
+  assertValidExerciseMotionResultId(motionResultId)
+
+  try {
+    const response = await client.get<ApiResponse<ExerciseMotionMovementAnalysisResponse | null>>(
+      `/exercise-sessions/motions/${motionResultId}/movement-analysis`,
+      {
+        headers: { Accept: 'application/json' },
+      },
+    )
+
+    const body = response.data
+    if (body.errors && Object.keys(body.errors).length > 0) {
+      throw new Error(EXERCISE_MOTION_MOVEMENT_ANALYSIS_ERROR_MESSAGE)
+    }
+
+    if (!body.data) {
+      throw new Error(INVALID_MOVEMENT_ANALYSIS_RESPONSE_MESSAGE)
+    }
+
+    return body.data
+  } catch (error) {
+    if (error instanceof Error && error.message === INVALID_MOVEMENT_ANALYSIS_RESPONSE_MESSAGE) {
+      throw error
+    }
+    throw new Error(EXERCISE_MOTION_MOVEMENT_ANALYSIS_ERROR_MESSAGE)
   }
 }

@@ -41,3 +41,14 @@ app:
     village:
       enabled: true
       room-capacity: 100
+    # 그림 멀티플레이 (S14P31E103-820) 도 dev 에서 활성. 기본 yaml 의 enabled=false 는 운영 안전핀.
+    # 비활성 상태에선 WS CONNECT 가 "quiz realtime disabled" 로 거절되어 host 가 member_joined 를
+    # 받지 못해 시작 버튼이 영원히 잠긴다 (멤버 카운트는 WS 로만 갱신됨).
+    quiz:
+      enabled: true
+
+# AI 서버 임베딩 트리거 활성화 (S14P31E103-788). docker-compose dev 네트워크 내부 hostname.
+# 운영 배포 시 AI_DIALOGUE_BASE_URL 환경변수로 override.
+ai:
+  dialogue:
+    base-url: ${AI_DIALOGUE_BASE_URL:http://ai-dev:8001/api/v1}

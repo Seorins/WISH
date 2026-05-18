@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { DialogueLayer } from '../../dialogue/common/DialogueLayer'
 import { useVillageDialogueSession } from '../useVillageDialogueSession'
-import type { DailyActivityState, VillagerChoice, VillagerNpcId } from '../types'
+import type { VillagerChoice, VillagerNpcId } from '../types'
 
 interface VillagerDialogueControllerProps {
   npcId: VillagerNpcId | null
@@ -9,7 +9,6 @@ interface VillagerDialogueControllerProps {
   isOpen: boolean
   onClose: () => void
   onTextChange?: (text: string) => void
-  dailyActivityState?: DailyActivityState
 }
 
 export function VillagerDialogueController({
@@ -18,7 +17,6 @@ export function VillagerDialogueController({
   isOpen,
   onClose,
   onTextChange,
-  dailyActivityState,
 }: VillagerDialogueControllerProps) {
   const {
     status,
@@ -31,7 +29,7 @@ export function VillagerDialogueController({
     selectChoice,
     advanceDialogue,
     cancelDialogue,
-  } = useVillageDialogueSession(patientProfileId, onClose, dailyActivityState)
+  } = useVillageDialogueSession(patientProfileId, onClose)
 
   useEffect(() => {
     if (!isOpen || !npcId) return

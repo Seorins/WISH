@@ -11,6 +11,30 @@ export {
   updateArtwork,
 } from './artworks'
 export {
+  createQuizRoom,
+  getQuizRoom,
+  getWaitingQuizRooms,
+  joinQuizRoom,
+  leaveQuizRoom,
+  startQuizRoom,
+  type PromptAssignment,
+  type QuizGameStartedResponse,
+  type QuizMember,
+  type QuizRoomListItem,
+  type QuizRoomSnapshot,
+  type QuizRoomStatus,
+  type QuizStrokeMessage,
+  type StartQuizRoomRequest,
+} from './quiz'
+export {
+  createPhotoBooth,
+  deletePhotoBooth,
+  getMyPhotoBooths,
+  getPhotoBooth,
+  getPublicPhotoBooths,
+  updatePhotoBooth,
+} from './photo-booths'
+export {
   createExerciseMotion,
   deleteExerciseMotion,
   getExerciseMotion,
@@ -19,20 +43,37 @@ export {
   updateExerciseMotion,
 } from './exercise-motions'
 export {
-  calculateAverageCompletionRate,
-  calculateAverageAccuracy,
   CREATE_EXERCISE_SESSION_ERROR_MESSAGE,
   createExerciseSession,
+  createExerciseSessionMotion,
+  EXERCISE_MOTION_MOVEMENT_ANALYSIS_ERROR_MESSAGE,
   EXERCISE_SESSION_DETAIL_ERROR_MESSAGE,
   EXERCISE_SESSION_ERROR_MESSAGE,
   EXERCISE_MOTION_REPLAY_ERROR_MESSAGE,
+  getExerciseMotionMovementAnalysis,
   getExerciseMotionReplay,
   getExerciseSessionDetail,
   getExerciseSessions,
   getMyExerciseSessions,
-  toCreateExerciseSessionRequest,
+  validateCreateExerciseSessionMotionRequest,
   validateCreateExerciseSessionRequest,
 } from './exercise-sessions'
+export {
+  createGomokuRoom,
+  getGomokuRanking,
+  getGomokuRoom,
+  getMyGomokuMatches,
+  getMyGomokuStats,
+  getWaitingGomokuRooms,
+  heartbeatGomokuRoom,
+  joinGomokuRoom,
+  leaveGomokuRoom,
+  playGomokuMove,
+  rematchGomokuRoom,
+  resignGomokuRoom,
+  startGomokuRoom,
+  swapGomokuRoomStones,
+} from './gomoku'
 export {
   getChartRanking,
   getChartStats,
@@ -42,18 +83,31 @@ export {
   saveMusicResult,
 } from './music-results'
 export { consumeFuel, getFuelInbox, getFuelStatus, sendFuel } from './fuel'
-export { getGuardianDialogueSession, listGuardianDialogueSessions } from './guardian-dialogue'
+export {
+  getGuardianDialogueDailySummary,
+  getGuardianDialogueSession,
+  getGuardianDialogueWeeklyTrend,
+  listGuardianDialogueSessions,
+} from './guardian-dialogue'
 export { requestPresignedUploadUrls, uploadToPresignedUrl } from './uploads'
-export { createPatientProfile, listPatientProfiles } from './patient-profiles'
+export { createPatientProfile, listPatientProfiles, updatePatientProfile } from './patient-profiles'
 export { endLoginSession, heartbeatLoginSession, startLoginSession } from './login-sessions'
 export {
   endContent,
+  getActiveLiveSession,
   requestGameLivekitToken,
   requestGuardianLivekitToken,
   startContent,
+  subscribeGamePresence,
   subscribeRealtimeEvents,
+  subscribeWatching,
 } from './realtime'
-export { getCumulativeUsageStats, getDailyUsageStats, getUsageAverages } from './usage-stats'
+export {
+  getCumulativeUsageStats,
+  getDailyUsageStats,
+  getUsageAverages,
+  getUsageRankings,
+} from './usage-stats'
 export {
   createTaekwondoMotion,
   deleteTaekwondoMotion,
@@ -74,9 +128,8 @@ export {
   TAEKWONDO_BELT_COLORS,
 } from './taekwondo-belt-history'
 export {
-  calculateTaekwondoAverageAccuracy,
-  calculateTaekwondoMonstersDefeated,
   createTaekwondoSession,
+  createTaekwondoSessionMotion,
   formatTaekwondoAiFeedback,
   getMyTaekwondoSessions,
   getTaekwondoSessions,
@@ -132,6 +185,17 @@ export type {
   UpdateArtworkRequest,
 } from './artworks'
 export type {
+  CreatePhotoBoothParams,
+  CreatePhotoBoothRequest,
+  ListPhotoBoothParams,
+  PhotoBooth,
+  PhotoBoothPage,
+  PublicPhotoBooth,
+  PublicPhotoBoothAuthor,
+  PublicPhotoBoothPage,
+  UpdatePhotoBoothRequest,
+} from './photo-booths'
+export type {
   CreateExerciseMotionParams,
   CreateExerciseMotionRequest,
   ExerciseMotion,
@@ -141,11 +205,13 @@ export type {
   UpdateExerciseMotionRequest,
 } from './exercise-motions'
 export type {
-  CreateExerciseMotionRecord,
-  CreateExerciseMotionResultRequest,
-  CreateExerciseSessionRecord,
+  CreateExerciseSessionMotionRequest,
   CreateExerciseSessionRequest,
   ExerciseSessionDetail,
+  ExerciseSessionMotionSaveResponse,
+  ExerciseMotionMovementAnalysisJointRange,
+  ExerciseMotionMovementAnalysisResponse,
+  ExerciseMotionMovementAnalysisSegment,
   ExerciseMotionReplayClip,
   ExerciseMotionReplayResponse,
   ExerciseSessionMotionResult,
@@ -157,6 +223,26 @@ export type {
   MotionReplayLandmarkTuple,
   MotionReplaySegment,
 } from './exercise-sessions'
+export type {
+  GomokuEndReason,
+  GomokuMatchPage,
+  GomokuMatchResult,
+  GomokuMatchStatus,
+  GomokuMatchSummary,
+  GomokuMoveRecord,
+  GomokuMoveRequest,
+  GomokuPageParams,
+  GomokuPlayer,
+  GomokuRanking,
+  GomokuRankingEntry,
+  GomokuRoom,
+  GomokuRoomCreateRequest,
+  GomokuRoomJoinRequest,
+  GomokuRoomPage,
+  GomokuRuleSet,
+  GomokuStats,
+  GomokuStone,
+} from './gomoku'
 export type {
   ChartStats,
   GetMyMusicResultsParams,
@@ -178,13 +264,24 @@ export type {
   FuelStatus,
 } from './fuel'
 export type {
+  GuardianDialogueChoiceTone,
+  GuardianDialogueChoiceValence,
+  GuardianDialogueDailySummary,
   GuardianDialogueFinishReason,
   GuardianDialogueGeneratedBy,
   GuardianDialogueNpc,
+  GuardianDialogueSentimentTone,
+  GuardianDialogueSentimentWord,
   GuardianDialogueSessionDetail,
   GuardianDialogueSessionMeta,
   GuardianDialogueSessionStatus,
+  GuardianDialogueSignal,
+  GuardianDialogueSignalKind,
   GuardianDialogueTurn,
+  GuardianDialogueValenceDistribution,
+  GuardianDialogueWeeklyTrend,
+  GuardianDialogueWeeklyTrendPoint,
+  GuardianNpcVisited,
   ListGuardianDialogueSessionsParams,
 } from './guardian-dialogue'
 export type {
@@ -192,9 +289,16 @@ export type {
   PresignedUploadRequest,
   PresignedUploadResponse,
 } from './uploads'
-export type { Gender, PatientProfile, PatientProfileCreateRequest } from './patient-profiles'
+export type {
+  Gender,
+  PatientProfile,
+  PatientProfileCreateRequest,
+  PatientProfileUpdateRequest,
+} from './patient-profiles'
 export type { LoginSession, LoginSessionStartRequest } from './login-sessions'
 export type {
+  ActiveLiveSessionResponse,
+  GamePresenceEvent,
   LiveKitTokenResponse,
   RealtimeContentType,
   RealtimeEvent,
@@ -209,6 +313,9 @@ export type {
   UsageAverage,
   UsageAverages,
   UsageAveragesParams,
+  UsageRankingEntry,
+  UsageRankings,
+  UsageRankingsParams,
 } from './usage-stats'
 export type {
   CreateTaekwondoMotionParams,
@@ -222,11 +329,13 @@ export type {
 } from './taekwondo-motions'
 export type { TaekwondoBeltColor, TaekwondoBeltHistory } from './taekwondo-belt-history'
 export type {
+  BeltPromotionResponse,
   CreateTaekwondoSessionMotionRequest,
   CreateTaekwondoSessionRequest,
   GetMyTaekwondoSessionsParams,
   TaekwondoSessionDetail,
   TaekwondoSessionMotionResult,
+  TaekwondoSessionMotionSaveResponse,
   TaekwondoSessionPage,
   ToCreateTaekwondoSessionMotionRequestParams,
   TaekwondoSessionSummary,

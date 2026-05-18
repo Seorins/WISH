@@ -8,7 +8,7 @@
 
 .head {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: var(--dash-space-3);
 }
@@ -18,48 +18,51 @@
   font-size: 18px;
   font-weight: 700;
   color: var(--dash-color-text-strong);
-  letter-spacing: -0.01em;
-}
-
-.toggle {
+  letter-spacing: 0;
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-  padding: 4px;
-  border-radius: var(--dash-radius-pill);
-  background: var(--dash-color-surface-tint);
-  border: 1px solid var(--dash-color-border);
+  gap: 6px;
 }
 
-.toggleItem {
-  appearance: none;
-  border: none;
-  background: transparent;
-  padding: 6px 16px;
-  border-radius: var(--dash-radius-pill);
-  font: inherit;
-  font-size: 12.5px;
+.metaLine {
+  margin: 6px 0 0;
+  font-size: 12px;
   font-weight: 600;
   color: var(--dash-color-text-muted);
-  cursor: pointer;
-  transition:
-    background 0.15s,
-    color 0.15s,
-    box-shadow 0.15s;
+  letter-spacing: 0;
 }
 
-.toggleItem:hover {
-  color: var(--dash-color-text);
+.guardianNote {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #f8fbff 0%, #f5f0ff 100%);
+  border: 1px solid rgba(124, 92, 255, 0.1);
 }
 
-.toggleItemActive {
-  background: var(--dash-gradient-primary);
-  color: #fff;
-  box-shadow: var(--dash-shadow-pill);
+.guardianNoteLabel {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--dash-color-primary);
 }
 
-.toggleItemActive:hover {
-  color: #fff;
+.guardianNote strong {
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.55;
+  color: var(--dash-color-text-strong);
+  word-break: keep-all;
+}
+
+.guardianNote p {
+  margin: 0;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--dash-color-text-muted);
+  word-break: keep-all;
 }
 
 .summaryCard {
@@ -72,11 +75,6 @@
   box-shadow: var(--dash-shadow-card);
   flex: 1;
   min-height: 0;
-}
-
-/* summaryCard 안에서는 head를 위쪽 패딩 0으로 — 카드 내부 위치 */
-.summaryCard > .head {
-  padding: 0;
 }
 
 .chartSection {
@@ -102,9 +100,9 @@
 }
 
 .sectionTitle::before {
-  content: '▾';
-  color: var(--dash-color-text-subtle);
-  font-size: 11px;
+  content: '●';
+  color: var(--dash-color-primary);
+  font-size: 9px;
 }
 
 .chartBody {
@@ -112,12 +110,29 @@
   min-height: 130px;
 }
 
-/* ===== Metric grid (4 cards) ===== */
+.emptyChart {
+  height: 100%;
+  min-height: 130px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  background: #f6f7fc;
+  color: var(--dash-color-text-muted);
+  font-size: 13px;
+  font-weight: 600;
+}
 
 .metricGrid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--dash-space-3);
+}
+
+.metricSection {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dash-space-2);
 }
 
 .metricCard {
@@ -133,7 +148,6 @@
   min-width: 0;
 }
 
-/* WithRing 카드도 column 유지 — ScoreRing은 우측 absolute, 텍스트와 baseline 통일 */
 .metricCardWithRing {
   padding-right: 56px;
 }
@@ -156,74 +170,36 @@
   font-size: 12px;
   font-weight: 600;
   color: var(--dash-color-text-muted);
-  letter-spacing: -0.005em;
+  letter-spacing: 0;
   white-space: nowrap;
 }
 
 .metricValue {
-  font-size: 24px;
+  font-size: 20px;
   font-weight: 800;
   color: var(--dash-color-text-strong);
-  letter-spacing: -0.02em;
-  line-height: 1;
+  letter-spacing: 0;
+  line-height: 1.1;
   white-space: nowrap;
 }
 
-.metricUnit {
-  font-size: 13px;
+.metricFoot,
+.metricFootWarning {
+  font-size: 11.5px;
   font-weight: 600;
-  color: var(--dash-color-text-muted);
-  margin-left: 2px;
-}
-
-.metricValueRow {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 2px;
-}
-
-.metricValueDelta {
-  font-size: 24px;
-  font-weight: 800;
-  color: var(--dash-color-text-strong);
-  letter-spacing: -0.02em;
-  line-height: 1;
-}
-
-.metricBadge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  background: rgba(52, 201, 156, 0.14);
-  color: var(--dash-color-success);
-}
-
-.metricBadgeIcon {
-  width: 14px;
-  height: 14px;
+  margin-top: 4px;
+  line-height: 1.35;
+  white-space: normal;
+  word-break: keep-all;
 }
 
 .metricFoot {
-  font-size: 11.5px;
-  font-weight: 600;
   color: var(--dash-color-success);
-  margin-top: 4px;
-  white-space: nowrap;
 }
 
-.metricFootBalance {
-  font-size: 11.5px;
-  font-weight: 600;
-  color: var(--dash-color-primary);
-  margin-top: 4px;
-  white-space: nowrap;
+.metricFootWarning {
+  color: #ef7f85;
 }
-
-/* ===== Detail grid (comparison + AI) ===== */
 
 .detailGrid {
   display: grid;
@@ -257,12 +233,13 @@
   gap: 6px;
 }
 
-/* Comparison */
-
 .balanceWrap {
   background: #f6f7fc;
   border-radius: 14px;
   padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .balanceRow {
@@ -286,18 +263,12 @@
 }
 
 .balanceValue {
-  font-size: 22px;
+  font-size: 18px;
   font-weight: 800;
   color: var(--dash-color-text-strong);
-  letter-spacing: -0.02em;
-  line-height: 1;
-}
-
-.balanceUnit {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--dash-color-text-muted);
-  margin-left: 2px;
+  letter-spacing: 0;
+  line-height: 1.1;
+  white-space: nowrap;
 }
 
 .balanceBar {
@@ -317,61 +288,53 @@
 }
 
 .balanceCenter {
-  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-}
-
-.balanceCenterText {
-  position: absolute;
-  inset: 0;
-  display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  pointer-events: none;
+  gap: 4px;
+  min-width: 118px;
+  padding: 12px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.82);
+  text-align: center;
 }
 
-.balanceCenterValue {
-  font-size: 22px;
+.balanceCenter strong {
+  font-size: 13px;
   font-weight: 800;
   color: var(--dash-color-text-strong);
-  letter-spacing: -0.02em;
-  line-height: 1;
-  display: inline-flex;
-  align-items: baseline;
+  letter-spacing: 0;
+  line-height: 1.25;
+  word-break: keep-all;
 }
 
-.balanceCenterUnit {
-  font-size: 13px;
+.balanceCenter span {
+  font-size: 11px;
   font-weight: 600;
-  color: var(--dash-color-text-strong);
-  margin-left: 1px;
-}
-
-.balanceCenterMeta {
-  font-size: 10.5px;
-  font-weight: 500;
   color: var(--dash-color-text-muted);
-  margin-top: 3px;
+  white-space: nowrap;
 }
 
-/* AI insight */
+.balanceSummary {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--dash-color-text-muted);
+  word-break: keep-all;
+}
 
 .insightCard {
   background:
-    radial-gradient(
-      circle at 90% 18%,
-      rgba(168, 146, 255, 0.18) 0%,
-      rgba(168, 146, 255, 0) 55%
-    ),
+    radial-gradient(circle at 90% 18%, rgba(168, 146, 255, 0.18) 0%, rgba(168, 146, 255, 0) 55%),
     var(--dash-color-surface);
   padding-right: 56px;
 }
 
 .insightSparkle {
   font-size: 14px;
+  color: var(--dash-color-primary);
 }
 
 .insightText {
@@ -380,7 +343,7 @@
   font-weight: 600;
   color: var(--dash-color-text-strong);
   line-height: 1.55;
-  letter-spacing: -0.005em;
+  letter-spacing: 0;
   word-break: keep-all;
 }
 
@@ -393,16 +356,38 @@
   word-break: keep-all;
 }
 
-.insightStar {
-  position: absolute;
-  right: 14px;
-  bottom: 14px;
-  font-size: 32px;
-  filter: drop-shadow(0 4px 10px rgba(255, 200, 80, 0.4));
-  pointer-events: none;
+.nextAction {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.74);
+  border: 1px solid rgba(124, 92, 255, 0.1);
 }
 
-/* Tip */
+.nextAction span {
+  font-size: 11.5px;
+  font-weight: 800;
+  color: var(--dash-color-success);
+}
+
+.nextAction strong {
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: 1.45;
+  color: var(--dash-color-text-strong);
+  word-break: keep-all;
+}
+
+.insightStar {
+  position: absolute;
+  right: 16px;
+  bottom: 12px;
+  font-size: 28px;
+  color: rgba(124, 92, 255, 0.3);
+  pointer-events: none;
+}
 
 .tipCard {
   display: flex;
@@ -415,7 +400,17 @@
 }
 
 .tipIcon {
-  font-size: 18px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #eef8f5;
+  color: var(--dash-color-success);
+  font-size: 12px;
+  font-weight: 800;
+  flex: 0 0 auto;
   margin-top: 1px;
 }
 
@@ -438,7 +433,7 @@
   font-weight: 500;
   color: var(--dash-color-text-muted);
   line-height: 1.55;
-  letter-spacing: -0.005em;
+  letter-spacing: 0;
 }
 
 @media (max-width: 768px) {
@@ -446,18 +441,17 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: var(--dash-space-2);
   }
+
   .detailGrid {
     grid-template-columns: 1fr;
     gap: var(--dash-space-3);
   }
+
   .metricValue,
-  .metricValueDelta {
-    font-size: 20px;
-  }
-  .balanceValue,
-  .balanceCenterValue {
+  .balanceValue {
     font-size: 18px;
   }
+
   .title {
     font-size: 16px;
   }

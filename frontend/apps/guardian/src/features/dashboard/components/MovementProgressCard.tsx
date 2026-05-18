@@ -3,8 +3,8 @@ import { useMyPatientId } from '@/features/auth/hooks/useMyPatientId'
 import { MOVEMENTS, type Movement } from '../data/mock'
 import { MOTION_CLIPS } from '../data/motionClips'
 import { toRecordedMotionClip } from '../data/replayClips'
-import { useGymnasticsMotionReplay, useGymnasticsRangeSummary } from '../hooks'
 import type { GymnasticsRangeSummaryItem } from '../gymnasticsRangeSummary'
+import { useGymnasticsMotionReplay, useGymnasticsRangeSummary } from '../hooks'
 import { Character3D } from './Character3D'
 import { ChevronDownIcon } from './icons'
 import { ScoreRing } from './ScoreRing'
@@ -31,6 +31,14 @@ const DEFAULT_MOVEMENT_BY_ID = new Map(MOVEMENTS.map(movement => [movement.id, m
 const FALLBACK_THUMBNAIL = MOVEMENTS[0].thumbnail
 type ReplayMode = 'raw' | 'compact'
 
+function resolveMotionPercent(item: GymnasticsRangeSummaryItem): number {
+  if (item.targetCount > 0) {
+    return Math.round(Math.min(1, item.completedCount / item.targetCount) * 100)
+  }
+
+  return item.scoreAvailable ? item.currentPercent : 0
+}
+
 function toDashboardMovement(item: GymnasticsRangeSummaryItem): DashboardMovement {
   const clipId =
     TOP_CLIP_ID_BY_MOTION_ID[item.exerciseMotionId] ?? `motion-${item.exerciseMotionId}`
@@ -42,10 +50,10 @@ function toDashboardMovement(item: GymnasticsRangeSummaryItem): DashboardMovemen
     exerciseMotionId: item.exerciseMotionId,
     replayAvailable: item.replayAvailable,
     name: item.motionName || fallback?.name || '체조 동작',
-    score: item.scoreAvailable ? item.currentPercent : (fallback?.score ?? 0),
+    score: resolveMotionPercent(item),
     thumbnail: fallback?.thumbnail ?? FALLBACK_THUMBNAIL,
     progressLabel: item.progressLabel,
-    scoreAvailable: item.scoreAvailable,
+    scoreAvailable: item.targetCount > 0 || item.scoreAvailable,
   }
 }
 
@@ -55,7 +63,8 @@ function formatReplayTime(ms: number): string {
 
 export function MovementProgressCard() {
   const { data: patientId } = useMyPatientId()
-  const { data: rangeSummary } = useGymnasticsRangeSummary(patientId)
+  const { data: rangeSummary, isLoading: isRangeSummaryLoading } =
+    useGymnasticsRangeSummary(patientId)
   const [expanded, setExpanded] = useState(true)
   const [activeMotionId, setActiveMotionId] = useState<string | null>(null)
   const [isReplayPlaying, setIsReplayPlaying] = useState(true)
@@ -64,12 +73,12 @@ export function MovementProgressCard() {
 
   const scoreColor = (score: number) => {
     if (score >= 90) return { from: '#6ddec0', to: '#34c99c' }
-    if (score >= 80) return { from: '#a892ff', to: '#7c5cff' }
+    if (score >= 70) return { from: '#a892ff', to: '#7c5cff' }
     return { from: '#7cc7ff', to: '#5b9eff' }
   }
 
   const movements = useMemo<DashboardMovement[]>(() => {
-    if (!rangeSummary || rangeSummary.items.length === 0) return MOVEMENTS
+    if (!rangeSummary || rangeSummary.items.length === 0) return []
     return rangeSummary.items.map(toDashboardMovement)
   }, [rangeSummary])
 
@@ -163,51 +172,64 @@ export function MovementProgressCard() {
   return (
     <article className={styles.card}>
       <div className={styles.sessionToggle}>
-        <span className={styles.sessionLabel}>오늘 수행 동작</span>
+        <span className={styles.sessionLabel}>
+          {rangeSummary ? '최근 체조 세션 동작' : '체조 동작 기록'}
+        </span>
       </div>
 
       <div className={`${styles.leftCol} ${!expanded ? styles.leftColCollapsed : ''}`}>
-        <div className={styles.list}>
-          {visible.map(m => {
-            const { from, to } = scoreColor(m.score)
-            const isActive = activeMotionId === m.id
-            return (
-              <button
-                key={m.id}
-                type="button"
-                className={`${styles.row} ${isActive ? styles.rowActive : ''}`}
-                onClick={() => toggleMotion(m.id)}
-                aria-pressed={isActive}
-              >
-                <div className={styles.thumb} aria-hidden>
-                  <img src={m.thumbnail} alt="" />
-                </div>
-                <span className={styles.rowText}>
-                  <span className={styles.rowName}>{m.name}</span>
-                  {m.progressLabel && <span className={styles.rowMeta}>{m.progressLabel}</span>}
-                </span>
-                {m.scoreAvailable === false ? (
-                  <span className={styles.sessionBadge}>세션 기록</span>
-                ) : (
-                  <ScoreRing
-                    value={m.score}
-                    size={52}
-                    strokeWidth={5.5}
-                    fontSize={17}
-                    gradientFrom={from}
-                    gradientTo={to}
-                  />
-                )}
-              </button>
-            )
-          })}
-        </div>
+        {visible.length === 0 ? (
+          <div className={styles.emptyState}>
+            <strong>
+              {isRangeSummaryLoading ? '기록을 불러오는 중입니다.' : '최근 체조 기록이 없습니다.'}
+            </strong>
+            <span>아이의 체조 세션이 저장되면 완료 동작과 리플레이를 보여줍니다.</span>
+          </div>
+        ) : (
+          <div className={styles.list}>
+            {visible.map(movement => {
+              const { from, to } = scoreColor(movement.score)
+              const isActive = activeMotionId === movement.id
+              return (
+                <button
+                  key={movement.id}
+                  type="button"
+                  className={`${styles.row} ${isActive ? styles.rowActive : ''}`}
+                  onClick={() => toggleMotion(movement.id)}
+                  aria-pressed={isActive}
+                >
+                  <div className={styles.thumb} aria-hidden>
+                    <img src={movement.thumbnail} alt="" />
+                  </div>
+                  <span className={styles.rowText}>
+                    <span className={styles.rowName}>{movement.name}</span>
+                    {movement.progressLabel && (
+                      <span className={styles.rowMeta}>{movement.progressLabel}</span>
+                    )}
+                  </span>
+                  {movement.scoreAvailable === false ? (
+                    <span className={styles.sessionBadge}>세션 기록</span>
+                  ) : (
+                    <ScoreRing
+                      value={movement.score}
+                      size={52}
+                      strokeWidth={5.5}
+                      fontSize={17}
+                      gradientFrom={from}
+                      gradientTo={to}
+                    />
+                  )}
+                </button>
+              )
+            })}
+          </div>
+        )}
 
         {canExpand && (
           <button
             type="button"
             className={styles.viewAll}
-            onClick={() => setExpanded(v => !v)}
+            onClick={() => setExpanded(value => !value)}
             aria-expanded={expanded}
           >
             {expanded ? '접기' : '전체 동작 보기'}

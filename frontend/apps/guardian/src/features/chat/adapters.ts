@@ -1,10 +1,17 @@
 import type {
   GuardianDialogueNpc,
+  GuardianDialogueSentimentWord,
   GuardianDialogueSessionDetail,
   GuardianDialogueSessionMeta,
   GuardianDialogueTurn,
 } from '@wish/api-client'
-import type { ChatMessage, EmotionShare, EmotionSignal, EmotionTrendPoint } from './data/mock'
+import type {
+  ChatMessage,
+  EmotionShare,
+  EmotionSignal,
+  EmotionTrendPoint,
+  MessagePart,
+} from './data/mock'
 import { getFlagLabel } from './flagLabels'
 
 export const NPC_TO_CHARACTER_ID: Record<GuardianDialogueNpc, string> = {
@@ -33,25 +40,52 @@ export function toChatMessages(turns: GuardianDialogueTurn[]): ChatMessage[] {
       })
     }
     if (t.choiceText) {
-      const hasConcern = t.concernFlags.length > 0
-      const sentiment: 'positive' | 'negative' | undefined =
-        t.intensity != null
-          ? t.intensity >= 0
-            ? hasConcern
-              ? 'negative'
-              : 'positive'
-            : 'negative'
-          : hasConcern
-            ? 'negative'
-            : undefined
       out.push({
         id: `t${t.id}-c`,
         speaker: 'child',
-        parts: sentiment ? [{ text: t.choiceText, sentiment }] : [{ text: t.choiceText }],
+        parts: highlightSentimentWords(t.choiceText, t.sentimentWords ?? [], t.valence),
       })
     }
   }
   return out
+}
+
+/**
+ * 카탈로그가 지정한 sentimentWords 가 있으면 단어 단위로 색상 강조.
+ * 없으면 valence 로 전체 문장 톤만 표시.
+ */
+function highlightSentimentWords(
+  text: string,
+  words: GuardianDialogueSentimentWord[],
+  valence: GuardianDialogueTurn['valence'],
+): MessagePart[] {
+  if (!words || words.length === 0) {
+    if (valence === 'POSITIVE') return [{ text, sentiment: 'positive' }]
+    if (valence === 'NEGATIVE') return [{ text, sentiment: 'negative' }]
+    return [{ text }]
+  }
+  // sentimentWords 의 phrase 를 text 안에서 찾아 분리 (긴 phrase 먼저 매칭)
+  const sorted = [...words].sort((a, b) => b.phrase.length - a.phrase.length)
+  const parts: MessagePart[] = [{ text }]
+  for (const w of sorted) {
+    if (!w.phrase) continue
+    const tone: 'positive' | 'negative' = w.tone === 'POSITIVE' ? 'positive' : 'negative'
+    for (let i = 0; i < parts.length; i++) {
+      const p = parts[i]
+      if (p.sentiment) continue
+      const idx = p.text.indexOf(w.phrase)
+      if (idx === -1) continue
+      const before = p.text.slice(0, idx)
+      const after = p.text.slice(idx + w.phrase.length)
+      const replacement: MessagePart[] = []
+      if (before) replacement.push({ text: before })
+      replacement.push({ text: w.phrase, sentiment: tone })
+      if (after) replacement.push({ text: after })
+      parts.splice(i, 1, ...replacement)
+      i += replacement.length - 1
+    }
+  }
+  return parts
 }
 
 export function toEmotionTrend(turns: GuardianDialogueTurn[]): EmotionTrendPoint[] {
@@ -65,12 +99,24 @@ export function toEmotionTrend(turns: GuardianDialogueTurn[]): EmotionTrendPoint
 export function toTopicTags(turns: GuardianDialogueTurn[]): string[] {
   const seen = new Set<string>()
   const out: string[] = []
+  // 1순위: catalog 가 명시한 topicKeywords (주제 그 자체)
   for (const t of turns) {
-    for (const f of [...t.concernFlags, ...t.protectiveFactors]) {
-      if (seen.has(f)) continue
-      seen.add(f)
-      out.push(getFlagLabel(f).label)
+    for (const k of t.topicKeywords ?? []) {
+      if (seen.has(k)) continue
+      seen.add(k)
+      out.push(k)
       if (out.length >= 10) return out
+    }
+  }
+  // 폴백: 옛 turn (topicKeywords 미보유) — flag 라벨로 대체
+  if (out.length === 0) {
+    for (const t of turns) {
+      for (const f of [...t.concernFlags, ...t.protectiveFactors]) {
+        if (seen.has(f)) continue
+        seen.add(f)
+        out.push(getFlagLabel(f).label)
+        if (out.length >= 10) return out
+      }
     }
   }
   return out

@@ -14,7 +14,11 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
+import com.comong.backend.domain.dialogue.catalog.DialogueCatalogService;
+import com.comong.backend.domain.dialogue.catalog.model.ChoiceDefinition;
 import com.comong.backend.domain.dialogue.dto.FinishSessionRequest;
 import com.comong.backend.domain.dialogue.dto.FinishSessionResponse;
 import com.comong.backend.domain.dialogue.dto.GuardianSessionListItemResponse;
@@ -58,27 +62,49 @@ public class DialogueService {
     /** {@link DialogueTurn} 의 (session_id, step_index) UNIQUE 제약 이름. 마이그레이션과 일치. */
     private static final String UK_DIALOGUE_TURN_SESSION_STEP = "uk_dialogue_turn_session_step";
 
+    /**
+     * 자유 발화(STT) turn 의 표식 — 등대지기 자유 대화에서 catalog 정의가 없는 발화를 의미 (S14P31E103-787 FE 컨트랙트 약속). FE 의
+     * {@code FREE_INPUT_CHOICE_INTENT_ID} 와 정확히 같은 문자열이어야 한다.
+     */
+    private static final String FREE_INPUT_CHOICE_INTENT_ID = "FREE_INPUT";
+
     private final DialogueSessionRepository sessionRepository;
     private final DialogueTurnRepository turnRepository;
     private final PatientProfileService patientProfileService;
     private final FallbackSceneProvider fallbackSceneProvider;
     private final ClaudeSceneProvider claudeSceneProvider;
     private final LighthouseIntentCatalog lighthouseIntentCatalog;
+    private final CatalogSceneProvider catalogSceneProvider;
+    private final DialogueCatalogService dialogueCatalogService;
+    private final AiDialogueClient aiDialogueClient;
 
     @Transactional
     public StartSessionResponse createSession(Long currentUserId, StartSessionRequest request) {
         PatientProfile profile =
                 patientProfileService.findOwnedOrThrow(currentUserId, request.patientProfileId());
+
+        NpcName npcName = request.npcName();
+        String scriptId = null;
+        SceneResponse firstScene;
+
+        if (npcName.isLlmDriven()) {
+            // 등대지기: 기존 흐름 유지 (fallback firstScene + Claude 후속)
+            firstScene = fallbackSceneProvider.firstScene(npcName);
+        } else {
+            // 마을 NPC: catalog 에서 script 선택 후 첫 화면 반환
+            List<String> recentScripts =
+                    sessionRepository.findRecentScriptIds(profile.getId(), npcName);
+            scriptId = catalogSceneProvider.pickScriptId(npcName, recentScripts);
+            firstScene = catalogSceneProvider.firstScene(scriptId);
+        }
+
         DialogueSession session =
                 sessionRepository.save(
                         DialogueSession.builder()
                                 .patientProfile(profile)
-                                .npcName(request.npcName())
+                                .npcName(npcName)
+                                .scriptId(scriptId)
                                 .build());
-        SceneResponse firstScene =
-                request.npcName().isBackendDriven()
-                        ? fallbackSceneProvider.firstScene(request.npcName())
-                        : null; // 마을 주민은 FE 가 자체 스크립트로 첫 scene 로드
         return StartSessionResponse.of(session, firstScene);
     }
 
@@ -90,17 +116,32 @@ public class DialogueService {
 
         SelectedChoiceRequest choice = request.selectedChoice();
         int stepIndex = session.getStepCount();
-        DialogueTurnGeneratedBy generatedBy =
-                session.getNpcName().isBackendDriven()
-                        ? DialogueTurnGeneratedBy.FALLBACK
-                        : DialogueTurnGeneratedBy.NPC_SCRIPT;
 
-        // 등대지기는 BE catalog 의 metadata 가 진실 (FE 값 override).
-        // 마을 주민은 FE 자체 스크립트의 값 그대로 적재.
+        if (session.getNpcName().isLlmDriven()) {
+            // 등대지기 경로: 기존 lighthouseIntentCatalog 기반 영속 + Claude/Fallback scene
+            return submitLighthouseTurn(session, request, choice, stepIndex);
+        }
+        // 마을 NPC: BE catalog 기반 영속 + scene
+        return submitVillageTurn(session, request, choice, stepIndex);
+    }
+
+    private SubmitTurnResponse submitLighthouseTurn(
+            DialogueSession session,
+            SubmitTurnRequest request,
+            SelectedChoiceRequest choice,
+            int stepIndex) {
+        boolean isFreeInput = FREE_INPUT_CHOICE_INTENT_ID.equals(choice.choiceIntentId());
+
         short intensity;
         List<String> concernFlags;
         List<String> protectiveFactors;
-        if (session.getNpcName().isBackendDriven()) {
+        if (isFreeInput) {
+            // 자유 발화는 catalog 정의가 없는 사용자 발화. 의미 메타데이터는 후속 단계에서
+            // RAG/임베딩 기반으로 다루며 여기서는 텍스트만 적재한다.
+            intensity = 0;
+            concernFlags = List.of();
+            protectiveFactors = List.of();
+        } else {
             LighthouseIntentCatalog.ChoiceIntentMetadata meta =
                     lighthouseIntentCatalog
                             .lookup(choice.choiceIntentId())
@@ -111,36 +152,97 @@ public class DialogueService {
             intensity = meta.intensity();
             concernFlags = meta.concernFlags();
             protectiveFactors = meta.protectiveFactors();
-        } else {
-            intensity = choice.intensity();
-            concernFlags = choice.concernFlags();
-            protectiveFactors = choice.protectiveFactors();
         }
 
+        persistTurn(
+                session,
+                stepIndex,
+                request.questionText(),
+                choice.choiceIntentId(),
+                choice.text(),
+                intensity,
+                concernFlags,
+                protectiveFactors,
+                DialogueTurnGeneratedBy.FALLBACK,
+                /* valence */ null,
+                /* tone */ null,
+                /* topicKeywords */ List.of(),
+                /* sentimentWords */ List.of());
+        session.incrementStepCount();
+
+        // 자유 발화는 BE 가 다음 scene 을 정의하지 않는다 — FE 가 AI /dialogue/chat 결과로 다음 영철 메시지를 띄움.
+        if (isFreeInput) {
+            return SubmitTurnResponse.of(session, null);
+        }
+        SceneResponse nextScene = buildLighthouseNextScene(session, choice.choiceIntentId());
+        return SubmitTurnResponse.of(session, nextScene);
+    }
+
+    private SubmitTurnResponse submitVillageTurn(
+            DialogueSession session,
+            SubmitTurnRequest request,
+            SelectedChoiceRequest choice,
+            int stepIndex) {
+        ChoiceDefinition def =
+                dialogueCatalogService
+                        .findChoice(choice.choiceIntentId())
+                        .orElseThrow(
+                                () ->
+                                        new BusinessException(
+                                                DialogueErrorCode.INVALID_CHOICE_FOR_STEP));
+        persistTurn(
+                session,
+                stepIndex,
+                request.questionText(),
+                def.choiceIntentId(),
+                def.text(),
+                (short) def.intensity(),
+                def.concernFlags(),
+                def.protectiveFactors(),
+                DialogueTurnGeneratedBy.NPC_SCRIPT,
+                def.valence(),
+                def.tone(),
+                def.topicKeywords(),
+                def.sentimentWords());
+        session.incrementStepCount();
+        SceneResponse nextScene = catalogSceneProvider.nextScene(session.getScriptId(), def);
+        return SubmitTurnResponse.of(session, nextScene);
+    }
+
+    private void persistTurn(
+            DialogueSession session,
+            int stepIndex,
+            String questionText,
+            String choiceIntentId,
+            String choiceText,
+            short intensity,
+            List<String> concernFlags,
+            List<String> protectiveFactors,
+            DialogueTurnGeneratedBy generatedBy,
+            com.comong.backend.domain.dialogue.catalog.model.ChoiceValence valence,
+            com.comong.backend.domain.dialogue.catalog.model.ChoiceTone tone,
+            List<String> topicKeywords,
+            List<com.comong.backend.domain.dialogue.catalog.model.SentimentWord> sentimentWords) {
         try {
             turnRepository.saveAndFlush(
                     DialogueTurn.builder()
                             .session(session)
                             .stepIndex(stepIndex)
-                            .questionText(request.questionText())
-                            .choiceIntentId(choice.choiceIntentId())
-                            .choiceText(choice.text())
+                            .questionText(questionText)
+                            .choiceIntentId(choiceIntentId)
+                            .choiceText(choiceText)
                             .intensity(intensity)
                             .concernFlags(concernFlags)
                             .protectiveFactors(protectiveFactors)
+                            .valence(valence)
+                            .tone(tone)
+                            .topicKeywords(topicKeywords)
+                            .sentimentWords(sentimentWords)
                             .generatedBy(generatedBy)
                             .build());
         } catch (DataIntegrityViolationException e) {
             throw mapTurnConstraintViolation(e);
         }
-
-        session.incrementStepCount();
-
-        SceneResponse nextScene =
-                session.getNpcName().isBackendDriven()
-                        ? buildLighthouseNextScene(session, choice.choiceIntentId())
-                        : null; // 마을 주민은 FE 가 자체 라우팅
-        return SubmitTurnResponse.of(session, nextScene);
     }
 
     /**
@@ -175,10 +277,30 @@ public class DialogueService {
         requireInProgress(session);
         session.finish(request.finishReason());
         List<String> closingLines =
-                session.getNpcName().isBackendDriven()
+                session.getNpcName().isLlmDriven()
                         ? fallbackSceneProvider.closingLines(
                                 session.getNpcName(), request.finishReason())
-                        : null; // 마을 주민은 FE 가 자체 closingLines 표시
+                        : null; // 마을 주민은 catalog ending scene 에서 이미 closingLines 전달
+
+        // 세션 종료 후 RAG 임베딩 트리거 — fire-and-forget (S14P31E103-788).
+        // 1) lazy 연관(patientProfile) 을 트랜잭션 안에서 미리 unpack — 비동기 스레드에서 LazyInitializationException
+        // 회피.
+        // 2) turns 도 트랜잭션 안에서 fetch.
+        // 3) afterCommit 시점에 호출 — 롤백 시 임베딩이 외부에 새지 않도록 정합성 보장.
+        long patientProfileId = session.getPatientProfile().getId();
+        long sessionIdValue = session.getId();
+        NpcName npcName = session.getNpcName();
+        List<DialogueTurn> turns =
+                turnRepository.findAllBySessionIdOrderByStepIndexAsc(sessionIdValue);
+        TransactionSynchronizationManager.registerSynchronization(
+                new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        aiDialogueClient.embedSessionAsync(
+                                patientProfileId, sessionIdValue, npcName, turns);
+                    }
+                });
+
         return FinishSessionResponse.of(session, closingLines);
     }
 

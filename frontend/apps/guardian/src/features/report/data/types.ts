@@ -41,6 +41,7 @@ export type RomJointTrend = {
 }
 
 export type UsageRankEntry = {
+  rank: number
   name: string
   minutes: number
   isMe: boolean

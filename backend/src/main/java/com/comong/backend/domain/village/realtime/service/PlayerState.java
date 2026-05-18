@@ -29,9 +29,20 @@ public record PlayerState(
     }
 
     /** 위치/방향 갱신 + lastSeen 동시 갱신. 718 에서 사용 예정. */
-    public PlayerState withPosition(double newX, double newY, String newDir, Instant now) {
+    public PlayerState withPosition(
+            double newX, double newY, String newDir, String newTextureKey, Instant now) {
+        String nextTextureKey =
+                newTextureKey == null || newTextureKey.isBlank() ? textureKey : newTextureKey;
         return new PlayerState(
-                userId, patientProfileId, nickname, textureKey, newX, newY, newDir, sessionId, now);
+                userId,
+                patientProfileId,
+                nickname,
+                nextTextureKey,
+                newX,
+                newY,
+                newDir,
+                sessionId,
+                now);
     }
 
     /** 위치 변화 없이 lastSeen 만 갱신 (heartbeat 등). */

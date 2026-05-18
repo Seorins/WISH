@@ -14,4 +14,5 @@ public record PositionPacket(
         @NotNull @DecimalMin("0.0") @DecimalMax("1.0") Double x,
         @NotNull @DecimalMin("0.0") @DecimalMax("1.0") Double y,
         @NotNull String dir,
-        @NotNull Boolean moving) {}
+        @NotNull Boolean moving,
+        String textureKey) {}

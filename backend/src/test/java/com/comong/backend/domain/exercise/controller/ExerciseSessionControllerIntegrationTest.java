@@ -64,52 +64,46 @@ class ExerciseSessionControllerIntegrationTest extends IntegrationTestSupport {
         ExerciseMotion march = exerciseMotionRepository.save(exerciseMotion("March", 1));
         ExerciseMotion sideStep = exerciseMotionRepository.save(exerciseMotion("Side step", 2));
 
+        long sessionId = createEmptyExerciseSession(user.token(), user.patientProfileId(), "TOP");
+
         mockMvc.perform(
-                        post("/exercise-sessions")
+                        post("/exercise-sessions/{id}/motions", sessionId)
+                                .header("Authorization", "Bearer " + user.token())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(motionBody(march.getId(), 12, 0.91, 8, "무릎을 조금 더 올려요")))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.sessionId").value(sessionId))
+                .andExpect(jsonPath("$.data.sessionDurationSec").value(12))
+                .andExpect(jsonPath("$.data.sessionCompletedMotionCount").value(1))
+                .andExpect(jsonPath("$.data.savedMotion.exerciseMotionId").value(march.getId()))
+                .andExpect(jsonPath("$.data.savedMotion.motionName").value("March"))
+                .andExpect(jsonPath("$.data.savedMotion.completedReps").value(8));
+
+        mockMvc.perform(
+                        post("/exercise-sessions/{id}/motions", sessionId)
                                 .header("Authorization", "Bearer " + user.token())
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(
-                                        """
-                                        {
-                                          "patientProfileId": %d,
-                                          "exerciseType": "TOP",
-                                          "durationSec": 78,
-                                          "averageAccuracy": 0.87,
-                                          "motions": [
-                                            {
-                                              "exerciseMotionId": %d,
-                                              "durationSec": 12,
-                                              "accuracy": 0.91,
-                                              "completedReps": 8,
-                                              "feedback": "무릎을 조금 더 올려요"
-                                            },
-                                            {
-                                              "exerciseMotionId": %d,
-                                              "durationSec": 14,
-                                              "accuracy": 0.88,
-                                              "completedReps": 8,
-                                              "feedback": "팔꿈치를 어깨 높이까지 올려요"
-                                            }
-                                          ]
-                                        }
-                                        """
-                                                .formatted(
-                                                        user.patientProfileId(),
-                                                        march.getId(),
-                                                        sideStep.getId())))
+                                        motionBody(
+                                                sideStep.getId(), 14, 0.88, 8, "팔꿈치를 어깨 높이까지 올려요")))
                 .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.sessionDurationSec").value(26))
+                .andExpect(jsonPath("$.data.sessionCompletedMotionCount").value(2));
+
+        mockMvc.perform(
+                        get("/exercise-sessions/{id}", sessionId)
+                                .header("Authorization", "Bearer " + user.token()))
+                .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("SUCCESS"))
-                .andExpect(jsonPath("$.data.id").isNumber())
+                .andExpect(jsonPath("$.data.id").value(sessionId))
                 .andExpect(jsonPath("$.data.patientProfileId").value(user.patientProfileId()))
                 .andExpect(jsonPath("$.data.exerciseType").value("TOP"))
-                .andExpect(jsonPath("$.data.durationSec").value(78))
-                .andExpect(jsonPath("$.data.averageAccuracy").value(0.87))
                 .andExpect(jsonPath("$.data.completedMotionCount").value(2))
                 .andExpect(jsonPath("$.data.motions.length()").value(2))
                 .andExpect(jsonPath("$.data.motions[0].exerciseMotionId").value(march.getId()))
-                .andExpect(jsonPath("$.data.motions[0].motionName").value("March"))
                 .andExpect(jsonPath("$.data.motions[0].routineOrder").value(1))
-                .andExpect(jsonPath("$.data.motions[0].completedReps").value(8));
+                .andExpect(jsonPath("$.data.motions[1].exerciseMotionId").value(sideStep.getId()))
+                .andExpect(jsonPath("$.data.motions[1].routineOrder").value(2));
 
         assertThat(exerciseSessionRepository.count()).isEqualTo(1);
         assertThat(exerciseSessionMotionRepository.count()).isEqualTo(2);
@@ -119,34 +113,26 @@ class ExerciseSessionControllerIntegrationTest extends IntegrationTestSupport {
     void createExerciseSession_persistsRawAndCompactPoseReplay() throws Exception {
         TestUser user = setupUserWithProfile("replay@example.com", "replay-user");
         ExerciseMotion march = exerciseMotionRepository.save(exerciseMotion("March", 1));
+        long sessionId = createEmptyExerciseSession(user.token(), user.patientProfileId(), "TOP");
 
         String body =
                 mockMvc.perform(
-                                post("/exercise-sessions")
+                                post("/exercise-sessions/{id}/motions", sessionId)
                                         .header("Authorization", "Bearer " + user.token())
                                         .contentType(MediaType.APPLICATION_JSON)
                                         .content(
                                                 """
                                                 {
-                                                  "patientProfileId": %d,
-                                                  "exerciseType": "TOP",
+                                                  "exerciseMotionId": %d,
                                                   "durationSec": 12,
-                                                  "averageAccuracy": 0.91,
-                                                  "motions": [
-                                                    {
-                                                      "exerciseMotionId": %d,
-                                                      "durationSec": 12,
-                                                      "accuracy": 0.91,
-                                                      "completedReps": 8,
-                                                      "feedback": "Good",
-                                                      "poseReplay": %s,
-                                                      "compactPoseReplay": %s
-                                                    }
-                                                  ]
+                                                  "accuracy": 0.91,
+                                                  "completedReps": 8,
+                                                  "feedback": "Good",
+                                                  "poseReplay": %s,
+                                                  "compactPoseReplay": %s
                                                 }
                                                 """
                                                         .formatted(
-                                                                user.patientProfileId(),
                                                                 march.getId(),
                                                                 replayJson(30, 67, "raw window"),
                                                                 replayJson(
@@ -154,13 +140,13 @@ class ExerciseSessionControllerIntegrationTest extends IntegrationTestSupport {
                                                                         400,
                                                                         "compact count window"))))
                         .andExpect(status().isCreated())
-                        .andExpect(jsonPath("$.data.motions[0].replayAvailable").value(true))
+                        .andExpect(jsonPath("$.data.savedMotion.replayAvailable").value(true))
                         .andReturn()
                         .getResponse()
                         .getContentAsString();
 
-        JsonNode motion = objectMapper.readTree(body).get("data").get("motions").get(0);
-        Long motionResultId = motion.get("id").asLong();
+        Long motionResultId =
+                objectMapper.readTree(body).get("data").get("savedMotion").get("id").asLong();
 
         ExerciseSessionMotion savedMotion =
                 exerciseSessionMotionRepository.findById(motionResultId).orElseThrow();
@@ -180,49 +166,154 @@ class ExerciseSessionControllerIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
-    void createExerciseSession_acceptsV2PoseReplay() throws Exception {
-        TestUser user = setupUserWithProfile("replay-v2@example.com", "replay-v2-user");
+    void getMovementAnalysis_returnsConfidenceFilteredJointRanges() throws Exception {
+        TestUser user = setupUserWithProfile("analysis@example.com", "analysis-user");
         ExerciseMotion march = exerciseMotionRepository.save(exerciseMotion("March", 1));
+        long sessionId = createEmptyExerciseSession(user.token(), user.patientProfileId(), "TOP");
 
         String body =
                 mockMvc.perform(
-                                post("/exercise-sessions")
+                                post("/exercise-sessions/{id}/motions", sessionId)
                                         .header("Authorization", "Bearer " + user.token())
                                         .contentType(MediaType.APPLICATION_JSON)
                                         .content(
                                                 """
                                                 {
-                                                  "patientProfileId": %d,
-                                                  "exerciseType": "TOP",
-                                                  "durationSec": 12,
-                                                  "averageAccuracy": 0.91,
-                                                  "motions": [
-                                                    {
-                                                      "exerciseMotionId": %d,
-                                                      "durationSec": 12,
-                                                      "accuracy": 0.91,
-                                                      "completedReps": 8,
-                                                      "feedback": "Good",
-                                                      "poseReplay": %s,
-                                                      "compactPoseReplay": %s
-                                                    }
-                                                  ]
+                                                  "exerciseMotionId": %d,
+                                                  "durationSec": 1,
+                                                  "accuracy": 0.91,
+                                                  "completedReps": 1,
+                                                  "feedback": "Good",
+                                                  "poseReplay": %s
                                                 }
                                                 """
                                                         .formatted(
-                                                                user.patientProfileId(),
+                                                                march.getId(),
+                                                                analysisReplayJson())))
+                        .andExpect(status().isCreated())
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString();
+
+        Long motionResultId =
+                objectMapper.readTree(body).get("data").get("savedMotion").get("id").asLong();
+
+        mockMvc.perform(
+                        get(
+                                        "/exercise-sessions/motions/{motionResultId}/movement-analysis",
+                                        motionResultId)
+                                .header("Authorization", "Bearer " + user.token()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.analysisAvailable").value(true))
+                .andExpect(jsonPath("$.data.replaySource").value("RAW"))
+                .andExpect(jsonPath("$.data.totalFrameCount").value(3))
+                .andExpect(jsonPath("$.data.analyzedFrameCount").value(2))
+                .andExpect(jsonPath("$.data.excludedFrameCount").value(1))
+                .andExpect(jsonPath("$.data.analyzedDurationMs").value(66))
+                .andExpect(jsonPath("$.data.excludedDurationMs").value(33))
+                .andExpect(jsonPath("$.data.confidenceThreshold").value(0.2))
+                .andExpect(jsonPath("$.data.averageConfidence").value(0.92))
+                .andExpect(jsonPath("$.data.joints[0].jointName").value("LEFT_ELBOW"))
+                .andExpect(jsonPath("$.data.joints[0].validFrameCount").value(2))
+                .andExpect(jsonPath("$.data.joints[0].coverageRate").value(0.667))
+                .andExpect(jsonPath("$.data.joints[0].minAngleDeg").value(90.0))
+                .andExpect(jsonPath("$.data.joints[0].maxAngleDeg").value(180.0))
+                .andExpect(jsonPath("$.data.joints[0].rangeDeg").value(90.0))
+                .andExpect(jsonPath("$.data.excludedSegments[0].startMs").value(33))
+                .andExpect(jsonPath("$.data.excludedSegments[0].endMs").value(66))
+                .andExpect(jsonPath("$.data.excludedSegments[0].reason").value("LOW_CONFIDENCE"))
+                .andExpect(
+                        jsonPath("$.data.representativeSegment.reason").value("analysis window"));
+    }
+
+    @Test
+    void getMovementAnalysis_returnsUnavailableWhenReplayIsMissing() throws Exception {
+        TestUser user = setupUserWithProfile("analysis-empty@example.com", "analysis-empty-user");
+        PatientProfile profile = findProfile(user);
+        ExerciseMotion march = exerciseMotionRepository.save(exerciseMotion("March", 1));
+        ExerciseSession session =
+                exerciseSessionRepository.save(exerciseSession(profile, 1, 0.8, 1));
+        ExerciseSessionMotion sessionMotion =
+                exerciseSessionMotionRepository.save(sessionMotion(session, march, 1, 0.8));
+
+        mockMvc.perform(
+                        get(
+                                        "/exercise-sessions/motions/{motionResultId}/movement-analysis",
+                                        sessionMotion.getId())
+                                .header("Authorization", "Bearer " + user.token()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.analysisAvailable").value(false))
+                .andExpect(jsonPath("$.data.replaySource").value("NONE"))
+                .andExpect(jsonPath("$.data.totalFrameCount").value(0))
+                .andExpect(jsonPath("$.data.joints.length()").value(0))
+                .andExpect(jsonPath("$.data.excludedSegments.length()").value(0));
+    }
+
+    @Test
+    void getMovementAnalysis_rejectsInvalidReplayTiming() throws Exception {
+        TestUser user =
+                setupUserWithProfile("analysis-invalid@example.com", "analysis-invalid-user");
+        PatientProfile profile = findProfile(user);
+        ExerciseMotion march = exerciseMotionRepository.save(exerciseMotion("March", 1));
+        ExerciseSession session =
+                exerciseSessionRepository.save(exerciseSession(profile, 1, 0.8, 1));
+        ExerciseSessionMotion sessionMotion =
+                exerciseSessionMotionRepository.save(
+                        ExerciseSessionMotion.builder()
+                                .session(session)
+                                .exerciseMotion(march)
+                                .durationSec(1)
+                                .accuracy(0.8)
+                                .completedReps(1)
+                                .feedback("Good")
+                                .poseReplay(invalidTimingReplayJson())
+                                .build());
+
+        mockMvc.perform(
+                        get(
+                                        "/exercise-sessions/motions/{motionResultId}/movement-analysis",
+                                        sessionMotion.getId())
+                                .header("Authorization", "Bearer " + user.token()))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.code").value("G-999"));
+    }
+
+    @Test
+    void createExerciseSession_acceptsV2PoseReplay() throws Exception {
+        TestUser user = setupUserWithProfile("replay-v2@example.com", "replay-v2-user");
+        ExerciseMotion march = exerciseMotionRepository.save(exerciseMotion("March", 1));
+        long sessionId = createEmptyExerciseSession(user.token(), user.patientProfileId(), "TOP");
+
+        String body =
+                mockMvc.perform(
+                                post("/exercise-sessions/{id}/motions", sessionId)
+                                        .header("Authorization", "Bearer " + user.token())
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .content(
+                                                """
+                                                {
+                                                  "exerciseMotionId": %d,
+                                                  "durationSec": 12,
+                                                  "accuracy": 0.91,
+                                                  "completedReps": 8,
+                                                  "feedback": "Good",
+                                                  "poseReplay": %s,
+                                                  "compactPoseReplay": %s
+                                                }
+                                                """
+                                                        .formatted(
                                                                 march.getId(),
                                                                 replayJsonV2(30, 67, "raw v2"),
                                                                 replayJsonV2(
                                                                         5, 400, "compact v2"))))
                         .andExpect(status().isCreated())
-                        .andExpect(jsonPath("$.data.motions[0].replayAvailable").value(true))
+                        .andExpect(jsonPath("$.data.savedMotion.replayAvailable").value(true))
                         .andReturn()
                         .getResponse()
                         .getContentAsString();
 
-        JsonNode motion = objectMapper.readTree(body).get("data").get("motions").get(0);
-        Long motionResultId = motion.get("id").asLong();
+        Long motionResultId =
+                objectMapper.readTree(body).get("data").get("savedMotion").get("id").asLong();
 
         mockMvc.perform(
                         get("/exercise-sessions/motions/{motionResultId}/replay", motionResultId)
@@ -316,15 +407,12 @@ class ExerciseSessionControllerIntegrationTest extends IntegrationTestSupport {
     void createExerciseSession_rejectsOtherUsersPatientProfile() throws Exception {
         TestUser owner = setupUserWithProfile("owner@example.com", "owner-user");
         TestUser other = setupUserWithProfile("other@example.com", "other-user");
-        ExerciseMotion motion = exerciseMotionRepository.save(exerciseMotion("March", 1));
 
         mockMvc.perform(
                         post("/exercise-sessions")
                                 .header("Authorization", "Bearer " + other.token())
                                 .contentType(MediaType.APPLICATION_JSON)
-                                .content(
-                                        saveRequest(
-                                                owner.patientProfileId(), motion.getId(), "TOP")))
+                                .content(createSessionBody(owner.patientProfileId(), "TOP")))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("P-001"));
 
@@ -333,91 +421,61 @@ class ExerciseSessionControllerIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
-    void createExerciseSession_rejectsUnknownMotion() throws Exception {
+    void saveExerciseMotion_rejectsUnknownMotion() throws Exception {
         TestUser user = setupUserWithProfile("unknown@example.com", "unknown-user");
+        long sessionId = createEmptyExerciseSession(user.token(), user.patientProfileId(), "TOP");
 
         mockMvc.perform(
-                        post("/exercise-sessions")
+                        post("/exercise-sessions/{id}/motions", sessionId)
                                 .header("Authorization", "Bearer " + user.token())
                                 .contentType(MediaType.APPLICATION_JSON)
-                                .content(saveRequest(user.patientProfileId(), 999_999L, "TOP")))
+                                .content(motionBody(999_999L, 12, 0.91, 8, "feedback")))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("EX-001"));
 
-        assertThat(exerciseSessionRepository.count()).isZero();
         assertThat(exerciseSessionMotionRepository.count()).isZero();
     }
 
     @Test
-    void createExerciseSession_rejectsMotionTypeMismatch() throws Exception {
+    void saveExerciseMotion_rejectsMotionTypeMismatch() throws Exception {
         TestUser user = setupUserWithProfile("mismatch@example.com", "mismatch-user");
         ExerciseMotion motion =
                 exerciseMotionRepository.save(
                         exerciseMotion(ExerciseType.DANIEL, "Daniel stretch", 1));
+        long sessionId = createEmptyExerciseSession(user.token(), user.patientProfileId(), "TOP");
 
         mockMvc.perform(
-                        post("/exercise-sessions")
+                        post("/exercise-sessions/{id}/motions", sessionId)
                                 .header("Authorization", "Bearer " + user.token())
                                 .contentType(MediaType.APPLICATION_JSON)
-                                .content(
-                                        saveRequest(
-                                                user.patientProfileId(), motion.getId(), "TOP")))
+                                .content(motionBody(motion.getId(), 12, 0.91, 8, "feedback")))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("EX-004"));
 
-        assertThat(exerciseSessionRepository.count()).isZero();
         assertThat(exerciseSessionMotionRepository.count()).isZero();
     }
 
     @Test
-    void createExerciseSession_rejectsEmptyMotions() throws Exception {
-        TestUser user = setupUserWithProfile("empty@example.com", "empty-user");
+    void saveExerciseMotion_rejectsMissingMotionId() throws Exception {
+        TestUser user = setupUserWithProfile("invalid-motion@example.com", "invalid-motion-user");
+        long sessionId = createEmptyExerciseSession(user.token(), user.patientProfileId(), "TOP");
 
         mockMvc.perform(
-                        post("/exercise-sessions")
+                        post("/exercise-sessions/{id}/motions", sessionId)
                                 .header("Authorization", "Bearer " + user.token())
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(
                                         """
                                         {
-                                          "patientProfileId": %d,
-                                          "exerciseType": "TOP",
-                                          "durationSec": 78,
-                                          "averageAccuracy": 0.87,
-                                          "motions": []
+                                          "durationSec": 12,
+                                          "accuracy": 0.91,
+                                          "completedReps": 8,
+                                          "feedback": "feedback"
                                         }
-                                        """
-                                                .formatted(user.patientProfileId())))
+                                        """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("G-001"));
 
-        assertThat(exerciseSessionRepository.count()).isZero();
-        assertThat(exerciseSessionMotionRepository.count()).isZero();
-    }
-
-    @Test
-    void createExerciseSession_rejectsNullMotionElement() throws Exception {
-        TestUser user = setupUserWithProfile("null-motion@example.com", "null-motion-user");
-
-        mockMvc.perform(
-                        post("/exercise-sessions")
-                                .header("Authorization", "Bearer " + user.token())
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(
-                                        """
-                                        {
-                                          "patientProfileId": %d,
-                                          "exerciseType": "TOP",
-                                          "durationSec": 78,
-                                          "averageAccuracy": 0.87,
-                                          "motions": [null]
-                                        }
-                                        """
-                                                .formatted(user.patientProfileId())))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("G-001"));
-
-        assertThat(exerciseSessionRepository.count()).isZero();
         assertThat(exerciseSessionMotionRepository.count()).isZero();
     }
 
@@ -426,7 +484,7 @@ class ExerciseSessionControllerIntegrationTest extends IntegrationTestSupport {
         mockMvc.perform(
                         post("/exercise-sessions")
                                 .contentType(MediaType.APPLICATION_JSON)
-                                .content(saveRequest(1L, 1L, "TOP")))
+                                .content(createSessionBody(1L, "TOP")))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("G-003"));
     }
@@ -443,6 +501,49 @@ class ExerciseSessionControllerIntegrationTest extends IntegrationTestSupport {
         mockMvc.perform(get("/exercise-sessions/{id}", 1L))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("G-003"));
+    }
+
+    private long createEmptyExerciseSession(
+            String token, Long patientProfileId, String exerciseType) throws Exception {
+        String body =
+                mockMvc.perform(
+                                post("/exercise-sessions")
+                                        .header("Authorization", "Bearer " + token)
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .content(createSessionBody(patientProfileId, exerciseType)))
+                        .andExpect(status().isCreated())
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString();
+        return objectMapper.readTree(body).get("data").get("id").asLong();
+    }
+
+    private String createSessionBody(Long patientProfileId, String exerciseType) {
+        return """
+                {
+                  "patientProfileId": %d,
+                  "exerciseType": "%s"
+                }
+                """
+                .formatted(patientProfileId, exerciseType);
+    }
+
+    private String motionBody(
+            Long exerciseMotionId,
+            int durationSec,
+            double accuracy,
+            int completedReps,
+            String feedback) {
+        return """
+                {
+                  "exerciseMotionId": %d,
+                  "durationSec": %d,
+                  "accuracy": %s,
+                  "completedReps": %d,
+                  "feedback": "%s"
+                }
+                """
+                .formatted(exerciseMotionId, durationSec, accuracy, completedReps, feedback);
     }
 
     private ExerciseMotion exerciseMotion(String name, int routineOrder) {
@@ -488,27 +589,6 @@ class ExerciseSessionControllerIntegrationTest extends IntegrationTestSupport {
 
     private PatientProfile findProfile(TestUser user) {
         return patientProfileRepository.findById(user.patientProfileId()).orElseThrow();
-    }
-
-    private String saveRequest(Long patientProfileId, Long exerciseMotionId, String exerciseType) {
-        return """
-                {
-                  "patientProfileId": %d,
-                  "exerciseType": "%s",
-                  "durationSec": 78,
-                  "averageAccuracy": 0.87,
-                  "motions": [
-                    {
-                      "exerciseMotionId": %d,
-                      "durationSec": 12,
-                      "accuracy": 0.91,
-                      "completedReps": 8,
-                      "feedback": "무릎을 조금 더 올려요"
-                    }
-                  ]
-                }
-                """
-                .formatted(patientProfileId, exerciseType, exerciseMotionId);
     }
 
     private String replayJson(int fps, int endMs, String reason) {
@@ -614,6 +694,91 @@ class ExerciseSessionControllerIntegrationTest extends IntegrationTestSupport {
                   [0.2, 2.2, 0.0, 0.9]
                 ]
                 """;
+    }
+
+    private String analysisReplayJson() {
+        return """
+                {
+                  "version": 1,
+                  "fps": 30,
+                  "durationMs": 99,
+                  "landmarks": %s,
+                  "frames": [
+                    {"t": 0, "lm": %s},
+                    {"t": 33, "lm": %s},
+                    {"t": 66, "lm": %s}
+                  ],
+                  "representativeSegment": {
+                    "startMs": 0,
+                    "endMs": 99,
+                    "reason": "analysis window"
+                  }
+                }
+                """
+                .formatted(
+                        replayLandmarkNamesJson(),
+                        straightPoseFrameTuplesJson(0.92),
+                        straightPoseFrameTuplesJson(0.1),
+                        bentLeftElbowFrameTuplesJson(0.92));
+    }
+
+    private String invalidTimingReplayJson() {
+        return """
+                {
+                  "version": 1,
+                  "fps": 30,
+                  "durationMs": 99,
+                  "landmarks": %s,
+                  "frames": [
+                    {"t": 0, "lm": %s},
+                    {"t": 120, "lm": %s}
+                  ]
+                }
+                """
+                .formatted(
+                        replayLandmarkNamesJson(),
+                        straightPoseFrameTuplesJson(0.92),
+                        straightPoseFrameTuplesJson(0.92));
+    }
+
+    private String straightPoseFrameTuplesJson(double confidence) {
+        return """
+                [
+                  [0.0, 0.0, 0.0, %1$.2f],
+                  [1.0, 0.0, 0.0, %1$.2f],
+                  [0.0, 1.0, 0.0, %1$.2f],
+                  [1.0, 1.0, 0.0, %1$.2f],
+                  [0.0, 2.0, 0.0, %1$.2f],
+                  [1.0, 2.0, 0.0, %1$.2f],
+                  [0.0, 3.0, 0.0, %1$.2f],
+                  [1.0, 3.0, 0.0, %1$.2f],
+                  [0.0, 4.0, 0.0, %1$.2f],
+                  [1.0, 4.0, 0.0, %1$.2f],
+                  [0.0, 5.0, 0.0, %1$.2f],
+                  [1.0, 5.0, 0.0, %1$.2f]
+                ]
+                """
+                .formatted(confidence);
+    }
+
+    private String bentLeftElbowFrameTuplesJson(double confidence) {
+        return """
+                [
+                  [0.0, 0.0, 0.0, %1$.2f],
+                  [1.0, 0.0, 0.0, %1$.2f],
+                  [0.0, 1.0, 0.0, %1$.2f],
+                  [1.0, 1.0, 0.0, %1$.2f],
+                  [1.0, 1.0, 0.0, %1$.2f],
+                  [1.0, 2.0, 0.0, %1$.2f],
+                  [0.0, 3.0, 0.0, %1$.2f],
+                  [1.0, 3.0, 0.0, %1$.2f],
+                  [0.0, 4.0, 0.0, %1$.2f],
+                  [1.0, 4.0, 0.0, %1$.2f],
+                  [0.0, 5.0, 0.0, %1$.2f],
+                  [1.0, 5.0, 0.0, %1$.2f]
+                ]
+                """
+                .formatted(confidence);
     }
 
     private String replayLandmarkNamesV2Json() {
