@@ -491,7 +491,7 @@
   width: 54px;
   height: 54px;
   display: grid;
-  place-items: end center;
+  place-items: start start;
   overflow: hidden;
   border-radius: 8px;
   background: #dceeea;
@@ -501,11 +501,11 @@
   background: #f6efe4;
 }
 
-.gomoku-versus-avatar img {
-  width: 58px;
-  height: 58px;
-  object-fit: contain;
-  object-position: center bottom;
+.gomoku-versus-avatar-sheet {
+  display: block;
+  max-width: none;
+  object-fit: fill;
+  transform-origin: top left;
 }
 
 .gomoku-versus-player div:last-child {

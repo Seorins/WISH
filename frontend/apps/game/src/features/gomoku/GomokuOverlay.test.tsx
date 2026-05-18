@@ -27,9 +27,14 @@ vi.mock('@wish/api-client', () => ({
 }))
 
 const ONLINE_LABEL = '\uC628\uB77C\uC778'
+const LOCAL_LABEL = '2\uC778'
 const CREATE_ROOM_LABEL = '\uBC29 \uB9CC\uB4E4\uAE30'
 const RANKING_LABEL = '\uB7AD\uD0B9'
 const GAME_END_LABEL = '\uB300\uAD6D \uC885\uB8CC'
+const COMPUTER_LEVEL_LABEL = '\uCEF4\uD4E8\uD130 \uB09C\uC774\uB3C4'
+const RULE_LABEL = '\uB8F0'
+const FREESTYLE_LABEL = '\uC790\uC720\uB8F0'
+const WINS_LABEL = '\uC2B9'
 const AUTH_REQUIRED_MESSAGE =
   '\uC628\uB77C\uC778 \uB300\uC804\uC740 \uB85C\uADF8\uC778\uC774 \uD544\uC694\uD574\uC694.'
 
@@ -140,6 +145,8 @@ describe('GomokuOverlay online room creation', () => {
 
     render(<GomokuOverlay open onClose={vi.fn()} patientProfileId={7} />)
 
+    fireEvent.click(screen.getByRole('button', { name: LOCAL_LABEL }))
+    fireEvent.click(screen.getByRole('button', { name: FREESTYLE_LABEL }))
     fireEvent.click(screen.getByRole('button', { name: ONLINE_LABEL }))
     fireEvent.click(screen.getByRole('button', { name: CREATE_ROOM_LABEL }))
 
@@ -165,6 +172,18 @@ describe('GomokuOverlay online room creation', () => {
     })
     expect(createGomokuRoom).not.toHaveBeenCalled()
     expect(screen.getAllByText(AUTH_REQUIRED_MESSAGE).length).toBeGreaterThan(0)
+  })
+
+  it('hides rule and computer difficulty controls in online mode', async () => {
+    render(<GomokuOverlay open onClose={vi.fn()} patientProfileId={7} />)
+
+    fireEvent.click(screen.getByRole('button', { name: ONLINE_LABEL }))
+
+    await waitFor(() => {
+      expect(getWaitingGomokuRooms).toHaveBeenCalled()
+    })
+    expect(screen.queryByText(COMPUTER_LEVEL_LABEL)).toBeNull()
+    expect(screen.queryByText(RULE_LABEL)).toBeNull()
   })
 
   it('allows creating the next online room after a room finishes', async () => {
@@ -218,6 +237,6 @@ describe('GomokuOverlay online room creation', () => {
     fireEvent.click(screen.getByRole('button', { name: RANKING_LABEL }))
 
     expect(await screen.findByText('ranker')).toBeTruthy()
-    expect(screen.getByText('4승')).toBeTruthy()
+    expect(screen.getByText(`4${WINS_LABEL}`)).toBeTruthy()
   })
 })
