@@ -1,5 +1,4 @@
 export { QuizGuessOverlay } from './QuizGuessOverlay'
-export { QuizJoinCodeOverlay } from './QuizJoinCodeOverlay'
 export { QuizRealtimeClient, type QuizRealtimeClientOptions } from './quizRealtimeClient'
 export type {
   PromptAssignment,

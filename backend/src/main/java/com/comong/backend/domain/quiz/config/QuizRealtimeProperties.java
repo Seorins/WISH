@@ -8,7 +8,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * <ul>
  *   <li>{@code enabled}: 도메인 활성 토글. false 면 REST/STOMP CONNECT 모두 거부 — 시연 안정성 폴백.
  *   <li>{@code minPlayers}: 게임 시작 최소 인원 (기본 2).
- *   <li>{@code maxPlayers}: 방 정원 (기본 4). 입장 캡 + 시작 후 추가 입장 차단.
+ *   <li>{@code maxPlayers}: 방 정원 (기본 6). 입장 캡 + 시작 후 추가 입장 차단.
  *   <li>{@code roundDurationSeconds}: 라운드 제한 시간.
  *   <li>{@code emptyRoomGraceSeconds}: 마지막 1명까지 빠진 뒤 방 폐기까지 유예 — 일시 단절 복구용.
  * </ul>

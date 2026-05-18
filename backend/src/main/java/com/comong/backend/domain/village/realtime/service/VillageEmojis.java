@@ -12,7 +12,25 @@ import java.util.Set;
 public final class VillageEmojis {
 
     public static final Set<String> ALLOWED =
-            Set.of("안녕", "따라와", "좋아", "고마워", "힘내", "❓", "😄", "😢", "👍", "❤️");
+            Set.of(
+                    "안녕",
+                    "따라와",
+                    "좋아",
+                    "고마워",
+                    "😄",
+                    "😢",
+                    "👍",
+                    "❤️",
+                    "❓",
+                    "taekwondo-belt:WHITE",
+                    "taekwondo-belt:YELLOW",
+                    "taekwondo-belt:ORANGE",
+                    "taekwondo-belt:GREEN",
+                    "taekwondo-belt:BLUE",
+                    "taekwondo-belt:PURPLE",
+                    "taekwondo-belt:BROWN",
+                    "taekwondo-belt:RED",
+                    "taekwondo-belt:BLACK");
 
     private VillageEmojis() {}
 

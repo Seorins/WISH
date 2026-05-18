@@ -192,6 +192,10 @@ export class ArtSelectScene extends Phaser.Scene {
   private backgroundDisplayArea!: BackgroundDisplayArea
 
   private readonly handlePointerDown = (pointer: Phaser.Input.Pointer) => {
+    if (this.emojiPalette?.consumePointerDown(pointer)) {
+      return
+    }
+
     if (this.handleObstacleEditorPointerDown(pointer)) {
       return
     }

@@ -53,7 +53,10 @@ public class PhotoBoothService {
 
     @Transactional
     public PhotoBoothResponse create(
-            Long userId, PhotoBoothCreateRequest request, MultipartFile file) {
+            Long userId,
+            PhotoBoothCreateRequest request,
+            MultipartFile file,
+            MultipartFile thumbnail) {
         PatientProfile profile =
                 patientProfileService
                         .findEntityByUserId(userId)
@@ -64,6 +67,7 @@ public class PhotoBoothService {
 
         StoredImage stored = imageStorage.upload(file);
         registerCleanupOnRollback(stored.url());
+        String thumbnailUrl = uploadThumbnailOrNull(thumbnail);
 
         PhotoBoothPhoto saved =
                 photoRepository.save(
@@ -71,6 +75,7 @@ public class PhotoBoothService {
                                 .patientProfile(profile)
                                 .frameId(request.frameId())
                                 .imageUrl(stored.url())
+                                .thumbnailUrl(thumbnailUrl)
                                 .isPublic(request.isPublic())
                                 .build());
         return PhotoBoothResponse.from(saved, imageStorage);
@@ -108,8 +113,10 @@ public class PhotoBoothService {
         accessChecker.verifyOwner(photo, userId);
 
         String imageUrl = photo.getImageUrl();
+        String thumbnailUrl = photo.getThumbnailUrl();
         photoRepository.delete(photo);
         registerImageDeleteAfterCommit(imageUrl);
+        registerImageDeleteAfterCommit(thumbnailUrl);
     }
 
     private PhotoBoothPhoto findOrThrow(Long id) {
@@ -117,6 +124,20 @@ public class PhotoBoothService {
                 .findByIdWithProfileAndUser(id)
                 .orElseThrow(
                         () -> new BusinessException(PhotoBoothErrorCode.PHOTO_BOOTH_NOT_FOUND));
+    }
+
+    private String uploadThumbnailOrNull(MultipartFile thumbnail) {
+        if (!isPresent(thumbnail)) {
+            return null;
+        }
+        try {
+            StoredImage storedThumbnail = imageStorage.upload(thumbnail);
+            registerCleanupOnRollback(storedThumbnail.url());
+            return storedThumbnail.url();
+        } catch (RuntimeException ex) {
+            log.warn("포토부스 썸네일 업로드 실패. 원본 이미지로 대체합니다.", ex);
+            return null;
+        }
     }
 
     /** Create 용 — 트랜잭션 롤백 시 업로드 파일 삭제. */
@@ -149,5 +170,9 @@ public class PhotoBoothService {
         } catch (RuntimeException ex) {
             log.warn("{}: {}", failureMessage, url, ex);
         }
+    }
+
+    private static boolean isPresent(MultipartFile file) {
+        return file != null && !file.isEmpty();
     }
 }

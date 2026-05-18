@@ -410,7 +410,13 @@ export function PhotoGalleryOverlay({ open, onClose }: PhotoGalleryOverlayProps)
                   onClick={() => setSelected(photo)}
                 >
                   <div style={styles.thumbWrap}>
-                    <img src={photo.imageUrl} alt="" style={styles.thumb} loading="lazy" />
+                    <img
+                      src={photo.thumbnailUrl ?? photo.imageUrl}
+                      alt=""
+                      style={styles.thumb}
+                      loading="lazy"
+                      decoding="async"
+                    />
                   </div>
                   <div style={styles.cardFooter}>
                     <span style={styles.author}>{photo.author.nickname}</span>

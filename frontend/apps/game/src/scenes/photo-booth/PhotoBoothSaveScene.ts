@@ -41,7 +41,7 @@ export class PhotoBoothSaveScene extends Phaser.Scene {
   private captures: string[] = []
   private allCaptures: string[] = []
   private slotDisplays: SlotDisplay[] = []
-  private isPublic = false
+  private isPublic = true
   private publicToggleBgGraphics!: Phaser.GameObjects.Graphics
   private publicToggleHitArea!: Phaser.GameObjects.Rectangle
   private publicToggleKnob!: Phaser.GameObjects.Arc
@@ -69,7 +69,7 @@ export class PhotoBoothSaveScene extends Phaser.Scene {
     this.captures = data.captures ?? []
     this.allCaptures = data.allCaptures ?? data.captures ?? []
     this.slotDisplays = []
-    this.isPublic = false
+    this.isPublic = true
 
     this.add.rectangle(0, 0, vw, vh, 0xffffff).setOrigin(0)
 
@@ -170,10 +170,10 @@ export class PhotoBoothSaveScene extends Phaser.Scene {
       })
       .setOrigin(0, 0)
     this.publicLabel = this.add
-      .text(panelLeftX + 24, cardCenterY - cardH / 2 + 56, '비공개 (나만 보기)', {
+      .text(panelLeftX + 24, cardCenterY - cardH / 2 + 56, '공개 (모두 보기)', {
         fontFamily: FONT,
         fontSize: '14px',
-        color: '#b39e8d',
+        color: '#ff7aa3',
         resolution: 2,
       })
       .setOrigin(0, 0)
@@ -196,7 +196,7 @@ export class PhotoBoothSaveScene extends Phaser.Scene {
       .setInteractive({ useHandCursor: true })
     const knobOffset = (this.toggleW - this.toggleH) / 2
     this.publicToggleKnob = this.add.circle(
-      this.toggleCenterX - knobOffset,
+      this.toggleCenterX + (this.isPublic ? knobOffset : -knobOffset),
       this.toggleCenterY,
       this.toggleH / 2 - 3,
       0xffffff,
@@ -238,7 +238,7 @@ export class PhotoBoothSaveScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.cleanupTextures())
 
     document.fonts
-      .load("32px 'Jua'", '5 저장하기 다운로드 공개 비공개 필터 다시 고르기 확인 나만 보기')
+      .load("32px 'Jua'", '5 저장하기 다운로드 공개 비공개 필터 다시 고르기 확인 나만 모두 보기')
       .then(() => {
         if (!this.scene.isActive()) return
         this.children.list.forEach(obj => {
@@ -354,6 +354,26 @@ export class PhotoBoothSaveScene extends Phaser.Scene {
     })
   }
 
+  private canvasToThumbnailBlob(canvas: HTMLCanvasElement): Promise<Blob | null> {
+    const maxSide = 420
+    const scale = Math.min(1, maxSide / Math.max(canvas.width, canvas.height))
+    const thumbnailCanvas = document.createElement('canvas')
+    thumbnailCanvas.width = Math.max(1, Math.round(canvas.width * scale))
+    thumbnailCanvas.height = Math.max(1, Math.round(canvas.height * scale))
+
+    const ctx = thumbnailCanvas.getContext('2d')
+    if (!ctx) return Promise.resolve(null)
+    ctx.imageSmoothingEnabled = true
+    ctx.imageSmoothingQuality = 'high'
+    ctx.fillStyle = '#ffffff'
+    ctx.fillRect(0, 0, thumbnailCanvas.width, thumbnailCanvas.height)
+    ctx.drawImage(canvas, 0, 0, thumbnailCanvas.width, thumbnailCanvas.height)
+
+    return new Promise(resolve => {
+      thumbnailCanvas.toBlob(blob => resolve(blob), 'image/jpeg', 0.82)
+    })
+  }
+
   private async downloadComposite() {
     const c = await this.buildCompositeCanvas()
     if (!c) return
@@ -398,11 +418,15 @@ export class PhotoBoothSaveScene extends Phaser.Scene {
       const canvas = await this.buildCompositeCanvas()
       const blob = canvas ? await this.canvasToBlob(canvas) : null
       if (blob) {
+        const thumbnail = canvas ? await this.canvasToThumbnailBlob(canvas) : null
+        const timestamp = Date.now()
         await createPhotoBooth({
           frameId: this.frame.id,
           isPublic: this.isPublic,
           image: blob,
-          filename: `photo-booth-${this.frame.id}-${Date.now()}.png`,
+          filename: `photo-booth-${this.frame.id}-${timestamp}.png`,
+          thumbnail,
+          thumbnailFilename: `photo-booth-${this.frame.id}-${timestamp}-thumb.jpg`,
         })
         if (this.isPublic) {
           await queryClient.invalidateQueries({ queryKey: [PUBLIC_PHOTO_BOOTHS_QUERY_KEY] })

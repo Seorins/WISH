@@ -17,15 +17,22 @@ public record PhotoBoothResponse(
         Long id,
         String frameId,
         String imageUrl,
+        String thumbnailUrl,
         boolean isPublic,
         LocalDateTime createdAt,
         LocalDateTime updatedAt) {
 
     public static PhotoBoothResponse from(PhotoBoothPhoto photo, ImageStorage imageStorage) {
+        String imageUrl = imageStorage.toPublicUrl(photo.getImageUrl());
+        String thumbnailUrl =
+                photo.getThumbnailUrl() == null || photo.getThumbnailUrl().isBlank()
+                        ? imageUrl
+                        : imageStorage.toPublicUrl(photo.getThumbnailUrl());
         return new PhotoBoothResponse(
                 photo.getId(),
                 photo.getFrameId(),
-                imageStorage.toPublicUrl(photo.getImageUrl()),
+                imageUrl,
+                thumbnailUrl,
                 photo.isPublic(),
                 photo.getCreatedAt(),
                 photo.getUpdatedAt());

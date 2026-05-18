@@ -49,7 +49,14 @@ export type QuizGameStartedResponse = {
 }
 
 export type StartQuizRoomRequest = {
-  totalRounds?: 3 | 6 | 9
+  totalRounds?: 3 | 6 | 9 | 12 | 15
+}
+
+export type QuizRoomListItem = {
+  roomId: string
+  hostNickname: string
+  memberCount: number
+  maxPlayers: number
 }
 
 export async function createQuizRoom(): Promise<QuizRoomSnapshot> {
@@ -72,6 +79,11 @@ export async function getQuizRoom(roomId: string): Promise<QuizRoomSnapshot> {
   const response = await apiClient.get<ApiResponse<QuizRoomSnapshot>>(
     `/quiz/rooms/${encodeURIComponent(roomId)}`,
   )
+  return response.data.data
+}
+
+export async function getWaitingQuizRooms(): Promise<QuizRoomListItem[]> {
+  const response = await apiClient.get<ApiResponse<QuizRoomListItem[]>>('/quiz/rooms/waiting')
   return response.data.data
 }
 

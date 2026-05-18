@@ -18,6 +18,10 @@ import {
   updateGameSettings,
 } from '@/game/settings/gameSettings'
 import { syncSceneBgmVolume } from '@/game/systems/sceneBgm'
+import {
+  getCachedPatientNickname,
+  prefetchPatientNickname,
+} from '@/features/exerciseSessions/patientProfile'
 
 type SettingsMenu = {
   isOpen: () => boolean
@@ -84,6 +88,8 @@ const COLORS = {
 
 const LABELS = {
   title: '\uC124\uC815',
+  nickname: '\uB2C9\uB124\uC784',
+  nicknameEmpty: '\uC124\uC815 \uC548 \uB428',
   sound: '\uC0AC\uC6B4\uB4DC',
   bgm: '\uBC30\uACBD\uC74C\uC545',
   on: 'ON',
@@ -106,12 +112,18 @@ export function createSettingsMenu(
   let selectedCharacterId = getSelectedPlayerCharacterId()
   let selectedOutfitId = getSelectedPlayerOutfitId(selectedCharacterId)
   let outfitCarouselIndex = getOutfitIndex(selectedCharacterId, selectedOutfitId)
+  let currentNickname = getCachedPatientNickname()
   let backdrop: Phaser.GameObjects.Rectangle | null = null
   let modal: Phaser.GameObjects.Container | null = null
   let clickZones: ClickZone[] = []
   let sliderZones: SliderZone[] = []
   let activeSlider: SliderZone | null = null
   let previousTopOnly: boolean | null = null
+
+  const handleNicknameUpdated = (payload: { nickname: string }) => {
+    currentNickname = payload.nickname
+  }
+  scene.game.events.on('settings:nickname-updated', handleNicknameUpdated)
 
   function toggleButton() {
     if (modal) {
@@ -183,6 +195,13 @@ export function createSettingsMenu(
     settings = getGameSettings()
     selectedCharacterId = getSelectedPlayerCharacterId()
     selectedOutfitId = getSelectedPlayerOutfitId(selectedCharacterId)
+    currentNickname = getCachedPatientNickname()
+
+    void prefetchPatientNickname(nickname => {
+      if (currentNickname === nickname) return
+      currentNickname = nickname
+      if (modal) openSettings()
+    })
 
     const container = createOverlay()
     const { width, height } = scene.scale
@@ -196,7 +215,8 @@ export function createSettingsMenu(
     const labelW = Math.min(132, contentW * 0.28)
     const rowH = 58
     const rowGap = 14
-    const soundY = panelTop + 124
+    const nicknameY = panelTop + 124
+    const soundY = nicknameY + rowH + rowGap
     const bgmY = soundY + rowH + rowGap
     const speedY = bgmY + rowH + rowGap
     const outfitY = speedY + rowH + rowGap
@@ -215,6 +235,22 @@ export function createSettingsMenu(
       }),
     )
     addClickZone(closeX, closeY, 34, 34, close)
+
+    container.add(
+      createNicknameRow(scene, contentLeft, nicknameY, contentW, rowH, labelW, currentNickname),
+    )
+    const nicknameButtonW = 104
+    const nicknameButtonH = 40
+    addClickZone(
+      contentLeft + contentW - nicknameButtonW / 2 - 16,
+      nicknameY,
+      nicknameButtonW,
+      nicknameButtonH,
+      () => {
+        close({ notify: false })
+        scene.game.events.emit('settings:nickname-edit-open', { current: currentNickname })
+      },
+    )
 
     const masterSlider = createSlider(scene, {
       x: contentLeft,
@@ -455,6 +491,7 @@ export function createSettingsMenu(
 
   applyMasterVolume(scene, settings.masterVolume)
   scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+    scene.game.events.off('settings:nickname-updated', handleNicknameUpdated)
     close()
   })
 
@@ -467,7 +504,7 @@ export function createSettingsMenu(
 
 function getPanelSize(scene: Phaser.Scene, mode: 'settings' | 'outfits') {
   const maxW = mode === 'settings' ? 620 : 580
-  const maxH = mode === 'settings' ? 500 : 520
+  const maxH = mode === 'settings' ? 580 : 520
   return {
     panelW: Math.min(maxW, scene.scale.width * 0.82),
     panelH: Math.min(maxH, scene.scale.height * 0.84),
@@ -671,6 +708,55 @@ function createSpeedRow(
     )
   })
 
+  return container
+}
+
+function createNicknameRow(
+  scene: Phaser.Scene,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  labelWidth: number,
+  nickname: string | null,
+) {
+  const container = scene.add.container(0, 0)
+  const buttonW = 104
+  const buttonH = 40
+  container.add(createRowBackground(scene, x, y, width, height))
+  container.add(
+    scene.add
+      .text(x + 22, y, LABELS.nickname, {
+        fontFamily: FONT_FAMILY,
+        fontSize: '18px',
+        color: colorString(COLORS.text),
+        fontStyle: 'bold',
+      })
+      .setOrigin(0, 0.5),
+  )
+  const valueLeft = x + labelWidth + 18
+  const valueRight = x + width - buttonW - 28
+  const valueWidth = Math.max(40, valueRight - valueLeft)
+  const displayValue = nickname ?? LABELS.nicknameEmpty
+  container.add(
+    scene.add
+      .text(valueLeft, y, displayValue, {
+        fontFamily: FONT_FAMILY,
+        fontSize: '16px',
+        color: colorString(nickname ? COLORS.accentDark : COLORS.mutedText),
+        fontStyle: 'bold',
+        fixedWidth: valueWidth,
+      })
+      .setOrigin(0, 0.5),
+  )
+  container.add(
+    createTextButton(scene, x + width - buttonW / 2 - 16, y, buttonW, buttonH, LABELS.change, {
+      fillColor: COLORS.primary,
+      borderColor: COLORS.primaryBorder,
+      textColor: 0xffffff,
+      fontSize: 16,
+    }),
+  )
   return container
 }
 

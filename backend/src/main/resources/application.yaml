@@ -77,7 +77,7 @@ app:
     quiz:
       enabled: false
       min-players: 2
-      max-players: 4
+      max-players: 6
       round-duration-seconds: 60
       empty-room-grace-seconds: 60
 

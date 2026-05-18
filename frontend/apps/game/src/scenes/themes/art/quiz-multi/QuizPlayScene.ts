@@ -30,25 +30,54 @@ const SLOT_BG_EMPTY = 0x435a7d
 const TOOLBAR_BG = 0x3d557d
 const CHIP_BG = 0xffe9c2
 const STROKE_THROTTLE_MS = 60
+const MIN_VISIBLE_PLAYER_SLOTS = 6
 /** 추측 말풍선 표시 시간 — 정답/오답 동일. 너무 길면 화면 혼잡, 너무 짧으면 못 봄. */
 const BUBBLE_TTL_MS = 3200
 
 /**
- * 플레이어 슬롯 아바타 — themes/art/ui/char1~4.png 의 상반신만 setCrop 으로 잘라 노출. 원형 배경 없이 그대로 노출.
- * joinOrder 기준으로 1~4 순환.
+ * 플레이어 슬롯 아바타 — themes/art/ui/char1~9.png 의 상반신만 setCrop 으로 잘라 노출.
+ * roomId + joinOrder 기준으로 방마다 섞인 순서를 만들되, 모든 클라이언트가 같은 캐릭터를 보도록 고정 매핑한다.
  */
-const SLOT_CHAR_NUMBERS = [1, 2, 3, 4] as const
+const SLOT_CHAR_NUMBERS = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const
 /** 이미지 상단에서 얼마만큼 잘라 상반신만 보일지 — 헤더/머리/어깨까지 포함. */
 const SLOT_CHAR_CROP_RATIO = 0.55
+const SLOT_CHAR_STEPS = [1, 2, 4, 5, 7, 8] as const
 
-function slotCharKey(joinOrder: number): string {
-  const n = SLOT_CHAR_NUMBERS[(joinOrder < 0 ? 0 : joinOrder) % SLOT_CHAR_NUMBERS.length]
-  return `quiz-avatar-char${n}`
+function slotCharKey(charNumber: number): string {
+  return `quiz-avatar-char${charNumber}`
 }
 
-function slotCharPath(joinOrder: number): string {
-  const n = SLOT_CHAR_NUMBERS[(joinOrder < 0 ? 0 : joinOrder) % SLOT_CHAR_NUMBERS.length]
-  return `images/themes/art/ui/char${n}.png`
+function slotCharPath(charNumber: number): string {
+  return `images/themes/art/ui/char${charNumber}.png`
+}
+
+function hashString(value: string): number {
+  let hash = 2166136261
+  for (let i = 0; i < value.length; i++) {
+    hash = Math.imul(hash ^ value.charCodeAt(i), 16777619)
+  }
+  return hash >>> 0
+}
+
+function slotCharNumber(joinOrder: number, roomId: string): number {
+  const seed = hashString(roomId || 'quiz-room')
+  const normalizedOrder = Math.max(0, Math.trunc(joinOrder))
+  const step = SLOT_CHAR_STEPS[(seed >>> 8) % SLOT_CHAR_STEPS.length]
+  const index = (seed + normalizedOrder * step) % SLOT_CHAR_NUMBERS.length
+  return SLOT_CHAR_NUMBERS[index]
+}
+
+function slotCharKeyForMember(joinOrder: number, roomId: string): string {
+  return slotCharKey(slotCharNumber(joinOrder, roomId))
+}
+
+function slotIndicesForSide(maxPlayers: number, side: 'left' | 'right'): number[] {
+  const start = side === 'left' ? 0 : 1
+  const indices: number[] = []
+  for (let i = start; i < maxPlayers; i += 2) {
+    indices.push(i)
+  }
+  return indices
 }
 
 // 검정을 맨 앞에 둬서 기본 펜 색으로 사용. 그림 그릴 때 가장 흔하게 쓰는 색.
@@ -111,8 +140,8 @@ export class QuizPlayScene extends Phaser.Scene {
    */
   private activeBubbles = new Map<number, { text: string; correct: boolean; expiresAt: number }>()
   private roundEnded = false
-  /** 정답 발표 배너 — guess_submitted(correct=true) 도착 시 화면 중앙에 짧게 뜬다. */
-  private correctBanner: Phaser.GameObjects.Container | null = null
+  /** 정답 공개 배너 — round_ended 도착 시 화면 중앙에 제시어를 크게 띄운다. */
+  private answerBanner: Phaser.GameObjects.Container | null = null
   /**
    * 라운드 타임아웃 후 BE 가 round_ended/game_finished 를 못 보냈을 때를 대비한 reconcile.
    * 타이머가 0 이 된 시각 + 마지막 시도 시각 을 기억해 4초마다 1회씩 REST 로 룸 상태를 끌어와
@@ -152,8 +181,8 @@ export class QuizPlayScene extends Phaser.Scene {
     this.finalMembers = null
     this.isLeaving = false
     this.guessOverlayOpen = false
-    this.correctBanner?.destroy()
-    this.correctBanner = null
+    this.answerBanner?.destroy()
+    this.answerBanner = null
     this.timerExpiredAt = null
     this.roundEndedAt = null
     this.lastReconcileAt = 0
@@ -171,10 +200,10 @@ export class QuizPlayScene extends Phaser.Scene {
       )
     }
     // 슬롯 아바타 — char1~4 (art/ui) 를 미리 로드. setCrop 으로 상반신만 노출.
-    SLOT_CHAR_NUMBERS.forEach((_, index) => {
-      const key = slotCharKey(index)
+    SLOT_CHAR_NUMBERS.forEach(charNumber => {
+      const key = slotCharKey(charNumber)
       if (!this.textures.exists(key)) {
-        this.load.image(key, assetPath(slotCharPath(index)))
+        this.load.image(key, assetPath(slotCharPath(charNumber)))
       }
     })
   }
@@ -246,6 +275,11 @@ export class QuizPlayScene extends Phaser.Scene {
     const canvasAreaTop = padding + topBarH + padding
     const canvasAreaBottom = h - padding - bottomBarH - padding
     const canvasAreaH = canvasAreaBottom - canvasAreaTop
+    const maxPlayerSlots = Math.max(
+      MIN_VISIBLE_PLAYER_SLOTS,
+      this.snapshot.maxPlayers,
+      this.snapshot.members.length,
+    )
 
     // 캔버스/하단 도구바 먼저 그리고, 슬롯(=말풍선 포함) 을 나중에 그려 z-order 우위 확보.
     // 게스트가 보낸 추측 말풍선은 슬롯 옆으로 펼쳐져 캔버스 영역과 겹치는데, 슬롯이 캔버스보다
@@ -255,14 +289,22 @@ export class QuizPlayScene extends Phaser.Scene {
     this.drawCanvasArea(container, canvasX, canvasAreaTop, canvasW, canvasAreaH)
     this.drawBottomBar(container, padding, h - padding - bottomBarH, w - padding * 2, bottomBarH)
     this.drawTopBar(container, padding, padding, w - padding * 2, topBarH)
-    this.drawSidebar(container, padding, canvasAreaTop, sidebarW, canvasAreaH, [0, 2], 'left')
+    this.drawSidebar(
+      container,
+      padding,
+      canvasAreaTop,
+      sidebarW,
+      canvasAreaH,
+      slotIndicesForSide(maxPlayerSlots, 'left'),
+      'left',
+    )
     this.drawSidebar(
       container,
       w - padding - sidebarW,
       canvasAreaTop,
       sidebarW,
       canvasAreaH,
-      [1, 3],
+      slotIndicesForSide(maxPlayerSlots, 'right'),
       'right',
     )
 
@@ -317,14 +359,21 @@ export class QuizPlayScene extends Phaser.Scene {
       .setOrigin(0, 0.5)
     container.add(turnLabel)
 
-    const pipGap = 18
+    const promptW = Math.min(420, w * 0.36)
+    const promptLeft = x + w / 2 - promptW / 2
     const pipStart = x + 170
+    const pipAvailableW = Math.max(72, promptLeft - pipStart - 16)
+    const pipGap =
+      this.snapshot.totalRounds > 1
+        ? Math.max(7, Math.min(18, pipAvailableW / (this.snapshot.totalRounds - 1)))
+        : 18
+    const pipRadius = Math.max(3, Math.min(5, pipGap * 0.32))
     for (let i = 0; i < this.snapshot.totalRounds; i++) {
       const active = i + 1 <= this.snapshot.roundNumber
       const pip = this.add.circle(
         pipStart + i * pipGap,
         y + h - 17,
-        5,
+        pipRadius,
         active ? 0xffd36b : 0x5b6680,
         1,
       )
@@ -339,7 +388,6 @@ export class QuizPlayScene extends Phaser.Scene {
       : this.wordLength
         ? `${this.wordLength}글자`
         : '그림을 맞춰봐!'
-    const promptW = Math.min(420, w * 0.36)
     const promptBg = this.add.graphics()
     promptBg.fillStyle(0x121a2b, 1)
     promptBg.fillRoundedRect(x + w / 2 - promptW / 2, y + 10, promptW, h - 20, 20)
@@ -442,9 +490,10 @@ export class QuizPlayScene extends Phaser.Scene {
     }
 
     // 캐릭터(art/ui/char1~4) 의 상반신만 setCrop 으로 잘라 표시. 원형 배경/마스크 없이 그대로 노출.
-    const avatarSize = Math.min(96, w * 0.7)
-    const avatarY = y + Math.max(58, h * 0.34)
-    const avatarKey = slotCharKey(member.joinOrder)
+    const avatarSize = Math.min(96, w * 0.7, Math.max(56, h * 0.46))
+    const avatarY = y + Math.max(46, h * 0.32)
+    const nameY = y + h - Math.min(58, Math.max(48, h * 0.38))
+    const avatarKey = slotCharKeyForMember(member.joinOrder, this.snapshot.roomId)
     if (this.textures.exists(avatarKey)) {
       const source = this.textures.get(avatarKey).getSourceImage() as HTMLImageElement
       const srcW = source.width || 1
@@ -461,7 +510,7 @@ export class QuizPlayScene extends Phaser.Scene {
     }
     container.add(
       this.add
-        .text(x + w / 2, y + h - 58, member.nickname, {
+        .text(x + w / 2, nameY, member.nickname, {
           fontFamily: FONT_FAMILY,
           fontSize: '16px',
           color: isDrawer ? '#1a0e05' : '#ffffff',
@@ -609,68 +658,206 @@ export class QuizPlayScene extends Phaser.Scene {
   }
 
   /**
-   * 누군가 정답을 맞췄을 때 캔버스 중앙 위쪽에 큼지막한 배너로 알림. 자동으로 2.4s 뒤 사라짐.
-   * 슬롯 말풍선 "정답!" 하나만으론 출제자/다른 정답자가 놓치기 쉬워서 배너로 보강한다.
+   * 라운드가 끝났을 때 정답 단어를 화면 중앙에 크게 공개한다.
+   * 맞춘 사람이 있으면 함께 표시하고, 시간초과면 정답만 보여준다.
    */
-  private showCorrectBanner(nickname: string) {
-    this.correctBanner?.destroy()
+  private showAnswerBanner(word: string, nickname: string | null) {
+    const answer = word.trim()
+    if (!answer) return
+
+    this.answerBanner?.destroy()
     const w = this.scale.width
     const h = this.scale.height
     const cx = w / 2
-    const cy = h * 0.34
+    const cy = h * 0.38
     // 씬 최상위에 직접 add — root(depth 1) 안에 넣고 setDepth(100) 해봐야 Phaser Container 는
     // 자식 자동 depth-sort 를 안 해서 add 순서대로 그려진다. 결과적으로 layoutContainer 가
     // 배너 위를 덮어 안 보이던 문제. 씬 root display list 는 depth 로 정렬되므로 여기다 둔다.
     const container = this.add.container(cx, cy).setDepth(100)
-    this.correctBanner = container
+    this.answerBanner = container
 
-    // 배경 + 외곽선. 폭은 문구에 맞춰 dynamic, 높이는 고정.
-    const label = `정답!  ${nickname} 님이 맞췄어요`
-    const text = this.add
-      .text(0, 0, label, {
+    // 정답자가 있을 땐 황금 톤(승리감), 시간초과일 땐 차분한 cream 톤(공개감) 으로 분기.
+    const hasWinner = !!nickname
+    const palette = hasWinner
+      ? {
+          shadow: 0x000000,
+          base: 0xc0701c, // 두께 표현용 짙은 주황
+          fill: 0xffb84a, // 메인 황금 주황
+          highlight: 0xffe28a, // 윗 하이라이트
+          border: 0x6a3a18, // 짙은 갈색 보더
+          title: '#fff7df',
+          titleStroke: '#6a3a18',
+          answer: '#ffffff',
+          answerStroke: '#6a3a18',
+          banner: 0xffd96b,
+        }
+      : {
+          shadow: 0x000000,
+          base: 0xa8845a,
+          fill: 0xfff3da,
+          highlight: 0xfff8e7,
+          border: 0x6a4a26,
+          title: '#3a2614',
+          titleStroke: '#fff8e7',
+          answer: '#3a2614',
+          answerStroke: '#fff8e7',
+          banner: 0xa8845a,
+        }
+
+    const maxBannerW = Math.max(320, Math.min(w * 0.86, 820))
+    const titleLabel = hasWinner ? `🎉  ${nickname}  정답!` : '⏱  정답 공개'
+    const titleText = this.add
+      .text(0, 0, titleLabel, {
         fontFamily: FONT_FAMILY,
-        fontSize: '36px',
-        color: '#1a4d20',
+        fontSize: '30px',
+        color: palette.title,
         fontStyle: 'bold',
+        stroke: palette.titleStroke,
+        strokeThickness: 4,
       })
       .setOrigin(0.5)
-    const paddingX = 44
-    const paddingY = 24
-    const bw = text.width + paddingX * 2
-    const bh = text.height + paddingY * 2
-    const radius = bh / 2
 
+    let answerFontSize = Math.min(92, Math.max(54, Math.floor(w * 0.072)))
+    const answerText = this.add
+      .text(0, 0, answer, {
+        fontFamily: FONT_FAMILY,
+        fontSize: `${answerFontSize}px`,
+        color: palette.answer,
+        fontStyle: 'bold',
+        stroke: palette.answerStroke,
+        strokeThickness: 8,
+        shadow: { offsetX: 0, offsetY: 3, color: '#000', blur: 6, fill: true },
+      })
+      .setOrigin(0.5)
+
+    const maxTextW = maxBannerW - 96
+    if (answerText.width > maxTextW) {
+      answerFontSize = Math.max(40, Math.floor(answerFontSize * (maxTextW / answerText.width)))
+      answerText.setFontSize(`${answerFontSize}px`)
+      answerText.setStroke(palette.answerStroke, Math.max(5, Math.floor(answerFontSize * 0.1)))
+    }
+
+    // 점수 pill — 정답자 한정. "+2점" 작은 알약 표시로 게임 보상감.
+    const scorePill = hasWinner ? this.add.container(0, 0) : null
+    if (scorePill) {
+      const pillW = 86
+      const pillH = 34
+      const pg = this.add.graphics()
+      pg.fillStyle(0x6a3a18, 1)
+      pg.fillRoundedRect(-pillW / 2, -pillH / 2 + 2, pillW, pillH, pillH / 2)
+      pg.fillStyle(0xfff7df, 1)
+      pg.fillRoundedRect(-pillW / 2, -pillH / 2, pillW, pillH, pillH / 2)
+      const pt = this.add
+        .text(0, 0, '+2점', {
+          fontFamily: FONT_FAMILY,
+          fontSize: '17px',
+          color: '#8a3d10',
+          fontStyle: 'bold',
+        })
+        .setOrigin(0.5)
+      scorePill.add([pg, pt])
+    }
+
+    // 콘텐츠 전체 높이를 먼저 계산해서 -totalH/2 부터 cursor 식으로 쌓아 올린다.
+    // pill 을 위치 계산에 안 넣었던 이전 안은 위/아래 패딩이 비대칭이었음.
+    const titleGap = 8
+    const scoreGap = 12
+    const pillH = 34
+    const totalH =
+      titleText.height + titleGap + answerText.height + (scorePill ? scoreGap + pillH : 0)
+    let cursor = -totalH / 2
+    titleText.setPosition(0, cursor + titleText.height / 2)
+    cursor += titleText.height + titleGap
+    answerText.setPosition(0, cursor + answerText.height / 2)
+    cursor += answerText.height
+    if (scorePill) {
+      cursor += scoreGap
+      scorePill.setPosition(0, cursor + pillH / 2)
+    }
+
+    const paddingX = 56
+    const paddingY = 34
+    const contentH = totalH
+    const contentW = Math.max(titleText.width, answerText.width, 280)
+    const bw = Math.min(maxBannerW, Math.max(contentW + paddingX * 2, 360))
+    const bh = contentH + paddingY * 2
+    const radius = Math.min(38, bh / 2)
+
+    // 카드 본체 — 1) drop shadow 다층, 2) 짙은 base(두께감), 3) 메인 fill, 4) 윗 하이라이트, 5) 두꺼운 보더.
     const g = this.add.graphics()
-    g.fillStyle(0x000000, 0.28)
-    g.fillRoundedRect(-bw / 2 + 4, -bh / 2 + 8, bw, bh, radius)
-    g.fillStyle(0xdcf6c4, 1)
-    g.fillRoundedRect(-bw / 2, -bh / 2, bw, bh, radius)
-    g.lineStyle(4, 0x4d8a2a, 1)
-    g.strokeRoundedRect(-bw / 2, -bh / 2, bw, bh, radius)
-    container.add([g, text])
+    for (let i = 0; i < 5; i++) {
+      const spread = i * 2.4
+      g.fillStyle(palette.shadow, 0.07)
+      g.fillRoundedRect(
+        -bw / 2 - spread,
+        -bh / 2 + 10 + spread * 0.6,
+        bw + spread * 2,
+        bh + spread,
+        radius + spread,
+      )
+    }
+    // 두께(아래쪽이 살짝 더 진하게 깔리는 3D 효과)
+    g.fillStyle(palette.base, 1)
+    g.fillRoundedRect(-bw / 2, -bh / 2 + 6, bw, bh, radius)
+    // 메인 면
+    g.fillStyle(palette.fill, 1)
+    g.fillRoundedRect(-bw / 2, -bh / 2, bw, bh - 6, radius)
+    // 윗 하이라이트 — 카드 상단에 살짝 밝은 띠.
+    g.fillStyle(palette.highlight, 0.7)
+    g.fillRoundedRect(-bw / 2 + 6, -bh / 2 + 6, bw - 12, bh * 0.35, radius - 4)
+    // 보더
+    g.lineStyle(4, palette.border, 1)
+    g.strokeRoundedRect(-bw / 2, -bh / 2, bw, bh - 6, radius)
 
-    // 등장: 위에서 살짝 내려오며 페이드 인 → 잠깐 머무름 → 페이드 아웃.
-    // 동일 타겟에 alpha 트윈 두 개를 동시에 add 하면 같은 프레임에서 서로 덮어써 alpha 가
-    // 0 으로 고정되는 버그가 있다. 페이드 아웃은 delayedCall 로 분리.
+    container.add(g)
+
+    // 양옆 별 장식 — 정답자가 있을 때만. emoji 사용 (이전 게임씬과 톤 통일).
+    if (hasWinner) {
+      const starL = this.add
+        .text(-bw / 2 + 28, -bh / 2 + 26, '⭐', { fontSize: '30px' })
+        .setOrigin(0.5)
+      const starR = this.add
+        .text(bw / 2 - 28, -bh / 2 + 26, '⭐', { fontSize: '30px' })
+        .setOrigin(0.5)
+      container.add([starL, starR])
+      // 별이 살짝 흔들리는 트윈 — 게임 느낌 부스트.
+      this.tweens.add({
+        targets: [starL, starR],
+        angle: { from: -10, to: 10 },
+        duration: 320,
+        yoyo: true,
+        repeat: 3,
+        ease: 'Sine.inOut',
+      })
+    }
+
+    container.add(titleText)
+    container.add(answerText)
+    if (scorePill) container.add(scorePill)
+
+    // 등장: 작게 시작해서 살짝 오버슈팅하며 펑! 가운데로 — 게임 보상 모먼트의 통통튀는 느낌.
     container.setAlpha(0)
-    container.setY(cy - 20)
+    container.setScale(0.5)
+    container.setY(cy - 14)
     this.tweens.add({
       targets: container,
       alpha: 1,
+      scale: 1,
       y: cy,
-      duration: 220,
-      ease: 'Back.out',
+      duration: 360,
+      ease: 'Back.easeOut',
     })
-    this.time.delayedCall(2200, () => {
+    this.time.delayedCall(1700, () => {
       if (!container.active) return
       this.tweens.add({
         targets: container,
         alpha: 0,
-        duration: 320,
+        scale: 0.92,
+        duration: 240,
         ease: 'Sine.in',
         onComplete: () => {
           container.destroy()
-          if (this.correctBanner === container) this.correctBanner = null
+          if (this.answerBanner === container) this.answerBanner = null
         },
       })
     })
@@ -1026,6 +1213,8 @@ export class QuizPlayScene extends Phaser.Scene {
         event.message ?? '게임이 중단되어 로비로 돌아왔어요.',
       )
     } else if (event.type === 'round_started') {
+      this.answerBanner?.destroy()
+      this.answerBanner = null
       this.snapshot = {
         ...this.snapshot,
         status: event.status,
@@ -1055,11 +1244,14 @@ export class QuizPlayScene extends Phaser.Scene {
         correct: event.correct,
         expiresAt: Date.now() + BUBBLE_TTL_MS,
       })
-      if (event.correct) {
-        this.showCorrectBanner(event.nickname)
-      }
       this.drawLayout()
     } else if (event.type === 'round_ended') {
+      const correctMember =
+        event.correctUserId === undefined
+          ? null
+          : (event.members.find(member => member.userId === event.correctUserId) ??
+            this.snapshot.members.find(member => member.userId === event.correctUserId) ??
+            null)
       this.roundEnded = true
       this.snapshot = { ...this.snapshot, members: event.members }
       // 라운드 종료 시 잔여 말풍선 모두 정리 (정답자 말풍선은 그대로 두고 싶다면 정답자 user 만 유지하도록 변경 가능).
@@ -1068,7 +1260,10 @@ export class QuizPlayScene extends Phaser.Scene {
       this.timerExpiredAt = null
       this.roundEndedAt = Date.now()
       this.drawLayout()
+      this.showAnswerBanner(event.word, correctMember?.nickname ?? null)
     } else if (event.type === 'game_finished') {
+      this.answerBanner?.destroy()
+      this.answerBanner = null
       this.finalMembers = event.members
       this.snapshot = { ...this.snapshot, status: 'FINISHED', members: event.members }
       this.activeBubbles.clear()

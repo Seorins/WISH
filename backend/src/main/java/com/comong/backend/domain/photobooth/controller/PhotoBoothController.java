@@ -70,9 +70,10 @@ public class PhotoBoothController {
     public ResponseEntity<ApiResponse<PhotoBoothResponse>> create(
             @AuthenticationPrincipal AuthenticatedUser currentUser,
             @Valid @RequestPart("request") PhotoBoothCreateRequest request,
-            @RequestPart("image") MultipartFile image) {
+            @RequestPart("image") MultipartFile image,
+            @RequestPart(value = "thumbnail", required = false) MultipartFile thumbnail) {
         PhotoBoothResponse response =
-                photoBoothService.create(currentUser.userId(), request, image);
+                photoBoothService.create(currentUser.userId(), request, image, thumbnail);
         URI location = URI.create("/photo-booths/" + response.id());
         return ResponseEntity.created(location).body(ApiResponse.success(response));
     }

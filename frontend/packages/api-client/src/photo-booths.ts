@@ -14,6 +14,7 @@ export type PhotoBooth = {
   id: number
   frameId: string
   imageUrl: string
+  thumbnailUrl?: string | null
   isPublic: boolean
   createdAt: string
   updatedAt: string
@@ -27,6 +28,7 @@ export type PublicPhotoBooth = {
   id: number
   frameId: string
   imageUrl: string
+  thumbnailUrl?: string | null
   createdAt: string
   author: PublicPhotoBoothAuthor
 }
@@ -34,6 +36,8 @@ export type PublicPhotoBooth = {
 export type CreatePhotoBoothParams = CreatePhotoBoothRequest & {
   image: Blob
   filename: string
+  thumbnail?: Blob | null
+  thumbnailFilename?: string
 }
 
 export type ListPhotoBoothParams = {
@@ -44,10 +48,23 @@ export type ListPhotoBoothParams = {
 export type PhotoBoothPage = PageResponse<PhotoBooth>
 export type PublicPhotoBoothPage = PageResponse<PublicPhotoBooth>
 
-export async function createPhotoBooth({ image, filename, ...request }: CreatePhotoBoothParams) {
+export async function createPhotoBooth({
+  image,
+  filename,
+  thumbnail,
+  thumbnailFilename,
+  ...request
+}: CreatePhotoBoothParams) {
   const formData = new FormData()
   formData.append('request', new Blob([JSON.stringify(request)], { type: 'application/json' }))
   formData.append('image', image, filename)
+  if (thumbnail) {
+    formData.append(
+      'thumbnail',
+      thumbnail,
+      thumbnailFilename ?? filename.replace(/\.[^.]+$/, '.jpg'),
+    )
+  }
 
   const response = await apiClient.post<ApiResponse<PhotoBooth>>('/photo-booths', formData)
   return response.data

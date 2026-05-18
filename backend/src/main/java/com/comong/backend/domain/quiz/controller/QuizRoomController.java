@@ -1,5 +1,7 @@
 package com.comong.backend.domain.quiz.controller;
 
+import java.util.List;
+
 import jakarta.validation.Valid;
 
 import org.springframework.http.ResponseEntity;
@@ -14,6 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.comong.backend.domain.quiz.dto.JoinRoomRequest;
 import com.comong.backend.domain.quiz.dto.QuizGameStartRequest;
 import com.comong.backend.domain.quiz.dto.QuizGameStartedResponse;
+import com.comong.backend.domain.quiz.dto.QuizRoomListItem;
 import com.comong.backend.domain.quiz.dto.QuizRoomSnapshot;
 import com.comong.backend.domain.quiz.service.QuizRoomService;
 import com.comong.backend.global.common.response.ApiResponse;
@@ -53,6 +56,15 @@ public class QuizRoomController {
             @AuthenticationPrincipal AuthenticatedUser currentUser) {
         QuizRoomSnapshot snapshot = quizRoomService.createRoom(currentUser.userId());
         return ResponseEntity.ok(ApiResponse.success(snapshot));
+    }
+
+    @Operation(
+            summary = "입장 가능한 방 목록",
+            description =
+                    "WAITING 상태이며 정원 미만인 방을 createdAt 내림차순으로 반환합니다. 코드는 노출하지 않고 roomId 만 내려 입장에 사용합니다.")
+    @GetMapping("/waiting")
+    public ResponseEntity<ApiResponse<List<QuizRoomListItem>>> findWaiting() {
+        return ResponseEntity.ok(ApiResponse.success(quizRoomService.findWaitingRooms()));
     }
 
     @Operation(summary = "코드로 방 입장", description = "방장이 공유한 6자리 코드로 입장합니다.")

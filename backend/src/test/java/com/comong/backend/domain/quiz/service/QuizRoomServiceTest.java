@@ -31,7 +31,7 @@ import com.comong.backend.domain.quiz.exception.QuizRoomNotFoundException;
 class QuizRoomServiceTest {
 
     private static final int MIN = 2;
-    private static final int MAX = 4;
+    private static final int MAX = 6;
 
     private PatientProfileService patientProfileService;
     private QuizBroadcastService broadcastService;
@@ -101,14 +101,18 @@ class QuizRoomServiceTest {
         stubProfile(2L, 101L, "a");
         stubProfile(3L, 102L, "b");
         stubProfile(4L, 103L, "c");
-        stubProfile(5L, 104L, "overflow");
+        stubProfile(5L, 104L, "d");
+        stubProfile(6L, 105L, "e");
+        stubProfile(7L, 106L, "overflow");
 
         QuizRoomSnapshot host = service.createRoom(1L);
         service.joinByCode(2L, host.code());
         service.joinByCode(3L, host.code());
         service.joinByCode(4L, host.code());
+        service.joinByCode(5L, host.code());
+        service.joinByCode(6L, host.code());
 
-        assertThatThrownBy(() -> service.joinByCode(5L, host.code()))
+        assertThatThrownBy(() -> service.joinByCode(7L, host.code()))
                 .isInstanceOf(QuizRoomFullException.class);
     }
 
@@ -295,10 +299,10 @@ class QuizRoomServiceTest {
         service.joinByCode(2L, host.code());
 
         com.comong.backend.domain.quiz.dto.QuizGameStartedResponse response =
-                service.startGame(1L, host.roomId(), 6);
+                service.startGame(1L, host.roomId(), 15);
 
-        assertThat(response.snapshot().totalRounds()).isEqualTo(6);
-        assertThat(registry.findById(host.roomId()).orElseThrow().totalRounds()).isEqualTo(6);
+        assertThat(response.snapshot().totalRounds()).isEqualTo(15);
+        assertThat(registry.findById(host.roomId()).orElseThrow().totalRounds()).isEqualTo(15);
     }
 
     @Test

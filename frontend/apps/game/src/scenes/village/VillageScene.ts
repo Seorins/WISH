@@ -35,7 +35,8 @@ import {
   attachVillageRealtime,
   createVillageEmojiPalette,
   emitEmoteBubble,
-  VILLAGE_EMOJIS,
+  syncCurrentBeltEmojiToPalette,
+  VILLAGE_EMOJI_SLOT_COUNT,
   type VillageEmojiPaletteHandle,
   type VillageRealtimeIntegration,
 } from '@/features/village-realtime'
@@ -52,6 +53,8 @@ const PHOTO_BOOTH_INTERACT_DISTANCE = 40
 const PHOTO_GALLERY_INTERACT_DISTANCE = 40
 const GOMOKU_BOARD_INTERACT_DISTANCE = 56
 const WORLD_INTERACTION_REOPEN_COOLDOWN_MS = 350
+const EMOJI_HINT_OPEN_TEXT = '[Q] 닫기'
+const EMOJI_HINT_OPEN_OFFSET_Y = 66
 const VILLAGE_SHIP_KEY = 'village-ship'
 const VILLAGE_SHIP_PATH = 'images/themes/ferry/ui/ship.png'
 const VILLAGE_SHIP = {
@@ -401,6 +404,7 @@ export class VillageScene extends Phaser.Scene {
   private readonly handleFuelNoticeFocus = () => {
     void this.loadVillageFuelNoticeState()
   }
+  private disposeEmojiBeltSync: (() => void) | null = null
   /** Q 키로 사용자가 의도적으로 팔레트를 켰는지. 다이얼로그/설정 패널 자동 숨김과 분리. */
   private emojiPaletteManuallyShown = false
   /** 팔레트 숨겨져 있을 때 우하단에 "[Q] 이모티콘" 으로 토글 단축키 안내 (S14P31E103-769). */
@@ -658,6 +662,10 @@ export class VillageScene extends Phaser.Scene {
         return
       }
 
+      if (this.emojiPalette?.consumePointerDown(pointer)) {
+        return
+      }
+
       if (this.obstacleManager?.handlePointerDown(pointer)) {
         return
       }
@@ -690,14 +698,15 @@ export class VillageScene extends Phaser.Scene {
     })
     this.emojiPalette = createVillageEmojiPalette(this, {
       onSelect: emoji => {
-        if (this.isVillagerDialogueOpen || this.settingsMenu.isOpen()) return
+        if (this.isEmojiOverlayOpen()) return
         if (!this.villageRealtime?.publishEmote(emoji)) return
         // 로컬 즉시 렌더로 latency 가림. 서버 echo 는 RemotePlayersGroup 가 localUserId 필터링으로 무시.
         emitEmoteBubble(this, this.player, emoji, 100)
       },
     })
+    this.disposeEmojiBeltSync = syncCurrentBeltEmojiToPalette(this.emojiPalette)
     this.emojiPaletteManuallyShown = false
-    // 팔레트는 기본 숨김 → 단축키를 모른 사용자가 발견할 수 있도록 우하단 고정 힌트. 팔레트가 열리면 같은 자리이므로 숨겨서 겹침 회피.
+    // 팔레트는 기본 숨김 → 단축키를 모른 사용자가 발견할 수 있도록 우하단 고정 힌트. 팔레트가 열리면 위로 띄워 닫기 버튼으로 유지.
     this.emojiHint = this.add
       .text(vw - 18, vh - 18, '[Q] 이모티콘', {
         fontSize: '14px',
@@ -710,6 +719,12 @@ export class VillageScene extends Phaser.Scene {
       .setOrigin(1, 1)
       .setScrollFactor(0)
       .setDepth(100)
+      .setInteractive({ useHandCursor: true })
+    this.emojiHint.on('pointerdown', (event: Phaser.Types.Input.EventData) => {
+      ;(event as unknown as { stopPropagation?: () => void }).stopPropagation?.()
+      if (this.isEmojiOverlayOpen()) return
+      this.emojiPaletteManuallyShown = !this.emojiPaletteManuallyShown
+    })
     // 1\~9 + 0 단축키. 인덱스 0\~9 매핑. 팔레트가 숨겨져 있어도 발사 가능 (학습용 토글 vs 즉시 발사 분리).
     const emojiKeyNames = [
       'ONE',
@@ -724,15 +739,15 @@ export class VillageScene extends Phaser.Scene {
       'ZERO',
     ] as const
     emojiKeyNames.forEach((name, index) => {
-      if (index >= VILLAGE_EMOJIS.length) return
+      if (index >= VILLAGE_EMOJI_SLOT_COUNT) return
       this.input.keyboard?.on(`keydown-${name}`, () => {
-        if (this.isVillagerDialogueOpen || this.settingsMenu.isOpen()) return
+        if (this.isEmojiOverlayOpen()) return
         this.emojiPalette?.triggerByIndex(index)
       })
     })
     // Q 키 — 팔레트 토글. 다이얼로그/설정 패널 열려있으면 무시.
     this.input.keyboard?.on('keydown-Q', () => {
-      if (this.isVillagerDialogueOpen || this.settingsMenu.isOpen()) return
+      if (this.isEmojiOverlayOpen()) return
       this.emojiPaletteManuallyShown = !this.emojiPaletteManuallyShown
     })
     this.game.events.on('villager-dialogue:closed', this.handleVillagerDialogueClosed, this)
@@ -759,6 +774,8 @@ export class VillageScene extends Phaser.Scene {
       this.input.keyboard?.off('keydown-BACKSPACE', this.undoObstaclePolygonPoint, this)
       this.villageRealtime?.destroy()
       this.villageRealtime = null
+      this.disposeEmojiBeltSync?.()
+      this.disposeEmojiBeltSync = null
       this.emojiPalette?.destroy()
       this.emojiPalette = null
       this.emojiHint?.destroy()
@@ -772,6 +789,15 @@ export class VillageScene extends Phaser.Scene {
       this.fuelNotice?.container.destroy()
       this.fuelNotice = null
     })
+  }
+
+  private isEmojiOverlayOpen() {
+    return (
+      this.isVillagerDialogueOpen ||
+      this.settingsMenu.isOpen() ||
+      this.isGomokuOpen ||
+      this.isPhotoGalleryOpen
+    )
   }
 
   update(_time: number, delta: number) {
@@ -793,14 +819,15 @@ export class VillageScene extends Phaser.Scene {
     this.resolvePolygonObstacleCollision()
 
     this.villageRealtime?.publishLocal(this.player, this.lastDirection, movement.moving)
-    const overlaysOpen =
-      this.isVillagerDialogueOpen ||
-      this.settingsMenu.isOpen() ||
-      this.isGomokuOpen ||
-      this.isPhotoGalleryOpen
+    const overlaysOpen = this.isEmojiOverlayOpen()
     const paletteVisible = this.emojiPaletteManuallyShown && !overlaysOpen
     this.emojiPalette?.setVisible(paletteVisible)
-    this.emojiHint?.setVisible(!paletteVisible && !overlaysOpen)
+    this.emojiHint
+      ?.setText(paletteVisible ? EMOJI_HINT_OPEN_TEXT : '[Q] 이모티콘')
+      .setY(
+        paletteVisible ? this.scale.height - 18 - EMOJI_HINT_OPEN_OFFSET_Y : this.scale.height - 18,
+      )
+      .setVisible(!overlaysOpen)
     this.minimap?.container.setVisible(!overlaysOpen)
     this.refreshVillageFuelNoticeUi(!overlaysOpen)
     this.updateVillageMinimap()
