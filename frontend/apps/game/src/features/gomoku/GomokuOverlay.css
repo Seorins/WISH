@@ -775,13 +775,13 @@
 
 .gomoku-ranking li {
   display: grid;
-  grid-template-columns: 24px 1fr auto;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
-  min-height: 30px;
+  min-height: 42px;
   border-radius: 7px;
   background: #eef5ee;
-  padding: 0 8px;
+  padding: 6px 8px;
   font-size: 13px;
   font-weight: 900;
 }
@@ -791,16 +791,30 @@
   color: #0c5f58;
 }
 
-.gomoku-ranking strong {
+.gomoku-ranking-player {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.gomoku-ranking strong,
+.gomoku-ranking-player span {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.gomoku-ranking-player span {
+  color: #61756e;
+  font-size: 11px;
+  line-height: 1.25;
+}
+
 .gomoku-ranking em {
   color: #0e7280;
   font-style: normal;
+  white-space: nowrap;
 }
 
 .gomoku-history {

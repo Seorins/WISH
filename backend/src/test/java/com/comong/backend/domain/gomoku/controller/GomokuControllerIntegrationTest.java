@@ -296,7 +296,7 @@ class GomokuControllerIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
-    void ranking_ordersByWinsBeforeWinRate() throws Exception {
+    void ranking_ordersByWinsThenWinRate() throws Exception {
         TestUser alpha =
                 setupUserWithProfile("gomoku-rank-alpha@example.com", "rank-alpha", "alpha");
         TestUser beta = setupUserWithProfile("gomoku-rank-beta@example.com", "rank-beta", "beta");
@@ -307,6 +307,7 @@ class GomokuControllerIntegrationTest extends IntegrationTestSupport {
         finishBlackWin(alpha, gamma);
         finishBlackWin(gamma, alpha);
         finishBlackWin(beta, gamma);
+        finishBlackWin(beta, gamma);
 
         mockMvc.perform(
                         get("/gomoku/ranking")
@@ -315,10 +316,13 @@ class GomokuControllerIntegrationTest extends IntegrationTestSupport {
                                 .header("Authorization", "Bearer " + alpha.token()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.totalPlayers").value(3))
-                .andExpect(jsonPath("$.data.entries[0].nickname").value("alpha"))
+                .andExpect(jsonPath("$.data.entries[0].nickname").value("beta"))
                 .andExpect(jsonPath("$.data.entries[0].wins").value(2))
-                .andExpect(jsonPath("$.data.entries[1].nickname").value("beta"))
-                .andExpect(jsonPath("$.data.entries[1].wins").value(1));
+                .andExpect(jsonPath("$.data.entries[0].winRate").value(1.0))
+                .andExpect(jsonPath("$.data.entries[1].nickname").value("alpha"))
+                .andExpect(jsonPath("$.data.entries[1].wins").value(2))
+                .andExpect(jsonPath("$.data.entries[2].nickname").value("gamma"))
+                .andExpect(jsonPath("$.data.entries[2].wins").value(1));
     }
 
     @Test

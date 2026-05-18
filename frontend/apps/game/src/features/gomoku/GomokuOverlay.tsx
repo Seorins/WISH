@@ -1418,8 +1418,11 @@ function OnlinePanel({
                 {ranking.entries.map(entry => (
                   <li key={entry.patientProfileId} className={entry.isMe ? 'me' : ''}>
                     <span>{entry.rank}</span>
-                    <strong>{entry.nickname}</strong>
-                    <em>{`${entry.wins}${text.wins}`}</em>
+                    <div className="gomoku-ranking-player">
+                      <strong>{entry.nickname}</strong>
+                      <span>{`${entry.wins}${text.wins} ${entry.draws}${text.draws} ${entry.losses}${text.losses}`}</span>
+                    </div>
+                    <em>{formatPercent(entry.winRate)}</em>
                   </li>
                 ))}
               </ol>

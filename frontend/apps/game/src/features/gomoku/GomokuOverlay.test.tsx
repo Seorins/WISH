@@ -47,6 +47,8 @@ const COMPUTER_LEVEL_LABEL = '\uCEF4\uD4E8\uD130 \uB09C\uC774\uB3C4'
 const RULE_LABEL = '\uB8F0'
 const FREESTYLE_LABEL = '\uC790\uC720\uB8F0'
 const WINS_LABEL = '\uC2B9'
+const DRAWS_LABEL = '\uBB34'
+const LOSSES_LABEL = '\uD328'
 const AUTH_REQUIRED_MESSAGE =
   '\uC628\uB77C\uC778 \uB300\uC804\uC740 \uB85C\uADF8\uC778\uC774 \uD544\uC694\uD574\uC694.'
 
@@ -333,6 +335,7 @@ describe('GomokuOverlay online room creation', () => {
     fireEvent.click(screen.getByRole('button', { name: RANKING_LABEL }))
 
     expect(await screen.findByText('ranker')).toBeTruthy()
-    expect(screen.getByText(`4${WINS_LABEL}`)).toBeTruthy()
+    expect(screen.getByText(`4${WINS_LABEL} 0${DRAWS_LABEL} 1${LOSSES_LABEL}`)).toBeTruthy()
+    expect(screen.getByText('80%')).toBeTruthy()
   })
 })
