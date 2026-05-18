@@ -111,8 +111,8 @@ export class QuizPlayScene extends Phaser.Scene {
    */
   private activeBubbles = new Map<number, { text: string; correct: boolean; expiresAt: number }>()
   private roundEnded = false
-  /** 정답 발표 배너 — guess_submitted(correct=true) 도착 시 화면 중앙에 짧게 뜬다. */
-  private correctBanner: Phaser.GameObjects.Container | null = null
+  /** 정답 공개 배너 — round_ended 도착 시 화면 중앙에 제시어를 크게 띄운다. */
+  private answerBanner: Phaser.GameObjects.Container | null = null
   /**
    * 라운드 타임아웃 후 BE 가 round_ended/game_finished 를 못 보냈을 때를 대비한 reconcile.
    * 타이머가 0 이 된 시각 + 마지막 시도 시각 을 기억해 4초마다 1회씩 REST 로 룸 상태를 끌어와
@@ -152,8 +152,8 @@ export class QuizPlayScene extends Phaser.Scene {
     this.finalMembers = null
     this.isLeaving = false
     this.guessOverlayOpen = false
-    this.correctBanner?.destroy()
-    this.correctBanner = null
+    this.answerBanner?.destroy()
+    this.answerBanner = null
     this.timerExpiredAt = null
     this.roundEndedAt = null
     this.lastReconcileAt = 0
@@ -609,36 +609,62 @@ export class QuizPlayScene extends Phaser.Scene {
   }
 
   /**
-   * 누군가 정답을 맞췄을 때 캔버스 중앙 위쪽에 큼지막한 배너로 알림. 자동으로 2.4s 뒤 사라짐.
-   * 슬롯 말풍선 "정답!" 하나만으론 출제자/다른 정답자가 놓치기 쉬워서 배너로 보강한다.
+   * 라운드가 끝났을 때 정답 단어를 화면 중앙에 크게 공개한다.
+   * 맞춘 사람이 있으면 함께 표시하고, 시간초과면 정답만 보여준다.
    */
-  private showCorrectBanner(nickname: string) {
-    this.correctBanner?.destroy()
+  private showAnswerBanner(word: string, nickname: string | null) {
+    const answer = word.trim()
+    if (!answer) return
+
+    this.answerBanner?.destroy()
     const w = this.scale.width
     const h = this.scale.height
     const cx = w / 2
-    const cy = h * 0.34
+    const cy = h * 0.38
     // 씬 최상위에 직접 add — root(depth 1) 안에 넣고 setDepth(100) 해봐야 Phaser Container 는
     // 자식 자동 depth-sort 를 안 해서 add 순서대로 그려진다. 결과적으로 layoutContainer 가
     // 배너 위를 덮어 안 보이던 문제. 씬 root display list 는 depth 로 정렬되므로 여기다 둔다.
     const container = this.add.container(cx, cy).setDepth(100)
-    this.correctBanner = container
+    this.answerBanner = container
 
-    // 배경 + 외곽선. 폭은 문구에 맞춰 dynamic, 높이는 고정.
-    const label = `정답!  ${nickname} 님이 맞췄어요`
-    const text = this.add
-      .text(0, 0, label, {
+    const maxBannerW = Math.max(280, Math.min(w * 0.86, 760))
+    const titleLabel = nickname ? `${nickname} 님 정답!` : '정답 공개'
+    const titleText = this.add
+      .text(0, 0, titleLabel, {
         fontFamily: FONT_FAMILY,
-        fontSize: '36px',
+        fontSize: '28px',
         color: '#1a4d20',
         fontStyle: 'bold',
       })
       .setOrigin(0.5)
-    const paddingX = 44
-    const paddingY = 24
-    const bw = text.width + paddingX * 2
-    const bh = text.height + paddingY * 2
-    const radius = bh / 2
+
+    let answerFontSize = Math.min(78, Math.max(44, w * 0.064))
+    const answerText = this.add
+      .text(0, 0, answer, {
+        fontFamily: FONT_FAMILY,
+        fontSize: `${answerFontSize}px`,
+        color: '#1a0e05',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5)
+
+    const maxTextW = maxBannerW - 72
+    if (answerText.width > maxTextW) {
+      answerFontSize = Math.max(34, Math.floor(answerFontSize * (maxTextW / answerText.width)))
+      answerText.setFontSize(`${answerFontSize}px`)
+    }
+
+    const gap = 14
+    titleText.setPosition(0, -(answerText.height + gap) / 2)
+    answerText.setPosition(0, (titleText.height + gap) / 2)
+
+    const paddingX = 38
+    const paddingY = 30
+    const contentW = Math.max(titleText.width, answerText.width)
+    const contentH = titleText.height + gap + answerText.height
+    const bw = Math.min(maxBannerW, Math.max(contentW + paddingX * 2, 320))
+    const bh = contentH + paddingY * 2
+    const radius = Math.min(34, bh / 2)
 
     const g = this.add.graphics()
     g.fillStyle(0x000000, 0.28)
@@ -647,7 +673,7 @@ export class QuizPlayScene extends Phaser.Scene {
     g.fillRoundedRect(-bw / 2, -bh / 2, bw, bh, radius)
     g.lineStyle(4, 0x4d8a2a, 1)
     g.strokeRoundedRect(-bw / 2, -bh / 2, bw, bh, radius)
-    container.add([g, text])
+    container.add([g, titleText, answerText])
 
     // 등장: 위에서 살짝 내려오며 페이드 인 → 잠깐 머무름 → 페이드 아웃.
     // 동일 타겟에 alpha 트윈 두 개를 동시에 add 하면 같은 프레임에서 서로 덮어써 alpha 가
@@ -661,16 +687,16 @@ export class QuizPlayScene extends Phaser.Scene {
       duration: 220,
       ease: 'Back.out',
     })
-    this.time.delayedCall(2200, () => {
+    this.time.delayedCall(1650, () => {
       if (!container.active) return
       this.tweens.add({
         targets: container,
         alpha: 0,
-        duration: 320,
+        duration: 220,
         ease: 'Sine.in',
         onComplete: () => {
           container.destroy()
-          if (this.correctBanner === container) this.correctBanner = null
+          if (this.answerBanner === container) this.answerBanner = null
         },
       })
     })
@@ -1026,6 +1052,8 @@ export class QuizPlayScene extends Phaser.Scene {
         event.message ?? '게임이 중단되어 로비로 돌아왔어요.',
       )
     } else if (event.type === 'round_started') {
+      this.answerBanner?.destroy()
+      this.answerBanner = null
       this.snapshot = {
         ...this.snapshot,
         status: event.status,
@@ -1055,11 +1083,14 @@ export class QuizPlayScene extends Phaser.Scene {
         correct: event.correct,
         expiresAt: Date.now() + BUBBLE_TTL_MS,
       })
-      if (event.correct) {
-        this.showCorrectBanner(event.nickname)
-      }
       this.drawLayout()
     } else if (event.type === 'round_ended') {
+      const correctMember =
+        event.correctUserId === undefined
+          ? null
+          : (event.members.find(member => member.userId === event.correctUserId) ??
+            this.snapshot.members.find(member => member.userId === event.correctUserId) ??
+            null)
       this.roundEnded = true
       this.snapshot = { ...this.snapshot, members: event.members }
       // 라운드 종료 시 잔여 말풍선 모두 정리 (정답자 말풍선은 그대로 두고 싶다면 정답자 user 만 유지하도록 변경 가능).
@@ -1068,7 +1099,10 @@ export class QuizPlayScene extends Phaser.Scene {
       this.timerExpiredAt = null
       this.roundEndedAt = Date.now()
       this.drawLayout()
+      this.showAnswerBanner(event.word, correctMember?.nickname ?? null)
     } else if (event.type === 'game_finished') {
+      this.answerBanner?.destroy()
+      this.answerBanner = null
       this.finalMembers = event.members
       this.snapshot = { ...this.snapshot, status: 'FINISHED', members: event.members }
       this.activeBubbles.clear()
