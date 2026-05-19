@@ -18,6 +18,13 @@ class WeekActivityData(BaseModel):
     )
 
 
+class DialogueTrendPoint(BaseModel):
+    """일별 대화 톤 추이. BE GuardianReportSummaryService 가 전달하는 값."""
+    date: str
+    positive_neutral_percent: Optional[int] = Field(default=None, ge=0, le=100)
+    session_count: int = Field(ge=0)
+
+
 class WeekDialogueData(BaseModel):
     """한 주 대화 집계 (등대지기 영철과의 대화 신호)."""
     valence_distribution: Dict[str, int] = Field(
@@ -29,6 +36,8 @@ class WeekDialogueData(BaseModel):
     topics: List[str] = Field(default_factory=list)
     npc_visits: Dict[str, int] = Field(default_factory=dict)
     qualitative_summary: Optional[str] = None
+    daily_trend: List[DialogueTrendPoint] = Field(default_factory=list)
+    total_sessions: int = Field(default=0, ge=0)
 
 
 class WeekDelta(BaseModel):

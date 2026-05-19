@@ -15,10 +15,12 @@ logger = logging.getLogger(__name__)
 
 GMS_BASE_URL = os.getenv("GMS_ANTHROPIC_BASE_URL", "https://gms.ssafy.io/gmsapi/api.anthropic.com/v1")
 GMS_API_KEY = os.getenv("GMS_KEY", "")
-# 주간 종합 코멘트는 품질이 중요한 1회 호출 → Opus 기본. 이전에 Opus 로 fallback 만 떨어지던 건
-# BE 측 body=null 전송 버그 (S14P31E103-745 후속 fix) 가 원인이었고, 그 수정 후 재시도.
-# 4xx/timeout 등으로 다시 막히면 REPORT_SUMMARY_MODEL 환경변수로 Haiku 로 즉시 교체 가능.
-GMS_MODEL = os.getenv("REPORT_SUMMARY_MODEL", "claude-opus-4-7")
+# 리포트 요약은 별도 REPORT_SUMMARY_MODEL 이 있으면 우선 사용하고, 없으면 배포에서 이미 검증한
+# 공용 GMS_ANTHROPIC_MODEL 을 따른다. 모델 ID가 서비스별로 갈라지면 GMS 4xx → fallback 이 반복된다.
+GMS_MODEL = os.getenv(
+    "REPORT_SUMMARY_MODEL",
+    os.getenv("GMS_ANTHROPIC_MODEL", "claude-sonnet-4-5-20250929"),
+)
 GMS_VERSION = os.getenv("GMS_ANTHROPIC_VERSION", "2023-06-01")
 # 주간 데이터 + JSON 출력이라 chat 보다 토큰·시간 여유 필요.
 GMS_TIMEOUT = int(os.getenv("REPORT_SUMMARY_TIMEOUT_SECONDS", "30"))
@@ -158,6 +160,14 @@ def _extract_text(data: dict) -> Optional[str]:
 
 
 async def summarize_weekly_report(request: ReportSummaryRequest) -> ReportSummaryResponse:
+    if not GMS_API_KEY.strip():
+        logger.warning(
+            "[ReportSummary] GMS_KEY 미설정 — fallback (patient=%d, week_start=%s)",
+            request.patient_profile_id,
+            request.week_start,
+        )
+        return _fallback(f"missing-api-key model={GMS_MODEL}")
+
     headers = {
         "x-api-key": GMS_API_KEY,
         "anthropic-version": GMS_VERSION,
