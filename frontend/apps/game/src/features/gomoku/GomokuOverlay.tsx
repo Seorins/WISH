@@ -71,6 +71,7 @@ const ONLINE_AVATAR_FRAME_SIZE = 78
 const COMPUTER_THINK_DELAY_MS = 420
 const ONLINE_POLL_INTERVAL_MS = 1500
 const DEMO_AUTH_ENABLED = import.meta.env.VITE_ENABLE_DEMO_AUTH === 'true'
+const GOMOKU_BOARD_IMAGE_PATH = assetPath('images/village/objects/gomoku-board.png')
 
 const text = {
   title: '\uAD11\uC7A5 \uC624\uBAA9',
@@ -915,8 +916,8 @@ export function GomokuOverlay({
 
   return (
     <div className="gomoku-backdrop" role="dialog" aria-modal="true" aria-label={text.title}>
-      <section className={`gomoku-shell ${hasChosenMode ? `mode-${mode}` : ''}`}>
-        <header className={`gomoku-topbar ${hasChosenMode ? `mode-${mode}` : ''}`}>
+      <section className={`gomoku-shell ${hasChosenMode ? `mode-${mode}` : 'mode-select'}`}>
+        <header className={`gomoku-topbar ${hasChosenMode ? `mode-${mode}` : 'mode-select'}`}>
           <div className="gomoku-topbar-title">
             {hasChosenMode ? (
               <span className={`gomoku-mode-badge mode-${mode}`}>{MODE_BADGE_LABEL[mode]}</span>
@@ -1256,32 +1257,61 @@ function ChatPanel({
 function ModeSelectionScreen({ onSelect }: { onSelect: (mode: GameMode) => void }) {
   return (
     <div className="gomoku-mode-select">
-      <h2>{text.modeSelectTitle}</h2>
-      <p>{text.modeSelectSubtitle}</p>
+      <section className="gomoku-mode-select-hero">
+        <div className="gomoku-mode-select-copy">
+          <span className="gomoku-mode-select-kicker">{text.title}</span>
+          <h2>{text.modeSelectTitle}</h2>
+          <p>{text.modeSelectSubtitle}</p>
+        </div>
+        <div className="gomoku-mode-select-preview" aria-hidden="true">
+          <img src={GOMOKU_BOARD_IMAGE_PATH} alt="" />
+        </div>
+      </section>
       <div className="gomoku-mode-select-grid">
         <button
           type="button"
           className="gomoku-mode-select-card mode-computer"
           onClick={() => onSelect('computer')}
         >
-          <strong>{text.modeBadgeComputer}</strong>
-          <span>{text.modeCardComputerDesc}</span>
+          <span className="gomoku-mode-select-card-art" aria-hidden="true">
+            <span className="gomoku-card-stone black" />
+            <span className="gomoku-card-stone white" />
+            <span className="gomoku-card-line" />
+          </span>
+          <span className="gomoku-mode-select-card-copy">
+            <strong>{text.modeBadgeComputer}</strong>
+            <span>{text.modeCardComputerDesc}</span>
+          </span>
         </button>
         <button
           type="button"
           className="gomoku-mode-select-card mode-local"
           onClick={() => onSelect('local')}
         >
-          <strong>{text.modeBadgeLocal}</strong>
-          <span>{text.modeCardLocalDesc}</span>
+          <span className="gomoku-mode-select-card-art" aria-hidden="true">
+            <span className="gomoku-card-stone black" />
+            <span className="gomoku-card-stone white" />
+            <span className="gomoku-card-line" />
+          </span>
+          <span className="gomoku-mode-select-card-copy">
+            <strong>{text.modeBadgeLocal}</strong>
+            <span>{text.modeCardLocalDesc}</span>
+          </span>
         </button>
         <button
           type="button"
           className="gomoku-mode-select-card mode-online"
           onClick={() => onSelect('online')}
         >
-          <strong>{text.modeBadgeOnline}</strong>
-          <span>{text.modeCardOnlineDesc}</span>
+          <span className="gomoku-mode-select-card-art" aria-hidden="true">
+            <span className="gomoku-card-stone black" />
+            <span className="gomoku-card-stone white" />
+            <span className="gomoku-card-line" />
+          </span>
+          <span className="gomoku-mode-select-card-copy">
+            <strong>{text.modeBadgeOnline}</strong>
+            <span>{text.modeCardOnlineDesc}</span>
+          </span>
         </button>
       </div>
     </div>

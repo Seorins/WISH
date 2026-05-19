@@ -32,6 +32,16 @@
   box-shadow: 0 24px 60px rgba(4, 13, 15, 0.45);
 }
 
+.gomoku-shell.mode-select {
+  border-color: #875b32;
+  background:
+    linear-gradient(180deg, rgba(255, 252, 240, 0.98), rgba(234, 245, 239, 0.98)),
+    #f4f4e7;
+  box-shadow:
+    0 24px 60px rgba(4, 13, 15, 0.45),
+    0 0 0 3px rgba(218, 160, 85, 0.34);
+}
+
 .gomoku-shell.mode-computer {
   border-color: #3a596e;
   box-shadow:
@@ -61,6 +71,11 @@
   padding: 14px 20px;
   border-bottom: 2px solid rgba(49, 93, 87, 0.18);
   background: linear-gradient(90deg, #f8faf2, #eaf2ed);
+}
+
+.gomoku-topbar.mode-select {
+  background: linear-gradient(90deg, #fff7df, #e6f4ed);
+  border-bottom-color: rgba(135, 91, 50, 0.24);
 }
 
 .gomoku-topbar.mode-computer {
@@ -163,79 +178,207 @@
 }
 
 .gomoku-mode-select {
+  position: relative;
   min-height: 0;
   display: grid;
-  grid-template-rows: auto auto 1fr;
-  gap: 14px;
-  padding: 32px 24px;
+  grid-template-rows: auto auto;
+  gap: clamp(18px, 3.5vh, 32px);
+  padding: clamp(22px, 4vw, 44px);
   align-content: center;
   justify-items: center;
+  overflow: auto;
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.64), rgba(255, 255, 255, 0.64)),
+    linear-gradient(90deg, rgba(117, 77, 43, 0.1) 1px, transparent 1px),
+    linear-gradient(0deg, rgba(117, 77, 43, 0.1) 1px, transparent 1px),
+    linear-gradient(135deg, #fff4d8 0%, #f4faf2 48%, #dfeff4 100%);
+  background-size:
+    auto,
+    54px 54px,
+    54px 54px,
+    auto;
 }
 
-.gomoku-mode-select > h2 {
+.gomoku-mode-select-hero {
+  width: min(980px, 100%);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 340px);
+  align-items: center;
+  gap: clamp(20px, 4vw, 42px);
+}
+
+.gomoku-mode-select-copy {
+  min-width: 0;
+}
+
+.gomoku-mode-select-kicker {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 14px;
+  border: 2px solid rgba(135, 91, 50, 0.36);
+  border-radius: 999px;
+  background: rgba(255, 248, 224, 0.86);
+  color: #6d471f;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.gomoku-mode-select h2 {
   margin: 0;
-  font-size: 28px;
+  margin-top: 16px;
+  font-size: clamp(30px, 4vw, 46px);
+  line-height: 1.12;
   color: #17342f;
 }
 
-.gomoku-mode-select > p {
-  margin: 0;
+.gomoku-mode-select p {
+  margin: 10px 0 0;
   color: #45625b;
-  font-size: 15px;
+  font-size: clamp(15px, 1.6vw, 18px);
   font-weight: 800;
+  line-height: 1.45;
+  word-break: keep-all;
+}
+
+.gomoku-mode-select-preview {
+  position: relative;
+  aspect-ratio: 1 / 0.78;
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  transform: rotate(-3deg);
+  filter: drop-shadow(0 22px 22px rgba(86, 54, 20, 0.2));
+}
+
+.gomoku-mode-select-preview::before {
+  content: '';
+  position: absolute;
+  inset: 18% 6% 19%;
+  border-radius: 8px;
+  background: rgba(18, 80, 78, 0.18);
+  transform: rotate(4deg);
+}
+
+.gomoku-mode-select-preview img {
+  position: relative;
+  width: min(100%, 330px);
+  height: auto;
+  object-fit: contain;
 }
 
 .gomoku-mode-select-grid {
-  width: min(900px, 100%);
+  width: min(980px, 100%);
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
-  margin-top: 8px;
 }
 
 .gomoku-mode-select-card {
   display: grid;
-  grid-template-rows: auto auto;
-  align-items: start;
-  gap: 10px;
-  padding: 28px 22px;
+  grid-template-columns: 72px minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+  min-height: 132px;
+  padding: 20px;
   border: 3px solid transparent;
-  border-radius: 16px;
-  background: #fbfdf8;
+  border-radius: 8px;
+  background: rgba(251, 253, 248, 0.94);
   cursor: pointer;
   text-align: left;
   font: inherit;
   transition:
     transform 120ms,
-    box-shadow 120ms;
+    box-shadow 120ms,
+    border-color 120ms;
 }
 
 .gomoku-mode-select-card:hover,
 .gomoku-mode-select-card:focus-visible {
   transform: translateY(-3px);
-  box-shadow: 0 14px 28px rgba(24, 36, 31, 0.18);
+  box-shadow: 0 16px 30px rgba(24, 36, 31, 0.18);
   outline: none;
 }
 
 .gomoku-mode-select-card.mode-computer {
-  border-color: #3a596e;
-  background: #f3f7fa;
+  border-color: #5d7890;
+  background: linear-gradient(180deg, #f7fbfd, #e8f1f6);
 }
 
 .gomoku-mode-select-card.mode-local {
-  border-color: #4a8b3f;
-  background: #f1f8ee;
+  border-color: #66a05d;
+  background: linear-gradient(180deg, #f7fcf3, #e7f3df);
 }
 
 .gomoku-mode-select-card.mode-online {
-  border-color: #b78938;
-  background: #fdf6e2;
+  border-color: #c08b35;
+  background: linear-gradient(180deg, #fff9e7, #f5ead0);
+}
+
+.gomoku-mode-select-card-art {
+  position: relative;
+  display: block;
+  width: 72px;
+  height: 72px;
+  overflow: hidden;
+  border: 2px solid rgba(84, 55, 26, 0.26);
+  border-radius: 8px;
+  background:
+    linear-gradient(90deg, rgba(85, 56, 30, 0.24) 2px, transparent 2px),
+    linear-gradient(0deg, rgba(85, 56, 30, 0.24) 2px, transparent 2px),
+    linear-gradient(135deg, #f1c16c, #d6903e);
+  background-size:
+    18px 18px,
+    18px 18px,
+    auto;
+  box-shadow: inset 0 0 0 5px rgba(120, 70, 25, 0.16);
+}
+
+.gomoku-card-line {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  top: 35px;
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(66, 38, 19, 0.28);
+}
+
+.gomoku-card-stone {
+  position: absolute;
+  z-index: 1;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+}
+
+.gomoku-card-stone.black {
+  left: 17px;
+  top: 17px;
+  background:
+    radial-gradient(circle at 34% 28%, #6b6f72, #1f2426 62%, #050606 100%);
+  box-shadow: 0 4px 7px rgba(28, 18, 9, 0.24);
+}
+
+.gomoku-card-stone.white {
+  right: 16px;
+  bottom: 17px;
+  background:
+    radial-gradient(circle at 34% 28%, #ffffff, #f1eadc 62%, #cfc4ae 100%);
+  box-shadow: 0 4px 7px rgba(28, 18, 9, 0.2);
+}
+
+.gomoku-mode-select-card-copy {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
 }
 
 .gomoku-mode-select-card strong {
-  font-size: 20px;
+  font-size: clamp(17px, 1.8vw, 20px);
   color: #17342f;
   line-height: 1.2;
+  word-break: keep-all;
 }
 
 .gomoku-mode-select-card span {
@@ -1165,6 +1308,26 @@
   }
 }
 
+@media (max-width: 760px) {
+  .gomoku-mode-select {
+    align-content: start;
+  }
+
+  .gomoku-mode-select-hero {
+    max-width: 620px;
+    grid-template-columns: minmax(0, 1fr) minmax(150px, 220px);
+  }
+
+  .gomoku-mode-select-grid {
+    max-width: 620px;
+    grid-template-columns: 1fr;
+  }
+
+  .gomoku-mode-select-card {
+    min-height: 112px;
+  }
+}
+
 @media (max-width: 620px) {
   .gomoku-backdrop {
     padding: 0;
@@ -1182,6 +1345,57 @@
 
   .gomoku-topbar h1 {
     font-size: 22px;
+  }
+
+  .gomoku-mode-select {
+    padding: 18px 14px 24px;
+  }
+
+  .gomoku-mode-select-hero {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .gomoku-mode-select h2 {
+    margin-top: 12px;
+    font-size: 30px;
+  }
+
+  .gomoku-mode-select-preview {
+    order: -1;
+    width: min(64vw, 220px);
+    justify-self: center;
+  }
+
+  .gomoku-mode-select-card {
+    grid-template-columns: 62px minmax(0, 1fr);
+    gap: 12px;
+    min-height: 104px;
+    padding: 14px;
+  }
+
+  .gomoku-mode-select-card-art {
+    width: 62px;
+    height: 62px;
+  }
+
+  .gomoku-card-line {
+    top: 30px;
+  }
+
+  .gomoku-card-stone {
+    width: 20px;
+    height: 20px;
+  }
+
+  .gomoku-card-stone.black {
+    left: 14px;
+    top: 12px;
+  }
+
+  .gomoku-card-stone.white {
+    right: 13px;
+    bottom: 12px;
   }
 
   .gomoku-layout {
