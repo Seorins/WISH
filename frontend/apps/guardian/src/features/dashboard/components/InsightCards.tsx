@@ -3,7 +3,11 @@ import { useNavigate } from 'react-router-dom'
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, XAxis, YAxis } from 'recharts'
 import { useMyPatientId } from '@/features/auth/hooks/useMyPatientId'
 import { useRomMovementAnalysis } from '@/features/rom/hooks'
-import { type RomJointDetail } from '@/features/rom/data/model'
+import {
+  ROM_BALANCE_ATTENTION_DEG,
+  ROM_CAPTURE_WARN_PERCENT,
+  type RomJointDetail,
+} from '@/features/rom/data/model'
 import { useGymnasticsDashboardSummary } from '../hooks'
 import { ChevronDownIcon, InfoIcon } from './icons'
 import styles from './InsightCards.module.css'
@@ -277,25 +281,33 @@ const ROM_TONE_CLASSES = [
   styles.romCellCyan,
 ] as const
 
-function formatRomDegrees(value: number | null): string {
+function formatRomDegrees(value: number | null | undefined): string {
   if (typeof value !== 'number') return '확인 중'
   return `${value.toFixed(1)}도`
 }
 
 function romGap(joint: RomJointDetail): number | null {
-  if (joint.leftRangeDeg === null || joint.rightRangeDeg === null) return null
-  return Math.abs(joint.leftRangeDeg - joint.rightRangeDeg)
+  const { leftRangeDeg, rightRangeDeg } = joint
+  if (typeof leftRangeDeg !== 'number' || typeof rightRangeDeg !== 'number') return null
+  return Math.abs(leftRangeDeg - rightRangeDeg)
+}
+
+function isBelowCaptureThreshold(value: number | null | undefined): boolean {
+  return typeof value === 'number' && value < ROM_CAPTURE_WARN_PERCENT
 }
 
 function resolveRomStatus(joint: RomJointDetail): { label: string; className: string } {
   if (!joint.analysisAvailable) {
     return { label: '기록 부족', className: styles.romStatusMuted }
   }
-  if ((joint.confidencePercent ?? 0) < 60 || (joint.coveragePercent ?? 0) < 60) {
+  if (
+    isBelowCaptureThreshold(joint.confidencePercent) ||
+    isBelowCaptureThreshold(joint.coveragePercent)
+  ) {
     return { label: '촬영 확인', className: styles.romStatusWarn }
   }
   const gap = romGap(joint)
-  if (gap !== null && gap >= 15) {
+  if (gap !== null && gap >= ROM_BALANCE_ATTENTION_DEG) {
     return { label: '좌우 차이', className: styles.romStatusAttention }
   }
   return { label: '안정적', className: styles.romStatusGood }

@@ -162,7 +162,7 @@ export function ROMDetailPage() {
         </aside>
 
         <section className={styles.rightCol}>
-          {analysisView && hasAnalyzedMotion && <CriteriaSummary analysis={analysisView} />}
+          {analysisView && <CriteriaSummary analysis={analysisView} />}
           {isLoading ? (
             <StatePanel
               title="움직임 분석을 불러오는 중입니다"

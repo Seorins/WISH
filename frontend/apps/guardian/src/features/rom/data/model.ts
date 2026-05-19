@@ -1,5 +1,9 @@
 export type RomJointId = 'elbow' | 'shoulder' | 'hip' | 'knee'
 
+export const ROM_CAPTURE_WARN_PERCENT = 60
+export const ROM_CONFIDENCE_GOOD_PERCENT = 80
+export const ROM_BALANCE_ATTENTION_DEG = 15
+
 export type RomJointGroup = {
   id: RomJointId
   name: string

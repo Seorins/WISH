@@ -1,5 +1,11 @@
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, XAxis, YAxis } from 'recharts'
-import type { RomJointDetail, RomJointTrendPoint } from '../data/model'
+import {
+  ROM_BALANCE_ATTENTION_DEG,
+  ROM_CAPTURE_WARN_PERCENT,
+  ROM_CONFIDENCE_GOOD_PERCENT,
+  type RomJointDetail,
+  type RomJointTrendPoint,
+} from '../data/model'
 import { InfoTip } from './InfoTip'
 import styles from './ROMAnalysisPanel.module.css'
 
@@ -46,6 +52,10 @@ function rangeGap(left: number | null, right: number | null): number | null {
   return Math.abs(left - right)
 }
 
+function isLowCapturePercent(value: number | null): boolean {
+  return typeof value === 'number' && value < ROM_CAPTURE_WARN_PERCENT
+}
+
 function buildBalanceLabel(joint: RomJointDetail): string {
   const gap = rangeGap(joint.leftRangeDeg, joint.rightRangeDeg)
   if (gap === null) return '좌우 비교 준비 중'
@@ -67,10 +77,10 @@ function buildBalanceSummary(joint: RomJointDetail): string {
 function buildNextAction(joint: RomJointDetail): string {
   const gap = rangeGap(joint.leftRangeDeg, joint.rightRangeDeg)
   if (!joint.analysisAvailable) return '다음에는 아이의 전신이 화면 중앙에 보이도록 도와주세요.'
-  if ((joint.confidencePercent ?? 0) < 60 || joint.excludedDurationMs > 0) {
+  if (isLowCapturePercent(joint.confidencePercent) || joint.excludedDurationMs > 0) {
     return '다음 촬영 때는 카메라를 조금 멀리 두고, 팔과 다리가 화면 밖으로 나가지 않게 해 주세요.'
   }
-  if (gap !== null && gap >= 15) {
+  if (gap !== null && gap >= ROM_BALANCE_ATTENTION_DEG) {
     return '다음 체조 때 같은 동작에서 좌우 차이가 반복되는지 한 번만 더 확인해 주세요.'
   }
   return '지금처럼 짧게 반복해도 충분해요. 다음 기록에서도 비슷한 흐름인지 보면 됩니다.'
@@ -78,8 +88,8 @@ function buildNextAction(joint: RomJointDetail): string {
 
 function buildConfidenceLabel(value: number | null): string {
   if (value === null) return '확인 중'
-  if (value >= 80) return '안정'
-  if (value >= 60) return '보통'
+  if (value >= ROM_CONFIDENCE_GOOD_PERCENT) return '안정'
+  if (value >= ROM_CAPTURE_WARN_PERCENT) return '보통'
   return '주의'
 }
 
@@ -121,7 +131,7 @@ export function ROMAnalysisPanel({ joint }: Props) {
           </div>
           <div
             className={`${styles.quickCard} ${
-              (joint.confidencePercent ?? 100) < 60 ? styles.quickCardWarn : ''
+              isLowCapturePercent(joint.confidencePercent) ? styles.quickCardWarn : ''
             }`}
           >
             <span className={styles.quickLabel}>촬영 안정도</span>
@@ -136,6 +146,17 @@ export function ROMAnalysisPanel({ joint }: Props) {
               {joint.analyzedMotionCount}/{joint.motionCount}개
             </strong>
             <span className={styles.quickHint}>관절이 보인 동작</span>
+          </div>
+          <div
+            className={`${styles.quickCard} ${
+              joint.excludedDurationMs > 0 ? styles.quickCardWarn : ''
+            }`}
+          >
+            <span className={styles.quickLabel}>제외 시간</span>
+            <strong className={styles.quickValue}>
+              {formatDuration(joint.excludedDurationMs)}
+            </strong>
+            <span className={styles.quickHint}>관절이 안 보인 시간</span>
           </div>
         </section>
 
