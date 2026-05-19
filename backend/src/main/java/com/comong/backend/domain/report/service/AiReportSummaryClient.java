@@ -13,8 +13,9 @@ import org.springframework.web.client.RestClient;
 
 import com.comong.backend.domain.report.config.AiReportSummaryProperties;
 import com.comong.backend.domain.report.dto.WeeklyReportAiSummaryResponse;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * AI 서버의 {@code POST /report/summarize} 어댑터. 동기 호출 — 보호자 GET 응답을 대기하기 때문.
@@ -51,7 +52,7 @@ public class AiReportSummaryClient {
         String json;
         try {
             json = objectMapper.writeValueAsString(payload);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             log.warn("AI report summary payload serialize failed: {}", e.getMessage());
             return WeeklyReportAiSummaryResponse.fallback("be:serialize-failed:" + e.getMessage());
         }
