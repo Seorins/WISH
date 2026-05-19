@@ -25,12 +25,12 @@ type ActivityItem = {
 
 const STATUS_LABEL: Record<ActivityStatus, string> = {
   done: '완료',
-  pending: '아직',
+  pending: '활동 없음',
 }
 
 const STATUS_CLASS: Record<ActivityStatus, string> = {
   done: 'statusDone',
-  pending: 'statusPlanned',
+  pending: 'statusNone',
 }
 
 // 각 캐릭터 일러스트가 전신 비율이라 scale + translateY 로 상반신만 크롭.
