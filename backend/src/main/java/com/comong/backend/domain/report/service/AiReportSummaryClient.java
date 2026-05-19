@@ -7,11 +7,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
 import com.comong.backend.domain.report.config.AiReportSummaryProperties;
 import com.comong.backend.domain.report.dto.WeeklyReportAiSummaryResponse;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * AI 서버의 {@code POST /report/summarize} 어댑터. 동기 호출 — 보호자 GET 응답을 대기하기 때문.
@@ -26,12 +29,15 @@ public class AiReportSummaryClient {
 
     private final RestClient restClient;
     private final AiReportSummaryProperties properties;
+    private final ObjectMapper objectMapper;
 
     public AiReportSummaryClient(
             @Qualifier("aiReportSummaryRestClient") RestClient restClient,
-            AiReportSummaryProperties properties) {
+            AiReportSummaryProperties properties,
+            ObjectMapper objectMapper) {
         this.restClient = restClient;
         this.properties = properties;
+        this.objectMapper = objectMapper;
     }
 
     public WeeklyReportAiSummaryResponse summarize(Map<String, Object> payload) {
@@ -40,13 +46,24 @@ public class AiReportSummaryClient {
             return WeeklyReportAiSummaryResponse.fallback("be:disabled");
         }
 
+        // RestClient.body(Map) 자동 직렬화 경로에서 빈 body 가 전송되는 사례가 있어
+        // ObjectMapper 로 미리 JSON 문자열로 만든 뒤 String body 로 보낸다.
+        String json;
+        try {
+            json = objectMapper.writeValueAsString(payload);
+        } catch (JsonProcessingException e) {
+            log.warn("AI report summary payload serialize failed: {}", e.getMessage());
+            return WeeklyReportAiSummaryResponse.fallback("be:serialize-failed:" + e.getMessage());
+        }
+
         Map<String, Object> body;
         try {
             body =
                     restClient
                             .post()
                             .uri("/report/summarize")
-                            .body(payload)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .body(json)
                             .retrieve()
                             .body(new ParameterizedTypeReference<>() {});
         } catch (Exception e) {
