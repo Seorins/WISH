@@ -617,6 +617,8 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
   private hasSubmittedSession = false
   private saveState: 'idle' | 'saving' | 'success' | 'error' = 'idle'
   private saveRetryButton?: Phaser.GameObjects.Text
+  private finishButton?: Phaser.GameObjects.Text
+  private sessionResultPanel?: Phaser.GameObjects.Container
   private lastTtsKey: string | null = null
   private lastTtsPlayedAtMs = 0
   private guideOverlay?: Phaser.GameObjects.Container
@@ -728,6 +730,92 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.cleanup())
     this.cameras.main.fadeIn(220, 0, 0, 0)
+    this.createFinishButton(vw)
+  }
+
+  private createFinishButton(vw: number) {
+    if (this.finishButton) return
+    this.finishButton = this.add
+      .text(vw - 32, 32, '종료', {
+        fontFamily: 'sans-serif',
+        fontSize: '24px',
+        color: '#ffffff',
+        backgroundColor: '#7c1d1d',
+        padding: { left: 18, right: 18, top: 8, bottom: 8 },
+        fontStyle: '700',
+      })
+      .setOrigin(1, 0)
+      .setDepth(40)
+      .setInteractive({ useHandCursor: true })
+    this.finishButton.on('pointerdown', () => {
+      if (
+        this.hasSubmittedSession ||
+        this.saveState === 'saving' ||
+        this.saveState === 'success' ||
+        this.sessionResultPanel
+      ) {
+        return
+      }
+      void this.finishExerciseSession()
+    })
+  }
+
+  private showSessionResultPanel(motionCount: number, averageAccuracy: number): boolean {
+    if (this.sessionResultPanel) return true
+    this.finishButton?.setVisible(false)
+
+    const { width: vw, height: vh } = this.scale
+    const overlay = this.add.container(vw / 2, vh / 2).setDepth(46)
+    const dim = this.add.rectangle(0, 0, vw, vh, 0x2d1b10, 0.6).setInteractive()
+    const panelWidth = Math.min(vw * 0.5, 520)
+    const panelHeight = Math.min(vh * 0.5, 440)
+    const panel = this.add
+      .rectangle(0, 0, panelWidth, panelHeight, 0xfff5dc, 0.98)
+      .setStrokeStyle(4, 0xd7a750, 0.95)
+    const title = this.add
+      .text(0, -panelHeight * 0.36, '체조 완료', {
+        fontFamily: 'sans-serif',
+        fontSize: '32px',
+        color: '#5a3517',
+        fontStyle: '800',
+      })
+      .setOrigin(0.5)
+    const lines = [
+      `완료한 동작  ${motionCount}개`,
+      `평균 수행률  ${Math.round(averageAccuracy * 100)}%`,
+    ]
+    const stats = this.add
+      .text(0, -panelHeight * 0.06, lines.join('\n'), {
+        fontFamily: 'sans-serif',
+        fontSize: '22px',
+        color: '#4d2d18',
+        align: 'center',
+        lineSpacing: 14,
+      })
+      .setOrigin(0.5)
+    const confirmBtn = this.add
+      .text(0, panelHeight * 0.35, '확인', {
+        fontFamily: 'sans-serif',
+        fontSize: '26px',
+        color: '#ffffff',
+        backgroundColor: '#4d9b5d',
+        padding: { left: 36, right: 36, top: 10, bottom: 10 },
+        fontStyle: '700',
+      })
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: true })
+    confirmBtn.on('pointerdown', () => this.closeSessionResultPanel())
+
+    overlay.add([dim, panel, title, stats, confirmBtn])
+    this.sessionResultPanel = overlay
+    return true
+  }
+
+  private closeSessionResultPanel() {
+    const overlay = this.sessionResultPanel
+    this.sessionResultPanel = undefined
+    overlay?.destroy(true)
+    fadeToScene(this, 'GymnasticsSelectScene')
   }
 
   update() {
@@ -3278,7 +3366,12 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
         ])
       }
       this.renderSaveState()
-      this.time.delayedCall(1500, () => fadeToScene(this, 'GymnasticsSelectScene'))
+      const motionCount = this.motionRecords.length
+      const averageAccuracy =
+        motionCount === 0
+          ? 0
+          : this.motionRecords.reduce((sum, r) => sum + r.completionRate, 0) / motionCount
+      this.showSessionResultPanel(motionCount, averageAccuracy)
     } catch (error) {
       console.warn('[GymnasticsPlayScene] Failed to finalize exercise session.', {
         error,
@@ -3966,6 +4059,10 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     this.pendingMotionUploads = []
     this.sessionIdPromise = null
     this.exerciseSessionPatientProfileId = null
+    this.sessionResultPanel?.destroy(true)
+    this.sessionResultPanel = undefined
+    this.finishButton?.destroy()
+    this.finishButton = undefined
   }
 }
 
