@@ -376,6 +376,12 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
   gap: 6px;
+  position: sticky;
+  bottom: -1px;
+  z-index: 2;
+  margin-top: 2px;
+  padding: 12px 0 4px;
+  background: linear-gradient(180deg, rgba(245, 248, 239, 0) 0%, #f5f8ef 36%, #f5f8ef 100%);
 }
 
 .gomoku-segmented button.active,
