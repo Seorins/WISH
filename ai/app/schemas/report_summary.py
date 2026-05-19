@@ -63,3 +63,6 @@ class ReportSummaryResponse(BaseModel):
     connection: Optional[str] = None
     suggestion: str = ""
     is_fallback: bool = False
+    # DEBUG (임시): fallback 발생 시 원인 추적용. 운영 안정화 후 제거.
+    debug_reason: Optional[str] = None
+    debug_raw: Optional[str] = None

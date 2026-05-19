@@ -19,9 +19,12 @@ public record WeeklyReportAiSummaryResponse(
         @Schema(description = "정서/대화 관찰 1~2개") List<String> emotionObservations,
         @Schema(description = "활동-정서 연결 한 문장 (없으면 null)") String connection,
         @Schema(description = "이번 주 함께 해볼 만한 작은 활동 1개") String suggestion,
-        @Schema(description = "AI 호출 실패로 안전 문구가 내려간 경우 true") boolean isFallback) {
+        @Schema(description = "AI 호출 실패로 안전 문구가 내려간 경우 true") boolean isFallback,
+        // DEBUG (임시): fallback 원인 추적용. 운영 안정화 후 제거.
+        @Schema(description = "DEBUG: fallback 원인") String debugReason,
+        @Schema(description = "DEBUG: AI 원본 응답 일부") String debugRaw) {
 
-    public static WeeklyReportAiSummaryResponse fallback() {
+    public static WeeklyReportAiSummaryResponse fallback(String reason) {
         return new WeeklyReportAiSummaryResponse(
                 List.of(
                         "이번 주 데이터를 한눈에 모아 봤어요.",
@@ -31,6 +34,12 @@ public record WeeklyReportAiSummaryResponse(
                 List.of(),
                 null,
                 "아이가 가장 좋아한 활동이 무엇이었는지 한 번 물어봐 주세요.",
-                true);
+                true,
+                reason,
+                null);
+    }
+
+    public static WeeklyReportAiSummaryResponse fallback() {
+        return fallback("be-default");
     }
 }
