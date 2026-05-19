@@ -16,10 +16,7 @@ import type {
 
 const RESPONSE_HOLD_MS = 200
 
-export const LIGHTHOUSE_OPENING_WELCOME_LINES = [
-  '어서 와, 기다리고 있었단다.',
-  '우리만의 작은 등대에 온 걸 환영해.',
-]
+export const LIGHTHOUSE_OPENING_WELCOME_LINES = ['오늘 기분 어때 ?']
 
 export const LIGHTHOUSE_OPENING_SAFE_LINES = ['여기서는 천천히 쉬어도 괜찮아.']
 export const LIGHTHOUSE_LOADING_LINE = '등대지기가 불빛을 살피고 있어요...'

@@ -72,9 +72,7 @@ describe('LighthouseEmotionController', () => {
         }),
       }),
     )
-    expect(onTextChange).toHaveBeenCalledWith(
-      '어서 와, 기다리고 있었단다.\n우리만의 작은 등대에 온 걸 환영해.',
-    )
+    expect(onTextChange).toHaveBeenCalledWith('오늘 기분 어때 ?')
     expect(screen.queryByRole('group', { name: '말하기' })).toBeNull()
   })
 
