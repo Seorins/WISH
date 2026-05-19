@@ -28,7 +28,12 @@ export async function getReportAiSummary(
 ): Promise<WeeklyReportAiSummary> {
   const response = await apiClient.get<ApiResponse<WeeklyReportAiSummary>>(
     `/guardian/patients/${patientProfileId}/report/ai-summary`,
-    { params: { weekStart } },
+    {
+      params: { weekStart },
+      // Opus 호출은 20~40초 걸려서 전역 apiClient 의 10s timeout 으로는 못 받음.
+      // BE 측 35s 와 맞춰 충분히 길게 둠 (BE 가 먼저 fallback 으로 응답하기 전에 axios 가 abort 되지 않도록).
+      timeout: 60_000,
+    },
   )
   return response.data.data
 }
