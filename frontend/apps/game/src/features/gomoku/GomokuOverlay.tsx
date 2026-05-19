@@ -157,6 +157,17 @@ const text = {
   me: '\uB098',
   opponent: '\uC0C1\uB300',
   versus: 'VS',
+  modeBadgeComputer: '\uD83E\uDD16 \uCEF4\uD4E8\uD130 \uB300\uC804',
+  modeBadgeLocal: '\uD83D\uDC65 \uB458\uC774\uC11C \uB300\uC804',
+  modeBadgeOnline: '\uD83C\uDF10 \uC628\uB77C\uC778 \uB300\uC804',
+  modeSelectTitle: '\uC624\uBAA9 \uC5B4\uB5BB\uAC8C \uB458\uB798\uC694?',
+  modeSelectSubtitle: '\uB300\uC804 \uBC29\uC2DD\uC744 \uACE8\uB77C\uC8FC\uC138\uC694',
+  modeCardComputerDesc:
+    '\uCEF4\uD4E8\uD130\uC640 \uD55C \uD310. \uCD08\uAE09/\uC911\uAE09/\uACE0\uAE09 \uB09C\uC774\uB3C4',
+  modeCardLocalDesc:
+    '\uAC19\uC740 \uD654\uBA74\uC5D0\uC11C \uB458\uC774 \uBC88\uAC08\uC544 \uD55C \uD310',
+  modeCardOnlineDesc:
+    '\uC628\uB77C\uC778 \uCE5C\uAD6C\uC640 \uB300\uAD6D\uD558\uACE0 \uB7AD\uD0B9\uC5D0\uB3C4 \uBC18\uC601',
 } as const
 
 const timerOptions = [
@@ -174,6 +185,12 @@ export function GomokuOverlay({
   onAuthRequired,
 }: GomokuOverlayProps) {
   const [mode, setMode] = useState<GameMode>(DEFAULT_MODE)
+  const [hasChosenMode, setHasChosenMode] = useState(false)
+  useEffect(() => {
+    if (!open) {
+      setHasChosenMode(false)
+    }
+  }, [open])
   const [computerLevel, setComputerLevel] = useState<ComputerLevel>(DEFAULT_COMPUTER_LEVEL)
   const [ruleSet, setRuleSet] = useState<RuleSet>(DEFAULT_RULE_SET)
   const [timerEnabled, setTimerEnabled] = useState(DEFAULT_TIMER_ENABLED)
@@ -894,204 +911,248 @@ export function GomokuOverlay({
           </button>
         </header>
 
-        <main className="gomoku-layout">
-          <section className="gomoku-board-zone" aria-label={text.title}>
-            <StatusBanner
-              status={effectiveStatus}
-              currentTurn={currentTurn}
-              isComputerThinking={mode === 'computer' && isComputerThinking}
-              mode={mode}
-              room={onlineRoom}
-              myOnlineStone={myOnlineStone}
-              moveCount={activeMoves.length}
-              message={
-                mode === 'online'
-                  ? onlineError ||
-                    (isResolvingOnlineProfile ? text.onlinePreparing : onlineStatusMessage)
-                  : statusMessage
-              }
-            />
-            <div className="gomoku-board-wrap">
-              <div className="gomoku-board" role="grid" aria-label="15 x 15 gomoku board">
-                {board.map((row, rowIndex) =>
-                  row.map((cell, colIndex) => {
-                    const position = { row: rowIndex, col: colIndex }
-                    const winning = effectiveStatus.winningLine?.some(linePosition =>
-                      isSamePosition(linePosition, position),
-                    )
-                    const last = isSamePosition(lastMove, position)
-                    const hinted = mode !== 'online' && isSamePosition(hintMove, position)
-                    const className = [
-                      'gomoku-cell',
-                      cell ? `stone-${cell}` : '',
-                      winning ? 'winning' : '',
-                      last ? 'last' : '',
-                      hinted ? 'hinted' : '',
-                      !cell && starPoints.has(`${rowIndex}:${colIndex}`) ? 'star' : '',
-                    ]
-                      .filter(Boolean)
-                      .join(' ')
-
-                    return (
-                      <button
-                        key={`${rowIndex}:${colIndex}`}
-                        type="button"
-                        role="gridcell"
-                        style={{
-                          left: `${(colIndex / (GOMOKU_BOARD_SIZE - 1)) * 100}%`,
-                          top: `${(rowIndex / (GOMOKU_BOARD_SIZE - 1)) * 100}%`,
-                        }}
-                        className={className}
-                        aria-label={`${rowIndex + 1}, ${colIndex + 1}`}
-                        disabled={
-                          !canHumanPlay || Boolean(cell) || (mode === 'online' && onlineBusy)
-                        }
-                        onClick={() => handleCellClick(position)}
-                      >
-                        {cell ? <span className="gomoku-stone" aria-hidden="true" /> : null}
-                      </button>
-                    )
-                  }),
-                )}
-              </div>
-              <BoardPhaseOverlay
+        {hasChosenMode ? (
+          <main className="gomoku-layout">
+            <section className="gomoku-board-zone" aria-label={text.title}>
+              <StatusBanner
                 status={effectiveStatus}
+                currentTurn={currentTurn}
+                isComputerThinking={mode === 'computer' && isComputerThinking}
                 mode={mode}
                 room={onlineRoom}
-                currentTurn={currentTurn}
                 myOnlineStone={myOnlineStone}
                 moveCount={activeMoves.length}
-                message={mode === 'online' ? onlineStatusMessage : statusMessage}
+                message={
+                  mode === 'online'
+                    ? onlineError ||
+                      (isResolvingOnlineProfile ? text.onlinePreparing : onlineStatusMessage)
+                    : statusMessage
+                }
               />
-            </div>
-          </section>
+              <div className="gomoku-board-wrap">
+                <div className="gomoku-board" role="grid" aria-label="15 x 15 gomoku board">
+                  {board.map((row, rowIndex) =>
+                    row.map((cell, colIndex) => {
+                      const position = { row: rowIndex, col: colIndex }
+                      const winning = effectiveStatus.winningLine?.some(linePosition =>
+                        isSamePosition(linePosition, position),
+                      )
+                      const last = isSamePosition(lastMove, position)
+                      const hinted = mode !== 'online' && isSamePosition(hintMove, position)
+                      const className = [
+                        'gomoku-cell',
+                        cell ? `stone-${cell}` : '',
+                        winning ? 'winning' : '',
+                        last ? 'last' : '',
+                        hinted ? 'hinted' : '',
+                        !cell && starPoints.has(`${rowIndex}:${colIndex}`) ? 'star' : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')
 
-          <aside className="gomoku-side">
-            <ModePanel mode={mode} onModeChange={handleModeChange} />
-            {mode !== 'online' ? (
-              <ControlPanel
-                mode={mode}
-                computerLevel={computerLevel}
-                ruleSet={ruleSet}
-                timerEnabled={timerEnabled}
-                timerSeconds={timerSeconds}
-                onComputerLevelChange={setComputerLevel}
-                onRuleSetChange={setRuleSet}
-                onTimerEnabledChange={setTimerEnabled}
-                onTimerSecondsChange={setTimerSeconds}
-              />
-            ) : null}
-            {mode === 'online' ? (
-              <>
-                <OnlinePanel
-                  room={onlineRoom}
-                  waitingRooms={waitingRooms}
-                  stats={onlineStats}
-                  ranking={onlineRanking}
-                  busy={onlineBusy}
-                  profileNotice={onlineProfileNotice}
-                  onCreateRoom={handleOnlineCreate}
-                  onRematchRoom={handleOnlineRematch}
-                  onRefreshRooms={handleOnlineRefresh}
-                  onJoinRoom={handleOnlineJoin}
-                />
-                <OnlineVersusPanel
+                      return (
+                        <button
+                          key={`${rowIndex}:${colIndex}`}
+                          type="button"
+                          role="gridcell"
+                          style={{
+                            left: `${(colIndex / (GOMOKU_BOARD_SIZE - 1)) * 100}%`,
+                            top: `${(rowIndex / (GOMOKU_BOARD_SIZE - 1)) * 100}%`,
+                          }}
+                          className={className}
+                          aria-label={`${rowIndex + 1}, ${colIndex + 1}`}
+                          disabled={
+                            !canHumanPlay || Boolean(cell) || (mode === 'online' && onlineBusy)
+                          }
+                          onClick={() => handleCellClick(position)}
+                        >
+                          {cell ? <span className="gomoku-stone" aria-hidden="true" /> : null}
+                        </button>
+                      )
+                    }),
+                  )}
+                </div>
+                <BoardPhaseOverlay
+                  status={effectiveStatus}
+                  mode={mode}
                   room={onlineRoom}
                   currentTurn={currentTurn}
                   myOnlineStone={myOnlineStone}
-                  selectedOutfit={selectedOnlineOutfit}
-                  timers={onlineTimers}
+                  moveCount={activeMoves.length}
+                  message={mode === 'online' ? onlineStatusMessage : statusMessage}
                 />
-              </>
-            ) : null}
-            {mode !== 'online' ? (
-              <PracticeVersusPanel
-                mode={mode}
-                currentTurn={currentTurn}
-                timers={timers}
-                scoreboard={scoreboard}
-                timerEnabled={timerEnabled}
-                computerLevel={computerLevel}
-                humanStone={computerHumanStone}
-                selectedOutfit={selectedOnlineOutfit}
-              />
-            ) : null}
-            {mode === 'online' ? (
-              <ControlPanel
-                mode={mode}
-                computerLevel={computerLevel}
-                ruleSet={ruleSet}
-                timerEnabled={timerEnabled}
-                timerSeconds={timerSeconds}
-                onComputerLevelChange={setComputerLevel}
-                onRuleSetChange={setRuleSet}
-                onTimerEnabledChange={setTimerEnabled}
-                onTimerSecondsChange={setTimerSeconds}
-              />
-            ) : null}
-            {mode === 'online' ? (
-              <div className="gomoku-actions" aria-label="\uB300\uAD6D \uBA85\uB839">
-                {canRematchOnlineRoom ? (
-                  <button type="button" onClick={handleOnlineRematch} disabled={onlineBusy}>
-                    {text.nextOnlineGame}
+              </div>
+            </section>
+
+            <aside className="gomoku-side">
+              <ModePanel mode={mode} onModeChange={handleModeChange} />
+              {mode !== 'online' ? (
+                <ControlPanel
+                  mode={mode}
+                  computerLevel={computerLevel}
+                  ruleSet={ruleSet}
+                  timerEnabled={timerEnabled}
+                  timerSeconds={timerSeconds}
+                  onComputerLevelChange={setComputerLevel}
+                  onRuleSetChange={setRuleSet}
+                  onTimerEnabledChange={setTimerEnabled}
+                  onTimerSecondsChange={setTimerSeconds}
+                />
+              ) : null}
+              {mode === 'online' ? (
+                <>
+                  <OnlinePanel
+                    room={onlineRoom}
+                    waitingRooms={waitingRooms}
+                    stats={onlineStats}
+                    ranking={onlineRanking}
+                    busy={onlineBusy}
+                    profileNotice={onlineProfileNotice}
+                    onCreateRoom={handleOnlineCreate}
+                    onRematchRoom={handleOnlineRematch}
+                    onRefreshRooms={handleOnlineRefresh}
+                    onJoinRoom={handleOnlineJoin}
+                  />
+                  <OnlineVersusPanel
+                    room={onlineRoom}
+                    currentTurn={currentTurn}
+                    myOnlineStone={myOnlineStone}
+                    selectedOutfit={selectedOnlineOutfit}
+                    timers={onlineTimers}
+                  />
+                </>
+              ) : null}
+              {mode !== 'online' ? (
+                <PracticeVersusPanel
+                  mode={mode}
+                  currentTurn={currentTurn}
+                  timers={timers}
+                  scoreboard={scoreboard}
+                  timerEnabled={timerEnabled}
+                  computerLevel={computerLevel}
+                  humanStone={computerHumanStone}
+                  selectedOutfit={selectedOnlineOutfit}
+                />
+              ) : null}
+              {mode === 'online' ? (
+                <ControlPanel
+                  mode={mode}
+                  computerLevel={computerLevel}
+                  ruleSet={ruleSet}
+                  timerEnabled={timerEnabled}
+                  timerSeconds={timerSeconds}
+                  onComputerLevelChange={setComputerLevel}
+                  onRuleSetChange={setRuleSet}
+                  onTimerEnabledChange={setTimerEnabled}
+                  onTimerSecondsChange={setTimerSeconds}
+                />
+              ) : null}
+              {mode === 'online' ? (
+                <div className="gomoku-actions" aria-label="\uB300\uAD6D \uBA85\uB839">
+                  {canRematchOnlineRoom ? (
+                    <button type="button" onClick={handleOnlineRematch} disabled={onlineBusy}>
+                      {text.nextOnlineGame}
+                    </button>
+                  ) : null}
+                  <button type="button" onClick={handleOnlineRefresh} disabled={onlineBusy}>
+                    {text.refresh}
                   </button>
-                ) : null}
-                <button type="button" onClick={handleOnlineRefresh} disabled={onlineBusy}>
-                  {text.refresh}
-                </button>
-                {!canRematchOnlineRoom ? (
+                  {!canRematchOnlineRoom ? (
+                    <button
+                      type="button"
+                      onClick={handleOnlineStart}
+                      disabled={!canStartOnlineRoom || onlineBusy}
+                    >
+                      {text.startRoom}
+                    </button>
+                  ) : null}
+                  {canSwapOnlineStones ? (
+                    <button type="button" onClick={handleOnlineSwapStones} disabled={onlineBusy}>
+                      {text.swapStones}
+                    </button>
+                  ) : null}
+                  {onlineRoom?.status === 'PLAYING' ? (
+                    <button type="button" onClick={handleOnlineResign} disabled={onlineBusy}>
+                      {text.resign}
+                    </button>
+                  ) : null}
                   <button
                     type="button"
-                    onClick={handleOnlineStart}
-                    disabled={!canStartOnlineRoom || onlineBusy}
+                    onClick={handleOnlineLeave}
+                    disabled={!onlineRoom || onlineBusy}
                   >
-                    {text.startRoom}
+                    {text.leaveRoom}
                   </button>
-                ) : null}
-                {canSwapOnlineStones ? (
-                  <button type="button" onClick={handleOnlineSwapStones} disabled={onlineBusy}>
-                    {text.swapStones}
+                </div>
+              ) : (
+                <div className="gomoku-actions" aria-label="\uB300\uAD6D \uBA85\uB839">
+                  <button type="button" onClick={resetGame}>
+                    {text.restart}
                   </button>
-                ) : null}
-                {onlineRoom?.status === 'PLAYING' ? (
-                  <button type="button" onClick={handleOnlineResign} disabled={onlineBusy}>
-                    {text.resign}
+                  {mode === 'computer' ? (
+                    <button type="button" onClick={handleSwapComputerStones}>
+                      {text.swapStones}
+                    </button>
+                  ) : null}
+                  <button type="button" onClick={handleUndo} disabled={moves.length === 0}>
+                    {text.undo}
                   </button>
-                ) : null}
-                <button
-                  type="button"
-                  onClick={handleOnlineLeave}
-                  disabled={!onlineRoom || onlineBusy}
-                >
-                  {text.leaveRoom}
-                </button>
-              </div>
-            ) : (
-              <div className="gomoku-actions" aria-label="\uB300\uAD6D \uBA85\uB839">
-                <button type="button" onClick={resetGame}>
-                  {text.restart}
-                </button>
-                {mode === 'computer' ? (
-                  <button type="button" onClick={handleSwapComputerStones}>
-                    {text.swapStones}
+                  <button
+                    type="button"
+                    onClick={handleHint}
+                    disabled={effectiveStatus.phase !== 'playing'}
+                  >
+                    {text.hint}
                   </button>
-                ) : null}
-                <button type="button" onClick={handleUndo} disabled={moves.length === 0}>
-                  {text.undo}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleHint}
-                  disabled={effectiveStatus.phase !== 'playing'}
-                >
-                  {text.hint}
-                </button>
-              </div>
-            )}
-            <MoveHistory moves={activeMoves} />
-          </aside>
-        </main>
+                </div>
+              )}
+              <MoveHistory moves={activeMoves} />
+            </aside>
+          </main>
+        ) : (
+          <ModeSelectionScreen
+            onSelect={picked => {
+              handleModeChange(picked)
+              setHasChosenMode(true)
+            }}
+          />
+        )}
       </section>
+    </div>
+  )
+}
+
+function ModeSelectionScreen({ onSelect }: { onSelect: (mode: GameMode) => void }) {
+  return (
+    <div className="gomoku-mode-select">
+      <h2>{text.modeSelectTitle}</h2>
+      <p>{text.modeSelectSubtitle}</p>
+      <div className="gomoku-mode-select-grid">
+        <button
+          type="button"
+          className="gomoku-mode-select-card mode-computer"
+          onClick={() => onSelect('computer')}
+        >
+          <strong>{text.modeBadgeComputer}</strong>
+          <span>{text.modeCardComputerDesc}</span>
+        </button>
+        <button
+          type="button"
+          className="gomoku-mode-select-card mode-local"
+          onClick={() => onSelect('local')}
+        >
+          <strong>{text.modeBadgeLocal}</strong>
+          <span>{text.modeCardLocalDesc}</span>
+        </button>
+        <button
+          type="button"
+          className="gomoku-mode-select-card mode-online"
+          onClick={() => onSelect('online')}
+        >
+          <strong>{text.modeBadgeOnline}</strong>
+          <span>{text.modeCardOnlineDesc}</span>
+        </button>
+      </div>
     </div>
   )
 }
