@@ -26,11 +26,11 @@ import lombok.RequiredArgsConstructor;
 /**
  * 보호자 주간 리포트 AI 요약 조립 (S14P31E103-745).
  *
- * <p>월~일 한 주의 활동(UsageStat) + 대화 톤 트렌드(GuardianDialogueSummary.weekly) 를 모아 AI 서버에 던지고
- * 종합 코멘트 + 관찰 + 제안을 받아 보호자에게 그대로 전달한다.
+ * <p>월~일 한 주의 활동(UsageStat) + 대화 톤 트렌드(GuardianDialogueSummary.weekly) 를 모아 AI 서버에 던지고 종합 코멘트 + 관찰
+ * + 제안을 받아 보호자에게 그대로 전달한다.
  *
- * <p>v1 범위: 활동 합계/일자별 시간 + 대화 톤 트렌드 + 지난 주 활동 델타. 게임별 상세 점수, 대화 주제·우려 시그널은
- * 추가 데이터가 필요해 v2 에서 보강 예정 (현재는 빈 객체로 보내고 AI 가 가용 데이터 한도에서 의견을 낸다).
+ * <p>v1 범위: 활동 합계/일자별 시간 + 대화 톤 트렌드 + 지난 주 활동 델타. 게임별 상세 점수, 대화 주제·우려 시그널은 추가 데이터가 필요해 v2 에서 보강 예정
+ * (현재는 빈 객체로 보내고 AI 가 가용 데이터 한도에서 의견을 낸다).
  */
 @Service
 @RequiredArgsConstructor

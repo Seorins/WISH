@@ -16,8 +16,8 @@ import com.comong.backend.domain.report.dto.WeeklyReportAiSummaryResponse;
 /**
  * AI 서버의 {@code POST /report/summarize} 어댑터. 동기 호출 — 보호자 GET 응답을 대기하기 때문.
  *
- * <p>실패(타임아웃/5xx/파싱 오류/AI 비활성)는 모두 로깅만 하고 {@link WeeklyReportAiSummaryResponse#fallback()} 으로
- * 복구한다. 리포트 화면 자체는 항상 노출되어야 하므로 예외를 위로 던지지 않는다.
+ * <p>실패(타임아웃/5xx/파싱 오류/AI 비활성)는 모두 로깅만 하고 {@link WeeklyReportAiSummaryResponse#fallback()} 으로 복구한다.
+ * 리포트 화면 자체는 항상 노출되어야 하므로 예외를 위로 던지지 않는다.
  */
 @Component
 public class AiReportSummaryClient {
@@ -68,8 +68,7 @@ public class AiReportSummaryClient {
         List<String> activity = toStringList(body.get("activity_observations"));
         List<String> emotion = toStringList(body.get("emotion_observations"));
         Object connectionRaw = body.get("connection");
-        String connection =
-                (connectionRaw instanceof String s && !s.isBlank()) ? s : null;
+        String connection = (connectionRaw instanceof String s && !s.isBlank()) ? s : null;
         Object suggestionRaw = body.get("suggestion");
         String suggestion = suggestionRaw instanceof String s ? s : "";
         boolean isFallback = Boolean.TRUE.equals(body.get("is_fallback"));
