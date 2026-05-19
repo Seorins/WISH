@@ -1029,6 +1029,7 @@ export function GomokuOverlay({
                 onTimerSecondsChange={setTimerSeconds}
               />
             ) : null}
+            <MoveHistory moves={activeMoves} />
             {mode === 'online' ? (
               <div className="gomoku-actions" aria-label="\uB300\uAD6D \uBA85\uB839">
                 {canRematchOnlineRoom ? (
@@ -1088,7 +1089,6 @@ export function GomokuOverlay({
                 </button>
               </div>
             )}
-            <MoveHistory moves={activeMoves} />
           </aside>
         </main>
       </section>
