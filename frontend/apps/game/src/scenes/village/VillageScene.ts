@@ -57,9 +57,8 @@ const EMOJI_HINT_TEXT = '[Q] 이모티콘'
 const EMOJI_HINT_OPEN_TEXT = '[Q] 닫기'
 const EMOJI_HINT_OPEN_OFFSET_Y = 66
 const SETTINGS_HINT_TEXT = '\u2699 [ESC] 설정'
-const VILLAGE_CONTROL_TUTORIAL_KEY = 'village_control_tutorial_seen'
 const LEGACY_INTERACTION_TUTORIAL_KEY = 'tutorial_interaction_seen'
-const VILLAGE_CONTROL_TUTORIAL_DURATION_MS = 6000
+const VILLAGE_CONTROL_TUTORIAL_DURATION_MS = 10000
 const VILLAGE_SHIP_KEY = 'village-ship'
 const VILLAGE_SHIP_PATH = 'images/themes/ferry/ui/ship.png'
 const VILLAGE_SHIP = {
@@ -362,16 +361,6 @@ type VillageFuelNoticeUi = {
 type VillageSceneData = {
   spawn?: RatioPoint
   portalCooldownMs?: number
-}
-
-function hasStoredFlag(key: string) {
-  if (typeof window === 'undefined') return false
-
-  try {
-    return window.localStorage.getItem(key) === 'true'
-  } catch {
-    return false
-  }
 }
 
 function setStoredFlag(key: string) {
@@ -691,6 +680,11 @@ export class VillageScene extends Phaser.Scene {
     })
 
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      if (this.controlTutorial) {
+        this.hideVillageControlTutorial()
+        return
+      }
+
       if (this.settingsMenu.isOpen()) {
         return
       }
@@ -775,7 +769,7 @@ export class VillageScene extends Phaser.Scene {
       },
     )
     this.createVillageSettingsHint()
-    this.showVillageControlTutorialOnce()
+    this.showVillageControlTutorial(data.spawn === undefined)
     // 1\~9 + 0 단축키. 인덱스 0\~9 매핑. 팔레트가 숨겨져 있어도 발사 가능 (학습용 토글 vs 즉시 발사 분리).
     const emojiKeyNames = [
       'ONE',
@@ -867,6 +861,7 @@ export class VillageScene extends Phaser.Scene {
       speed: getPlayerMoveSpeed(),
       blocked:
         this.isVillagerDialogueOpen ||
+        Boolean(this.controlTutorial) ||
         this.settingsMenu.isOpen() ||
         this.isGomokuOpen ||
         this.isPhotoGalleryOpen,
@@ -972,16 +967,14 @@ export class VillageScene extends Phaser.Scene {
     )
   }
 
-  private showVillageControlTutorialOnce() {
+  private showVillageControlTutorial(shouldShow: boolean) {
     setStoredFlag(LEGACY_INTERACTION_TUTORIAL_KEY)
-    if (hasStoredFlag(VILLAGE_CONTROL_TUTORIAL_KEY)) return
+    if (!shouldShow) return
 
-    setStoredFlag(VILLAGE_CONTROL_TUTORIAL_KEY)
-
-    const width = 236
-    const height = 92
+    const width = Phaser.Math.Clamp(this.scale.width - 44, 320, 456)
+    const height = Phaser.Math.Clamp(this.scale.height - 44, 320, 342)
     const container = this.add
-      .container(18, this.scale.height - height - 18)
+      .container(this.scale.width / 2 - width / 2, this.scale.height / 2 - height / 2)
       .setDepth(102)
       .setScrollFactor(0)
       .setSize(width, height)
@@ -992,14 +985,49 @@ export class VillageScene extends Phaser.Scene {
       )
 
     const bg = this.add.graphics()
-    bg.fillStyle(0x000000, 0.78)
-    bg.fillRoundedRect(0, 0, width, height, 12)
-    bg.lineStyle(1.5, 0xffffff, 0.18)
-    bg.strokeRoundedRect(0.75, 0.75, width - 1.5, height - 1.5, 11)
+    this.drawVillageControlTutorialPanel(bg, width, height)
 
-    const eRow = this.createVillageControlTutorialRow('E', '상호작용', 24)
-    const qRow = this.createVillageControlTutorialRow('Q', '이모티콘', 66)
-    container.add([bg, ...eRow, ...qRow])
+    const title = this.add
+      .text(width / 2, 28, '조작법 안내', {
+        fontFamily: "'Jua', 'Apple SD Gothic Neo', sans-serif",
+        fontSize: '26px',
+        color: '#fff8e7',
+        align: 'center',
+        resolution: 2,
+      })
+      .setOrigin(0.5)
+
+    const subtitle = this.add
+      .text(width / 2, 59, '마을에서 사용할 수 있는 기본 조작이에요', {
+        fontFamily: 'Pretendard, "Noto Sans KR", sans-serif',
+        fontSize: '15px',
+        fontStyle: '800',
+        color: '#d8c7ad',
+        align: 'center',
+        resolution: 2,
+      })
+      .setOrigin(0.5)
+
+    const rows = [
+      this.createVillageControlTutorialRow(width, 'WASD / 방향키', '이동', 106),
+      this.createVillageControlTutorialRow(width, '마우스 클릭', '원하는 곳으로 이동', 146),
+      this.createVillageControlTutorialRow(width, 'E', '상호작용', 186),
+      this.createVillageControlTutorialRow(width, 'Q', '이모티콘', 226),
+      this.createVillageControlTutorialRow(width, 'ESC', '설정과 의상 변경', 266),
+    ].flat()
+
+    const closeText = this.add
+      .text(width / 2, height - 26, '클릭하면 닫혀요', {
+        fontFamily: 'Pretendard, "Noto Sans KR", sans-serif',
+        fontSize: '14px',
+        fontStyle: '800',
+        color: '#b8aa96',
+        align: 'center',
+        resolution: 2,
+      })
+      .setOrigin(0.5)
+
+    container.add([bg, title, subtitle, ...rows, closeText])
 
     container.on(
       'pointerdown',
@@ -1027,15 +1055,38 @@ export class VillageScene extends Phaser.Scene {
     )
   }
 
-  private createVillageControlTutorialRow(key: string, label: string, y: number) {
+  private drawVillageControlTutorialPanel(
+    bg: Phaser.GameObjects.Graphics,
+    width: number,
+    height: number,
+  ) {
+    bg.clear()
+    bg.fillStyle(0x000000, 0.22)
+    bg.fillRoundedRect(5, 7, width, height, 18)
+    bg.fillStyle(0x241d19, 0.94)
+    bg.fillRoundedRect(0, 0, width, height, 18)
+    bg.lineStyle(2, 0xffefd0, 0.78)
+    bg.strokeRoundedRect(1, 1, width - 2, height - 2, 17)
+    bg.lineStyle(1, 0xffffff, 0.18)
+    bg.strokeRoundedRect(8, 8, width - 16, height - 16, 13)
+  }
+
+  private createVillageControlTutorialRow(width: number, key: string, label: string, y: number) {
+    const keyWidth = width < 380 ? 104 : 118
+    const keyX = 28
+    const keyCenterX = keyX + keyWidth / 2
+    const labelX = keyX + keyWidth + 18
+    const fontSize = width < 380 ? '16px' : '17px'
     const keyBg = this.add.graphics()
     keyBg.fillStyle(0x7b61ff, 1)
-    keyBg.fillRoundedRect(18, y - 15, 34, 30, 8)
+    keyBg.fillRoundedRect(keyX, y - 15, keyWidth, 30, 8)
+    keyBg.lineStyle(1.4, 0xffffff, 0.38)
+    keyBg.strokeRoundedRect(keyX + 0.5, y - 14.5, keyWidth - 1, 29, 7)
 
     const keyText = this.add
-      .text(35, y, key, {
+      .text(keyCenterX, y, key, {
         fontFamily: 'Pretendard, "Noto Sans KR", sans-serif',
-        fontSize: '18px',
+        fontSize,
         fontStyle: '900',
         color: '#ffffff',
         resolution: 2,
@@ -1043,11 +1094,12 @@ export class VillageScene extends Phaser.Scene {
       .setOrigin(0.5)
 
     const labelText = this.add
-      .text(66, y, label, {
+      .text(labelX, y, label, {
         fontFamily: 'Pretendard, "Noto Sans KR", sans-serif',
-        fontSize: '18px',
+        fontSize,
         fontStyle: '800',
         color: '#fff4dc',
+        wordWrap: { width: width - labelX - 28 },
         resolution: 2,
       })
       .setOrigin(0, 0.5)
@@ -1075,8 +1127,12 @@ export class VillageScene extends Phaser.Scene {
   private layoutVillageControlTutorial() {
     if (!this.controlTutorial) return
 
-    const height = this.controlTutorial.height || 92
-    this.controlTutorial.setPosition(18, this.scale.height - height - 18)
+    const width = this.controlTutorial.width || 456
+    const height = this.controlTutorial.height || 342
+    this.controlTutorial.setPosition(
+      this.scale.width / 2 - width / 2,
+      this.scale.height / 2 - height / 2,
+    )
   }
 
   private createVillageMinimap(worldWidth: number, worldHeight: number) {
