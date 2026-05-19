@@ -15,9 +15,9 @@ logger = logging.getLogger(__name__)
 
 GMS_BASE_URL = os.getenv("GMS_ANTHROPIC_BASE_URL", "https://gms.ssafy.io/gmsapi/api.anthropic.com/v1")
 GMS_API_KEY = os.getenv("GMS_KEY", "")
-# 주간 리포트 요약은 보호자가 한눈에 보는 종합 코멘트라 품질이 중요 → Opus 기본.
-# DIALOGUE_CHAT_MODEL(영철 채팅용 Haiku) 과는 별개로 운용한다.
-GMS_MODEL = os.getenv("REPORT_SUMMARY_MODEL", "claude-opus-4-7")
+# 영철 chat 과 동일한 Haiku 사용 — GMS 프록시에서 검증된 모델 ID. Opus/Sonnet 시도했으나
+# dev 환경에서 fallback 만 떨어져서 우선 동작 보장 우선. 품질 향상 필요 시 모델만 교체.
+GMS_MODEL = os.getenv("REPORT_SUMMARY_MODEL", "claude-haiku-4-5-20251001")
 GMS_VERSION = os.getenv("GMS_ANTHROPIC_VERSION", "2023-06-01")
 # 주간 데이터 + JSON 출력이라 chat 보다 토큰·시간 여유 필요.
 GMS_TIMEOUT = int(os.getenv("REPORT_SUMMARY_TIMEOUT_SECONDS", "30"))
