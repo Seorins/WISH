@@ -34,7 +34,7 @@ public class AiReportSummaryClient {
     private static final Logger log = LoggerFactory.getLogger(AiReportSummaryClient.class);
 
     // 버전 마커 — debugReason 에 박혀 dev 에 실제 반영된 코드 버전을 식별.
-    private static final String CODE_VERSION = "v6-jdk-httpclient";
+    private static final String CODE_VERSION = "v7-http11";
 
     private final AiReportSummaryProperties properties;
     private final ObjectMapper objectMapper;
@@ -43,7 +43,9 @@ public class AiReportSummaryClient {
     public AiReportSummaryClient(AiReportSummaryProperties properties, ObjectMapper objectMapper) {
         this.properties = properties;
         this.objectMapper = objectMapper;
-        this.httpClient = HttpClient.newHttpClient();
+        // HTTP/2 기본값 사용 시 uvicorn(HTTP/1.1 only) 과 자동 협상에서 body 가 유실되는 케이스가
+        // 보고된 적 있어 HTTP/1.1 로 강제.
+        this.httpClient = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).build();
     }
 
     public WeeklyReportAiSummaryResponse summarize(Map<String, Object> payload) {
@@ -98,14 +100,21 @@ public class AiReportSummaryClient {
         if (status / 100 != 2) {
             String preview = new String(respBytes, StandardCharsets.UTF_8);
             if (preview.length() > 300) preview = preview.substring(0, 300);
-            log.warn("AI report summary HTTP {} body={}", status, preview);
+            String reqPreview =
+                    new String(
+                            jsonBytes, 0, Math.min(jsonBytes.length, 80), StandardCharsets.UTF_8);
+            log.warn("AI report summary HTTP {} uri={} body={}", status, uri, preview);
             return WeeklyReportAiSummaryResponse.fallback(
                     "be:http-"
                             + status
                             + "["
                             + CODE_VERSION
+                            + "][uri="
+                            + uri
                             + "][bytes="
                             + jsonBytes.length
+                            + "][reqHead="
+                            + reqPreview
                             + "]:"
                             + preview);
         }
