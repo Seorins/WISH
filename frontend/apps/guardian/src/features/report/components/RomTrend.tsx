@@ -28,6 +28,24 @@ const TONE_COLORS: Record<RomJointTrend['tone'], { from: string; to: string }> =
 
 export function RomTrend({ trends }: Props) {
   const navigate = useNavigate()
+
+  // 측정 데이터 자체가 없을 때 — 가짜 수치 보여주는 대신 수집 중 안내.
+  if (trends.length === 0) {
+    return (
+      <article className={styles.card} aria-label="ROM 추이">
+        <header className={styles.cardHead}>
+          <h3 className={styles.cardTitle}>가동 범위 추이</h3>
+          <button type="button" className={styles.cardAction} onClick={() => navigate('/rom')}>
+            측정 시작
+          </button>
+        </header>
+        <p className={styles.romCollecting}>
+          ROM 측정 데이터를 수집 중이에요. 자세 분석을 시작하면 여기에 변화가 나타나요.
+        </p>
+      </article>
+    )
+  }
+
   const biggestImprovement = trends.reduce<RomJointTrend | null>((best, t) => {
     if (!best || t.delta > best.delta) return t
     return best

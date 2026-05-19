@@ -22,7 +22,7 @@ import {
   useUsageRankings,
 } from '@/features/activity/hooks'
 import { useFuelStatus } from '@/features/fuel/hooks'
-import { buildMockReport, buildUsageRanking } from './mock'
+import { buildUsageRanking } from './mock'
 import type {
   AchievementStat,
   GameAchievement,
@@ -317,6 +317,23 @@ function buildExerciseAchievement(
   }
 }
 
+function buildOneLiner(summary: ReportSummary, achievements: GameAchievement[]): string {
+  // 데이터가 전혀 없을 때 → 활동 안 했다고 명시.
+  if (summary.totalMinutes === 0 && summary.sessionCount === 0) {
+    return '아직 이번 주는 함께한 기록이 없어요'
+  }
+  // 시간이 가장 길었던 활동을 그대로 노출 — 추측·과장 없는 사실 기반 한 줄.
+  const topGame = achievements.reduce<GameAchievement | null>(
+    (top, g) => (g.minutes > (top?.minutes ?? 0) ? g : top),
+    null,
+  )
+  if (topGame && topGame.minutes > 0) {
+    return `이번 주는 ${topGame.label} 시간이 가장 길었어요 ${topGame.emoji}`
+  }
+  // 게임 활동은 0인데 login(접속) 만 있는 경우 — 잠깐 들렀다고 표현.
+  return '이번 주에는 잠깐 들러줬어요'
+}
+
 function buildArtAchievement(artworks: Artwork[], minutes: number): GameAchievement {
   if (artworks.length === 0) {
     return {
@@ -378,9 +395,6 @@ export function useReportData({ patientId, patientName, week }: UseReportDataOpt
   const fuelQuery = useFuelStatus()
 
   const data = useMemo<ReportData>(() => {
-    // ROM 추이 / one-liner 만 mock — 나머지는 BE 실데이터
-    const mock = buildMockReport(week, patientName)
-
     const dailyData = dailyQuery.data as DailyUsageStats | undefined
     const lastDailyData = lastDailyQuery.data as DailyUsageStats | undefined
     const averagesData = averagesQuery.data as UsageAverages | undefined
@@ -457,10 +471,11 @@ export function useReportData({ patientId, patientName, week }: UseReportDataOpt
     return {
       patientName,
       week,
-      oneLiner: mock.oneLiner,
+      oneLiner: buildOneLiner(summary, achievements),
       summary,
       participation,
-      romTrends: mock.romTrends,
+      // ROM 측정 데이터는 BE 미지원 — 빈 배열로 두고 컴포넌트가 '수집 중' 안내로 처리.
+      romTrends: [],
       usage,
       timeBuckets,
       topBucketId,
