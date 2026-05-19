@@ -162,6 +162,10 @@ export function LighthouseEmotionController({
     state.status === 'opening_safe_line' ||
     state.status === 'waiting_final_close'
   const showFinishButton = isAwaitingUserSpeech && !loading
+  // 대화 진행 중에는 ESC 등으로 닫히지 않도록 close/cancel 핸들러를 차단한다.
+  // 유일한 종료 경로는 "오늘은 여기까지 대화할래요!" 버튼 → finish('COMPLETED') → BE finish 호출 →
+  // status='waiting_final_close' 진입. 그 이후엔 다시 dismiss 가능.
+  const isInActiveChat = isAwaitingUserSpeech || loading
 
   const handleSttSubmit = (transcript: string) => {
     void submitSttInput(transcript)
@@ -184,8 +188,8 @@ export function LighthouseEmotionController({
         footerAction={null}
         showFrame={false}
         onAdvance={canAdvance ? advance : undefined}
-        onClose={close}
-        onCancel={cancel}
+        onClose={isInActiveChat ? undefined : close}
+        onCancel={isInActiveChat ? undefined : cancel}
       />
       <LighthouseSttOverlay
         visible={isAwaitingUserSpeech && !loading}
