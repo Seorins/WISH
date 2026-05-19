@@ -199,17 +199,22 @@ export function LiveMonitorPage() {
             {viewerEnabled ? (
               <LiveKitViewer activeSession={activeSession} />
             ) : (
-              <section className={styles.placeholder}>
-                <h2 className={styles.title}>
-                  {connectionRequested
-                    ? '실시간 연결 중입니다.'
-                    : '아직 실시간 연결을 시작하지 않았습니다.'}
-                </h2>
-                <p className={styles.subtitle}>
-                  {connectionRequested
-                    ? '아이 화면이 준비되면 자동으로 영상이 표시됩니다.'
-                    : '보호자가 시작 버튼을 눌렀을 때만 아이 화면 연결을 요청합니다.'}
-                </p>
+              <section className={styles.liveEmptyState}>
+                <div className={styles.liveEmptyIcon} aria-hidden="true">
+                  {connectionRequested ? '···' : 'LIVE'}
+                </div>
+                <div>
+                  <h2 className={styles.title}>
+                    {connectionRequested
+                      ? '아이 화면을 연결하고 있습니다.'
+                      : '실시간 연결을 시작하면 아이 화면이 여기에 표시됩니다.'}
+                  </h2>
+                  <p className={styles.subtitle}>
+                    {connectionRequested
+                      ? '연결이 준비되는 동안 이 화면을 열어두세요.'
+                      : '위의 시작 버튼을 누를 때만 아이 화면 연결을 요청합니다.'}
+                  </p>
+                </div>
               </section>
             )}
           </div>
