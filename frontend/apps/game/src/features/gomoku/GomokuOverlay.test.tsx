@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import {
   createGomokuRoom,
+  getGomokuMessages,
   getGomokuRanking,
   getMyGomokuStats,
   getWaitingGomokuRooms,
@@ -9,6 +10,7 @@ import {
   listPatientProfiles,
   rematchGomokuRoom,
   swapGomokuRoomStones,
+  type GomokuChatMessage,
   type GomokuRanking,
   type GomokuRoom,
   type GomokuRoomPage,
@@ -19,6 +21,7 @@ import { GomokuOverlay } from './GomokuOverlay'
 
 vi.mock('@wish/api-client', () => ({
   createGomokuRoom: vi.fn(),
+  getGomokuMessages: vi.fn(),
   getGomokuRanking: vi.fn(),
   getGomokuRoom: vi.fn(),
   getMyGomokuStats: vi.fn(),
@@ -30,6 +33,7 @@ vi.mock('@wish/api-client', () => ({
   playGomokuMove: vi.fn(),
   rematchGomokuRoom: vi.fn(),
   resignGomokuRoom: vi.fn(),
+  sendGomokuMessage: vi.fn(),
   startGomokuRoom: vi.fn(),
   swapGomokuRoomStones: vi.fn(),
 }))
@@ -187,6 +191,7 @@ describe('GomokuOverlay online room creation', () => {
     vi.mocked(getGomokuRanking).mockResolvedValue(apiResponse(emptyRanking))
     vi.mocked(heartbeatGomokuRoom).mockResolvedValue(apiResponse(createdRoom))
     vi.mocked(listPatientProfiles).mockResolvedValue(apiResponse([]))
+    vi.mocked(getGomokuMessages).mockResolvedValue(apiResponse([] as GomokuChatMessage[]))
   })
 
   afterEach(() => {
