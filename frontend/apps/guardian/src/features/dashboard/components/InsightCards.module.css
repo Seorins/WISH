@@ -356,10 +356,13 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
-  padding: 10px 6px;
+  justify-content: center;
+  gap: 4px;
+  min-height: 94px;
+  padding: 10px 8px;
   border-radius: var(--dash-radius-md);
   text-align: center;
+  min-width: 0;
 }
 
 .romCellMint,
@@ -378,37 +381,63 @@
 
 .romJoint {
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--dash-color-text-muted);
-  letter-spacing: 0.01em;
+  letter-spacing: 0;
+  white-space: nowrap;
 }
 
 .romPercent {
-  font-size: 19px;
+  font-size: 18px;
   font-weight: 800;
   color: var(--dash-color-text-strong);
   line-height: 1.1;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+.romSubMetric {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--dash-color-text-muted);
+  line-height: 1.25;
+  white-space: nowrap;
 }
 
 .romRating {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 21px;
+  padding: 3px 8px;
+  border-radius: var(--dash-radius-pill);
   font-size: 10.5px;
-  font-weight: 600;
+  font-weight: 800;
+  line-height: 1.2;
+  white-space: nowrap;
 }
 
+.romStatusGood,
 .romRatingMint {
+  background: var(--dash-color-success-soft);
   color: var(--dash-color-success);
 }
 
+.romStatusAttention,
 .romRatingLavender {
+  background: var(--dash-color-primary-50);
   color: var(--dash-color-primary);
 }
 
+.romStatusWarn,
 .romRatingPink {
+  background: #fff1f3;
   color: #ed5f8c;
 }
 
+.romStatusMuted,
 .romRatingCyan {
+  background: #eef6fb;
   color: #2c9bbd;
 }
 

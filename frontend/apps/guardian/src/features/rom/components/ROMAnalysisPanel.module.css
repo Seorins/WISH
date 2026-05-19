@@ -32,6 +32,55 @@
   letter-spacing: 0;
 }
 
+.quickGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--dash-space-2);
+}
+
+.quickCard {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  min-height: 84px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: #f6f7fc;
+  border: 1px solid var(--dash-color-border);
+  min-width: 0;
+}
+
+.quickCardWarn {
+  background: #fff7f7;
+  border-color: rgba(239, 127, 133, 0.28);
+}
+
+.quickLabel {
+  color: var(--dash-color-text-muted);
+  font-size: 11.5px;
+  font-weight: 800;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.quickValue {
+  color: var(--dash-color-text-strong);
+  font-size: 18px;
+  font-weight: 900;
+  line-height: 1.1;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+.quickHint {
+  color: var(--dash-color-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.35;
+  word-break: keep-all;
+}
+
 .guardianNote {
   display: flex;
   flex-direction: column;
@@ -437,6 +486,10 @@
 }
 
 @media (max-width: 768px) {
+  .quickGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .metricGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: var(--dash-space-2);

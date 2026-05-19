@@ -6,7 +6,11 @@ import { useMyPatientId } from '@/features/auth/hooks/useMyPatientId'
 import { JointStepNav } from '@/features/rom/components/JointStepNav'
 import { ROMAnalysisPanel } from '@/features/rom/components/ROMAnalysisPanel'
 import { ROMCharacter3D } from '@/features/rom/components/ROMCharacter3D'
-import { ROM_JOINT_GROUPS, type RomJointId } from '@/features/rom/data/model'
+import {
+  ROM_JOINT_GROUPS,
+  type RomJointId,
+  type RomMovementAnalysisView,
+} from '@/features/rom/data/model'
 import { useRomMovementAnalysis } from '@/features/rom/hooks'
 import '@/features/dashboard/tokens.css'
 import styles from './ROMDetailPage.module.css'
@@ -17,6 +21,38 @@ function StatePanel({ title, description }: { title: string; description: string
       <h2 className={styles.stateTitle}>{title}</h2>
       <p className={styles.stateText}>{description}</p>
     </article>
+  )
+}
+
+function CriteriaSummary({ analysis }: { analysis: RomMovementAnalysisView }) {
+  return (
+    <section className={styles.criteriaPanel} aria-label="ROM 지표 기준">
+      <div className={styles.criteriaIntro}>
+        <span>ROM 기준</span>
+        <strong>100% 점수가 아니라, 운동 중 실제로 움직인 각도입니다.</strong>
+      </div>
+      <div className={styles.criteriaGrid}>
+        <div className={styles.criteriaItem}>
+          <span>움직임 각도</span>
+          <strong>최대 각도 - 최소 각도</strong>
+        </div>
+        <div className={styles.criteriaItem}>
+          <span>좌우 차이</span>
+          <strong>왼쪽 평균과 오른쪽 평균의 차이</strong>
+        </div>
+        <div className={styles.criteriaItem}>
+          <span>촬영 안정도</span>
+          <strong>카메라가 관절을 잡은 신뢰도</strong>
+        </div>
+        <div className={styles.criteriaItem}>
+          <span>분석 동작</span>
+          <strong>
+            {analysis.analyzedMotionCount}/{analysis.motionCount}개
+            {analysis.failedMotionCount > 0 ? ` · 제외 ${analysis.failedMotionCount}개` : ''}
+          </strong>
+        </div>
+      </div>
+    </section>
   )
 }
 
@@ -126,6 +162,7 @@ export function ROMDetailPage() {
         </aside>
 
         <section className={styles.rightCol}>
+          {analysisView && hasAnalyzedMotion && <CriteriaSummary analysis={analysisView} />}
           {isLoading ? (
             <StatePanel
               title="움직임 분석을 불러오는 중입니다"
