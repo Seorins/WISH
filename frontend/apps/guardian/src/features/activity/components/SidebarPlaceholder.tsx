@@ -4,15 +4,16 @@ import gisungImg from '@/assets/gisung.png'
 import rumiImg from '@/assets/rumi.png'
 import seokjaeImg from '@/assets/seokjae.png'
 import sungsuImg from '@/assets/sungsu.png'
+import { useMyPatientId } from '@/features/auth/hooks/useMyPatientId'
+import { useDailyUsageStats } from '@/features/activity/hooks'
 import styles from './SidebarPlaceholder.module.css'
 
-type ActivityStatus = 'done' | 'planned'
+type ActivityStatus = 'done' | 'pending'
 type ActivityItemId = 'music' | 'art' | 'taekwondo' | 'gymnastics'
 
 type ActivityItem = {
   id: ActivityItemId
   name: string
-  status: ActivityStatus
   avatarUrl: string
   /** 사이드 썸네일 줌 배율 (기본 1.25). 클수록 상반신 클로즈업 */
   thumbScale?: string
@@ -24,21 +25,20 @@ type ActivityItem = {
 
 const STATUS_LABEL: Record<ActivityStatus, string> = {
   done: '완료',
-  planned: '예정',
+  pending: '아직',
 }
 
 const STATUS_CLASS: Record<ActivityStatus, string> = {
   done: 'statusDone',
-  planned: 'statusPlanned',
+  pending: 'statusPlanned',
 }
 
 // 각 캐릭터 일러스트가 전신 비율이라 scale + translateY 로 상반신만 크롭.
 // 캐릭터별로 디테일 다르면 thumbScale/thumbOffsetY 로 미세조정.
-const PLACEHOLDER_ITEMS: ActivityItem[] = [
+const ACTIVITY_ITEMS: ActivityItem[] = [
   {
     id: 'music',
     name: '음악',
-    status: 'done',
     avatarUrl: gisungImg,
     thumbScale: '1.5',
     thumbOffsetY: '-6%',
@@ -47,7 +47,6 @@ const PLACEHOLDER_ITEMS: ActivityItem[] = [
   {
     id: 'art',
     name: '미술',
-    status: 'done',
     avatarUrl: rumiImg,
     thumbScale: '1.5',
     thumbOffsetY: '-8%',
@@ -56,7 +55,6 @@ const PLACEHOLDER_ITEMS: ActivityItem[] = [
   {
     id: 'taekwondo',
     name: '태권도',
-    status: 'done',
     avatarUrl: seokjaeImg,
     thumbScale: '1.5',
     thumbOffsetY: '-6%',
@@ -65,13 +63,20 @@ const PLACEHOLDER_ITEMS: ActivityItem[] = [
   {
     id: 'gymnastics',
     name: '체조',
-    status: 'done',
     avatarUrl: sungsuImg,
     thumbScale: '1.5',
     thumbOffsetY: '-6%',
     to: '/activity?tab=gymnastics',
   },
 ]
+
+function todayIsoDate(): string {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
 
 function resolveActiveItemId(searchParams: URLSearchParams): ActivityItemId | null {
   const tab = searchParams.get('tab')
@@ -83,22 +88,29 @@ function resolveActiveItemId(searchParams: URLSearchParams): ActivityItemId | nu
 }
 
 /**
- * "오늘 한 활동" 사이드.
- * 대화 페이지의 CharacterSidebar 와 동일한 카드/리스트 포맷.
- * 후속 티켓에서 캐릭터 이미지 + 활동 데이터 연동.
+ * "오늘 한 활동" 사이드. 각 활동은 오늘 사용 시간이 0초보다 크면 '완료', 아니면 '아직'.
+ * 사용 시간은 UsageStat 일별 응답에서 컨텐츠별 초 값을 그대로 본다.
  */
 export function SidebarPlaceholder() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const activeItemId = resolveActiveItemId(searchParams)
 
+  const { data: patientId } = useMyPatientId()
+  const today = todayIsoDate()
+  const { data: daily } = useDailyUsageStats(patientId ?? undefined, { from: today, to: today })
+  const todayItem = daily?.items?.find(item => item.date === today)
+
   return (
     <div className={styles.card}>
       <h3 className={styles.title}>오늘 한 활동</h3>
       <div className={styles.list}>
-        {PLACEHOLDER_ITEMS.map(item => {
+        {ACTIVITY_ITEMS.map(item => {
           const isSelected = activeItemId === item.id
           const isClickable = item.to != null
+          // UsageStat 의 컨텐츠 키: music/art/taekwondo/gymnastics (sec). 0 초과면 '완료'.
+          const seconds = todayItem ? (todayItem[item.id] ?? 0) : 0
+          const status: ActivityStatus = seconds > 0 ? 'done' : 'pending'
           return (
             <button
               key={item.id}
@@ -123,8 +135,8 @@ export function SidebarPlaceholder() {
               </span>
               <span className={styles.meta}>
                 <span className={styles.name}>{item.name}</span>
-                <span className={`${styles.status} ${styles[STATUS_CLASS[item.status]]}`}>
-                  {STATUS_LABEL[item.status]}
+                <span className={`${styles.status} ${styles[STATUS_CLASS[status]]}`}>
+                  {STATUS_LABEL[status]}
                 </span>
               </span>
               {isSelected && <span className={styles.check}>✓</span>}

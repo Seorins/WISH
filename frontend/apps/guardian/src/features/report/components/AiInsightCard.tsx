@@ -44,11 +44,6 @@ export function AiInsightCard({ data, isLoading, isError }: Props) {
           </span>
           AI 인사이트
         </span>
-        {data.isFallback && (
-          <span className={styles.fallbackTag} aria-label="기본 응답">
-            기본 응답
-          </span>
-        )}
       </div>
 
       <div className={styles.summary}>
