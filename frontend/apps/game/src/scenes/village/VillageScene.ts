@@ -53,8 +53,13 @@ const PHOTO_BOOTH_INTERACT_DISTANCE = 40
 const PHOTO_GALLERY_INTERACT_DISTANCE = 40
 const GOMOKU_BOARD_INTERACT_DISTANCE = 56
 const WORLD_INTERACTION_REOPEN_COOLDOWN_MS = 350
+const EMOJI_HINT_TEXT = '[Q] 이모티콘'
 const EMOJI_HINT_OPEN_TEXT = '[Q] 닫기'
 const EMOJI_HINT_OPEN_OFFSET_Y = 66
+const SETTINGS_HINT_TEXT = '\u2699 [ESC] 설정'
+const VILLAGE_CONTROL_TUTORIAL_KEY = 'village_control_tutorial_seen'
+const LEGACY_INTERACTION_TUTORIAL_KEY = 'tutorial_interaction_seen'
+const VILLAGE_CONTROL_TUTORIAL_DURATION_MS = 6000
 const VILLAGE_SHIP_KEY = 'village-ship'
 const VILLAGE_SHIP_PATH = 'images/themes/ferry/ui/ship.png'
 const VILLAGE_SHIP = {
@@ -359,9 +364,30 @@ type VillageSceneData = {
   portalCooldownMs?: number
 }
 
+function hasStoredFlag(key: string) {
+  if (typeof window === 'undefined') return false
+
+  try {
+    return window.localStorage.getItem(key) === 'true'
+  } catch {
+    return false
+  }
+}
+
+function setStoredFlag(key: string) {
+  if (typeof window === 'undefined') return
+
+  try {
+    window.localStorage.setItem(key, 'true')
+  } catch {
+    // localStorage can be unavailable in private mode; the hint still works for this session.
+  }
+}
+
 export class VillageScene extends Phaser.Scene {
   private player!: PlayerSprite
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys
+  private wasdKeys!: Partial<Record<PlayerDirection, Phaser.Input.Keyboard.Key>>
   private obstacles!: Phaser.Physics.Arcade.StaticGroup
   private obstacleManager?: VillageObstacleManager
   private sehyunNpc!: Phaser.GameObjects.Sprite
@@ -409,6 +435,9 @@ export class VillageScene extends Phaser.Scene {
   private emojiPaletteManuallyShown = false
   /** 팔레트 숨겨져 있을 때 우하단에 "[Q] 이모티콘" 으로 토글 단축키 안내 (S14P31E103-769). */
   private emojiHint: Phaser.GameObjects.Text | null = null
+  private settingsHint: Phaser.GameObjects.Text | null = null
+  private controlTutorial: Phaser.GameObjects.Container | null = null
+  private controlTutorialTimer?: Phaser.Time.TimerEvent
 
   constructor() {
     super({ key: 'VillageScene' })
@@ -447,6 +476,12 @@ export class VillageScene extends Phaser.Scene {
     this.obstacleManager = undefined
     this.minimap?.container.destroy()
     this.minimap = null
+    this.settingsHint?.destroy()
+    this.settingsHint = null
+    this.controlTutorialTimer?.remove(false)
+    this.controlTutorialTimer = undefined
+    this.controlTutorial?.destroy(true)
+    this.controlTutorial = null
     this.fuelNotice?.container.destroy()
     this.fuelNotice = null
     this.isFuelNoticeOpen = false
@@ -622,6 +657,12 @@ export class VillageScene extends Phaser.Scene {
     this.cameras.main.startFollow(this.player, true, 1, 1)
 
     this.cursors = this.input.keyboard!.createCursorKeys()
+    this.wasdKeys = this.input.keyboard!.addKeys({
+      up: Phaser.Input.Keyboard.KeyCodes.W,
+      left: Phaser.Input.Keyboard.KeyCodes.A,
+      down: Phaser.Input.Keyboard.KeyCodes.S,
+      right: Phaser.Input.Keyboard.KeyCodes.D,
+    }) as Partial<Record<PlayerDirection, Phaser.Input.Keyboard.Key>>
     this.settingsMenu = createSettingsMenu(this, {
       onLogout: () => this.logout(),
       onClose: () => this.blockWorldInteractionBriefly(),
@@ -708,7 +749,7 @@ export class VillageScene extends Phaser.Scene {
     this.emojiPaletteManuallyShown = false
     // 팔레트는 기본 숨김 → 단축키를 모른 사용자가 발견할 수 있도록 우하단 고정 힌트. 팔레트가 열리면 위로 띄워 닫기 버튼으로 유지.
     this.emojiHint = this.add
-      .text(vw - 18, vh - 18, '[Q] 이모티콘', {
+      .text(vw - 18, vh - 18, EMOJI_HINT_TEXT, {
         fontSize: '14px',
         fontFamily: "'Jua', 'Apple SD Gothic Neo', sans-serif",
         color: '#ffffff',
@@ -720,11 +761,21 @@ export class VillageScene extends Phaser.Scene {
       .setScrollFactor(0)
       .setDepth(100)
       .setInteractive({ useHandCursor: true })
-    this.emojiHint.on('pointerdown', (event: Phaser.Types.Input.EventData) => {
-      ;(event as unknown as { stopPropagation?: () => void }).stopPropagation?.()
-      if (this.isEmojiOverlayOpen()) return
-      this.emojiPaletteManuallyShown = !this.emojiPaletteManuallyShown
-    })
+    this.emojiHint.on(
+      'pointerdown',
+      (
+        _pointer: Phaser.Input.Pointer,
+        _localX: number,
+        _localY: number,
+        event: Phaser.Types.Input.EventData,
+      ) => {
+        event.stopPropagation()
+        if (this.isEmojiOverlayOpen()) return
+        this.emojiPaletteManuallyShown = !this.emojiPaletteManuallyShown
+      },
+    )
+    this.createVillageSettingsHint()
+    this.showVillageControlTutorialOnce()
     // 1\~9 + 0 단축키. 인덱스 0\~9 매핑. 팔레트가 숨겨져 있어도 발사 가능 (학습용 토글 vs 즉시 발사 분리).
     const emojiKeyNames = [
       'ONE',
@@ -780,6 +831,12 @@ export class VillageScene extends Phaser.Scene {
       this.emojiPalette = null
       this.emojiHint?.destroy()
       this.emojiHint = null
+      this.settingsHint?.destroy()
+      this.settingsHint = null
+      this.controlTutorialTimer?.remove(false)
+      this.controlTutorialTimer = undefined
+      this.controlTutorial?.destroy(true)
+      this.controlTutorial = null
       this.minimap?.container.destroy()
       this.minimap = null
       this.fuelNoticePoll?.remove(false)
@@ -804,6 +861,7 @@ export class VillageScene extends Phaser.Scene {
     const movement = updatePlayerMovement({
       player: this.player,
       cursors: this.cursors,
+      alternativeKeys: this.wasdKeys,
       target: this.target,
       lastDirection: this.lastDirection,
       speed: getPlayerMoveSpeed(),
@@ -823,11 +881,14 @@ export class VillageScene extends Phaser.Scene {
     const paletteVisible = this.emojiPaletteManuallyShown && !overlaysOpen
     this.emojiPalette?.setVisible(paletteVisible)
     this.emojiHint
-      ?.setText(paletteVisible ? EMOJI_HINT_OPEN_TEXT : '[Q] 이모티콘')
+      ?.setText(paletteVisible ? EMOJI_HINT_OPEN_TEXT : EMOJI_HINT_TEXT)
       .setY(
         paletteVisible ? this.scale.height - 18 - EMOJI_HINT_OPEN_OFFSET_Y : this.scale.height - 18,
       )
       .setVisible(!overlaysOpen)
+    this.settingsHint?.setVisible(!overlaysOpen)
+    this.controlTutorial?.setVisible(!overlaysOpen)
+    this.layoutVillageControlTutorial()
     this.minimap?.container.setVisible(!overlaysOpen)
     this.refreshVillageFuelNoticeUi(!overlaysOpen)
     this.updateVillageMinimap()
@@ -878,6 +939,144 @@ export class VillageScene extends Phaser.Scene {
     }
 
     this.updateThemePortalTransitions()
+  }
+
+  private createVillageSettingsHint() {
+    this.settingsHint?.destroy()
+    this.settingsHint = this.add
+      .text(18, 18, SETTINGS_HINT_TEXT, {
+        fontSize: '14px',
+        fontFamily: "'Jua', 'Apple SD Gothic Neo', sans-serif",
+        color: '#ffffff',
+        backgroundColor: '#00000080',
+        padding: { left: 8, right: 8, top: 4, bottom: 4 },
+        resolution: 2,
+      })
+      .setOrigin(0, 0)
+      .setScrollFactor(0)
+      .setDepth(100)
+      .setInteractive({ useHandCursor: true })
+
+    this.settingsHint.on(
+      'pointerdown',
+      (
+        _pointer: Phaser.Input.Pointer,
+        _localX: number,
+        _localY: number,
+        event: Phaser.Types.Input.EventData,
+      ) => {
+        event.stopPropagation()
+        if (this.isEmojiOverlayOpen()) return
+        this.settingsMenu.toggleButton()
+      },
+    )
+  }
+
+  private showVillageControlTutorialOnce() {
+    setStoredFlag(LEGACY_INTERACTION_TUTORIAL_KEY)
+    if (hasStoredFlag(VILLAGE_CONTROL_TUTORIAL_KEY)) return
+
+    setStoredFlag(VILLAGE_CONTROL_TUTORIAL_KEY)
+
+    const width = 236
+    const height = 92
+    const container = this.add
+      .container(18, this.scale.height - height - 18)
+      .setDepth(102)
+      .setScrollFactor(0)
+      .setSize(width, height)
+      .setAlpha(0)
+      .setInteractive(
+        new Phaser.Geom.Rectangle(0, 0, width, height),
+        Phaser.Geom.Rectangle.Contains,
+      )
+
+    const bg = this.add.graphics()
+    bg.fillStyle(0x000000, 0.78)
+    bg.fillRoundedRect(0, 0, width, height, 12)
+    bg.lineStyle(1.5, 0xffffff, 0.18)
+    bg.strokeRoundedRect(0.75, 0.75, width - 1.5, height - 1.5, 11)
+
+    const eRow = this.createVillageControlTutorialRow('E', '상호작용', 24)
+    const qRow = this.createVillageControlTutorialRow('Q', '이모티콘', 66)
+    container.add([bg, ...eRow, ...qRow])
+
+    container.on(
+      'pointerdown',
+      (
+        _pointer: Phaser.Input.Pointer,
+        _localX: number,
+        _localY: number,
+        event: Phaser.Types.Input.EventData,
+      ) => {
+        event.stopPropagation()
+        this.hideVillageControlTutorial()
+      },
+    )
+
+    this.controlTutorial = container
+    this.layoutVillageControlTutorial()
+    this.tweens.add({
+      targets: container,
+      alpha: 1,
+      duration: 180,
+      ease: 'Sine.easeOut',
+    })
+    this.controlTutorialTimer = this.time.delayedCall(VILLAGE_CONTROL_TUTORIAL_DURATION_MS, () =>
+      this.hideVillageControlTutorial(),
+    )
+  }
+
+  private createVillageControlTutorialRow(key: string, label: string, y: number) {
+    const keyBg = this.add.graphics()
+    keyBg.fillStyle(0x7b61ff, 1)
+    keyBg.fillRoundedRect(18, y - 15, 34, 30, 8)
+
+    const keyText = this.add
+      .text(35, y, key, {
+        fontFamily: 'Pretendard, "Noto Sans KR", sans-serif',
+        fontSize: '18px',
+        fontStyle: '900',
+        color: '#ffffff',
+        resolution: 2,
+      })
+      .setOrigin(0.5)
+
+    const labelText = this.add
+      .text(66, y, label, {
+        fontFamily: 'Pretendard, "Noto Sans KR", sans-serif',
+        fontSize: '18px',
+        fontStyle: '800',
+        color: '#fff4dc',
+        resolution: 2,
+      })
+      .setOrigin(0, 0.5)
+
+    return [keyBg, keyText, labelText] as const
+  }
+
+  private hideVillageControlTutorial() {
+    if (!this.controlTutorial) return
+
+    this.controlTutorialTimer?.remove(false)
+    this.controlTutorialTimer = undefined
+
+    const tutorial = this.controlTutorial
+    this.controlTutorial = null
+    this.tweens.add({
+      targets: tutorial,
+      alpha: 0,
+      duration: 160,
+      ease: 'Sine.easeIn',
+      onComplete: () => tutorial.destroy(true),
+    })
+  }
+
+  private layoutVillageControlTutorial() {
+    if (!this.controlTutorial) return
+
+    const height = this.controlTutorial.height || 92
+    this.controlTutorial.setPosition(18, this.scale.height - height - 18)
   }
 
   private createVillageMinimap(worldWidth: number, worldHeight: number) {
