@@ -1930,8 +1930,8 @@
       "sentimentWords": [{"phrase": "아플까봐", "tone": "NEGATIVE"}],
       "endingType": "ASK_MEDICAL_FIRST",
       "endingNpcLines": [
-        "(노트 펼치며) 선생님께 '진통 방법 있어요?' 라고.",
-        "조은이도 옆에서 같이 들을게."
+        "괜찮아, 아픈 걸 줄이는 방법은 여러 가지 있어.",
+        "(노트 펼치며) 어떤 방법이 너한테 맞을지 선생님께 같이 물어보자."
       ],
       "closingLine": "또 와."
     },
@@ -1944,8 +1944,8 @@
       "topicKeywords": ["시술"], "sentimentWords": [],
       "endingType": "ASK_MEDICAL_FIRST",
       "endingNpcLines": [
-        "'몇 분 걸려요?' 한 줄 물어보자.",
-        "시간 보이면 마음이 좀 잡혀."
+        "시술마다 다르지만 대부분 짧아.",
+        "오늘 거 정확히 몇 분인지 선생님께 같이 물어보자. 시간 보이면 마음이 좀 잡혀."
       ],
       "closingLine": "또 와."
     },
@@ -2306,8 +2306,8 @@
       "topicKeywords": ["약"], "sentimentWords": [],
       "endingType": "ASK_MEDICAL_FIRST",
       "endingNpcLines": [
-        "선생님께 '이건 왜 먹어요?'",
-        "한 알씩 풀어주실 거야."
+        "약은 너 나아지게 도와주는 거야.",
+        "약마다 하는 일이 달라서, 자세한 건 선생님께 같이 가서 물어보자."
       ],
       "closingLine": "또 와."
     },
@@ -2334,8 +2334,8 @@
       "topicKeywords": ["약"], "sentimentWords": [],
       "endingType": "ASK_MEDICAL_FIRST",
       "endingNpcLines": [
-        "(작게 웃으며) 그것도 좋은 질문.",
-        "선생님께 같이 가서 물어보자."
+        "아픈 게 조금씩 작아지거나, 몸이 회복하는 거 도와줘.",
+        "(작게 웃으며) 정확한 변화는 선생님이 더 잘 알아. 같이 가서 들어보자."
       ],
       "closingLine": "또 와줘."
     },
@@ -4085,7 +4085,7 @@
       "topicKeywords": ["가족", "학교"], "sentimentWords": [],
       "endingType": "ASK_HELP_FIRST",
       "endingNpcLines": [
-        "엄마가 알아봐주실 거야.",
+        "엄마가 학교 선생님이랑 자주 연락하시거든. 한 줄이면 다 알아봐주실 거야.",
         "들은 거 다음에 알려줘!"
       ],
       "closingLine": "또 와!"
