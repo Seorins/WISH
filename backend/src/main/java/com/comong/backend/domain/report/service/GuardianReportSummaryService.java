@@ -132,12 +132,12 @@ public class GuardianReportSummaryService {
         Map<String, Object> dialogue = new LinkedHashMap<>();
         // valence_distribution / concern_signals / protective_factors / topics 는 v2 보강.
         // 현재는 일별 톤 트렌드와 총 세션 수만 전달 → AI 가 가용 데이터로 의견 생성.
+        // qualitative_summary 는 AI 스키마에서 Optional 이라 미포함 (null 값 직렬화 회피).
         dialogue.put("valence_distribution", Map.of());
         dialogue.put("concern_signals", List.of());
         dialogue.put("protective_factors", List.of());
         dialogue.put("topics", List.of());
         dialogue.put("npc_visits", Map.of());
-        dialogue.put("qualitative_summary", null);
         dialogue.put("daily_trend", trendPoints);
         dialogue.put("total_sessions", totalSessions);
         return dialogue;

@@ -107,9 +107,9 @@
   color: #6a4ee0;
 }
 
-.statusPlanned {
-  background: #e6f7ec;
-  color: #1f9a55;
+.statusNone {
+  background: var(--dash-color-surface-tint, #ececf2);
+  color: var(--dash-color-text-muted, #8b8aa3);
 }
 
 .check {
