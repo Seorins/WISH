@@ -43,7 +43,7 @@ public class AiReportSummaryClient {
 
     // 버전 마커 — debugReason 에 박혀 dev 에 실제 반영된 코드 버전을 식별한다.
     // (배포 캐시/롤백 디버깅용. 운영 안정화 후 제거)
-    private static final String CODE_VERSION = "v4-rsc";
+    private static final String CODE_VERSION = "v5-map-body";
 
     public WeeklyReportAiSummaryResponse summarize(Map<String, Object> payload) {
         if (!properties.isEnabled()) {
@@ -52,6 +52,8 @@ public class AiReportSummaryClient {
         }
 
         // ObjectMapper 로 JSON 직렬화 후 길이 로깅 — body 가 실제로 만들어졌는지 검증.
+        // 실제 전송은 Map 을 그대로 넘겨 Spring JSON converter 가 쓰게 한다.
+        // byte[] 를 넘기면 현재 JDK RestClient 조합에서 FastAPI 가 body=null 로 받는 케이스가 있었다.
         byte[] jsonBytes;
         try {
             jsonBytes = objectMapper.writeValueAsBytes(payload);
@@ -76,7 +78,7 @@ public class AiReportSummaryClient {
                             .post()
                             .uri("/report/summarize")
                             .contentType(MediaType.APPLICATION_JSON)
-                            .body(jsonBytes)
+                            .body(payload)
                             .retrieve()
                             .body(new ParameterizedTypeReference<>() {});
         } catch (Exception e) {
