@@ -162,6 +162,90 @@
   padding: 14px;
 }
 
+.gomoku-mode-select {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  gap: 14px;
+  padding: 32px 24px;
+  align-content: center;
+  justify-items: center;
+}
+
+.gomoku-mode-select > h2 {
+  margin: 0;
+  font-size: 28px;
+  color: #17342f;
+}
+
+.gomoku-mode-select > p {
+  margin: 0;
+  color: #45625b;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.gomoku-mode-select-grid {
+  width: min(900px, 100%);
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 8px;
+}
+
+.gomoku-mode-select-card {
+  display: grid;
+  grid-template-rows: auto auto;
+  align-items: start;
+  gap: 10px;
+  padding: 28px 22px;
+  border: 3px solid transparent;
+  border-radius: 16px;
+  background: #fbfdf8;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  transition:
+    transform 120ms,
+    box-shadow 120ms;
+}
+
+.gomoku-mode-select-card:hover,
+.gomoku-mode-select-card:focus-visible {
+  transform: translateY(-3px);
+  box-shadow: 0 14px 28px rgba(24, 36, 31, 0.18);
+  outline: none;
+}
+
+.gomoku-mode-select-card.mode-computer {
+  border-color: #3a596e;
+  background: #f3f7fa;
+}
+
+.gomoku-mode-select-card.mode-local {
+  border-color: #4a8b3f;
+  background: #f1f8ee;
+}
+
+.gomoku-mode-select-card.mode-online {
+  border-color: #b78938;
+  background: #fdf6e2;
+}
+
+.gomoku-mode-select-card strong {
+  font-size: 20px;
+  color: #17342f;
+  line-height: 1.2;
+}
+
+.gomoku-mode-select-card span {
+  font-size: 13px;
+  color: #45625b;
+  font-weight: 700;
+  line-height: 1.45;
+  word-break: keep-all;
+}
+
 .gomoku-board-zone {
   min-width: 0;
   min-height: 0;
