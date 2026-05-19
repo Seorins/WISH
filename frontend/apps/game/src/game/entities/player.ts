@@ -59,6 +59,7 @@ type CreatePlayerOptions = {
 type UpdatePlayerMovementOptions = {
   player: PlayerSprite
   cursors: Phaser.Types.Input.Keyboard.CursorKeys
+  alternativeKeys?: Partial<Record<PlayerDirection, Phaser.Input.Keyboard.Key>>
   target: Phaser.Math.Vector2 | null
   lastDirection: PlayerDirection
   speed?: number
@@ -366,6 +367,7 @@ function normalizePlayerOutfitId(value: unknown, characterId: PlayerCharacterId)
 export function updatePlayerMovement({
   player,
   cursors,
+  alternativeKeys,
   target,
   lastDirection,
   speed = PLAYER_WALK_SPEED,
@@ -380,23 +382,27 @@ export function updatePlayerMovement({
     nextTarget = null
   } else {
     const { left, right, up, down } = cursors
-    const isKeyPressed = left.isDown || right.isDown || up.isDown || down.isDown
+    const leftPressed = left.isDown || Boolean(alternativeKeys?.left?.isDown)
+    const rightPressed = right.isDown || Boolean(alternativeKeys?.right?.isDown)
+    const upPressed = up.isDown || Boolean(alternativeKeys?.up?.isDown)
+    const downPressed = down.isDown || Boolean(alternativeKeys?.down?.isDown)
+    const isKeyPressed = leftPressed || rightPressed || upPressed || downPressed
 
     if (isKeyPressed) {
       nextTarget = null
-      if (left.isDown) {
+      if (leftPressed) {
         vx -= speed
         nextDirection = 'left'
       }
-      if (right.isDown) {
+      if (rightPressed) {
         vx += speed
         nextDirection = 'right'
       }
-      if (up.isDown) {
+      if (upPressed) {
         vy -= speed
         nextDirection = 'up'
       }
-      if (down.isDown) {
+      if (downPressed) {
         vy += speed
         nextDirection = 'down'
       }
