@@ -47,11 +47,12 @@ public class AiReportSummaryClient {
             return WeeklyReportAiSummaryResponse.fallback("be:disabled");
         }
 
-        // RestClient.body(Map) 자동 직렬화 경로에서 빈 body 가 전송되는 사례가 있어
-        // ObjectMapper 로 미리 JSON 문자열로 만든 뒤 String body 로 보낸다.
-        String json;
+        // RestClient.body(Map) 자동 직렬화에서 String 컨버터 매칭 문제로 빈 body 가 전송되는 사례가 있어
+        // ObjectMapper 로 미리 JSON 바이트로 만들어 byte[] body 로 보낸다 — ByteArrayHttpMessageConverter
+        // 가 항상 매칭되어 신뢰성 있게 전송됨.
+        byte[] jsonBytes;
         try {
-            json = objectMapper.writeValueAsString(payload);
+            jsonBytes = objectMapper.writeValueAsBytes(payload);
         } catch (JacksonException e) {
             log.warn("AI report summary payload serialize failed: {}", e.getMessage());
             return WeeklyReportAiSummaryResponse.fallback("be:serialize-failed:" + e.getMessage());
@@ -64,7 +65,7 @@ public class AiReportSummaryClient {
                             .post()
                             .uri("/report/summarize")
                             .contentType(MediaType.APPLICATION_JSON)
-                            .body(json)
+                            .body(jsonBytes)
                             .retrieve()
                             .body(new ParameterizedTypeReference<>() {});
         } catch (Exception e) {
