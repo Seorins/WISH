@@ -961,9 +961,6 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(12)
 
-    this.createDeleteButton(rightHeaderX + rightHeaderW - headerH / 2, y, headerH, () =>
-      fadeToScene(this, 'GymnasticsSelectScene'),
-    )
     this.updateHeaderStats()
   }
 
@@ -1608,19 +1605,6 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
       width: maxX - minX + 1,
       height: maxY - minY + 1,
     }
-  }
-
-  private createDeleteButton(x: number, y: number, size: number, onClick: () => void) {
-    const bg = this.add
-      .image(0, 0, 'gymnastics-delete-button')
-      .setDisplaySize(size, size)
-      .setDepth(14)
-    const hitArea = this.add.rectangle(0, 0, size, size, 0xffffff, 0).setInteractive({
-      useHandCursor: true,
-    })
-    hitArea.on('pointerdown', onClick)
-
-    return this.add.container(x, y, [bg, hitArea]).setDepth(14)
   }
 
   private createArrowButton(
@@ -3335,6 +3319,10 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
   private async finishExerciseSession() {
     if (this.hasSubmittedSession || this.saveState === 'saving' || this.saveState === 'success')
       return
+
+    // 시범 영상/카운트다운 오버레이 (HTML video 포함) 가 떠 있으면 먼저 정리해야 결과 패널이 위에 보인다.
+    this.clearGuideOverlay()
+    this.clearCountdownOverlay()
 
     this.recordCurrentMotionResult()
     this.hasSubmittedSession = true

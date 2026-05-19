@@ -1235,6 +1235,13 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
       return
     }
 
+    // 시범 영상/모션 인트로 오버레이 (HTML video 포함) 가 떠 있으면 먼저 정리해야 결과 패널이 위에 보인다.
+    this.motionIntroOverlay?.destroy(true)
+    this.motionIntroOverlay = undefined
+    this.guideVideoExpandOverlay?.destroy(true)
+    this.guideVideoExpandOverlay = undefined
+    this.destroyGuideVideoElement()
+
     if (recordCurrentMotion) {
       this.recordCurrentMotionResult()
     }
@@ -1330,7 +1337,6 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     const visualTopY = topY
     const currentY = topY
     const currentWidth = vw * 0.3
-    const deleteSize = vh * 0.073
 
     this.createCurrentMotionPanel(vw * 0.23, currentY, currentWidth, currentHeight)
 
@@ -1347,10 +1353,6 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
       .setDepth(5)
 
     this.createPoomsaeProgress(vw * 0.63, visualTopY, progressWidth, progressHeight)
-
-    this.createDeleteButton(vw * 0.885, visualTopY, deleteSize, () => {
-      void this.finishPracticeSession(false)
-    })
   }
 
   private createCurrentMotionPanel(x: number, y: number, width: number, height: number) {
@@ -1929,23 +1931,6 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
 
   private updatePoomsaeProgress() {
     this.progressView?.update(this.getPracticeMotionCount(), this.motionResults.length)
-  }
-
-  private createDeleteButton(x: number, y: number, size: number, onClick: () => void) {
-    const buttonWidth = size * IMAGE_ASPECT.deleteButton
-    const button = this.add
-      .image(0, 0, ASSET_KEYS.deleteButton)
-      .setDisplaySize(buttonWidth, size)
-      .setDepth(6)
-
-    const hitArea = this.add.rectangle(0, 0, buttonWidth, size, 0xffffff, 0).setInteractive({
-      useHandCursor: true,
-    })
-    hitArea.on('pointerdown', onClick)
-    hitArea.on('pointerover', () => button.setTint(0xffefc4))
-    hitArea.on('pointerout', () => button.clearTint())
-
-    return this.add.container(x, y, [button, hitArea]).setDepth(6)
   }
 
   private showFeedback(message: string) {
