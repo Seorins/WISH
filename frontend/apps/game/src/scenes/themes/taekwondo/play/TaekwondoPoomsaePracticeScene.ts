@@ -27,9 +27,9 @@ import {
   createTaekwondoSession,
   createTaekwondoSessionMotion,
   DEFAULT_TAEKWONDO_BELT_COLOR,
-  getTaekwondoBeltHistory,
   getTaekwondoPoomsaeNumber,
   listTaekwondoMotions,
+  normalizeTaekwondoBeltColor,
   requestPresignedUploadUrls,
   toCreateTaekwondoSessionMotionRequest,
   uploadToPresignedUrl,
@@ -164,7 +164,10 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
   private motionRecorderHandle: ScreenRecorderHandle | null = null
   private pendingMotionUploads: Promise<void>[] = []
   private taekwondoSessionIdPromise: Promise<number> | null = null
-  private taekwondoSessionPatientProfileId: number | null = null
+  private pendingBeltPromotion: {
+    fromBelt: TaekwondoBeltColor
+    toBelt: TaekwondoBeltColor
+  } | null = null
   private currentMotionIndex = 0
   private practiceStartedAtMs = 0
   private motionStartedAtMs = 0
@@ -235,7 +238,7 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     this.countdownTimer = null
     this.lastPoseDetectTimeMs = -1
     this.taekwondoSessionIdPromise = null
-    this.taekwondoSessionPatientProfileId = null
+    this.pendingBeltPromotion = null
     this.sessionId =
       typeof crypto !== 'undefined' && 'randomUUID' in crypto
         ? crypto.randomUUID()
@@ -1068,7 +1071,19 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
       }
       try {
         const sessionId = await this.ensureTaekwondoSessionId()
-        await createTaekwondoSessionMotion(sessionId, motionResult)
+        const response = await createTaekwondoSessionMotion(sessionId, motionResult)
+        if (response.beltPromotion) {
+          const fromBelt = normalizeTaekwondoBeltColor(response.beltPromotion.fromBelt)
+          const toBelt = normalizeTaekwondoBeltColor(response.beltPromotion.toBelt)
+          if (fromBelt && toBelt) {
+            // 다단계 점프(여러 동작에 걸쳐): 첫 응답의 fromBelt 를 유지하고 마지막 toBelt 로 누적.
+            this.pendingBeltPromotion = {
+              fromBelt: this.pendingBeltPromotion?.fromBelt ?? fromBelt,
+              toBelt,
+            }
+            this.beltColor = toBelt
+          }
+        }
       } catch (err) {
         console.warn('[TaekwondoPoomsaePracticeScene] motion persist failed', err)
       }
@@ -1085,7 +1100,6 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
         if (!patientProfileId) {
           throw new Error('환자 정보가 올바르지 않습니다.')
         }
-        this.taekwondoSessionPatientProfileId = patientProfileId
         const session = await createTaekwondoSession({
           patientProfileId,
           poomsae: this.getPoomsaeForApi(),
@@ -1140,9 +1154,17 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
         this.pendingMotionUploads = []
       }
       this.showFeedback('저장 완료')
-      const patientProfileId = this.taekwondoSessionPatientProfileId
-      if (patientProfileId) {
-        shouldStopPractice = !(await this.showBeltPromotionIfNeeded(patientProfileId))
+      if (this.pendingBeltPromotion) {
+        const textureKey = BELT_PROMOTION_TEXTURE_KEYS[this.pendingBeltPromotion.toBelt]
+        if (textureKey && this.textures.exists(textureKey)) {
+          const shown = this.showBeltPromotionOverlay(
+            this.pendingBeltPromotion.toBelt,
+            textureKey,
+            true,
+          )
+          shouldStopPractice = !shown
+        }
+        this.pendingBeltPromotion = null
       }
     } catch (error) {
       this.hasSubmittedSession = false
@@ -1159,30 +1181,6 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
       if (shouldStopPractice) {
         this.stopPractice()
       }
-    }
-  }
-
-  private async showBeltPromotionIfNeeded(patientProfileId: number) {
-    try {
-      const history = await getTaekwondoBeltHistory(patientProfileId)
-      const latestBeltColor = history[0]?.toBelt
-      if (!latestBeltColor || latestBeltColor === this.beltColor) {
-        return false
-      }
-
-      const textureKey = BELT_PROMOTION_TEXTURE_KEYS[latestBeltColor]
-      this.beltColor = latestBeltColor
-
-      if (!textureKey || !this.textures.exists(textureKey)) {
-        return false
-      }
-
-      return this.showBeltPromotionOverlay(latestBeltColor, textureKey, true)
-    } catch (error) {
-      console.warn('[TaekwondoPoomsaePracticeScene] Failed to check taekwondo belt promotion.', {
-        message: error instanceof Error ? error.message : String(error),
-      })
-      return false
     }
   }
 
@@ -2031,7 +2029,7 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     this.motionRecorderHandle = null
     this.pendingMotionUploads = []
     this.taekwondoSessionIdPromise = null
-    this.taekwondoSessionPatientProfileId = null
+    this.pendingBeltPromotion = null
     this.stopCamera()
     this.cleanupCameraEffects()
 
