@@ -6,7 +6,11 @@ import { syncCurrentBeltEmojiToPalette } from './currentBeltEmote'
 import { emitEmoteBubble } from './emoteBubble'
 import { createVillageEmojiPalette } from './villageEmojiPalette'
 import type { VillageRealtimeIntegration } from './villageRealtimeIntegration'
-import { VILLAGE_EMOJI_SLOT_COUNT } from './types'
+import {
+  isWhiteBeltBoastEmoji,
+  VILLAGE_EMOJI_SLOT_COUNT,
+  WHITE_BELT_PROMOTION_GUIDE_MESSAGE,
+} from './types'
 
 const HINT_FONT_FAMILY = "'Jua', 'Apple SD Gothic Neo', sans-serif"
 const HINT_TEXT = '[Q] 이모티콘'
@@ -47,6 +51,16 @@ export function attachEmojiPalette(
   const palette = createVillageEmojiPalette(scene, {
     onSelect: emoji => {
       if (options.isOverlayOpen()) return
+      if (isWhiteBeltBoastEmoji(emoji)) {
+        emitEmoteBubble(
+          scene,
+          options.getPlayer(),
+          WHITE_BELT_PROMOTION_GUIDE_MESSAGE,
+          PALETTE_DEPTH,
+        )
+        return
+      }
+
       if (!options.realtime?.publishEmote(emoji)) return
       // 로컬 즉시 렌더로 latency 가림. 서버 echo 는 RemotePlayersGroup 가 localUserId 필터링으로 무시.
       emitEmoteBubble(scene, options.getPlayer(), emoji, PALETTE_DEPTH)

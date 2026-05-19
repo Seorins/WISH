@@ -77,6 +77,7 @@ export const TAEKWONDO_BELT_LABELS: Record<TaekwondoBeltColor, string> = {
 }
 
 const TAEKWONDO_BELT_BOAST_PREFIX = 'taekwondo-belt:' as const
+export const WHITE_BELT_PROMOTION_GUIDE_MESSAGE = '태권도 게임으로 승급해보세요'
 
 export type TaekwondoBeltBoastEmoji = `${typeof TAEKWONDO_BELT_BOAST_PREFIX}${string}`
 
@@ -114,6 +115,10 @@ export function isTaekwondoBeltBoastEmoji(emoji: string): emoji is TaekwondoBelt
 
 export function getTaekwondoBeltColorFromBoastEmoji(emoji: string): TaekwondoBeltColor | null {
   return TAEKWONDO_BELT_COLORS.find(color => createTaekwondoBeltBoastEmoji(color) === emoji) ?? null
+}
+
+export function isWhiteBeltBoastEmoji(emoji: string) {
+  return getTaekwondoBeltColorFromBoastEmoji(emoji) === 'WHITE'
 }
 
 export function createVillageEmojisForBelt(
