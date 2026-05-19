@@ -37,7 +37,7 @@ public class AiReportSummaryClient {
     public WeeklyReportAiSummaryResponse summarize(Map<String, Object> payload) {
         if (!properties.isEnabled()) {
             log.warn("AI report summary disabled (no base-url) — returning fallback");
-            return WeeklyReportAiSummaryResponse.fallback();
+            return WeeklyReportAiSummaryResponse.fallback("be:disabled");
         }
 
         Map<String, Object> body;
@@ -51,12 +51,13 @@ public class AiReportSummaryClient {
                             .body(new ParameterizedTypeReference<>() {});
         } catch (Exception e) {
             log.warn("AI report summary call failed: {}", e.getMessage());
-            return WeeklyReportAiSummaryResponse.fallback();
+            return WeeklyReportAiSummaryResponse.fallback(
+                    "be:call-failed:" + e.getClass().getSimpleName() + ":" + e.getMessage());
         }
 
         if (body == null) {
             log.warn("AI report summary returned null body");
-            return WeeklyReportAiSummaryResponse.fallback();
+            return WeeklyReportAiSummaryResponse.fallback("be:null-body");
         }
 
         return mapToResponse(body);
@@ -72,14 +73,26 @@ public class AiReportSummaryClient {
         Object suggestionRaw = body.get("suggestion");
         String suggestion = suggestionRaw instanceof String s ? s : "";
         boolean isFallback = Boolean.TRUE.equals(body.get("is_fallback"));
+        // AI 가 디버그 정보를 넣어 보낸 경우 그대로 통과시킨다.
+        Object debugReasonRaw = body.get("debug_reason");
+        String debugReason = debugReasonRaw instanceof String s ? s : null;
+        Object debugRawRaw = body.get("debug_raw");
+        String debugRaw = debugRawRaw instanceof String s ? s : null;
 
         if (summary.isEmpty() || suggestion.isBlank()) {
             // AI 측에서도 fallback 처리 안 된 비정상 응답 → 보수적으로 fallback 으로 통일.
             log.warn("AI report summary missing required fields, using fallback");
-            return WeeklyReportAiSummaryResponse.fallback();
+            return WeeklyReportAiSummaryResponse.fallback("be:missing-fields");
         }
         return new WeeklyReportAiSummaryResponse(
-                summary, activity, emotion, connection, suggestion, isFallback);
+                summary,
+                activity,
+                emotion,
+                connection,
+                suggestion,
+                isFallback,
+                debugReason,
+                debugRaw);
     }
 
     @SuppressWarnings("unchecked")

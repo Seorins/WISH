@@ -8,6 +8,9 @@ export type WeeklyReportAiSummary = {
   connection: string | null
   suggestion: string
   isFallback: boolean
+  // DEBUG (임시): fallback 원인 추적용. 운영 안정화 후 제거.
+  debugReason?: string | null
+  debugRaw?: string | null
 }
 
 /**
