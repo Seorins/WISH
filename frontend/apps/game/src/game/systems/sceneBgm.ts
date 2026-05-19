@@ -5,6 +5,7 @@ import { getGameSettings } from '@/game/settings/gameSettings'
 const FADE_IN_MS = 900
 const FADE_OUT_MS = 650
 const FADE_STEP_MS = 40
+const BGM_VOLUME_GAIN = 1.3
 
 const BGM_TRACKS = {
   start: {
@@ -282,7 +283,7 @@ export function getBgmTrackForScene(sceneKey: string): SceneBgmTrackKey | null {
 }
 
 function getTargetVolume(trackKey: SceneBgmTrackKey) {
-  return BGM_TRACKS[trackKey].volume * getGameSettings().masterVolume
+  return Math.min(1, BGM_TRACKS[trackKey].volume * BGM_VOLUME_GAIN * getGameSettings().masterVolume)
 }
 
 function tweenVolume(
