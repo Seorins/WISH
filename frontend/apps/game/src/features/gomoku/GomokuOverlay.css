@@ -95,6 +95,133 @@
   padding: 14px;
 }
 
+.gomoku-chat-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  gap: 8px;
+  padding: 10px 12px 12px;
+}
+
+.gomoku-chat-panel-heading h3 {
+  margin: 0;
+  font-size: 14px;
+  color: #17342f;
+  line-height: 1.2;
+}
+
+.gomoku-chat-list {
+  min-height: 0;
+  max-height: 220px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 6px;
+  border: 1px solid rgba(49, 93, 87, 0.18);
+  border-radius: 6px;
+  background: #f6faf3;
+}
+
+.gomoku-chat-empty {
+  margin: auto;
+  color: #61756e;
+  font-size: 12px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.gomoku-chat-message {
+  display: grid;
+  grid-template-rows: auto auto;
+  gap: 2px;
+  padding: 5px 9px;
+  border-radius: 6px;
+  border: 1px solid rgba(49, 93, 87, 0.16);
+  background: #ffffff;
+}
+
+.gomoku-chat-message.mine {
+  background: #def0d3;
+  border-color: rgba(74, 139, 63, 0.32);
+  margin-left: 14px;
+}
+
+.gomoku-chat-message.opponent {
+  background: #f3f7fa;
+  border-color: rgba(58, 89, 110, 0.22);
+  margin-right: 14px;
+}
+
+.gomoku-chat-message-author {
+  font-size: 11px;
+  color: #45625b;
+  font-weight: 800;
+}
+
+.gomoku-chat-message-content {
+  font-size: 13px;
+  color: #17342f;
+  font-weight: 700;
+  line-height: 1.35;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+.gomoku-chat-form {
+  display: flex;
+  gap: 5px;
+}
+
+.gomoku-chat-form input {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 34px;
+  padding: 4px 9px;
+  border: 2px solid rgba(49, 93, 87, 0.22);
+  border-radius: 6px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.gomoku-chat-form input:focus {
+  border-color: #1e5a55;
+  outline: none;
+}
+
+.gomoku-chat-form button {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 2px solid transparent;
+  border-radius: 6px;
+  background: #1e5a55;
+  color: #f8fff9;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.gomoku-chat-form button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.gomoku-chat-counter {
+  margin: 0;
+  color: #61756e;
+  font-size: 11px;
+  font-weight: 800;
+  text-align: right;
+}
+
+.gomoku-chat-error {
+  margin: 0;
+  color: #b8453a;
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .gomoku-board-zone {
   min-width: 0;
   min-height: 0;

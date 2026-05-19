@@ -60,6 +60,7 @@ export {
 } from './exercise-sessions'
 export {
   createGomokuRoom,
+  getGomokuMessages,
   getGomokuRanking,
   getGomokuRoom,
   getMyGomokuMatches,
@@ -71,6 +72,7 @@ export {
   playGomokuMove,
   rematchGomokuRoom,
   resignGomokuRoom,
+  sendGomokuMessage,
   startGomokuRoom,
   swapGomokuRoomStones,
 } from './gomoku'
@@ -227,6 +229,8 @@ export type {
 export type {
   GomokuEndReason,
   GomokuMatchPage,
+  GomokuChatMessage,
+  GomokuChatMessageSendRequest,
   GomokuMatchResult,
   GomokuMatchStatus,
   GomokuMatchSummary,

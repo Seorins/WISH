@@ -9,10 +9,13 @@ import java.util.Locale;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.comong.backend.domain.gomoku.dto.GomokuChatMessageResponse;
+import com.comong.backend.domain.gomoku.dto.GomokuChatMessageSendRequest;
 import com.comong.backend.domain.gomoku.dto.GomokuMatchSummaryResponse;
 import com.comong.backend.domain.gomoku.dto.GomokuMoveRecord;
 import com.comong.backend.domain.gomoku.dto.GomokuMoveRequest;
@@ -22,6 +25,7 @@ import com.comong.backend.domain.gomoku.dto.GomokuRoomCreateRequest;
 import com.comong.backend.domain.gomoku.dto.GomokuRoomJoinRequest;
 import com.comong.backend.domain.gomoku.dto.GomokuRoomResponse;
 import com.comong.backend.domain.gomoku.dto.GomokuStatsResponse;
+import com.comong.backend.domain.gomoku.entity.GomokuChatMessage;
 import com.comong.backend.domain.gomoku.entity.GomokuEndReason;
 import com.comong.backend.domain.gomoku.entity.GomokuMatch;
 import com.comong.backend.domain.gomoku.entity.GomokuMatchResult;
@@ -29,6 +33,7 @@ import com.comong.backend.domain.gomoku.entity.GomokuMatchStatus;
 import com.comong.backend.domain.gomoku.entity.GomokuRuleSet;
 import com.comong.backend.domain.gomoku.entity.GomokuStone;
 import com.comong.backend.domain.gomoku.exception.GomokuErrorCode;
+import com.comong.backend.domain.gomoku.repository.GomokuChatMessageRepository;
 import com.comong.backend.domain.gomoku.repository.GomokuMatchRepository;
 import com.comong.backend.domain.gomoku.repository.GomokuRankingProjection;
 import com.comong.backend.domain.patient.entity.PatientProfile;
@@ -54,8 +59,13 @@ public class GomokuService {
     };
     private static final String[] OPEN_THREE_PATTERNS = {".XXX.", ".XX.X.", ".X.XX."};
     private static final int DIRECTIONAL_PATTERN_RADIUS = 5;
+    private static final int CHAT_RECENT_LIMIT = 50;
+    private static final int CHAT_MAX_CONTENT_LENGTH = 200;
+    private static final int CHAT_RATE_LIMIT_PER_MINUTE = 20;
+    private static final Duration CHAT_RATE_LIMIT_WINDOW = Duration.ofMinutes(1);
 
     private final GomokuMatchRepository gomokuMatchRepository;
+    private final GomokuChatMessageRepository gomokuChatMessageRepository;
     private final PatientProfileService patientProfileService;
     private final ObjectMapper objectMapper;
 
@@ -286,6 +296,63 @@ public class GomokuService {
             return toRoomResponse(match, patientProfile.getId());
         }
         return toRoomResponse(match, patientProfile.getId());
+    }
+
+    @Transactional
+    public GomokuChatMessageResponse sendChatMessage(
+            Long userId, Long roomId, GomokuChatMessageSendRequest request) {
+        PatientProfile patientProfile = findPatientProfileOrThrow(userId);
+        GomokuMatch match = findRoomForUpdateOrThrow(roomId);
+        ensureParticipant(match, patientProfile.getId());
+
+        if (match.getStatus() == GomokuMatchStatus.CANCELLED) {
+            throw new BusinessException(GomokuErrorCode.GOMOKU_MESSAGE_NOT_ALLOWED);
+        }
+
+        String content = request.content() == null ? "" : request.content().trim();
+        if (content.isBlank()) {
+            throw new BusinessException(GomokuErrorCode.GOMOKU_MESSAGE_BLANK);
+        }
+        if (content.length() > CHAT_MAX_CONTENT_LENGTH) {
+            throw new BusinessException(GomokuErrorCode.GOMOKU_MESSAGE_TOO_LONG);
+        }
+
+        LocalDateTime windowStart = LocalDateTime.now().minus(CHAT_RATE_LIMIT_WINDOW);
+        long recentCount =
+                gomokuChatMessageRepository
+                        .countByMatchIdAndSenderPatientProfileIdAndCreatedAtAfter(
+                                match.getId(), patientProfile.getId(), windowStart);
+        if (recentCount >= CHAT_RATE_LIMIT_PER_MINUTE) {
+            throw new BusinessException(GomokuErrorCode.GOMOKU_MESSAGE_RATE_LIMITED);
+        }
+
+        match.markSeen(patientProfile.getId());
+        GomokuChatMessage saved =
+                gomokuChatMessageRepository.save(
+                        GomokuChatMessage.builder()
+                                .match(match)
+                                .senderPatientProfile(patientProfile)
+                                .content(content)
+                                .build());
+        return GomokuChatMessageResponse.from(saved);
+    }
+
+    public List<GomokuChatMessageResponse> findRecentChatMessages(Long userId, Long roomId) {
+        PatientProfile patientProfile = findPatientProfileOrThrow(userId);
+        GomokuMatch match =
+                gomokuMatchRepository
+                        .findById(roomId)
+                        .orElseThrow(
+                                () -> new BusinessException(GomokuErrorCode.GOMOKU_ROOM_NOT_FOUND));
+        ensureParticipant(match, patientProfile.getId());
+        List<GomokuChatMessageResponse> messages =
+                gomokuChatMessageRepository
+                        .findRecentByMatchId(match.getId(), PageRequest.of(0, CHAT_RECENT_LIMIT))
+                        .stream()
+                        .map(GomokuChatMessageResponse::from)
+                        .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
+        messages.sort((a, b) -> Long.compare(a.id(), b.id()));
+        return messages;
     }
 
     public Page<GomokuMatchSummaryResponse> findMine(Long userId, Pageable pageable) {
