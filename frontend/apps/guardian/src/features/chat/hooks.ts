@@ -83,10 +83,19 @@ export function pickFirstFinished(
   return null
 }
 
-export function useGuardianDialogueNpcTones(
+/** 사이드바 1줄 상태:
+ *  - hasSession=false → 세션 자체가 없음 ("대화 없음")
+ *  - hasSession=true,  tone=null → 세션은 있지만 concern/protective flag 없음 ("보통")
+ *  - hasSession=true,  tone!=null → 안정/피로/걱정 */
+export type NpcDialogueStatus = {
+  tone: EmotionTone | null
+  hasSession: boolean
+}
+
+export function useGuardianDialogueNpcStatuses(
   patientProfileId: number | null | undefined,
   npcs: GuardianDialogueNpc[],
-): Record<GuardianDialogueNpc, EmotionTone | null> {
+): Record<GuardianDialogueNpc, NpcDialogueStatus> {
   const enabled = typeof patientProfileId === 'number' && patientProfileId > 0
   const sessionsSize = 10
 
@@ -128,10 +137,13 @@ export function useGuardianDialogueNpcTones(
     }),
   })
 
-  const out = {} as Record<GuardianDialogueNpc, EmotionTone | null>
+  const out = {} as Record<GuardianDialogueNpc, NpcDialogueStatus>
   npcs.forEach((npc, i) => {
     const detail = detailQueries[i]?.data
-    out[npc] = detail ? deriveDominantTone(detail.turns) : null
+    out[npc] = {
+      tone: detail ? deriveDominantTone(detail.turns) : null,
+      hasSession: !!detail,
+    }
   })
   return out
 }

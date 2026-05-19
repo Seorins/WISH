@@ -25,22 +25,18 @@ import {
 import {
   pickFirstFinished,
   useGuardianDialogueDailySummary,
-  useGuardianDialogueNpcTones,
+  useGuardianDialogueNpcStatuses,
   useGuardianDialogueSession,
   useGuardianDialogueSessions,
   useGuardianDialogueWeeklyTrend,
+  type NpcDialogueStatus,
 } from '@/features/chat/hooks'
 import type {
   GuardianDialogueNpc,
   GuardianDialogueSignal,
   GuardianDialogueWeeklyTrendPoint,
 } from '@wish/api-client'
-import type {
-  EmotionShare,
-  EmotionSignal,
-  EmotionTone,
-  EmotionTrendPoint,
-} from '@/features/chat/data/mock'
+import type { EmotionShare, EmotionSignal, EmotionTrendPoint } from '@/features/chat/data/mock'
 import { useMyPatient } from '@/features/auth/hooks/useMyPatient'
 import '@/features/dashboard/tokens.css'
 
@@ -57,15 +53,17 @@ export function ChatPage() {
       CHARACTERS.map(c => CHARACTER_ID_TO_NPC[c.id]).filter((n): n is GuardianDialogueNpc => !!n),
     [],
   )
-  const npcTones = useGuardianDialogueNpcTones(patientProfileId, sidebarNpcList)
-  const sidebarTones = useMemo(() => {
-    const out: Record<string, EmotionTone | null> = {}
+  const npcStatuses = useGuardianDialogueNpcStatuses(patientProfileId, sidebarNpcList)
+  const sidebarStatuses = useMemo(() => {
+    const out: Record<string, NpcDialogueStatus> = {}
     for (const c of CHARACTERS) {
       const n = CHARACTER_ID_TO_NPC[c.id]
-      out[c.id] = n ? (npcTones[n] ?? null) : null
+      out[c.id] = n
+        ? (npcStatuses[n] ?? { tone: null, hasSession: false })
+        : { tone: null, hasSession: false }
     }
     return out
-  }, [npcTones])
+  }, [npcStatuses])
 
   // 캐릭터 전환 시 사용자가 고른 과거 세션은 리셋
   const [pickedSessionId, setPickedSessionId] = useState<number | null>(null)
@@ -191,7 +189,7 @@ export function ChatPage() {
             characters={CHARACTERS}
             selectedId={selectedId}
             onSelect={handleSelectCharacter}
-            tones={sidebarTones}
+            statuses={sidebarStatuses}
           />
         }
         main={
