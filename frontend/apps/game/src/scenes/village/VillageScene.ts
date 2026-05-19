@@ -35,8 +35,10 @@ import {
   attachVillageRealtime,
   createVillageEmojiPalette,
   emitEmoteBubble,
+  isWhiteBeltBoastEmoji,
   syncCurrentBeltEmojiToPalette,
   VILLAGE_EMOJI_SLOT_COUNT,
+  WHITE_BELT_PROMOTION_GUIDE_MESSAGE,
   type VillageEmojiPaletteHandle,
   type VillageRealtimeIntegration,
 } from '@/features/village-realtime'
@@ -734,6 +736,11 @@ export class VillageScene extends Phaser.Scene {
     this.emojiPalette = createVillageEmojiPalette(this, {
       onSelect: emoji => {
         if (this.isEmojiOverlayOpen()) return
+        if (isWhiteBeltBoastEmoji(emoji)) {
+          emitEmoteBubble(this, this.player, WHITE_BELT_PROMOTION_GUIDE_MESSAGE, 100)
+          return
+        }
+
         if (!this.villageRealtime?.publishEmote(emoji)) return
         // 로컬 즉시 렌더로 latency 가림. 서버 echo 는 RemotePlayersGroup 가 localUserId 필터링으로 무시.
         emitEmoteBubble(this, this.player, emoji, 100)

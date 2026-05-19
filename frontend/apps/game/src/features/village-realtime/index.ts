@@ -38,8 +38,10 @@ export {
   createVillageEmojisForBelt,
   getTaekwondoBeltColorFromBoastEmoji,
   isTaekwondoBeltBoastEmoji,
+  isWhiteBeltBoastEmoji,
   TAEKWONDO_BELT_BOAST_EMOJIS,
   VILLAGE_BASE_EMOJIS,
   VILLAGE_EMOJI_SLOT_COUNT,
   VILLAGE_EMOJIS,
+  WHITE_BELT_PROMOTION_GUIDE_MESSAGE,
 } from './types'
