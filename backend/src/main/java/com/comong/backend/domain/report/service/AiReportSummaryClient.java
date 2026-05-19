@@ -41,22 +41,33 @@ public class AiReportSummaryClient {
         this.objectMapper = objectMapper;
     }
 
+    // 버전 마커 — debugReason 에 박혀 dev 에 실제 반영된 코드 버전을 식별한다.
+    // (배포 캐시/롤백 디버깅용. 운영 안정화 후 제거)
+    private static final String CODE_VERSION = "v4-rsc";
+
     public WeeklyReportAiSummaryResponse summarize(Map<String, Object> payload) {
         if (!properties.isEnabled()) {
             log.warn("AI report summary disabled (no base-url) — returning fallback");
-            return WeeklyReportAiSummaryResponse.fallback("be:disabled");
+            return WeeklyReportAiSummaryResponse.fallback("be:disabled[" + CODE_VERSION + "]");
         }
 
-        // RestClient.body(Map) 자동 직렬화에서 String 컨버터 매칭 문제로 빈 body 가 전송되는 사례가 있어
-        // ObjectMapper 로 미리 JSON 바이트로 만들어 byte[] body 로 보낸다 — ByteArrayHttpMessageConverter
-        // 가 항상 매칭되어 신뢰성 있게 전송됨.
+        // ObjectMapper 로 JSON 직렬화 후 길이 로깅 — body 가 실제로 만들어졌는지 검증.
         byte[] jsonBytes;
         try {
             jsonBytes = objectMapper.writeValueAsBytes(payload);
         } catch (JacksonException e) {
             log.warn("AI report summary payload serialize failed: {}", e.getMessage());
-            return WeeklyReportAiSummaryResponse.fallback("be:serialize-failed:" + e.getMessage());
+            return WeeklyReportAiSummaryResponse.fallback(
+                    "be:serialize-failed[" + CODE_VERSION + "]:" + e.getMessage());
         }
+        log.info(
+                "[ReportSummary] sending POST /report/summarize payloadBytes={} preview={}",
+                jsonBytes.length,
+                new String(
+                        jsonBytes,
+                        0,
+                        Math.min(jsonBytes.length, 80),
+                        java.nio.charset.StandardCharsets.UTF_8));
 
         Map<String, Object> body;
         try {
@@ -71,7 +82,14 @@ public class AiReportSummaryClient {
         } catch (Exception e) {
             log.warn("AI report summary call failed: {}", e.getMessage());
             return WeeklyReportAiSummaryResponse.fallback(
-                    "be:call-failed:" + e.getClass().getSimpleName() + ":" + e.getMessage());
+                    "be:call-failed["
+                            + CODE_VERSION
+                            + "][bytes="
+                            + jsonBytes.length
+                            + "]:"
+                            + e.getClass().getSimpleName()
+                            + ":"
+                            + e.getMessage());
         }
 
         if (body == null) {
