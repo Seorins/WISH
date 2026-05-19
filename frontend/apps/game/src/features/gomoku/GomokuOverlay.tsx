@@ -157,7 +157,16 @@ const text = {
   me: '\uB098',
   opponent: '\uC0C1\uB300',
   versus: 'VS',
+  modeBadgeComputer: '\uD83E\uDD16 \uCEF4\uD4E8\uD130 \uB300\uC804',
+  modeBadgeLocal: '\uD83D\uDC65 \uB458\uC774\uC11C \uB300\uC804',
+  modeBadgeOnline: '\uD83C\uDF10 \uC628\uB77C\uC778 \uB300\uC804',
 } as const
+
+const MODE_BADGE_LABEL: Record<GameMode, string> = {
+  computer: text.modeBadgeComputer,
+  local: text.modeBadgeLocal,
+  online: text.modeBadgeOnline,
+}
 
 const timerOptions = [
   { label: '15\uCD08', value: 15 },
@@ -883,11 +892,14 @@ export function GomokuOverlay({
 
   return (
     <div className="gomoku-backdrop" role="dialog" aria-modal="true" aria-label={text.title}>
-      <section className={`gomoku-shell ${mode === 'online' ? 'online' : ''}`}>
-        <header className="gomoku-topbar">
-          <div>
-            <h1>{text.title}</h1>
-            <p>{text.subtitle}</p>
+      <section className={`gomoku-shell mode-${mode}`}>
+        <header className={`gomoku-topbar mode-${mode}`}>
+          <div className="gomoku-topbar-title">
+            <span className={`gomoku-mode-badge mode-${mode}`}>{MODE_BADGE_LABEL[mode]}</span>
+            <div>
+              <h1>{text.title}</h1>
+              <p>{text.subtitle}</p>
+            </div>
           </div>
           <button type="button" className="gomoku-close-button" onClick={handleClose}>
             {text.close}
