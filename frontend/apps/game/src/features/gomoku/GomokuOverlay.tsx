@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   createGomokuRoom,
+  getGomokuMessages,
   getGomokuRanking,
   getMyGomokuStats,
   getWaitingGomokuRooms,
@@ -10,8 +11,10 @@ import {
   playGomokuMove,
   rematchGomokuRoom,
   resignGomokuRoom,
+  sendGomokuMessage,
   startGomokuRoom,
   swapGomokuRoomStones,
+  type GomokuChatMessage,
   type GomokuEndReason,
   type GomokuRanking,
   type GomokuRoom,
@@ -168,6 +171,12 @@ const text = {
     '\uAC19\uC740 \uD654\uBA74\uC5D0\uC11C \uB458\uC774 \uBC88\uAC08\uC544 \uD55C \uD310',
   modeCardOnlineDesc:
     '\uC628\uB77C\uC778 \uCE5C\uAD6C\uC640 \uB300\uAD6D\uD558\uACE0 \uB7AD\uD0B9\uC5D0\uB3C4 \uBC18\uC601',
+  chatTitle: '\uB300\uAD6D \uCC44\uD305',
+  chatEmpty: '\uC544\uC9C1 \uBA54\uC2DC\uC9C0\uAC00 \uC5C6\uC5B4\uC694',
+  chatPlaceholder: '\uBA54\uC2DC\uC9C0\uB97C \uC785\uB825\uD574\uC8FC\uC138\uC694',
+  chatSend: '\uBCF4\uB0B4\uAE30',
+  chatSendError:
+    '\uBA54\uC2DC\uC9C0\uB97C \uBCF4\uB0B4\uC9C0 \uBABB\uD588\uC5B4\uC694. \uC7A0\uC2DC \uD6C4 \uB2E4\uC2DC \uC2DC\uB3C4\uD574 \uC8FC\uC138\uC694',
 } as const
 
 const MODE_BADGE_LABEL: Record<GameMode, string> = {
@@ -1031,6 +1040,12 @@ export function GomokuOverlay({
                     selectedOutfit={selectedOnlineOutfit}
                     timers={onlineTimers}
                   />
+                  {onlineRoom ? (
+                    <ChatPanel
+                      roomId={onlineRoom.id}
+                      myPatientProfileId={resolvedPatientProfileId}
+                    />
+                  ) : null}
                 </>
               ) : null}
               {mode !== 'online' ? (
@@ -1130,6 +1145,111 @@ export function GomokuOverlay({
         )}
       </section>
     </div>
+  )
+}
+
+function ChatPanel({
+  roomId,
+  myPatientProfileId,
+}: {
+  roomId: number
+  myPatientProfileId?: number
+}) {
+  const [messages, setMessages] = useState<GomokuChatMessage[]>([])
+  const [draft, setDraft] = useState('')
+  const [sending, setSending] = useState(false)
+  const [error, setError] = useState('')
+  const listRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    let timer: ReturnType<typeof setTimeout> | undefined
+
+    async function tick() {
+      try {
+        const result = await getGomokuMessages(roomId)
+        if (cancelled) return
+        setMessages(result.data)
+      } catch {
+        // 다음 폴링에서 다시 시도
+      }
+      if (cancelled) return
+      timer = setTimeout(tick, 2000)
+    }
+    tick()
+    return () => {
+      cancelled = true
+      if (timer) clearTimeout(timer)
+    }
+  }, [roomId])
+
+  useEffect(() => {
+    if (listRef.current) {
+      listRef.current.scrollTop = listRef.current.scrollHeight
+    }
+  }, [messages])
+
+  async function handleSend(event: React.FormEvent) {
+    event.preventDefault()
+    const trimmed = draft.trim()
+    if (!trimmed || sending) return
+    setSending(true)
+    setError('')
+    try {
+      const result = await sendGomokuMessage(roomId, { content: trimmed })
+      const saved = result.data
+      setMessages(previous => {
+        if (previous.some(message => message.id === saved.id)) {
+          return previous
+        }
+        return [...previous, saved]
+      })
+      setDraft('')
+    } catch {
+      setError(text.chatSendError)
+    } finally {
+      setSending(false)
+    }
+  }
+
+  return (
+    <section className="gomoku-panel gomoku-chat-panel" aria-label={text.chatTitle}>
+      <header className="gomoku-chat-panel-heading">
+        <h3>{text.chatTitle}</h3>
+      </header>
+      <div ref={listRef} className="gomoku-chat-list">
+        {messages.length === 0 ? (
+          <p className="gomoku-chat-empty">{text.chatEmpty}</p>
+        ) : (
+          messages.map(message => (
+            <div
+              key={message.id}
+              className={`gomoku-chat-message ${
+                message.senderPatientProfileId === myPatientProfileId ? 'mine' : 'opponent'
+              }`}
+            >
+              <span className="gomoku-chat-message-author">{message.senderNickname}</span>
+              <span className="gomoku-chat-message-content">{message.content}</span>
+            </div>
+          ))
+        )}
+      </div>
+      <form className="gomoku-chat-form" onSubmit={handleSend}>
+        <input
+          type="text"
+          value={draft}
+          onChange={event => setDraft(event.target.value.slice(0, 200))}
+          placeholder={text.chatPlaceholder}
+          maxLength={200}
+          disabled={sending}
+        />
+        <button type="submit" disabled={sending || !draft.trim()}>
+          {text.chatSend}
+        </button>
+      </form>
+      <p className="gomoku-chat-counter">{draft.length}/200</p>
+      {error ? <p className="gomoku-chat-error">{error}</p> : null}
+    </section>
   )
 }
 

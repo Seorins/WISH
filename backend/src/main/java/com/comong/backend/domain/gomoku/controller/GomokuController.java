@@ -1,6 +1,7 @@
 package com.comong.backend.domain.gomoku.controller;
 
 import java.net.URI;
+import java.util.List;
 
 import jakarta.validation.Valid;
 
@@ -18,6 +19,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.comong.backend.domain.gomoku.dto.GomokuChatMessageResponse;
+import com.comong.backend.domain.gomoku.dto.GomokuChatMessageSendRequest;
 import com.comong.backend.domain.gomoku.dto.GomokuMatchSummaryResponse;
 import com.comong.backend.domain.gomoku.dto.GomokuMoveRequest;
 import com.comong.backend.domain.gomoku.dto.GomokuRankingResponse;
@@ -135,6 +138,26 @@ public class GomokuController {
             @AuthenticationPrincipal AuthenticatedUser currentUser, @PathVariable Long roomId) {
         return ResponseEntity.ok(
                 ApiResponse.success(gomokuService.leave(currentUser.userId(), roomId)));
+    }
+
+    @Operation(summary = "Send online Gomoku room chat message")
+    @PostMapping("/rooms/{roomId}/messages")
+    public ResponseEntity<ApiResponse<GomokuChatMessageResponse>> sendChatMessage(
+            @AuthenticationPrincipal AuthenticatedUser currentUser,
+            @PathVariable Long roomId,
+            @Valid @RequestBody GomokuChatMessageSendRequest request) {
+        return ResponseEntity.ok(
+                ApiResponse.success(
+                        gomokuService.sendChatMessage(currentUser.userId(), roomId, request)));
+    }
+
+    @Operation(summary = "List recent online Gomoku room chat messages")
+    @GetMapping("/rooms/{roomId}/messages")
+    public ResponseEntity<ApiResponse<List<GomokuChatMessageResponse>>> findRecentChatMessages(
+            @AuthenticationPrincipal AuthenticatedUser currentUser, @PathVariable Long roomId) {
+        return ResponseEntity.ok(
+                ApiResponse.success(
+                        gomokuService.findRecentChatMessages(currentUser.userId(), roomId)));
     }
 
     @Operation(summary = "List my Gomoku matches")
