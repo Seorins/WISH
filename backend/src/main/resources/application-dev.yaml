@@ -52,3 +52,6 @@ app:
 ai:
   dialogue:
     base-url: ${AI_DIALOGUE_BASE_URL:http://ai-dev:8001/api/v1}
+  # 보호자 주간 리포트 AI 요약 (S14P31E103-745). 같은 ai-dev 컨테이너의 /report/* 엔드포인트로 라우팅.
+  report:
+    base-url: ${AI_REPORT_BASE_URL:http://ai-dev:8001/api/v1}

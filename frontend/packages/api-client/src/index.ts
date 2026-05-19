@@ -89,6 +89,7 @@ export {
   getGuardianDialogueWeeklyTrend,
   listGuardianDialogueSessions,
 } from './guardian-dialogue'
+export { getReportAiSummary } from './guardian-report'
 export { requestPresignedUploadUrls, uploadToPresignedUrl } from './uploads'
 export { createPatientProfile, listPatientProfiles, updatePatientProfile } from './patient-profiles'
 export { endLoginSession, heartbeatLoginSession, startLoginSession } from './login-sessions'
@@ -284,6 +285,7 @@ export type {
   GuardianNpcVisited,
   ListGuardianDialogueSessionsParams,
 } from './guardian-dialogue'
+export type { WeeklyReportAiSummary } from './guardian-report'
 export type {
   PresignedUploadItem,
   PresignedUploadRequest,
