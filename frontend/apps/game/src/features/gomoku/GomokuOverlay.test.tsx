@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import {
   createGomokuRoom,
+  getGomokuMessages,
   getGomokuRanking,
   getMyGomokuStats,
   getWaitingGomokuRooms,
@@ -9,6 +10,7 @@ import {
   listPatientProfiles,
   rematchGomokuRoom,
   swapGomokuRoomStones,
+  type GomokuChatMessage,
   type GomokuRanking,
   type GomokuRoom,
   type GomokuRoomPage,
@@ -19,6 +21,7 @@ import { GomokuOverlay } from './GomokuOverlay'
 
 vi.mock('@wish/api-client', () => ({
   createGomokuRoom: vi.fn(),
+  getGomokuMessages: vi.fn(),
   getGomokuRanking: vi.fn(),
   getGomokuRoom: vi.fn(),
   getMyGomokuStats: vi.fn(),
@@ -30,6 +33,7 @@ vi.mock('@wish/api-client', () => ({
   playGomokuMove: vi.fn(),
   rematchGomokuRoom: vi.fn(),
   resignGomokuRoom: vi.fn(),
+  sendGomokuMessage: vi.fn(),
   startGomokuRoom: vi.fn(),
   swapGomokuRoomStones: vi.fn(),
 }))
@@ -55,6 +59,12 @@ const DRAWS_LABEL = '\uBB34'
 const LOSSES_LABEL = '\uD328'
 const AUTH_REQUIRED_MESSAGE =
   '\uC628\uB77C\uC778 \uB300\uC804\uC740 \uB85C\uADF8\uC778\uC774 \uD544\uC694\uD574\uC694.'
+const COMPUTER_CARD_PATTERN = /\uCEF4\uD4E8\uD130 \uB300\uC804/
+const ONLINE_CARD_PATTERN = /\uC628\uB77C\uC778 \uB300\uC804/
+
+function chooseCard(pattern: RegExp = COMPUTER_CARD_PATTERN) {
+  fireEvent.click(screen.getByRole('button', { name: pattern }))
+}
 
 function apiResponse<T>(data: T) {
   return {
@@ -187,6 +197,7 @@ describe('GomokuOverlay online room creation', () => {
     vi.mocked(getGomokuRanking).mockResolvedValue(apiResponse(emptyRanking))
     vi.mocked(heartbeatGomokuRoom).mockResolvedValue(apiResponse(createdRoom))
     vi.mocked(listPatientProfiles).mockResolvedValue(apiResponse([]))
+    vi.mocked(getGomokuMessages).mockResolvedValue(apiResponse([] as GomokuChatMessage[]))
   })
 
   afterEach(() => {
@@ -198,6 +209,7 @@ describe('GomokuOverlay online room creation', () => {
     vi.mocked(createGomokuRoom).mockResolvedValue(apiResponse(createdRoom))
 
     render(<GomokuOverlay open onClose={vi.fn()} patientProfileId={7} />)
+    chooseCard()
 
     fireEvent.click(screen.getByRole('button', { name: LOCAL_LABEL }))
     fireEvent.click(screen.getByRole('button', { name: FREESTYLE_LABEL }))
@@ -221,8 +233,8 @@ describe('GomokuOverlay online room creation', () => {
     vi.mocked(leaveGomokuRoom).mockResolvedValueOnce(apiResponse(cancelledRoom))
 
     render(<GomokuOverlay open onClose={onClose} patientProfileId={7} />)
+    chooseCard(ONLINE_CARD_PATTERN)
 
-    fireEvent.click(screen.getByRole('button', { name: ONLINE_LABEL }))
     fireEvent.click(screen.getByRole('button', { name: CREATE_ROOM_LABEL }))
 
     expect(await screen.findByText('ABC123')).toBeTruthy()
@@ -244,8 +256,8 @@ describe('GomokuOverlay online room creation', () => {
     vi.mocked(heartbeatGomokuRoom).mockResolvedValue(apiResponse(createdRoom))
 
     render(<GomokuOverlay open onClose={vi.fn()} patientProfileId={7} />)
+    chooseCard(ONLINE_CARD_PATTERN)
 
-    fireEvent.click(screen.getByRole('button', { name: ONLINE_LABEL }))
     fireEvent.click(screen.getByRole('button', { name: CREATE_ROOM_LABEL }))
 
     expect(await screen.findByText('ABC123')).toBeTruthy()
@@ -262,8 +274,8 @@ describe('GomokuOverlay online room creation', () => {
     const onAuthRequired = vi.fn()
 
     render(<GomokuOverlay open onClose={vi.fn()} onAuthRequired={onAuthRequired} />)
+    chooseCard(ONLINE_CARD_PATTERN)
 
-    fireEvent.click(screen.getByRole('button', { name: ONLINE_LABEL }))
     fireEvent.click(screen.getByRole('button', { name: CREATE_ROOM_LABEL }))
 
     await waitFor(() => {
@@ -275,8 +287,7 @@ describe('GomokuOverlay online room creation', () => {
 
   it('hides rule and computer difficulty controls in online mode', async () => {
     render(<GomokuOverlay open onClose={vi.fn()} patientProfileId={7} />)
-
-    fireEvent.click(screen.getByRole('button', { name: ONLINE_LABEL }))
+    chooseCard(ONLINE_CARD_PATTERN)
 
     await waitFor(() => {
       expect(getWaitingGomokuRooms).toHaveBeenCalled()
@@ -291,6 +302,7 @@ describe('GomokuOverlay online room creation', () => {
 
     try {
       render(<GomokuOverlay open onClose={vi.fn()} patientProfileId={7} />)
+      chooseCard()
 
       fireEvent.click(screen.getByRole('button', { name: BEGINNER_LABEL }))
 
@@ -323,6 +335,7 @@ describe('GomokuOverlay online room creation', () => {
 
     try {
       render(<GomokuOverlay open onClose={vi.fn()} patientProfileId={7} />)
+      chooseCard()
 
       fireEvent.click(screen.getByRole('button', { name: SWAP_STONES_LABEL }))
       await act(async () => {
@@ -343,8 +356,8 @@ describe('GomokuOverlay online room creation', () => {
     vi.mocked(rematchGomokuRoom).mockResolvedValueOnce(apiResponse(rematchRoom))
 
     render(<GomokuOverlay open onClose={vi.fn()} patientProfileId={7} />)
+    chooseCard(ONLINE_CARD_PATTERN)
 
-    fireEvent.click(screen.getByRole('button', { name: ONLINE_LABEL }))
     fireEvent.click(screen.getByRole('button', { name: CREATE_ROOM_LABEL }))
 
     expect(await screen.findByText('FIN123')).toBeTruthy()
@@ -367,8 +380,8 @@ describe('GomokuOverlay online room creation', () => {
     vi.mocked(swapGomokuRoomStones).mockResolvedValueOnce(apiResponse(swappedRoom))
 
     render(<GomokuOverlay open onClose={vi.fn()} patientProfileId={7} />)
+    chooseCard(ONLINE_CARD_PATTERN)
 
-    fireEvent.click(screen.getByRole('button', { name: ONLINE_LABEL }))
     fireEvent.click(screen.getByRole('button', { name: CREATE_ROOM_LABEL }))
 
     expect(await screen.findByText('RDY123')).toBeTruthy()
@@ -404,8 +417,8 @@ describe('GomokuOverlay online room creation', () => {
     )
 
     render(<GomokuOverlay open onClose={vi.fn()} patientProfileId={7} />)
+    chooseCard(ONLINE_CARD_PATTERN)
 
-    fireEvent.click(screen.getByRole('button', { name: ONLINE_LABEL }))
     fireEvent.click(screen.getByRole('button', { name: RANKING_LABEL }))
 
     expect(await screen.findByText('ranker')).toBeTruthy()

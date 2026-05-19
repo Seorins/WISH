@@ -32,7 +32,21 @@
   box-shadow: 0 24px 60px rgba(4, 13, 15, 0.45);
 }
 
-.gomoku-shell.online {
+.gomoku-shell.mode-computer {
+  border-color: #3a596e;
+  box-shadow:
+    0 24px 60px rgba(4, 13, 15, 0.45),
+    0 0 0 3px rgba(122, 168, 196, 0.32);
+}
+
+.gomoku-shell.mode-local {
+  border-color: #4a8b3f;
+  box-shadow:
+    0 24px 60px rgba(4, 13, 15, 0.45),
+    0 0 0 3px rgba(126, 196, 122, 0.32);
+}
+
+.gomoku-shell.mode-online {
   border-color: #0e7280;
   box-shadow:
     0 24px 60px rgba(4, 13, 15, 0.45),
@@ -47,6 +61,59 @@
   padding: 14px 20px;
   border-bottom: 2px solid rgba(49, 93, 87, 0.18);
   background: linear-gradient(90deg, #f8faf2, #eaf2ed);
+}
+
+.gomoku-topbar.mode-computer {
+  background: linear-gradient(90deg, #f3f7fa, #e2ecf2);
+  border-bottom-color: rgba(58, 89, 110, 0.28);
+}
+
+.gomoku-topbar.mode-local {
+  background: linear-gradient(90deg, #f1f8ee, #e1efd9);
+  border-bottom-color: rgba(74, 139, 63, 0.28);
+}
+
+.gomoku-topbar.mode-online {
+  background: linear-gradient(90deg, #ecf6f4, #d8eeea);
+  border-bottom-color: rgba(14, 114, 128, 0.32);
+}
+
+.gomoku-topbar-title {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.gomoku-mode-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 900;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
+.gomoku-mode-badge.mode-computer {
+  background: #d8e5ed;
+  border-color: #3a596e;
+  color: #25425a;
+}
+
+.gomoku-mode-badge.mode-local {
+  background: #def0d3;
+  border-color: #4a8b3f;
+  color: #2d5e29;
+}
+
+.gomoku-mode-badge.mode-online {
+  background: #fbecc9;
+  border-color: #b78938;
+  color: #6e4d12;
 }
 
 .gomoku-topbar h1 {
@@ -93,6 +160,217 @@
   grid-template-columns: minmax(420px, 1fr) 340px;
   gap: 14px;
   padding: 14px;
+}
+
+.gomoku-mode-select {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  gap: 14px;
+  padding: 32px 24px;
+  align-content: center;
+  justify-items: center;
+}
+
+.gomoku-mode-select > h2 {
+  margin: 0;
+  font-size: 28px;
+  color: #17342f;
+}
+
+.gomoku-mode-select > p {
+  margin: 0;
+  color: #45625b;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.gomoku-mode-select-grid {
+  width: min(900px, 100%);
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 8px;
+}
+
+.gomoku-mode-select-card {
+  display: grid;
+  grid-template-rows: auto auto;
+  align-items: start;
+  gap: 10px;
+  padding: 28px 22px;
+  border: 3px solid transparent;
+  border-radius: 16px;
+  background: #fbfdf8;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  transition:
+    transform 120ms,
+    box-shadow 120ms;
+}
+
+.gomoku-mode-select-card:hover,
+.gomoku-mode-select-card:focus-visible {
+  transform: translateY(-3px);
+  box-shadow: 0 14px 28px rgba(24, 36, 31, 0.18);
+  outline: none;
+}
+
+.gomoku-mode-select-card.mode-computer {
+  border-color: #3a596e;
+  background: #f3f7fa;
+}
+
+.gomoku-mode-select-card.mode-local {
+  border-color: #4a8b3f;
+  background: #f1f8ee;
+}
+
+.gomoku-mode-select-card.mode-online {
+  border-color: #b78938;
+  background: #fdf6e2;
+}
+
+.gomoku-mode-select-card strong {
+  font-size: 20px;
+  color: #17342f;
+  line-height: 1.2;
+}
+
+.gomoku-mode-select-card span {
+  font-size: 13px;
+  color: #45625b;
+  font-weight: 700;
+  line-height: 1.45;
+  word-break: keep-all;
+}
+
+.gomoku-chat-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  gap: 8px;
+  padding: 10px 12px 12px;
+}
+
+.gomoku-chat-panel-heading h3 {
+  margin: 0;
+  font-size: 14px;
+  color: #17342f;
+  line-height: 1.2;
+}
+
+.gomoku-chat-list {
+  min-height: 0;
+  max-height: 220px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 6px;
+  border: 1px solid rgba(49, 93, 87, 0.18);
+  border-radius: 6px;
+  background: #f6faf3;
+}
+
+.gomoku-chat-empty {
+  margin: auto;
+  color: #61756e;
+  font-size: 12px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.gomoku-chat-message {
+  display: grid;
+  grid-template-rows: auto auto;
+  gap: 2px;
+  padding: 5px 9px;
+  border-radius: 6px;
+  border: 1px solid rgba(49, 93, 87, 0.16);
+  background: #ffffff;
+}
+
+.gomoku-chat-message.mine {
+  background: #def0d3;
+  border-color: rgba(74, 139, 63, 0.32);
+  margin-left: 14px;
+}
+
+.gomoku-chat-message.opponent {
+  background: #f3f7fa;
+  border-color: rgba(58, 89, 110, 0.22);
+  margin-right: 14px;
+}
+
+.gomoku-chat-message-author {
+  font-size: 11px;
+  color: #45625b;
+  font-weight: 800;
+}
+
+.gomoku-chat-message-content {
+  font-size: 13px;
+  color: #17342f;
+  font-weight: 700;
+  line-height: 1.35;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+.gomoku-chat-form {
+  display: flex;
+  gap: 5px;
+}
+
+.gomoku-chat-form input {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 34px;
+  padding: 4px 9px;
+  border: 2px solid rgba(49, 93, 87, 0.22);
+  border-radius: 6px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.gomoku-chat-form input:focus {
+  border-color: #1e5a55;
+  outline: none;
+}
+
+.gomoku-chat-form button {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 2px solid transparent;
+  border-radius: 6px;
+  background: #1e5a55;
+  color: #f8fff9;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.gomoku-chat-form button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.gomoku-chat-counter {
+  margin: 0;
+  color: #61756e;
+  font-size: 11px;
+  font-weight: 800;
+  text-align: right;
+}
+
+.gomoku-chat-error {
+  margin: 0;
+  color: #b8453a;
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .gomoku-board-zone {
@@ -376,6 +654,12 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
   gap: 6px;
+  position: sticky;
+  bottom: -1px;
+  z-index: 2;
+  margin-top: 2px;
+  padding: 12px 0 4px;
+  background: linear-gradient(180deg, rgba(245, 248, 239, 0) 0%, #f5f8ef 36%, #f5f8ef 100%);
 }
 
 .gomoku-segmented button.active,

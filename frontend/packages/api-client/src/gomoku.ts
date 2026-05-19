@@ -199,3 +199,30 @@ export async function getGomokuRanking(limit = 10, minGames = 1) {
   })
   return response.data
 }
+
+export type GomokuChatMessage = {
+  id: number
+  senderPatientProfileId: number
+  senderNickname: string
+  content: string
+  createdAt: string
+}
+
+export type GomokuChatMessageSendRequest = {
+  content: string
+}
+
+export async function sendGomokuMessage(roomId: number, request: GomokuChatMessageSendRequest) {
+  const response = await apiClient.post<ApiResponse<GomokuChatMessage>>(
+    `/gomoku/rooms/${roomId}/messages`,
+    request,
+  )
+  return response.data
+}
+
+export async function getGomokuMessages(roomId: number) {
+  const response = await apiClient.get<ApiResponse<GomokuChatMessage[]>>(
+    `/gomoku/rooms/${roomId}/messages`,
+  )
+  return response.data
+}
