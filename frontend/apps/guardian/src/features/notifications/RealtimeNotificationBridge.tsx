@@ -25,12 +25,14 @@ export function RealtimeNotificationBridge() {
 
     const controller = new AbortController()
     let cancelled = false
+    const requestToken = token
     const expectedSessionVersion = useRealtimeStore.getState().sessionVersion
 
     const hydrateSnapshot = async () => {
       try {
         const snapshot = await getActiveLiveSession({ signal: controller.signal })
         if (cancelled) return
+        if (useAuthStore.getState().token !== requestToken) return
         hydrateActiveSession(snapshot, expectedSessionVersion)
       } catch (error) {
         if (cancelled || controller.signal.aborted) return
@@ -48,6 +50,13 @@ export function RealtimeNotificationBridge() {
 
   useEffect(() => {
     if (!lastEvent || lastEventNonce === 0) return
+    if (
+      lastEvent.type === 'GAME_STARTED' &&
+      notifiedActiveSessionIdRef.current === lastEvent.loginSessionId
+    ) {
+      return
+    }
+
     const built = buildNotification(lastEvent)
     if (built) {
       if (lastEvent.type === 'GAME_STARTED') {
@@ -75,8 +84,9 @@ export function RealtimeNotificationBridge() {
   }, [activeSession, push])
 
   useEffect(() => {
+    notifiedActiveSessionIdRef.current = null
+
     if (!token) {
-      notifiedActiveSessionIdRef.current = null
       clear()
     }
   }, [token, clear])
