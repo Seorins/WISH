@@ -5,6 +5,7 @@ import {
   createVillageEmojisForBelt,
   getTaekwondoBeltColorFromBoastEmoji,
   isTaekwondoBeltBoastEmoji,
+  isWhiteBeltBoastEmoji,
   VILLAGE_EMOJI_SLOT_COUNT,
 } from './types'
 
@@ -34,5 +35,11 @@ describe('village realtime emote types', () => {
     expect(isTaekwondoBeltBoastEmoji(emote)).toBe(true)
     expect(getTaekwondoBeltColorFromBoastEmoji(emote)).toBe('RED')
     expect(isTaekwondoBeltBoastEmoji('힘내')).toBe(false)
+  })
+
+  it('detects only white belt boast emotes for local promotion guidance', () => {
+    expect(isWhiteBeltBoastEmoji(createTaekwondoBeltBoastEmoji('WHITE'))).toBe(true)
+    expect(isWhiteBeltBoastEmoji(createTaekwondoBeltBoastEmoji('YELLOW'))).toBe(false)
+    expect(isWhiteBeltBoastEmoji('안녕')).toBe(false)
   })
 })

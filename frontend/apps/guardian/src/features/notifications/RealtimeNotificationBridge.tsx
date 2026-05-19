@@ -1,5 +1,9 @@
-import { useEffect } from 'react'
-import type { RealtimeContentType, RealtimeEvent } from '@wish/api-client'
+import { useEffect, useRef } from 'react'
+import {
+  getActiveLiveSession,
+  type RealtimeContentType,
+  type RealtimeEvent,
+} from '@wish/api-client'
 import { useAuthStore } from '@/shared/auth/store'
 import { useNotificationStore, type NotificationItem } from '@/stores/notificationStore'
 import { useRealtimeStore } from '@/stores/realtimeStore'
@@ -8,19 +12,83 @@ import { useRealtimeStore } from '@/stores/realtimeStore'
 // 토스트 컴포넌트를 대체 — 화면 가운데 팝업 대신 헤더 종 아이콘에 누적되는 형태.
 export function RealtimeNotificationBridge() {
   const token = useAuthStore(state => state.token)
+  const activeSession = useRealtimeStore(state => state.activeSession)
+  const hydrateActiveSession = useRealtimeStore(state => state.hydrateActiveSession)
   const lastEvent = useRealtimeStore(state => state.lastEvent)
   const lastEventNonce = useRealtimeStore(state => state.lastEventNonce)
   const push = useNotificationStore(state => state.push)
   const clear = useNotificationStore(state => state.clear)
+  const notifiedActiveSessionIdRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    if (!token) return
+
+    const controller = new AbortController()
+    let cancelled = false
+    const requestToken = token
+    const expectedSessionVersion = useRealtimeStore.getState().sessionVersion
+
+    const hydrateSnapshot = async () => {
+      try {
+        const snapshot = await getActiveLiveSession({ signal: controller.signal })
+        if (cancelled) return
+        if (useAuthStore.getState().token !== requestToken) return
+        hydrateActiveSession(snapshot, expectedSessionVersion)
+      } catch (error) {
+        if (cancelled || controller.signal.aborted) return
+        console.warn('Initial active live session snapshot failed', error)
+      }
+    }
+
+    void hydrateSnapshot()
+
+    return () => {
+      cancelled = true
+      controller.abort()
+    }
+  }, [hydrateActiveSession, token])
 
   useEffect(() => {
     if (!lastEvent || lastEventNonce === 0) return
+    if (
+      lastEvent.type === 'GAME_STARTED' &&
+      notifiedActiveSessionIdRef.current === lastEvent.loginSessionId
+    ) {
+      return
+    }
+
     const built = buildNotification(lastEvent)
-    if (built) push(built)
+    if (built) {
+      if (lastEvent.type === 'GAME_STARTED') {
+        notifiedActiveSessionIdRef.current = lastEvent.loginSessionId
+      }
+      push(built)
+    }
   }, [lastEvent, lastEventNonce, push])
 
   useEffect(() => {
-    if (!token) clear()
+    if (!activeSession) {
+      notifiedActiveSessionIdRef.current = null
+      return
+    }
+
+    if (notifiedActiveSessionIdRef.current === activeSession.loginSessionId) return
+
+    notifiedActiveSessionIdRef.current = activeSession.loginSessionId
+    push({
+      kind: 'GAME_STARTED',
+      title: `${activeSession.patientName} 님이 접속 중이에요`,
+      description: '실시간으로 확인해보세요.',
+      href: '/live',
+    })
+  }, [activeSession, push])
+
+  useEffect(() => {
+    notifiedActiveSessionIdRef.current = null
+
+    if (!token) {
+      clear()
+    }
   }, [token, clear])
 
   return null
