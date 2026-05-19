@@ -15,6 +15,14 @@ WHISPER_MODEL = os.getenv("WHISPER_MODEL", "whisper-1")
 # 30초 짧은 발화 + 네트워크 여유. dialogue chat (5초) 보다 길게.
 WHISPER_TIMEOUT = int(os.getenv("WHISPER_TIMEOUT_SECONDS", "30"))
 WHISPER_LANGUAGE = os.getenv("WHISPER_LANGUAGE", "ko")
+# 한국어 고유명사/도메인 어휘를 Whisper 에 미리 알려서 오인식을 줄인다.
+# 영철은 등대지기 NPC 이고 대화 상대는 소아암 아이들 — 일상어 + 가족/학교 어휘 위주.
+WHISPER_PROMPT = os.getenv(
+    "WHISPER_PROMPT",
+    "등대지기 영철 할아버지와 아이가 나누는 따뜻한 대화. "
+    "등대, 마을, 친구, 학교, 병원, 가족, 엄마, 아빠, 형, 누나, 동생, "
+    "선생님, 놀이, 책, 그림, 노래, 바다, 햇빛, 바람.",
+)
 
 
 async def transcribe_audio(
@@ -36,7 +44,10 @@ async def transcribe_audio(
         "file": (filename, audio_bytes, content_type or "application/octet-stream"),
         "model": (None, WHISPER_MODEL),
         "language": (None, WHISPER_LANGUAGE),
+        "temperature": (None, "0"),
     }
+    if WHISPER_PROMPT:
+        files["prompt"] = (None, WHISPER_PROMPT)
 
     try:
         async with httpx.AsyncClient(timeout=WHISPER_TIMEOUT) as client:

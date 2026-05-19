@@ -79,7 +79,15 @@ export function useWhisperRecorder({
 
     let stream: MediaStream
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          channelCount: 1,
+          sampleRate: 16000,
+        },
+      })
     } catch (e) {
       const err = e as Error & { name?: string }
       if (err.name === 'NotAllowedError' || err.name === 'SecurityError') {

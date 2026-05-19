@@ -497,6 +497,13 @@ export class LighthouseSelectScene extends Phaser.Scene {
         if (!clickedChoice) return
       }
 
+      // 영철(LLM) 자유 대화는 React 측 "오늘은 여기까지 대화할래요!" 버튼만이 정상 종료 경로.
+      // 실수 클릭으로 BE 세션이 IN_PROGRESS 로 남고 보호자 페이지 누락되는 사고를 막기 위해
+      // Phaser 포인터로 인한 advance/close 는 LLM 대화 중에는 모두 무시한다. 진짜 advance/close 가
+      // 필요한 opening/closing 상태에서는 React 측 dialogue-advance-hitarea 가 capture 단계에서
+      // 먼저 받아 처리한다.
+      if (this.isBackendEmotionDialogueOpen) return
+
       const clickedDialog = this.dialog.frame.getBounds().contains(pointer.x, pointer.y)
       if (clickedDialog) this.advanceDialog()
       else this.closeDialog(true)
@@ -558,6 +565,8 @@ export class LighthouseSelectScene extends Phaser.Scene {
       this.skipEngagementAnimation()
       return
     }
+    // 영철 LLM 대화 중에는 ESC 로 종료되지 않도록 차단 — "오늘은 여기까지 대화할래요!" 버튼이 유일 종료 경로.
+    if (this.isBackendEmotionDialogueOpen) return
     if (this.isDialogVisible) this.closeDialog(true)
   }
 
