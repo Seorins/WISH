@@ -29,7 +29,10 @@ export class StartScene extends Phaser.Scene {
 
     // 로고
     const logo = this.add.image(width / 2, height / 2 - 60, 'logo')
-    logo.setScale((width * 0.35) / logo.width).setDepth(11)
+    const logoScale = (width * 0.35) / logo.width
+    logo.setScale(logoScale).setDepth(11)
+    // logo.png 내용이 이미지 중심에서 ~23px(원본 기준) 우측으로 치우쳐 있어 시각 중심을 화면 중앙에 맞추기 위해 보정
+    logo.x -= 23 * logoScale
 
     this.tweens.add({
       targets: logo,
