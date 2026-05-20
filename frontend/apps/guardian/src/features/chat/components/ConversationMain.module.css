@@ -128,7 +128,23 @@
   flex-direction: column;
   gap: 10px;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
+  min-height: 0;
+  height: 100%;
+  box-sizing: border-box;
+  overflow-y: auto;
+  padding: 24px 8px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(124, 92, 255, 0.32) transparent;
+}
+
+.bubbles::-webkit-scrollbar {
+  width: 8px;
+}
+
+.bubbles::-webkit-scrollbar-thumb {
+  background: rgba(124, 92, 255, 0.28);
+  border-radius: 999px;
 }
 
 .bubble {
@@ -320,6 +336,7 @@
     align-items: stretch;
     justify-content: flex-start;
     padding: 0 4px;
+    max-height: 240px;
   }
   .bubble {
     max-width: 75%;
