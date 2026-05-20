@@ -95,11 +95,9 @@ const AI_ADVANCE_THRESHOLD = 60
 const MOTION_COUNTDOWN_FROM = 3
 const MOTION_COUNTDOWN_TICK_MS = 1000
 const MOTION_COUNTDOWN_READY_FEEDBACK = '곧 시작해요!'
-const READY_TUTORIAL_DURATION_SEC = 5
+const READY_TUTORIAL_DURATION_SEC = 3
 const READY_TUTORIAL_MOTION_LABEL = '카메라 준비'
 const READY_TUTORIAL_FEEDBACK = '전신이 보이게 서주세요'
-const GUIDE_INTRO_PLAY_COUNT = 1
-const GUIDE_INTRO_FALLBACK_MS = 5000
 const MOTION_CAPTURING_FEEDBACK = '동작 확인 중...'
 const GUIDE_VIDEO_OBJECT_POSITION = '50% 90%'
 const SIDE_GUIDE_VIDEO_OBJECT_POSITION = '50% 90%'
@@ -160,7 +158,7 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
   private guideVideoExpandOverlay?: Phaser.GameObjects.Container
   private beltPromotionOverlay?: Phaser.GameObjects.Container
   private sessionResultPanel?: Phaser.GameObjects.Container
-  private finishButton?: Phaser.GameObjects.Text
+  private finishButton?: Phaser.GameObjects.Container
   private motions: TaekwondoMotion[] = []
   private motionResults: CreateTaekwondoSessionMotionRequest[] = []
   private recordedMotionIndexes = new Set<number>()
@@ -331,19 +329,30 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
 
   private createFinishButton(vw: number) {
     if (this.finishButton) return
-    this.finishButton = this.add
-      .text(vw - 32, 32, '종료', {
+    const btnW = 116
+    const btnH = 50
+    const radius = 14
+    const container = this.add.container(vw - 28, 28).setDepth(40)
+    const shadow = this.add.graphics()
+    shadow.fillStyle(0x2d1b10, 0.3)
+    shadow.fillRoundedRect(-btnW + 2, 4, btnW, btnH, radius)
+    const bg = this.add.graphics()
+    bg.fillStyle(0xfff5dc, 0.97)
+    bg.fillRoundedRect(-btnW, 0, btnW, btnH, radius)
+    bg.lineStyle(3, 0xd7a750, 0.95)
+    bg.strokeRoundedRect(-btnW, 0, btnW, btnH, radius)
+    const label = this.add
+      .text(-btnW / 2, btnH / 2 - 1, '종료', {
         fontFamily: 'sans-serif',
-        fontSize: '24px',
-        color: '#ffffff',
-        backgroundColor: '#7c1d1d',
-        padding: { left: 18, right: 18, top: 8, bottom: 8 },
-        fontStyle: '700',
+        fontSize: '22px',
+        color: '#7a471c',
+        fontStyle: '800',
       })
-      .setOrigin(1, 0)
-      .setDepth(40)
+      .setOrigin(0.5)
+    const hitArea = this.add
+      .rectangle(-btnW / 2, btnH / 2, btnW, btnH, 0xffffff, 0)
       .setInteractive({ useHandCursor: true })
-    this.finishButton.on('pointerdown', () => {
+    hitArea.on('pointerdown', () => {
       if (
         this.hasSubmittedSession ||
         this.isSavingSession ||
@@ -354,6 +363,10 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
       }
       void this.finishPracticeSession(true)
     })
+    hitArea.on('pointerover', () => container.setScale(1.04))
+    hitArea.on('pointerout', () => container.setScale(1))
+    container.add([shadow, bg, label, hitArea])
+    this.finishButton = container
   }
 
   private showSessionResultPanel(
@@ -745,21 +758,6 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     this.motionIntroOverlay = overlay
 
     if (guideVideoUrl) {
-      let playedCount = 0
-      const handleEnded = () => {
-        playedCount += 1
-        if (playedCount >= GUIDE_INTRO_PLAY_COUNT) {
-          this.startCurrentMotion()
-          return
-        }
-        const video = this.guideVideoElement
-        if (video) {
-          video.currentTime = 0
-          void video.play().catch(() => {
-            /* 자동재생 차단 등은 무시 */
-          })
-        }
-      }
       this.createGuideVideoElement(
         {
           x: vw / 2 + videoBoxX - boxWidth / 2,
@@ -771,16 +769,60 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
         guideVideoUrl,
         pendingText,
         25,
-        { loop: false, onEnded: handleEnded },
+        { loop: false },
       )
-    } else {
-      this.time.delayedCall(GUIDE_INTRO_FALLBACK_MS, () => {
-        this.startCurrentMotion()
-      })
     }
+
+    // 시범 영상과 동시에 진행되는 카운트다운. 종료 시점에 영상이 아직 끝나지 않았더라도 즉시 동작 캡쳐 시작.
+    this.startMotionIntroCountdown()
   }
 
-  private startCurrentMotion() {
+  private startMotionIntroCountdown() {
+    if (this.isSceneShuttingDown) return
+    this.countdownTimer?.remove(false)
+    this.countdownTimer = null
+    this.destroyCountdownText()
+
+    const { width: vw, height: vh } = this.scale
+    const fontSize = Math.round(Phaser.Math.Clamp(vh * 0.18, 86, 190))
+    const text = this.add
+      .text(vw / 2, vh * 0.86, String(MOTION_COUNTDOWN_FROM), {
+        fontFamily: 'sans-serif',
+        fontSize: `${fontSize}px`,
+        color: '#ffffff',
+        fontStyle: '900',
+        stroke: '#3a2110',
+        strokeThickness: 8,
+        align: 'center',
+      })
+      .setOrigin(0.5)
+      .setDepth(25)
+    text.setShadow(0, 5, '#000000', 10, false, true)
+    this.countdownText = text
+    this.playCountdownTextTween(text)
+
+    let remaining = MOTION_COUNTDOWN_FROM
+    this.countdownTimer = this.time.addEvent({
+      delay: MOTION_COUNTDOWN_TICK_MS,
+      repeat: MOTION_COUNTDOWN_FROM - 1,
+      callback: () => {
+        if (this.isSceneShuttingDown) return
+        remaining -= 1
+        if (remaining > 0) {
+          this.countdownText?.setText(String(remaining))
+          if (this.countdownText) {
+            this.playCountdownTextTween(this.countdownText)
+          }
+          return
+        }
+        this.countdownTimer = null
+        this.destroyCountdownText()
+        this.startCurrentMotion(true)
+      },
+    })
+  }
+
+  private startCurrentMotion(skipCountdown = false) {
     if (!this.isWaitingMotionStart) {
       return
     }
@@ -795,6 +837,10 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
 
     if (isReadyTutorial) {
       this.startReadyTutorialCountdown()
+    } else if (skipCountdown) {
+      // intro 카운트다운이 이미 화면에 진행됐으므로 캡쳐를 바로 시작.
+      this.motionRecorderHandle = startScreenRecording({ scene: this })
+      this.beginMotionCapture()
     } else {
       this.motionRecorderHandle = startScreenRecording({ scene: this })
       this.startMotionCountdown()
