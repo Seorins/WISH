@@ -1,6 +1,6 @@
 import { Suspense, useCallback, useEffect, useRef, useState, type ComponentRef } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
-import { Html, OrbitControls, useAnimations, useGLTF } from '@react-three/drei'
+import { OrbitControls, useAnimations, useGLTF } from '@react-three/drei'
 import { Matrix4, MathUtils, Quaternion, Vector3, type Bone, type Group } from 'three'
 import squatGlbUrl from '@/assets/squat.glb?url'
 import walkingGlbUrl from '@/assets/walking.glb?url'
@@ -1673,20 +1673,6 @@ function CharacterModel({
   return (
     <group ref={groupRef} position={[0, MODEL_OFFSET_Y, 0]} scale={BASE_SCALE}>
       <primitive object={scene} />
-      {joints.map(j => (
-        <group
-          key={j.id}
-          ref={el => {
-            if (el) markerRefs.current.set(j.id, el)
-            else markerRefs.current.delete(j.id)
-          }}
-          position={j.position}
-        >
-          <Html center zIndexRange={[40, 0]}>
-            <div className={styles.marker} aria-hidden />
-          </Html>
-        </group>
-      ))}
     </group>
   )
 }
