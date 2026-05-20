@@ -795,7 +795,7 @@ export class VillageScene extends Phaser.Scene {
     })
     this.villageBots.start()
     const villageBotColliders = this.villageBots.getPhysicsGroup()
-    this.physics.add.collider(this.player, villageBotColliders)
+    // Bots are ambient crowd actors, so they should not block the local player.
     this.physics.add.collider(villageBotColliders, this.obstacles)
     this.emojiPalette = createVillageEmojiPalette(this, {
       onSelect: emoji => {
