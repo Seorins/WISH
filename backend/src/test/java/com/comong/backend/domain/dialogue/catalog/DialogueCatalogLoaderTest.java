@@ -69,7 +69,7 @@ class DialogueCatalogLoaderTest {
         assertThat(sayHold.nextNodeId()).isNull();
         assertThat(sayHold.endingType()).isEqualTo(ChoiceEndingType.ASK_ADULT_FIRST);
         assertThat(sayHold.endingNpcLines()).isNotEmpty();
-        assertThat(sayHold.closingLine()).isEqualTo("또 놀러 와!");
+        assertThat(sayHold.closingLine()).isEqualTo("(꼬리로 손 잡으며) 또 와!");
     }
 
     @Test
