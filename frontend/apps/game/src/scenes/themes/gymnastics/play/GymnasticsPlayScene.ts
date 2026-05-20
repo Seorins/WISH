@@ -3417,8 +3417,47 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     this.requestInFlight = false
     this.recordCurrentMotionResult()
     this.setFeedbackTitle('완료!', { force: true })
+    this.showMotionAdvanceText('성공!')
     this.time.delayedCall(700, () => {
       this.advanceToNextMotion(false)
+    })
+  }
+
+  private showMotionAdvanceText(label: string) {
+    const { width: vw, height: vh } = this.scale
+    const fontSize = Math.round(Phaser.Math.Clamp(vh * 0.16, 80, 200))
+    const text = this.add
+      .text(vw / 2, vh / 2, label, {
+        fontFamily: 'sans-serif',
+        fontSize: `${fontSize}px`,
+        color: '#ffefc0',
+        fontStyle: '900',
+        stroke: '#5a3517',
+        strokeThickness: 10,
+        align: 'center',
+      })
+      .setOrigin(0.5)
+      .setDepth(42)
+      .setAlpha(0)
+      .setScale(0.7)
+    text.setShadow(0, 5, '#000000', 12, false, true)
+    this.tweens.add({
+      targets: text,
+      alpha: 1,
+      scale: 1.12,
+      duration: 180,
+      ease: 'Back.easeOut',
+      onComplete: () => {
+        this.tweens.add({
+          targets: text,
+          alpha: 0,
+          scale: 1,
+          delay: 500,
+          duration: 200,
+          ease: 'Sine.easeIn',
+          onComplete: () => text.destroy(),
+        })
+      },
     })
   }
 

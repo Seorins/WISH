@@ -655,8 +655,8 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     this.setSideGuideMagnifierVisible(false)
 
     if (this.isReadyTutorialMotion(this.motions[this.currentMotionIndex])) {
-      this.isWaitingMotionStart = true
-      this.startCurrentMotion()
+      // 카메라 준비 단계 카운트다운/안내 제거 — 바로 다음 실제 동작으로 진입.
+      this.advanceToNextMotion()
       return
     }
 
@@ -757,6 +757,7 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     this.isWaitingMotionStart = true
     this.motionIntroOverlay = overlay
 
+    // 시범 영상이 로드되면 카운트다운 시작. fallback 3초 뒤 영상 안 떠도 강제 시작.
     if (guideVideoUrl) {
       this.createGuideVideoElement(
         {
@@ -769,18 +770,20 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
         guideVideoUrl,
         pendingText,
         25,
-        { loop: false },
+        { loop: false, onReady: () => this.startMotionIntroCountdown() },
       )
+      this.time.delayedCall(3000, () => {
+        if (this.motionIntroOverlay && !this.countdownTimer) {
+          this.startMotionIntroCountdown()
+        }
+      })
+    } else {
+      this.startMotionIntroCountdown()
     }
-
-    // 시범 영상과 동시에 진행되는 카운트다운. 종료 시점에 영상이 아직 끝나지 않았더라도 즉시 동작 캡쳐 시작.
-    this.startMotionIntroCountdown()
   }
 
   private startMotionIntroCountdown() {
-    if (this.isSceneShuttingDown) return
-    this.countdownTimer?.remove(false)
-    this.countdownTimer = null
+    if (this.isSceneShuttingDown || this.countdownTimer) return
     this.destroyCountdownText()
 
     const { width: vw, height: vh } = this.scale
@@ -1078,6 +1081,45 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     }
   }
 
+  private showMotionAdvanceText(label: string) {
+    if (this.isSceneShuttingDown) return
+    const { width: vw, height: vh } = this.scale
+    const fontSize = Math.round(Phaser.Math.Clamp(vh * 0.16, 80, 200))
+    const text = this.add
+      .text(vw / 2, vh / 2, label, {
+        fontFamily: 'sans-serif',
+        fontSize: `${fontSize}px`,
+        color: '#ffefc0',
+        fontStyle: '900',
+        stroke: '#5a3517',
+        strokeThickness: 10,
+        align: 'center',
+      })
+      .setOrigin(0.5)
+      .setDepth(42)
+      .setAlpha(0)
+      .setScale(0.7)
+    text.setShadow(0, 5, '#000000', 12, false, true)
+    this.tweens.add({
+      targets: text,
+      alpha: 1,
+      scale: 1.12,
+      duration: 180,
+      ease: 'Back.easeOut',
+      onComplete: () => {
+        this.tweens.add({
+          targets: text,
+          alpha: 0,
+          scale: 1,
+          delay: 500,
+          duration: 200,
+          ease: 'Sine.easeIn',
+          onComplete: () => text.destroy(),
+        })
+      },
+    })
+  }
+
   private stopCaptureLoop() {
     this.isCapturing = false
     this.captureTimer?.remove(false)
@@ -1108,6 +1150,7 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     if (this.isSceneShuttingDown) {
       return
     }
+    this.showMotionAdvanceText('성공!')
     this.time.delayedCall(CAPTURE_RESULT_TO_ADVANCE_DELAY_MS, () => {
       if (this.isSceneShuttingDown || this.isAiJudgementPaused || this.guideVideoExpandOverlay) {
         return
@@ -1810,6 +1853,7 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     options?: {
       loop?: boolean
       onEnded?: () => void
+      onReady?: () => void
       objectFit?: 'cover' | 'contain'
       objectPosition?: string
       scale?: number
@@ -1870,6 +1914,7 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
       'loadeddata',
       () => {
         loadingText?.setVisible(false)
+        options?.onReady?.()
       },
       { once: true },
     )
