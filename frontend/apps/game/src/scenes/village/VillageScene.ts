@@ -337,6 +337,12 @@ type VillageMinimapBaseUi = {
   worldHeight: number
 }
 
+type VillageMinimapMarkerHit = {
+  bounds: Phaser.Geom.Rectangle
+  worldX: number
+  worldY: number
+}
+
 type VillageMinimapUi =
   | (VillageMinimapBaseUi & {
       collapsed: true
@@ -348,6 +354,7 @@ type VillageMinimapUi =
       playerDot: Phaser.GameObjects.Arc
       zoomOutBounds: Phaser.Geom.Rectangle
       zoomInBounds: Phaser.Geom.Rectangle
+      markerHits: VillageMinimapMarkerHit[]
       mapX: number
       mapY: number
       mapWidth: number
@@ -1284,6 +1291,8 @@ export class VillageScene extends Phaser.Scene {
     ]
 
     const minimapMarkers = [...themeMarkers, ...facilityMarkers]
+    const markerHits: VillageMinimapMarkerHit[] = []
+    const hitSize = 30
     minimapMarkers.forEach(marker => {
       const offset = VILLAGE_MINIMAP_MARKER_OFFSETS[marker.key]
       const adjustedXRatio = Phaser.Math.Clamp(marker.xRatio + offset.xRatio, 0, 1)
@@ -1306,22 +1315,12 @@ export class VillageScene extends Phaser.Scene {
           resolution: 2,
         })
         .setOrigin(labelOnLeft ? 1 : 0, 0.5)
-      const targetWorldX = marker.targetXRatio * worldWidth
-      const targetWorldY = marker.targetYRatio * worldHeight
-      const hitZone = this.add.zone(x, y, 28, 28).setInteractive({ useHandCursor: true })
-      hitZone.on(
-        'pointerdown',
-        (
-          _pointer: Phaser.Input.Pointer,
-          _localX: number,
-          _localY: number,
-          event: Phaser.Types.Input.EventData,
-        ) => {
-          event.stopPropagation()
-          this.teleportPlayerToWorld(targetWorldX, targetWorldY)
-        },
-      )
-      container.add([dot, label, hitZone])
+      container.add([dot, label])
+      markerHits.push({
+        bounds: new Phaser.Geom.Rectangle(x - hitSize / 2, y - hitSize / 2, hitSize, hitSize),
+        worldX: marker.targetXRatio * worldWidth,
+        worldY: marker.targetYRatio * worldHeight,
+      })
     })
 
     const playerDot = this.add.circle(0, 0, 7, 0xff6f76, 1).setStrokeStyle(2.5, 0xffffff, 1)
@@ -1334,6 +1333,7 @@ export class VillageScene extends Phaser.Scene {
       playerDot,
       zoomOutBounds,
       zoomInBounds,
+      markerHits,
       worldWidth,
       worldHeight,
       mapX,
@@ -1836,6 +1836,13 @@ export class VillageScene extends Phaser.Scene {
     if (Phaser.Geom.Rectangle.Contains(this.minimap.zoomInBounds, localX, localY)) {
       this.changeVillageMinimapZoom(1)
       return true
+    }
+
+    for (const marker of this.minimap.markerHits) {
+      if (Phaser.Geom.Rectangle.Contains(marker.bounds, localX, localY)) {
+        this.teleportPlayerToWorld(marker.worldX, marker.worldY)
+        return true
+      }
     }
 
     return this.isPointerInsideMinimap(pointer)
