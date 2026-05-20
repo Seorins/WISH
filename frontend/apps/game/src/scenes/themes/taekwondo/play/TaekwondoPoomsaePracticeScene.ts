@@ -28,6 +28,7 @@ import {
   createTaekwondoSessionMotion,
   DEFAULT_TAEKWONDO_BELT_COLOR,
   getTaekwondoPoomsaeNumber,
+  getTaekwondoProgress,
   listTaekwondoMotions,
   normalizeTaekwondoBeltColor,
   requestPresignedUploadUrls,
@@ -38,6 +39,7 @@ import {
   type TaegeukAnalyzeResponse,
   type TaekwondoBeltColor,
   type TaekwondoMotion,
+  type TaekwondoProgressResponse,
 } from '@wish/api-client'
 import { FilesetResolver, PoseLandmarker } from '@mediapipe/tasks-vision'
 import { mediaPipe33ToAihub29 } from '@/game/motion/aihubPoseMapping'
@@ -359,6 +361,7 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     averageAccuracy: number,
     monstersDefeated: number,
     beltPromotion: { fromBelt: TaekwondoBeltColor; toBelt: TaekwondoBeltColor } | null,
+    progress: TaekwondoProgressResponse | null,
   ): boolean {
     if (this.isSceneShuttingDown) return false
     this.finishButton?.setVisible(false)
@@ -394,6 +397,14 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
       lines.push(
         `🎉 띠 승급  ${getTaekwondoBeltLabel(beltPromotion.fromBelt)} → ${getTaekwondoBeltLabel(beltPromotion.toBelt)}`,
       )
+    } else if (progress) {
+      if (progress.nextBelt && progress.monstersUntilNextPromotion !== null) {
+        lines.push(
+          `현재 ${getTaekwondoBeltLabel(progress.currentBelt)} · ${getTaekwondoBeltLabel(progress.nextBelt)}까지 ${progress.monstersUntilNextPromotion}마리`,
+        )
+      } else if (!progress.nextBelt) {
+        lines.push(`🏆 최고 단계 ${getTaekwondoBeltLabel(progress.currentBelt)} 달성!`)
+      }
     }
     const stats = this.add
       .text(0, -panelHeight * 0.06, lines.join('\n'), {
@@ -1231,11 +1242,26 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
           : this.motionResults.reduce((sum, m) => sum + m.accuracy, 0) / motionCount
       const promotion = this.pendingBeltPromotion
       this.pendingBeltPromotion = null
+
+      // 띠 승급이 없을 때만 진행도(다음 띠까지 N마리) 를 노출. 승급 시점에는 승급 줄로 이미 충분.
+      let progress: TaekwondoProgressResponse | null = null
+      if (!promotion) {
+        const patientProfileId = resolvePatientProfileId()
+        if (patientProfileId) {
+          try {
+            progress = await getTaekwondoProgress(patientProfileId)
+          } catch (err) {
+            console.warn('[TaekwondoPoomsaePracticeScene] progress fetch failed', err)
+          }
+        }
+      }
+
       const shown = this.showSessionResultPanel(
         motionCount,
         averageAccuracy,
         monstersDefeated,
         promotion,
+        progress,
       )
       shouldStopPractice = !shown
     } catch (error) {
