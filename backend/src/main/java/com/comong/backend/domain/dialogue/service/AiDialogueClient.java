@@ -1,22 +1,28 @@
 package com.comong.backend.domain.dialogue.service;
 
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestClient;
 
 import com.comong.backend.domain.dialogue.catalog.model.ChoiceTone;
 import com.comong.backend.domain.dialogue.catalog.model.ChoiceValence;
 import com.comong.backend.domain.dialogue.config.AiDialogueProperties;
 import com.comong.backend.domain.dialogue.entity.DialogueTurn;
 import com.comong.backend.domain.dialogue.entity.NpcName;
+
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * AI 서버 RAG 어댑터. 세션 종료 시 대화 내용을 환아별 벡터 DB에 임베딩하도록 트리거한다 (S14P31E103-788).
@@ -31,15 +37,16 @@ import com.comong.backend.domain.dialogue.entity.NpcName;
 public class AiDialogueClient {
 
     private static final Logger log = LoggerFactory.getLogger(AiDialogueClient.class);
+    private static final String CODE_VERSION = "v2-http11";
 
-    private final RestClient restClient;
     private final AiDialogueProperties properties;
+    private final ObjectMapper objectMapper;
+    private final HttpClient httpClient;
 
-    public AiDialogueClient(
-            @Qualifier("aiDialogueRestClient") RestClient restClient,
-            AiDialogueProperties properties) {
-        this.restClient = restClient;
+    public AiDialogueClient(AiDialogueProperties properties, ObjectMapper objectMapper) {
         this.properties = properties;
+        this.objectMapper = objectMapper;
+        this.httpClient = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).build();
     }
 
     /**
@@ -72,13 +79,7 @@ public class AiDialogueClient {
                         turns.stream().map(AiDialogueClient::toTurnPayload).toList());
 
         try {
-            Map<String, Object> response =
-                    restClient
-                            .post()
-                            .uri("/dialogue/embed-session")
-                            .body(body)
-                            .retrieve()
-                            .body(new ParameterizedTypeReference<>() {});
+            Map<String, Object> response = postJson("/dialogue/embed-session", body, sessionId);
             Object success = response != null ? response.get("success") : null;
             if (Boolean.TRUE.equals(success)) {
                 log.info("AI embed-session ok session={} turns={}", sessionId, turns.size());
@@ -119,13 +120,7 @@ public class AiDialogueClient {
                         turns.stream().map(AiDialogueClient::toTurnPayload).toList());
 
         try {
-            Map<String, Object> response =
-                    restClient
-                            .post()
-                            .uri("/dialogue/emotion-summary")
-                            .body(body)
-                            .retrieve()
-                            .body(new ParameterizedTypeReference<>() {});
+            Map<String, Object> response = postJson("/dialogue/emotion-summary", body, sessionId);
             Object success = response != null ? response.get("success") : null;
             if (Boolean.FALSE.equals(success)) {
                 log.warn(
@@ -142,6 +137,55 @@ public class AiDialogueClient {
                     e.getMessage());
             return Optional.empty();
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> postJson(String path, Map<String, Object> body, long sessionId)
+            throws Exception {
+        byte[] jsonBytes;
+        try {
+            jsonBytes = objectMapper.writeValueAsBytes(body);
+        } catch (JacksonException e) {
+            throw new IllegalStateException("AI dialogue payload serialize failed", e);
+        }
+
+        URI uri = URI.create(properties.baseUrl().replaceAll("/+$", "") + path);
+        log.info(
+                "[DialogueAI] POST {} session={} bytes={} preview={}",
+                uri,
+                sessionId,
+                jsonBytes.length,
+                new String(jsonBytes, 0, Math.min(jsonBytes.length, 120), StandardCharsets.UTF_8));
+
+        HttpRequest request =
+                HttpRequest.newBuilder()
+                        .uri(uri)
+                        .timeout(Duration.ofSeconds(properties.timeoutSeconds()))
+                        .header("Content-Type", "application/json")
+                        .header("Accept", "application/json")
+                        .POST(HttpRequest.BodyPublishers.ofByteArray(jsonBytes))
+                        .build();
+
+        HttpResponse<byte[]> response =
+                httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
+        int status = response.statusCode();
+        byte[] responseBytes = response.body();
+        if (status / 100 != 2) {
+            String preview = new String(responseBytes, StandardCharsets.UTF_8);
+            if (preview.length() > 300) {
+                preview = preview.substring(0, 300);
+            }
+            log.warn(
+                    "AI dialogue HTTP {} [{}] session={} uri={} body={}",
+                    status,
+                    CODE_VERSION,
+                    sessionId,
+                    uri,
+                    preview);
+            return Map.of("success", false);
+        }
+
+        return objectMapper.readValue(responseBytes, Map.class);
     }
 
     private static Map<String, Object> toTurnPayload(DialogueTurn turn) {
