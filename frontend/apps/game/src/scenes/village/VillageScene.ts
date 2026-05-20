@@ -325,6 +325,8 @@ type VillageMinimapMarker = {
   label: string
   xRatio: number
   yRatio: number
+  targetXRatio: number
+  targetYRatio: number
   color: number
   radius: number
 }
@@ -333,6 +335,13 @@ type VillageMinimapBaseUi = {
   container: Phaser.GameObjects.Container
   worldWidth: number
   worldHeight: number
+}
+
+type VillageMinimapMarkerHit = {
+  bounds: Phaser.Geom.Rectangle
+  worldX: number
+  worldY: number
+  dot: Phaser.GameObjects.Arc
 }
 
 type VillageMinimapUi =
@@ -346,6 +355,7 @@ type VillageMinimapUi =
       playerDot: Phaser.GameObjects.Arc
       zoomOutBounds: Phaser.Geom.Rectangle
       zoomInBounds: Phaser.Geom.Rectangle
+      markerHits: VillageMinimapMarkerHit[]
       mapX: number
       mapY: number
       mapWidth: number
@@ -412,6 +422,7 @@ export class VillageScene extends Phaser.Scene {
   private fuelNotice: VillageFuelNoticeUi | null = null
   private minimapZoomIndex = 1
   private isMinimapCollapsed = false
+  private hoveredMinimapMarkerIndex: number | null = null
   private hasPendingFuelNotice = false
   private isFuelNoticeOpen = false
   private isFuelInboxNoticeRequestPending = false
@@ -719,6 +730,7 @@ export class VillageScene extends Phaser.Scene {
       createClickTargetMarker(this, pointer.worldX, pointer.worldY)
     })
     this.input.on('pointermove', this.handleObstacleEditorPointerMove, this)
+    this.input.on('pointermove', this.handleMinimapPointerMove, this)
     this.input.on('pointerup', this.handleObstacleEditorPointerUp, this)
     this.input.mouse?.disableContextMenu()
     this.input.keyboard!.on('keydown-E', this.handleNpcInteract, this)
@@ -1143,6 +1155,7 @@ export class VillageScene extends Phaser.Scene {
   }
 
   private createVillageMinimap(worldWidth: number, worldHeight: number) {
+    this.setHoveredMinimapMarker(null)
     if (this.isMinimapCollapsed) {
       this.createCollapsedVillageMinimap(worldWidth, worldHeight)
       return
@@ -1228,23 +1241,39 @@ export class VillageScene extends Phaser.Scene {
       label: VILLAGE_MINIMAP_THEME_LABELS[portal.key],
       xRatio: portal.xRatio,
       yRatio: portal.yRatio,
+      // 포털 사각형 내부 중앙 좌표. teleport 시 didEnter 가 다음 update 에서 true 가 되도록 보장.
+      targetXRatio: portal.xRatio + portal.widthRatio / 2,
+      targetYRatio: portal.yRatio + portal.heightRatio / 2,
       color: 0xf2b65a,
       radius: 5.5,
     }))
+    const ferryPortal = VILLAGE_THEME_PORTALS.find(portal => portal.key === 'ferry')
+    const photoXRatio = (VILLAGE_PHOTO_BOOTH.xRatio + VILLAGE_PHOTO_GALLERY.xRatio) / 2
+    const photoYRatio = (VILLAGE_PHOTO_BOOTH.yRatio + VILLAGE_PHOTO_GALLERY.yRatio) / 2
+    const gomokuXRatio = this.gomokuBoard
+      ? this.gomokuBoard.x / worldWidth
+      : VILLAGE_GOMOKU_BOARD.xRatio
+    const gomokuYRatio = this.gomokuBoard
+      ? this.gomokuBoard.y / worldHeight
+      : VILLAGE_GOMOKU_BOARD.yRatio
     const facilityMarkers: VillageMinimapMarker[] = [
       {
         key: 'photo',
         label: '사진',
-        xRatio: (VILLAGE_PHOTO_BOOTH.xRatio + VILLAGE_PHOTO_GALLERY.xRatio) / 2,
-        yRatio: (VILLAGE_PHOTO_BOOTH.yRatio + VILLAGE_PHOTO_GALLERY.yRatio) / 2,
+        xRatio: photoXRatio,
+        yRatio: photoYRatio,
+        targetXRatio: photoXRatio,
+        targetYRatio: photoYRatio,
         color: 0x6fc6c7,
         radius: 5,
       },
       {
         key: 'gomoku',
         label: '오목',
-        xRatio: this.gomokuBoard ? this.gomokuBoard.x / worldWidth : VILLAGE_GOMOKU_BOARD.xRatio,
-        yRatio: this.gomokuBoard ? this.gomokuBoard.y / worldHeight : VILLAGE_GOMOKU_BOARD.yRatio,
+        xRatio: gomokuXRatio,
+        yRatio: gomokuYRatio,
+        targetXRatio: gomokuXRatio,
+        targetYRatio: gomokuYRatio,
         color: 0x7dc36b,
         radius: 5,
       },
@@ -1253,12 +1282,21 @@ export class VillageScene extends Phaser.Scene {
         label: '별빛 항구',
         xRatio: VILLAGE_SHIP.xRatio,
         yRatio: VILLAGE_SHIP.yRatio,
+        // 배 시각 위치는 ferry 포털 밖이라, 클릭 시엔 ferry 포털 중앙으로 텔레포트하여 즉시 항구로 진입.
+        targetXRatio: ferryPortal
+          ? ferryPortal.xRatio + ferryPortal.widthRatio / 2
+          : VILLAGE_SHIP.xRatio,
+        targetYRatio: ferryPortal
+          ? ferryPortal.yRatio + ferryPortal.heightRatio / 2
+          : VILLAGE_SHIP.yRatio,
         color: 0x9d8bd7,
         radius: 5,
       },
     ]
 
     const minimapMarkers = [...themeMarkers, ...facilityMarkers]
+    const markerHits: VillageMinimapMarkerHit[] = []
+    const hitSize = 30
     minimapMarkers.forEach(marker => {
       const offset = VILLAGE_MINIMAP_MARKER_OFFSETS[marker.key]
       const adjustedXRatio = Phaser.Math.Clamp(marker.xRatio + offset.xRatio, 0, 1)
@@ -1282,6 +1320,12 @@ export class VillageScene extends Phaser.Scene {
         })
         .setOrigin(labelOnLeft ? 1 : 0, 0.5)
       container.add([dot, label])
+      markerHits.push({
+        bounds: new Phaser.Geom.Rectangle(x - hitSize / 2, y - hitSize / 2, hitSize, hitSize),
+        worldX: marker.targetXRatio * worldWidth,
+        worldY: marker.targetYRatio * worldHeight,
+        dot,
+      })
     })
 
     const playerDot = this.add.circle(0, 0, 7, 0xff6f76, 1).setStrokeStyle(2.5, 0xffffff, 1)
@@ -1294,6 +1338,7 @@ export class VillageScene extends Phaser.Scene {
       playerDot,
       zoomOutBounds,
       zoomInBounds,
+      markerHits,
       worldWidth,
       worldHeight,
       mapX,
@@ -1798,6 +1843,13 @@ export class VillageScene extends Phaser.Scene {
       return true
     }
 
+    for (const marker of this.minimap.markerHits) {
+      if (Phaser.Geom.Rectangle.Contains(marker.bounds, localX, localY)) {
+        this.teleportPlayerToWorld(marker.worldX, marker.worldY)
+        return true
+      }
+    }
+
     return this.isPointerInsideMinimap(pointer)
   }
 
@@ -1811,6 +1863,65 @@ export class VillageScene extends Phaser.Scene {
       pointer.y >= container.y &&
       pointer.y <= container.y + container.height
     )
+  }
+
+  private handleMinimapPointerMove(pointer: Phaser.Input.Pointer) {
+    if (!this.minimap || this.minimap.collapsed || !this.minimap.container.visible) {
+      this.setHoveredMinimapMarker(null)
+      return
+    }
+    const { container, markerHits } = this.minimap
+    const localX = pointer.x - container.x
+    const localY = pointer.y - container.y
+    let hovered: number | null = null
+    for (let index = 0; index < markerHits.length; index += 1) {
+      if (Phaser.Geom.Rectangle.Contains(markerHits[index].bounds, localX, localY)) {
+        hovered = index
+        break
+      }
+    }
+    this.setHoveredMinimapMarker(hovered)
+  }
+
+  private setHoveredMinimapMarker(index: number | null) {
+    if (this.hoveredMinimapMarkerIndex === index) return
+    const prev = this.hoveredMinimapMarkerIndex
+    if (prev !== null && this.minimap && !this.minimap.collapsed && this.minimap.markerHits[prev]) {
+      this.minimap.markerHits[prev].dot.setScale(1)
+    }
+    if (
+      index !== null &&
+      this.minimap &&
+      !this.minimap.collapsed &&
+      this.minimap.markerHits[index]
+    ) {
+      this.minimap.markerHits[index].dot.setScale(1.4)
+      this.input.setDefaultCursor('pointer')
+    } else {
+      this.input.setDefaultCursor('default')
+    }
+    this.hoveredMinimapMarkerIndex = index
+  }
+
+  private teleportPlayerToWorld(worldX: number, worldY: number) {
+    if (this.isTransitioning) return
+    if (this.settingsMenu.isOpen()) return
+    if (this.isVillagerDialogueOpen) return
+    if (this.isGomokuOpen) return
+    if (this.isPhotoGalleryOpen) return
+    if (this.isFuelNoticeOpen) return
+
+    this.target = null
+    this.player.setVelocity(0, 0)
+    this.player.setPosition(worldX, worldY)
+    this.lastSafePlayerPosition?.set(worldX, worldY)
+    this.cameras.main.centerOn(worldX, worldY)
+    // 미니맵 fast-travel 은 사용자의 명시적 의사이므로, 직전 씬 복귀 cooldown 을 건너뛰어 즉시 진입 가능하게.
+    this.portalCooldownUntil = this.time.now
+    // 모든 포털 wasInside 를 false 로 초기화해, 도착지가 포털 내부면 다음 update 에서 didEnter=true 가 발화.
+    ;(Object.keys(this.playerWasInPortal) as VillagePortalKey[]).forEach(key => {
+      this.playerWasInPortal[key] = false
+    })
   }
 
   private createPhotoGallery(worldWidth: number, worldHeight: number) {
