@@ -2,11 +2,11 @@ import type { MapWeatherRule } from './types'
 
 export const defaultMapWeatherRule: MapWeatherRule = {
   mapId: 'default',
-  mode: 'OUTDOOR_FULL',
-  allowParticles: true,
-  allowAmbientSound: true,
+  mode: 'INDOOR_SUBTLE',
+  allowParticles: false,
+  allowAmbientSound: false,
   allowLightingChange: true,
-  maxEffectIntensity: 0.6,
+  maxEffectIntensity: 0.18,
 }
 
 const indoorSubtle = (mapId: string, maxEffectIntensity = 0.18): MapWeatherRule => ({
@@ -38,6 +38,22 @@ export const mapWeatherRules: Record<string, MapWeatherRule> = {
   },
   VillageScene: {
     mapId: 'VillageScene',
+    mode: 'OUTDOOR_FULL',
+    allowParticles: true,
+    allowAmbientSound: true,
+    allowLightingChange: true,
+    maxEffectIntensity: 0.6,
+  },
+  ferry: {
+    mapId: 'ferry',
+    mode: 'OUTDOOR_FULL',
+    allowParticles: true,
+    allowAmbientSound: true,
+    allowLightingChange: true,
+    maxEffectIntensity: 0.6,
+  },
+  FerrySelectScene: {
+    mapId: 'FerrySelectScene',
     mode: 'OUTDOOR_FULL',
     allowParticles: true,
     allowAmbientSound: true,
