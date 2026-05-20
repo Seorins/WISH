@@ -2,13 +2,20 @@ package com.comong.backend.domain.quiz.controller;
 
 import java.security.Principal;
 
+import jakarta.validation.Valid;
+
 import org.springframework.messaging.handler.annotation.DestinationVariable;
 import org.springframework.messaging.handler.annotation.MessageMapping;
+import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.stereotype.Controller;
 
+import com.comong.backend.domain.quiz.dto.PromptAssignment;
+import com.comong.backend.domain.quiz.dto.QuizGuessMessage;
 import com.comong.backend.domain.quiz.dto.QuizRoomSnapshot;
+import com.comong.backend.domain.quiz.dto.QuizStrokeMessage;
 import com.comong.backend.domain.quiz.service.QuizBroadcastService;
 import com.comong.backend.domain.quiz.service.QuizRoomRegistry;
+import com.comong.backend.domain.quiz.service.QuizRoomService;
 import com.comong.backend.domain.village.realtime.handler.VillageStompPrincipal;
 
 import lombok.RequiredArgsConstructor;
@@ -33,6 +40,7 @@ public class QuizMessageController {
 
     private final QuizRoomRegistry roomRegistry;
     private final QuizBroadcastService broadcastService;
+    private final QuizRoomService quizRoomService;
 
     @MessageMapping("/quiz/{roomId}/ready")
     public void onReady(@DestinationVariable String roomId, Principal principal) {
@@ -43,8 +51,39 @@ public class QuizMessageController {
                 .findById(roomId)
                 .filter(room -> room.hasMember(vsp.userId()))
                 .ifPresent(
-                        room ->
-                                broadcastService.sendSnapshotToUser(
-                                        principal.getName(), roomId, QuizRoomSnapshot.of(room)));
+                        room -> {
+                            broadcastService.sendSnapshotToUser(
+                                    principal.getName(), roomId, QuizRoomSnapshot.of(room));
+                            if (room.currentDrawerUserId() == vsp.userId()
+                                    && room.currentPrompt() != null) {
+                                broadcastService.sendPromptToUser(
+                                        principal.getName(),
+                                        roomId,
+                                        new PromptAssignment(
+                                                room.roundNumber(), room.currentPrompt().word()));
+                            }
+                        });
+    }
+
+    @MessageMapping("/quiz/{roomId}/stroke")
+    public void onStroke(
+            @DestinationVariable String roomId,
+            @Valid @Payload QuizStrokeMessage stroke,
+            Principal principal) {
+        if (!(principal instanceof VillageStompPrincipal vsp)) {
+            return;
+        }
+        quizRoomService.relayStroke(vsp.userId(), roomId, stroke);
+    }
+
+    @MessageMapping("/quiz/{roomId}/guess")
+    public void onGuess(
+            @DestinationVariable String roomId,
+            @Valid @Payload QuizGuessMessage guess,
+            Principal principal) {
+        if (!(principal instanceof VillageStompPrincipal vsp)) {
+            return;
+        }
+        quizRoomService.submitGuess(vsp.userId(), roomId, guess.text());
     }
 }

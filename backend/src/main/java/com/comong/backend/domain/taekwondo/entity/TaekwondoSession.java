@@ -88,6 +88,18 @@ public class TaekwondoSession {
         this.createdAt = LocalDateTime.now();
     }
 
+    public void recordMotion(
+            int motionDurationSec, double motionAccuracy, int motionMonstersDefeated) {
+        validateNonNegative(motionDurationSec, "motionDurationSec");
+        validateAccuracy(motionAccuracy, "motionAccuracy");
+        validateNonNegative(motionMonstersDefeated, "motionMonstersDefeated");
+        double accuracySum = this.averageAccuracy * this.completedMotionCount + motionAccuracy;
+        this.durationSec += motionDurationSec;
+        this.completedMotionCount += 1;
+        this.averageAccuracy = accuracySum / this.completedMotionCount;
+        this.monstersDefeated += motionMonstersDefeated;
+    }
+
     private void validateNonNegative(int value, String fieldName) {
         if (value < 0) {
             throw new IllegalArgumentException(fieldName + " must not be negative");

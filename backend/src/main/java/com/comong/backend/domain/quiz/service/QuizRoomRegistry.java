@@ -2,6 +2,7 @@ package com.comong.backend.domain.quiz.service;
 
 import java.security.SecureRandom;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -210,14 +211,16 @@ public class QuizRoomRegistry {
      * @param prompt 본 라운드 제시어
      * @return 변경 후 룸 (lock 해제 후 snapshot 용)
      */
-    public QuizRoom startNextRound(String roomId, DrawingPrompt prompt) {
+    public QuizRoom startNextRound(
+            String roomId, DrawingPrompt prompt, Instant startedAt, Integer totalRounds) {
         RoomEntry entry = rooms.get(roomId);
         if (entry == null) {
             throw new com.comong.backend.domain.quiz.exception.QuizRoomNotFoundException();
         }
         entry.lock.lock();
         try {
-            entry.room.startNextRound(prompt);
+            entry.room.startNextRound(
+                    prompt, startedAt, properties.roundDurationSeconds(), totalRounds);
             return entry.room;
         } finally {
             entry.lock.unlock();
@@ -227,6 +230,23 @@ public class QuizRoomRegistry {
     /** 등록된 방 수 — 메트릭/디버깅용. */
     public int roomCount() {
         return rooms.size();
+    }
+
+    public List<String> roomIds() {
+        return List.copyOf(rooms.keySet());
+    }
+
+    /**
+     * 입장 가능한 (WAITING + 정원 미만) 방을 createdAt 내림차순으로 반환. 룸 lock 미보호 — 멤버 수/상태가 호출 사이에 미세하게 흔들릴 수 있지만
+     * 목록 UI 용도이므로 허용.
+     */
+    public List<QuizRoom> findJoinableRooms() {
+        return rooms.values().stream()
+                .map(RoomEntry::room)
+                .filter(room -> room.status() == QuizRoomStatus.WAITING)
+                .filter(room -> room.memberCount() < room.maxPlayers())
+                .sorted(java.util.Comparator.comparing(QuizRoom::createdAt).reversed())
+                .toList();
     }
 
     private String generateUniqueCode() {

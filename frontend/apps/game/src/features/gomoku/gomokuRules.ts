@@ -59,6 +59,8 @@ const FORBIDDEN_MESSAGES: Record<ForbiddenMove['type'], string> = {
   'double-three': '\uD751\uC740 3-3 \uAE08\uC218\uC785\uB2C8\uB2E4.',
   'double-four': '\uD751\uC740 4-4 \uAE08\uC218\uC785\uB2C8\uB2E4.',
 }
+const OPEN_THREE_PATTERNS = ['.XXX.', '.XX.X.', '.X.XX.'] as const
+const DIRECTIONAL_PATTERN_RADIUS = 5
 
 export function createEmptyBoard(size = GOMOKU_BOARD_SIZE): Board {
   return Array.from({ length: size }, () => Array<Cell>(size).fill(null))
@@ -164,15 +166,19 @@ export function detectForbiddenMove(
     return { type: 'overline', message: FORBIDDEN_MESSAGES.overline }
   }
 
+  if (getGameStatus(nextBoard, position, ruleSet).phase === 'won') {
+    return null
+  }
+
   const openThrees = DIRECTIONS.filter(direction =>
-    hasOpenContiguousLine(nextBoard, position, stone, direction, 3, 2),
+    hasOpenThree(nextBoard, position, stone, direction),
   ).length
   if (openThrees >= 2) {
     return { type: 'double-three', message: FORBIDDEN_MESSAGES['double-three'] }
   }
 
   const fours = DIRECTIONS.filter(direction =>
-    hasOpenContiguousLine(nextBoard, position, stone, direction, 4, 1),
+    hasFourThreat(nextBoard, position, stone, direction),
   ).length
   if (fours >= 2) {
     return { type: 'double-four', message: FORBIDDEN_MESSAGES['double-four'] }
@@ -288,32 +294,84 @@ function collectDirection(
   return positions
 }
 
-function hasOpenContiguousLine(
+function hasOpenThree(
   board: Board,
   origin: Position,
   stone: Stone,
   direction: (typeof DIRECTIONS)[number],
-  targetLength: number,
-  requiredOpenEnds: number,
 ) {
-  const forward = collectDirection(board, origin, stone, direction.dRow, direction.dCol)
-  const backward = collectDirection(board, origin, stone, -direction.dRow, -direction.dCol)
-  const lineLength = forward.length + backward.length + 1
-  if (lineLength !== targetLength) return false
-
-  const before = {
-    row: origin.row - direction.dRow * (backward.length + 1),
-    col: origin.col - direction.dCol * (backward.length + 1),
+  if (hasFourThreat(board, origin, stone, direction)) {
+    return false
   }
-  const after = {
-    row: origin.row + direction.dRow * (forward.length + 1),
-    col: origin.col + direction.dCol * (forward.length + 1),
-  }
-  const openEnds =
-    Number(isInsideBoard(board, before) && board[before.row][before.col] === null) +
-    Number(isInsideBoard(board, after) && board[after.row][after.col] === null)
 
-  return openEnds >= requiredOpenEnds
+  const line = getDirectionalPattern(board, origin, stone, direction)
+  const centerIndex = DIRECTIONAL_PATTERN_RADIUS
+
+  return OPEN_THREE_PATTERNS.some(pattern => containsPatternAtOrigin(line, centerIndex, pattern))
+}
+
+function hasFourThreat(
+  board: Board,
+  origin: Position,
+  stone: Stone,
+  direction: (typeof DIRECTIONS)[number],
+) {
+  for (let offset = -4; offset <= 4; offset += 1) {
+    if (offset === 0) continue
+
+    const candidate = {
+      row: origin.row + direction.dRow * offset,
+      col: origin.col + direction.dCol * offset,
+    }
+    if (!isInsideBoard(board, candidate) || board[candidate.row][candidate.col]) continue
+
+    const nextBoard = applyMove(board, candidate, stone)
+    const lineLength =
+      collectDirection(nextBoard, candidate, stone, direction.dRow, direction.dCol).length +
+      collectDirection(nextBoard, candidate, stone, -direction.dRow, -direction.dCol).length +
+      1
+    if (lineLength === 5) return true
+  }
+
+  return false
+}
+
+function getDirectionalPattern(
+  board: Board,
+  origin: Position,
+  stone: Stone,
+  direction: (typeof DIRECTIONS)[number],
+) {
+  let pattern = ''
+
+  for (
+    let offset = -DIRECTIONAL_PATTERN_RADIUS;
+    offset <= DIRECTIONAL_PATTERN_RADIUS;
+    offset += 1
+  ) {
+    const row = origin.row + direction.dRow * offset
+    const col = origin.col + direction.dCol * offset
+    const position = { row, col }
+    if (!isInsideBoard(board, position)) {
+      pattern += '#'
+    } else if (board[row][col] === null) {
+      pattern += '.'
+    } else {
+      pattern += board[row][col] === stone ? 'X' : '#'
+    }
+  }
+
+  return pattern
+}
+
+function containsPatternAtOrigin(line: string, centerIndex: number, pattern: string) {
+  for (let start = 0; start <= line.length - pattern.length; start += 1) {
+    const end = start + pattern.length
+    if (centerIndex < start || centerIndex >= end) continue
+    if (line.slice(start, end) === pattern) return true
+  }
+
+  return false
 }
 
 function getCandidateMoves(board: Board) {

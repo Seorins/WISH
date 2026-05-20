@@ -11,11 +11,20 @@ export { createVillageEmojiPalette } from './villageEmojiPalette'
 export type { VillageEmojiPaletteHandle } from './villageEmojiPalette'
 export { attachEmojiPalette } from './attachEmojiPalette'
 export type { AttachedEmojiPalette } from './attachEmojiPalette'
+export { syncCurrentBeltEmojiToPalette } from './currentBeltEmote'
+export {
+  getTaekwondoBeltEmoteTextureKey,
+  getTaekwondoBeltEmoteTintFill,
+  loadTaekwondoBeltEmoteImages,
+  setTaekwondoBeltImageDisplay,
+  TAEKWONDO_BELT_EMOTE_TEXTURE_KEYS,
+} from './taekwondoBeltEmoteAssets'
 export type {
   EmotePacket,
   PlayerDirection,
   PositionPacket,
   SnapshotMember,
+  TaekwondoBeltBoastEmoji,
   VillageEmoji,
   VillageEmoteEvent,
   VillageEvent,
@@ -24,4 +33,15 @@ export type {
   VillageMoveEvent,
   VillageSnapshot,
 } from './types'
-export { VILLAGE_EMOJIS } from './types'
+export {
+  createTaekwondoBeltBoastEmoji,
+  createVillageEmojisForBelt,
+  getTaekwondoBeltColorFromBoastEmoji,
+  isTaekwondoBeltBoastEmoji,
+  isWhiteBeltBoastEmoji,
+  TAEKWONDO_BELT_BOAST_EMOJIS,
+  VILLAGE_BASE_EMOJIS,
+  VILLAGE_EMOJI_SLOT_COUNT,
+  VILLAGE_EMOJIS,
+  WHITE_BELT_PROMOTION_GUIDE_MESSAGE,
+} from './types'

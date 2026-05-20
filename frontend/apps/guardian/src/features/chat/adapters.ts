@@ -33,11 +33,7 @@ export function toChatMessages(turns: GuardianDialogueTurn[]): ChatMessage[] {
   const out: ChatMessage[] = []
   for (const t of sorted) {
     if (t.questionText) {
-      out.push({
-        id: `t${t.id}-q`,
-        speaker: 'character',
-        parts: [{ text: t.questionText }],
-      })
+      pushCharacterMessage(out, `t${t.id}-q`, t.questionText)
     }
     if (t.choiceText) {
       out.push({
@@ -46,8 +42,31 @@ export function toChatMessages(turns: GuardianDialogueTurn[]): ChatMessage[] {
         parts: highlightSentimentWords(t.choiceText, t.sentimentWords ?? [], t.valence),
       })
     }
+    if (t.npcResponseText) {
+      pushCharacterMessage(out, `t${t.id}-r`, t.npcResponseText)
+    }
   }
   return out
+}
+
+function pushCharacterMessage(out: ChatMessage[], id: string, text: string) {
+  const trimmed = text.trim()
+  if (!trimmed) return
+  const previous = out[out.length - 1]
+  if (
+    previous?.speaker === 'character' &&
+    previous.parts
+      .map(part => part.text)
+      .join('')
+      .trim() === trimmed
+  ) {
+    return
+  }
+  out.push({
+    id,
+    speaker: 'character',
+    parts: [{ text: trimmed }],
+  })
 }
 
 /**

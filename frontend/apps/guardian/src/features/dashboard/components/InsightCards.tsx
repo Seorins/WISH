@@ -2,7 +2,13 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, XAxis, YAxis } from 'recharts'
 import { useMyPatientId } from '@/features/auth/hooks/useMyPatientId'
-import { useGymnasticsDashboardSummary, useGymnasticsRangeSummary } from '../hooks'
+import { useRomMovementAnalysis } from '@/features/rom/hooks'
+import {
+  ROM_BALANCE_ATTENTION_DEG,
+  ROM_CAPTURE_WARN_PERCENT,
+  type RomJointDetail,
+} from '@/features/rom/data/model'
+import { useGymnasticsDashboardSummary } from '../hooks'
 import { ChevronDownIcon, InfoIcon } from './icons'
 import styles from './InsightCards.module.css'
 
@@ -269,29 +275,59 @@ export function TrendChartCard() {
 }
 
 const ROM_TONE_CLASSES = [
-  { cell: styles.romCellMint, rating: styles.romRatingMint },
-  { cell: styles.romCellLavender, rating: styles.romRatingLavender },
-  { cell: styles.romCellPink, rating: styles.romRatingPink },
-  { cell: styles.romCellCyan, rating: styles.romRatingCyan },
+  styles.romCellMint,
+  styles.romCellLavender,
+  styles.romCellPink,
+  styles.romCellCyan,
 ] as const
 
-const ROM_STATUS_LABEL = {
-  new: '신규 기록',
-  improved: '이전보다 증가',
-  steady: '비슷함',
-  lower: '이전보다 감소',
-} as const
+function formatRomDegrees(value: number | null | undefined): string {
+  if (typeof value !== 'number') return '확인 중'
+  return `${value.toFixed(1)}도`
+}
+
+function romGap(joint: RomJointDetail): number | null {
+  const { leftRangeDeg, rightRangeDeg } = joint
+  if (typeof leftRangeDeg !== 'number' || typeof rightRangeDeg !== 'number') return null
+  return Math.abs(leftRangeDeg - rightRangeDeg)
+}
+
+function isBelowCaptureThreshold(value: number | null | undefined): boolean {
+  return typeof value === 'number' && value < ROM_CAPTURE_WARN_PERCENT
+}
+
+function resolveRomStatus(joint: RomJointDetail): { label: string; className: string } {
+  if (!joint.analysisAvailable) {
+    return { label: '기록 부족', className: styles.romStatusMuted }
+  }
+  if (
+    isBelowCaptureThreshold(joint.confidencePercent) ||
+    isBelowCaptureThreshold(joint.coveragePercent)
+  ) {
+    return { label: '촬영 확인', className: styles.romStatusWarn }
+  }
+  const gap = romGap(joint)
+  if (gap !== null && gap >= ROM_BALANCE_ATTENTION_DEG) {
+    return { label: '좌우 차이', className: styles.romStatusAttention }
+  }
+  return { label: '안정적', className: styles.romStatusGood }
+}
 
 export function ROMSummaryCard() {
   const navigate = useNavigate()
   const { data: patientId } = useMyPatientId()
-  const { data: rangeSummary, isLoading } = useGymnasticsRangeSummary(patientId)
-  const items = rangeSummary?.items.slice(0, 4) ?? []
+  const { data: movementAnalysis, isError, isLoading } = useRomMovementAnalysis(patientId)
+  const items = movementAnalysis?.joints.slice(0, 4) ?? []
+  const emptyMessage = isError
+    ? '움직임 분석을 불러오지 못했습니다.'
+    : isLoading
+      ? '움직임 기록을 불러오는 중입니다.'
+      : '최근 체조 세션에서 관절이 화면에 잡히면 표시됩니다.'
 
   return (
     <article className={styles.card}>
       <header className={styles.cardHead}>
-        <CardTitle tip="최근 체조 세션에서 확인된 동작별 수행 범위입니다. 의료적 관절 가동 범위가 아니라 운동 중 움직임 기록으로 봐야 합니다.">
+        <CardTitle tip="최근 체조 세션에서 관절이 실제로 움직인 각도입니다. 100점 만점 점수가 아니라 최대 각도와 최소 각도의 차이입니다.">
           운동 중 움직임 범위
         </CardTitle>
         <button type="button" className={styles.cardAction} onClick={() => navigate('/rom')}>
@@ -299,20 +335,20 @@ export function ROMSummaryCard() {
         </button>
       </header>
       {items.length === 0 ? (
-        <div className={styles.romEmpty}>
-          {isLoading ? '움직임 기록을 불러오는 중입니다.' : '최근 체조 세션이 생기면 표시됩니다.'}
-        </div>
+        <div className={styles.romEmpty}>{emptyMessage}</div>
       ) : (
         <div className={styles.romGrid}>
-          {items.map((item, index) => {
+          {items.map((joint, index) => {
             const tone = ROM_TONE_CLASSES[index % ROM_TONE_CLASSES.length]
-            const value = item.scoreAvailable ? `${item.currentPercent}%` : item.progressLabel
-            const rating = item.scoreAvailable ? ROM_STATUS_LABEL[item.status] : '세션 기록'
+            const status = resolveRomStatus(joint)
             return (
-              <div key={item.motionResultId} className={`${styles.romCell} ${tone.cell}`}>
-                <span className={styles.romJoint}>{item.motionName}</span>
-                <span className={styles.romPercent}>{value}</span>
-                <span className={`${styles.romRating} ${tone.rating}`}>{rating}</span>
+              <div key={joint.id} className={`${styles.romCell} ${tone}`}>
+                <span className={styles.romJoint}>{joint.name}</span>
+                <span className={styles.romPercent}>{formatRomDegrees(joint.currentRangeDeg)}</span>
+                <span className={styles.romSubMetric}>
+                  좌우 차이 {formatRomDegrees(romGap(joint))}
+                </span>
+                <span className={`${styles.romRating} ${status.className}`}>{status.label}</span>
               </div>
             )
           })}

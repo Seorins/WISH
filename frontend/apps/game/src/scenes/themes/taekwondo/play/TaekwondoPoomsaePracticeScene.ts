@@ -1,4 +1,5 @@
 ﻿import Phaser from 'phaser'
+import { playSceneBgm } from '@/game/systems/sceneBgm'
 import { assetPath } from '@/game/assets/assetPath'
 import { fadeToScene } from '@/game/systems/sceneTransition'
 import { addCoverBackground } from '@/game/world/background'
@@ -13,7 +14,7 @@ import {
 import {
   BELT_PROMOTION_DECORATION_KEYS,
   BELT_PROMOTION_TEXTURE_KEYS,
-  createBeltPromotionOverlay,
+  getTaekwondoBeltLabel,
 } from '../effects/beltPromotionOverlay'
 import { createPoomsaeProgressView, type PoomsaeProgressView } from './poomsaeProgress'
 import { createTaekwondoRoundedPanel } from './taekwondoPracticePanel'
@@ -23,22 +24,22 @@ import {
 } from '@/game/systems/musicRecorder'
 import {
   analyzeTaegeuk1Motion,
-  calculateTaekwondoAverageAccuracy,
-  calculateTaekwondoMonstersDefeated,
   createTaekwondoSession,
+  createTaekwondoSessionMotion,
   DEFAULT_TAEKWONDO_BELT_COLOR,
-  getTaekwondoBeltHistory,
   getTaekwondoPoomsaeNumber,
+  getTaekwondoProgress,
   listTaekwondoMotions,
+  normalizeTaekwondoBeltColor,
   requestPresignedUploadUrls,
   toCreateTaekwondoSessionMotionRequest,
   uploadToPresignedUrl,
   type CreateTaekwondoSessionMotionRequest,
-  type CreateTaekwondoSessionRequest,
   type Poomsae,
   type TaegeukAnalyzeResponse,
   type TaekwondoBeltColor,
   type TaekwondoMotion,
+  type TaekwondoProgressResponse,
 } from '@wish/api-client'
 import { FilesetResolver, PoseLandmarker } from '@mediapipe/tasks-vision'
 import { mediaPipe33ToAihub29 } from '@/game/motion/aihubPoseMapping'
@@ -83,9 +84,8 @@ const DEFAULT_FEEDBACK_MESSAGE = '실시간 피드백'
 const MOTION_LOAD_ERROR_MESSAGE = '품새 동작 정보를 불러오지 못했어요.'
 const CAMERA_DENIED_MESSAGE = '카메라를 사용할 수 없어요.'
 const GUIDE_VIDEO_PENDING_MESSAGE = '영상을 준비 중입니다.'
-const MOTION_INTRO_START_LABEL = '시작하기'
 
-const MAX_CAPTURE_DURATION_MS = 15000
+const MAX_CAPTURE_DURATION_MS = 5000
 const ANALYSIS_WINDOW_FRAMES = 60
 const MIN_ANALYSIS_INTERVAL_MS = 500
 const MIN_FRAMES_FOR_FIRST_ANALYSIS = 30
@@ -95,10 +95,10 @@ const AI_ADVANCE_THRESHOLD = 60
 const MOTION_COUNTDOWN_FROM = 3
 const MOTION_COUNTDOWN_TICK_MS = 1000
 const MOTION_COUNTDOWN_READY_FEEDBACK = '곧 시작해요!'
-const READY_TUTORIAL_DURATION_SEC = 10
+const READY_TUTORIAL_DURATION_SEC = 5
 const READY_TUTORIAL_MOTION_LABEL = '카메라 준비'
 const READY_TUTORIAL_FEEDBACK = '전신이 보이게 서주세요'
-const GUIDE_INTRO_PLAY_COUNT = 2
+const GUIDE_INTRO_PLAY_COUNT = 1
 const GUIDE_INTRO_FALLBACK_MS = 5000
 const MOTION_CAPTURING_FEEDBACK = '동작 확인 중...'
 const GUIDE_VIDEO_OBJECT_POSITION = '50% 90%'
@@ -159,11 +159,18 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
   private motionIntroOverlay?: Phaser.GameObjects.Container
   private guideVideoExpandOverlay?: Phaser.GameObjects.Container
   private beltPromotionOverlay?: Phaser.GameObjects.Container
+  private sessionResultPanel?: Phaser.GameObjects.Container
+  private finishButton?: Phaser.GameObjects.Text
   private motions: TaekwondoMotion[] = []
   private motionResults: CreateTaekwondoSessionMotionRequest[] = []
   private recordedMotionIndexes = new Set<number>()
   private motionRecorderHandle: ScreenRecorderHandle | null = null
   private pendingMotionUploads: Promise<void>[] = []
+  private taekwondoSessionIdPromise: Promise<number> | null = null
+  private pendingBeltPromotion: {
+    fromBelt: TaekwondoBeltColor
+    toBelt: TaekwondoBeltColor
+  } | null = null
   private currentMotionIndex = 0
   private practiceStartedAtMs = 0
   private motionStartedAtMs = 0
@@ -194,6 +201,11 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
   private beltColor: TaekwondoBeltColor = DEFAULT_TAEKWONDO_BELT_COLOR
 
   private readonly handleEscDown = () => {
+    if (this.sessionResultPanel) {
+      this.closeSessionResultPanel()
+      return
+    }
+
     if (this.beltPromotionOverlay) {
       this.closeBeltPromotionOverlay()
       return
@@ -233,6 +245,8 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     this.bestAiAnalysis = null
     this.countdownTimer = null
     this.lastPoseDetectTimeMs = -1
+    this.taekwondoSessionIdPromise = null
+    this.pendingBeltPromotion = null
     this.sessionId =
       typeof crypto !== 'undefined' && 'randomUUID' in crypto
         ? crypto.randomUUID()
@@ -294,6 +308,7 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
   }
 
   create() {
+    playSceneBgm(this)
     const { width: vw, height: vh } = this.scale
 
     addCoverBackground(this, ASSET_KEYS.background)
@@ -311,6 +326,118 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     this.input.keyboard?.on('keydown-ESC', this.handleEscDown)
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.cleanup())
     this.cameras.main.fadeIn(FADE_DURATION, 0, 0, 0)
+    this.createFinishButton(vw)
+  }
+
+  private createFinishButton(vw: number) {
+    if (this.finishButton) return
+    this.finishButton = this.add
+      .text(vw - 32, 32, '종료', {
+        fontFamily: 'sans-serif',
+        fontSize: '24px',
+        color: '#ffffff',
+        backgroundColor: '#7c1d1d',
+        padding: { left: 18, right: 18, top: 8, bottom: 8 },
+        fontStyle: '700',
+      })
+      .setOrigin(1, 0)
+      .setDepth(40)
+      .setInteractive({ useHandCursor: true })
+    this.finishButton.on('pointerdown', () => {
+      if (
+        this.hasSubmittedSession ||
+        this.isSavingSession ||
+        this.sessionResultPanel ||
+        this.beltPromotionOverlay
+      ) {
+        return
+      }
+      void this.finishPracticeSession(true)
+    })
+  }
+
+  private showSessionResultPanel(
+    motionCount: number,
+    averageAccuracy: number,
+    monstersDefeated: number,
+    beltPromotion: { fromBelt: TaekwondoBeltColor; toBelt: TaekwondoBeltColor } | null,
+    progress: TaekwondoProgressResponse | null,
+  ): boolean {
+    if (this.isSceneShuttingDown) return false
+    this.finishButton?.setVisible(false)
+
+    const { width: vw, height: vh } = this.scale
+    const overlay = this.add.container(vw / 2, vh / 2).setDepth(46)
+    const dim = this.add.rectangle(0, 0, vw, vh, 0x1b1209, 0.6).setInteractive()
+    const panelWidth = Math.min(vw * 0.5, 520)
+    const panelHeight = Math.min(vh * 0.55, 480)
+    const panel = createTaekwondoRoundedPanel(this, 0, 0, panelWidth, panelHeight, {
+      depth: 0,
+      fillColor: 0xfff5dc,
+      fillAlpha: 0.98,
+      strokeColor: 0xd7a750,
+      strokeAlpha: 0.95,
+      strokeWidth: 4,
+      radius: 24,
+    })
+    const title = this.add
+      .text(0, -panelHeight * 0.36, '연습 결과', {
+        fontFamily: 'sans-serif',
+        fontSize: '32px',
+        color: '#5a3517',
+        fontStyle: '800',
+      })
+      .setOrigin(0.5)
+    const lines = [
+      `완료한 동작  ${motionCount}개`,
+      `평균 정확도  ${Math.round(averageAccuracy * 100)}%`,
+      `처치한 몬스터  ${monstersDefeated}마리`,
+    ]
+    if (beltPromotion) {
+      lines.push(
+        `🎉 띠 승급  ${getTaekwondoBeltLabel(beltPromotion.fromBelt)} → ${getTaekwondoBeltLabel(beltPromotion.toBelt)}`,
+      )
+    } else if (progress) {
+      if (progress.nextBelt && progress.monstersUntilNextPromotion !== null) {
+        lines.push(
+          `현재 ${getTaekwondoBeltLabel(progress.currentBelt)} · ${getTaekwondoBeltLabel(progress.nextBelt)}까지 ${progress.monstersUntilNextPromotion}마리`,
+        )
+      } else if (!progress.nextBelt) {
+        lines.push(`🏆 최고 단계 ${getTaekwondoBeltLabel(progress.currentBelt)} 달성!`)
+      }
+    }
+    const stats = this.add
+      .text(0, -panelHeight * 0.06, lines.join('\n'), {
+        fontFamily: 'sans-serif',
+        fontSize: '22px',
+        color: '#4d2d18',
+        align: 'center',
+        lineSpacing: 14,
+      })
+      .setOrigin(0.5)
+    const confirmBtn = this.add
+      .text(0, panelHeight * 0.35, '확인', {
+        fontFamily: 'sans-serif',
+        fontSize: '26px',
+        color: '#ffffff',
+        backgroundColor: '#4d9b5d',
+        padding: { left: 36, right: 36, top: 10, bottom: 10 },
+        fontStyle: '700',
+      })
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: true })
+    confirmBtn.on('pointerdown', () => this.closeSessionResultPanel())
+
+    overlay.add([dim, panel, title, stats, confirmBtn])
+    this.sessionResultPanel = overlay
+    return true
+  }
+
+  private closeSessionResultPanel() {
+    const overlay = this.sessionResultPanel
+    this.sessionResultPanel = undefined
+    overlay?.destroy(true)
+    this.stopPractice()
   }
 
   private async initPoseLandmarker() {
@@ -573,7 +700,6 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
       radius: boxRadius,
     })
     const innerPadX = boxWidth * 0.08
-    const innerPadY = boxHeight * 0.07
     const titleText = this.add
       .text(descBoxX, contentY - boxHeight * 0.28, this.getCurrentMotionDisplayName(), {
         fontFamily: 'sans-serif',
@@ -606,53 +732,7 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
       .setOrigin(0, 0)
       .setLineSpacing(8)
 
-    const buttonWidth = boxWidth - innerPadX * 2
-    const buttonHeight = boxHeight * 0.1
-    const buttonY = contentY + boxHeight / 2 - innerPadY - buttonHeight / 2
-    const startButtonGroup = this.add.container(descBoxX, buttonY)
-    const startButton = createTaekwondoRoundedPanel(this, 0, 0, buttonWidth, buttonHeight, {
-      depth: 0,
-      fillColor: 0x5fa15a,
-      fillAlpha: 1,
-      strokeColor: 0x3f7a3f,
-      strokeAlpha: 0.95,
-      strokeWidth: 3,
-      radius: Math.round(buttonHeight * 0.4),
-    })
-    const startLabel = this.add
-      .text(0, -buttonHeight * 0.04, MOTION_INTRO_START_LABEL, {
-        fontFamily: 'sans-serif',
-        fontSize: `${Math.round(Phaser.Math.Clamp(buttonHeight * 0.42, 22, 32))}px`,
-        color: '#ffffff',
-        fontStyle: '700',
-      })
-      .setOrigin(0.5)
-      .setShadow(0, 2, '#2e5a2e', 3, false, true)
-    startButtonGroup.add([startButton, startLabel])
-    const hitArea = this.add
-      .rectangle(descBoxX, buttonY, buttonWidth, buttonHeight, 0xffffff, 0)
-      .setInteractive({ useHandCursor: true })
-
-    hitArea.on('pointerdown', () => this.startCurrentMotion())
-    hitArea.on('pointerover', () => {
-      startButtonGroup.setScale(1.03)
-    })
-    hitArea.on('pointerout', () => {
-      startButtonGroup.setScale(1)
-    })
-
-    overlay.add([
-      dim,
-      panel,
-      videoBox,
-      pendingText,
-      descBox,
-      titleText,
-      goalLabel,
-      goalText,
-      startButtonGroup,
-      hitArea,
-    ])
+    overlay.add([dim, panel, videoBox, pendingText, descBox, titleText, goalLabel, goalText])
     overlay.setAlpha(0)
     this.tweens.add({
       targets: overlay,
@@ -880,6 +960,7 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     this.capturedSequence = []
     this.lastPoseDetectTimeMs = -1
     this.bestAiAnalysis = null
+    this.spawnNextMotionEnemies()
     this.isCapturing = true
     this.analysisInFlight = false
     this.lastAnalysisStartedAtMs = 0
@@ -1041,8 +1122,8 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
 
     const handle = this.motionRecorderHandle
     this.motionRecorderHandle = null
-    if (handle) {
-      const uploadPromise = (async () => {
+    const persistPromise = (async () => {
+      if (handle) {
         try {
           const rec = await handle.stop()
           const presigned = await requestPresignedUploadUrls({
@@ -1060,51 +1141,46 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
         } catch (err) {
           console.warn('[TaekwondoPoomsaePracticeScene] motion recording upload failed', err)
         }
-      })()
-      this.pendingMotionUploads.push(uploadPromise)
-    }
+      }
+      try {
+        const sessionId = await this.ensureTaekwondoSessionId()
+        const response = await createTaekwondoSessionMotion(sessionId, motionResult)
+        if (response.beltPromotion) {
+          const fromBelt = normalizeTaekwondoBeltColor(response.beltPromotion.fromBelt)
+          const toBelt = normalizeTaekwondoBeltColor(response.beltPromotion.toBelt)
+          if (fromBelt && toBelt) {
+            // 다단계 점프(여러 동작에 걸쳐): 첫 응답의 fromBelt 를 유지하고 마지막 toBelt 로 누적.
+            this.pendingBeltPromotion = {
+              fromBelt: this.pendingBeltPromotion?.fromBelt ?? fromBelt,
+              toBelt,
+            }
+            this.beltColor = toBelt
+          }
+        }
+      } catch (err) {
+        console.warn('[TaekwondoPoomsaePracticeScene] motion persist failed', err)
+      }
+    })()
+    this.pendingMotionUploads.push(persistPromise)
 
     this.updatePoomsaeProgress()
   }
 
-  private async buildTaekwondoSessionPayload(): Promise<CreateTaekwondoSessionRequest | null> {
-    const patientProfileId = await resolvePatientProfileIdOrFetch()
-    if (!patientProfileId) {
-      console.warn(
-        '[TaekwondoPoomsaePracticeScene] Skip taekwondo session save: missing patientProfileId.',
-        {
-          search: window.location.search,
-          storedPatientProfileId: window.localStorage.getItem('wish_patient_profile_id'),
-          envPatientProfileId: import.meta.env.VITE_PATIENT_PROFILE_ID,
-        },
-      )
-      return null
+  private ensureTaekwondoSessionId(): Promise<number> {
+    if (!this.taekwondoSessionIdPromise) {
+      this.taekwondoSessionIdPromise = (async () => {
+        const patientProfileId = await resolvePatientProfileIdOrFetch()
+        if (!patientProfileId) {
+          throw new Error('환자 정보가 올바르지 않습니다.')
+        }
+        const session = await createTaekwondoSession({
+          patientProfileId,
+          poomsae: this.getPoomsaeForApi(),
+        })
+        return session.id
+      })()
     }
-
-    if (this.motionResults.length === 0) {
-      console.warn(
-        '[TaekwondoPoomsaePracticeScene] Skip taekwondo session save: no motion results.',
-        {
-          loadedMotionCount: this.motions.length,
-          currentMotionIndex: this.currentMotionIndex,
-        },
-      )
-      return null
-    }
-
-    const durationSec = Math.max(
-      1,
-      this.motionResults.reduce((total, result) => total + result.durationSec, 0),
-    )
-
-    return {
-      patientProfileId,
-      poomsae: this.getPoomsaeForApi(),
-      durationSec,
-      averageAccuracy: calculateTaekwondoAverageAccuracy(this.motionResults),
-      monstersDefeated: calculateTaekwondoMonstersDefeated(this.motionResults),
-      motions: this.motionResults,
-    }
+    return this.taekwondoSessionIdPromise
   }
 
   private async finishPracticeSession(recordCurrentMotion: boolean) {
@@ -1122,17 +1198,25 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
       return
     }
 
+    // 시범 영상/모션 인트로 오버레이 (HTML video 포함) 가 떠 있으면 먼저 정리해야 결과 패널이 위에 보인다.
+    this.motionIntroOverlay?.destroy(true)
+    this.motionIntroOverlay = undefined
+    this.guideVideoExpandOverlay?.destroy(true)
+    this.guideVideoExpandOverlay = undefined
+    this.destroyGuideVideoElement()
+
     if (recordCurrentMotion) {
       this.recordCurrentMotionResult()
     }
 
-    if (this.pendingMotionUploads.length > 0) {
-      await Promise.allSettled(this.pendingMotionUploads)
-      this.pendingMotionUploads = []
-    }
-
-    const payload = await this.buildTaekwondoSessionPayload()
-    if (!payload) {
+    if (this.motionResults.length === 0 && !this.taekwondoSessionIdPromise) {
+      console.warn(
+        '[TaekwondoPoomsaePracticeScene] Skip taekwondo session save: no motion results.',
+        {
+          loadedMotionCount: this.motions.length,
+          currentMotionIndex: this.currentMotionIndex,
+        },
+      )
       this.stopPractice()
       return
     }
@@ -1143,14 +1227,46 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     let shouldStopPractice = true
 
     try {
-      console.log('[TaekwondoPoomsaePracticeScene] Saving taekwondo session.', payload)
-      await createTaekwondoSession(payload)
-      console.log('[TaekwondoPoomsaePracticeScene] Saved taekwondo session.')
+      // 동작 단건 저장이 fire-and-forget 으로 진행되므로 남은 persist 만 대기. 별도 세션 종료 API 호출 없음.
+      await this.ensureTaekwondoSessionId()
+      if (this.pendingMotionUploads.length > 0) {
+        await Promise.allSettled(this.pendingMotionUploads)
+        this.pendingMotionUploads = []
+      }
       this.showFeedback('저장 완료')
-      shouldStopPractice = !(await this.showBeltPromotionIfNeeded(payload.patientProfileId))
+      const motionCount = this.motionResults.length
+      const monstersDefeated = this.motionResults.reduce((sum, m) => sum + m.monstersDefeated, 0)
+      const averageAccuracy =
+        motionCount === 0
+          ? 0
+          : this.motionResults.reduce((sum, m) => sum + m.accuracy, 0) / motionCount
+      const promotion = this.pendingBeltPromotion
+      this.pendingBeltPromotion = null
+
+      // 띠 승급이 없을 때만 진행도(다음 띠까지 N마리) 를 노출. 승급 시점에는 승급 줄로 이미 충분.
+      let progress: TaekwondoProgressResponse | null = null
+      if (!promotion) {
+        const patientProfileId = resolvePatientProfileId()
+        if (patientProfileId) {
+          try {
+            progress = await getTaekwondoProgress(patientProfileId)
+          } catch (err) {
+            console.warn('[TaekwondoPoomsaePracticeScene] progress fetch failed', err)
+          }
+        }
+      }
+
+      const shown = this.showSessionResultPanel(
+        motionCount,
+        averageAccuracy,
+        monstersDefeated,
+        promotion,
+        progress,
+      )
+      shouldStopPractice = !shown
     } catch (error) {
       this.hasSubmittedSession = false
-      console.warn('[TaekwondoPoomsaePracticeScene] Failed to save taekwondo session.', {
+      console.warn('[TaekwondoPoomsaePracticeScene] Failed to finalize taekwondo session.', {
         error,
         apiBaseUrl: import.meta.env.VITE_API_BASE_URL,
         hasAccessToken: Boolean(window.localStorage.getItem('wish_access_token')),
@@ -1164,48 +1280,6 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
         this.stopPractice()
       }
     }
-  }
-
-  private async showBeltPromotionIfNeeded(patientProfileId: number) {
-    try {
-      const history = await getTaekwondoBeltHistory(patientProfileId)
-      const latestBeltColor = history[0]?.toBelt
-      if (!latestBeltColor || latestBeltColor === this.beltColor) {
-        return false
-      }
-
-      const textureKey = BELT_PROMOTION_TEXTURE_KEYS[latestBeltColor]
-      this.beltColor = latestBeltColor
-
-      if (!textureKey || !this.textures.exists(textureKey)) {
-        return false
-      }
-
-      return this.showBeltPromotionOverlay(latestBeltColor, textureKey, true)
-    } catch (error) {
-      console.warn('[TaekwondoPoomsaePracticeScene] Failed to check taekwondo belt promotion.', {
-        message: error instanceof Error ? error.message : String(error),
-      })
-      return false
-    }
-  }
-
-  private showBeltPromotionOverlay(
-    beltColor: TaekwondoBeltColor,
-    textureKey: string,
-    shouldReturnToSelectOnClose: boolean,
-  ) {
-    if (this.isSceneShuttingDown) {
-      return false
-    }
-
-    this.beltPromotionOverlay?.destroy(true)
-    this.beltPromotionOverlay = createBeltPromotionOverlay(this, {
-      beltColor,
-      textureKey,
-      onClose: () => this.closeBeltPromotionOverlay(shouldReturnToSelectOnClose),
-    })
-    return true
   }
 
   private closeBeltPromotionOverlay(shouldReturnToSelectOnClose = true) {
@@ -1241,7 +1315,6 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     const visualTopY = topY
     const currentY = topY
     const currentWidth = vw * 0.3
-    const deleteSize = vh * 0.073
 
     this.createCurrentMotionPanel(vw * 0.23, currentY, currentWidth, currentHeight)
 
@@ -1258,10 +1331,6 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
       .setDepth(5)
 
     this.createPoomsaeProgress(vw * 0.63, visualTopY, progressWidth, progressHeight)
-
-    this.createDeleteButton(vw * 0.885, visualTopY, deleteSize, () => {
-      void this.finishPracticeSession(false)
-    })
   }
 
   private createCurrentMotionPanel(x: number, y: number, width: number, height: number) {
@@ -1842,23 +1911,6 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     this.progressView?.update(this.getPracticeMotionCount(), this.motionResults.length)
   }
 
-  private createDeleteButton(x: number, y: number, size: number, onClick: () => void) {
-    const buttonWidth = size * IMAGE_ASPECT.deleteButton
-    const button = this.add
-      .image(0, 0, ASSET_KEYS.deleteButton)
-      .setDisplaySize(buttonWidth, size)
-      .setDepth(6)
-
-    const hitArea = this.add.rectangle(0, 0, buttonWidth, size, 0xffffff, 0).setInteractive({
-      useHandCursor: true,
-    })
-    hitArea.on('pointerdown', onClick)
-    hitArea.on('pointerover', () => button.setTint(0xffefc4))
-    hitArea.on('pointerout', () => button.clearTint())
-
-    return this.add.container(x, y, [button, hitArea]).setDepth(6)
-  }
-
   private showFeedback(message: string) {
     this.feedbackText?.setText(message)
   }
@@ -2010,6 +2062,10 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     this.destroyGuideMagnifierElement()
     this.beltPromotionOverlay?.destroy(true)
     this.beltPromotionOverlay = undefined
+    this.sessionResultPanel?.destroy(true)
+    this.sessionResultPanel = undefined
+    this.finishButton?.destroy()
+    this.finishButton = undefined
     this.isWaitingMotionStart = false
     this.isAiJudgementPaused = false
     this.shouldRestartCaptureAfterGuideOverlay = false
@@ -2034,6 +2090,8 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     this.motionRecorderHandle?.cancel()
     this.motionRecorderHandle = null
     this.pendingMotionUploads = []
+    this.taekwondoSessionIdPromise = null
+    this.pendingBeltPromotion = null
     this.stopCamera()
     this.cleanupCameraEffects()
 

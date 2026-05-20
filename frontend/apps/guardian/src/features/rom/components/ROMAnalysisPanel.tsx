@@ -1,6 +1,11 @@
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, XAxis, YAxis } from 'recharts'
-import { ScoreRing } from '@/features/dashboard/components/ScoreRing'
-import type { RomJointDetail, RomJointTrendPoint } from '../data/model'
+import {
+  ROM_BALANCE_ATTENTION_DEG,
+  ROM_CAPTURE_WARN_PERCENT,
+  ROM_CONFIDENCE_GOOD_PERCENT,
+  type RomJointDetail,
+  type RomJointTrendPoint,
+} from '../data/model'
 import { InfoTip } from './InfoTip'
 import styles from './ROMAnalysisPanel.module.css'
 
@@ -9,7 +14,7 @@ type Props = {
 }
 
 function formatDeg(value: number | null): string {
-  return typeof value === 'number' ? `${value.toFixed(1)}°` : '분석 불가'
+  return typeof value === 'number' ? `약 ${value.toFixed(1)}도` : '확인 불가'
 }
 
 function formatPercent(value: number | null): string {
@@ -42,10 +47,60 @@ function sideBarWidth(value: number | null, max: number): string {
   return `${Math.min(100, Math.round((value / max) * 100))}%`
 }
 
+function rangeGap(left: number | null, right: number | null): number | null {
+  if (left === null || right === null) return null
+  return Math.abs(left - right)
+}
+
+function isLowCapturePercent(value: number | null): boolean {
+  return typeof value === 'number' && value < ROM_CAPTURE_WARN_PERCENT
+}
+
+function buildBalanceLabel(joint: RomJointDetail): string {
+  const gap = rangeGap(joint.leftRangeDeg, joint.rightRangeDeg)
+  if (gap === null) return '좌우 비교 준비 중'
+  if (gap < 10) return '좌우가 비슷해요'
+  if (gap < 20) return '조금 차이가 있어요'
+  return '차이가 크게 기록됐어요'
+}
+
+function buildBalanceSummary(joint: RomJointDetail): string {
+  const gap = rangeGap(joint.leftRangeDeg, joint.rightRangeDeg)
+  if (gap === null) return '왼쪽과 오른쪽을 함께 확인할 수 있는 기록이 더 필요해요.'
+  if (gap < 10)
+    return '양쪽 움직임이 비슷하게 기록됐어요. 걱정보다는 오늘 움직임의 균형을 보는 참고값으로 봐 주세요.'
+  if (gap < 20)
+    return '한쪽이 조금 더 크게 움직인 것으로 기록됐어요. 통증을 뜻하는 값은 아니고 오늘 촬영된 움직임 차이입니다.'
+  return '한쪽 움직임이 더 크게 기록됐어요. 다음 체조 때 같은 동작에서 반복되는지 한 번 더 확인해 주세요.'
+}
+
+function buildNextAction(joint: RomJointDetail): string {
+  const gap = rangeGap(joint.leftRangeDeg, joint.rightRangeDeg)
+  if (!joint.analysisAvailable) return '다음에는 아이의 전신이 화면 중앙에 보이도록 도와주세요.'
+  if (isLowCapturePercent(joint.confidencePercent) || joint.excludedDurationMs > 0) {
+    return '다음 촬영 때는 카메라를 조금 멀리 두고, 팔과 다리가 화면 밖으로 나가지 않게 해 주세요.'
+  }
+  if (gap !== null && gap >= ROM_BALANCE_ATTENTION_DEG) {
+    return '다음 체조 때 같은 동작에서 좌우 차이가 반복되는지 한 번만 더 확인해 주세요.'
+  }
+  return '지금처럼 짧게 반복해도 충분해요. 다음 기록에서도 비슷한 흐름인지 보면 됩니다.'
+}
+
+function buildConfidenceLabel(value: number | null): string {
+  if (value === null) return '확인 중'
+  if (value >= ROM_CONFIDENCE_GOOD_PERCENT) return '안정'
+  if (value >= ROM_CAPTURE_WARN_PERCENT) return '보통'
+  return '주의'
+}
+
 export function ROMAnalysisPanel({ joint }: Props) {
   const { domain, ticks } = buildYDomain(joint.trend)
   const sideMax = Math.max(joint.leftRangeDeg ?? 0, joint.rightRangeDeg ?? 0, 1)
   const firstExcludedSegment = joint.excludedSegments[0]
+  const gap = rangeGap(joint.leftRangeDeg, joint.rightRangeDeg)
+  const balanceLabel = buildBalanceLabel(joint)
+  const balanceSummary = buildBalanceSummary(joint)
+  const nextAction = buildNextAction(joint)
 
   return (
     <article className={styles.panel}>
@@ -53,24 +108,66 @@ export function ROMAnalysisPanel({ joint }: Props) {
         <header className={styles.head}>
           <div>
             <h2 className={styles.title}>
-              {joint.name} 움직임 범위
-              <InfoTip tip="최근 체조 세션의 좌표 replay를 분석한 관절 각도 변화량입니다. 의료적 관절 가동 범위가 아니라 운동 중 움직임 기록으로 봐야 합니다." />
+              {joint.name} 움직임 기록
+              <InfoTip tip="최근 체조에서 이 관절이 얼마나 접히고 펴졌는지 각도로 보여줍니다. 100점 만점의 점수가 아니라 움직인 각도입니다." />
             </h2>
             <p className={styles.metaLine}>
-              {joint.analyzedMotionCount}/{joint.motionCount}개 동작 분석 · 유효 프레임{' '}
-              {joint.validFrameCount.toLocaleString()}개
+              {joint.analyzedMotionCount}/{joint.motionCount}개 동작 확인 · 촬영 안정도{' '}
+              {formatPercent(joint.confidencePercent)}
             </p>
           </div>
         </header>
 
+        <section className={styles.quickGrid} aria-label={`${joint.name} 핵심 지표`}>
+          <div className={styles.quickCard}>
+            <span className={styles.quickLabel}>움직임 각도</span>
+            <strong className={styles.quickValue}>{formatDeg(joint.currentRangeDeg)}</strong>
+            <span className={styles.quickHint}>최대-최소 각도</span>
+          </div>
+          <div className={styles.quickCard}>
+            <span className={styles.quickLabel}>좌우 차이</span>
+            <strong className={styles.quickValue}>{formatDeg(gap)}</strong>
+            <span className={styles.quickHint}>{balanceLabel}</span>
+          </div>
+          <div
+            className={`${styles.quickCard} ${
+              isLowCapturePercent(joint.confidencePercent) ? styles.quickCardWarn : ''
+            }`}
+          >
+            <span className={styles.quickLabel}>촬영 안정도</span>
+            <strong className={styles.quickValue}>{formatPercent(joint.confidencePercent)}</strong>
+            <span className={styles.quickHint}>
+              {buildConfidenceLabel(joint.confidencePercent)}
+            </span>
+          </div>
+          <div className={styles.quickCard}>
+            <span className={styles.quickLabel}>분석 동작</span>
+            <strong className={styles.quickValue}>
+              {joint.analyzedMotionCount}/{joint.motionCount}개
+            </strong>
+            <span className={styles.quickHint}>관절이 보인 동작</span>
+          </div>
+          <div
+            className={`${styles.quickCard} ${
+              joint.excludedDurationMs > 0 ? styles.quickCardWarn : ''
+            }`}
+          >
+            <span className={styles.quickLabel}>제외 시간</span>
+            <strong className={styles.quickValue}>
+              {formatDuration(joint.excludedDurationMs)}
+            </strong>
+            <span className={styles.quickHint}>관절이 안 보인 시간</span>
+          </div>
+        </section>
+
         <section className={styles.chartSection}>
           <h3 className={styles.sectionTitle}>
-            동작별 각도 변화량
-            <InfoTip tip="같은 세션 안에서 각 체조 동작마다 이 관절의 최소/최대 각도 차이를 계산한 값입니다." />
+            동작별 움직인 각도
+            <InfoTip tip="각 체조 동작에서 이 관절이 가장 적게 접힌 순간과 가장 많이 접힌 순간의 차이입니다." />
           </h3>
           <div className={styles.chartBody}>
             {joint.trend.length === 0 ? (
-              <div className={styles.emptyChart}>분석 가능한 동작 데이터가 없습니다.</div>
+              <div className={styles.emptyChart}>확인할 수 있는 동작 기록이 없습니다.</div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={joint.trend} margin={{ top: 8, right: 16, left: -8, bottom: 4 }}>
@@ -97,7 +194,7 @@ export function ROMAnalysisPanel({ joint }: Props) {
                     ticks={ticks}
                     domain={domain}
                     tick={{ fontSize: 10.5, fill: '#b6b4c8' }}
-                    tickFormatter={value => `${value}°`}
+                    tickFormatter={value => `${value}도`}
                     tickLine={false}
                     axisLine={false}
                     width={40}
@@ -138,7 +235,7 @@ export function ROMAnalysisPanel({ joint }: Props) {
                             fontWeight={600}
                             fill="#3a345e"
                           >
-                            {payload.rangeDeg.toFixed(1)}°
+                            {payload.rangeDeg.toFixed(1)}도
                           </text>
                         </g>
                       )
@@ -150,70 +247,20 @@ export function ROMAnalysisPanel({ joint }: Props) {
             )}
           </div>
         </section>
-
-        <section className={styles.metricGrid}>
-          <div className={styles.metricCard}>
-            <span className={styles.metricLabel}>대표 범위</span>
-            <span className={styles.metricValue}>{formatDeg(joint.currentRangeDeg)}</span>
-            <span className={styles.metricFoot}>최근 세션 평균 각도 변화</span>
-          </div>
-
-          <div className={`${styles.metricCard} ${styles.metricCardWithRing}`}>
-            <div className={styles.metricBody}>
-              <span className={styles.metricLabel}>분석 커버리지</span>
-              <span className={styles.metricValue}>{formatPercent(joint.coveragePercent)}</span>
-              <span className={styles.metricFoot}>전체 프레임 중 사용 비율</span>
-            </div>
-            <ScoreRing
-              className={styles.metricRing}
-              value={joint.coveragePercent ?? 0}
-              size={46}
-              strokeWidth={5}
-              fontSize={0}
-              showUnit={false}
-              gradientFrom="#6ddec0"
-              gradientTo="#34c99c"
-            />
-          </div>
-
-          <div className={`${styles.metricCard} ${styles.metricCardWithRing}`}>
-            <div className={styles.metricBody}>
-              <span className={styles.metricLabel}>좌표 신뢰도</span>
-              <span className={styles.metricValue}>{formatPercent(joint.confidencePercent)}</span>
-              <span className={styles.metricFoot}>confidence 평균</span>
-            </div>
-            <ScoreRing
-              className={styles.metricRing}
-              value={joint.confidencePercent ?? 0}
-              size={46}
-              strokeWidth={5}
-              fontSize={0}
-              showUnit={false}
-              gradientFrom="#a892ff"
-              gradientTo="#7c5cff"
-            />
-          </div>
-
-          <div className={styles.metricCard}>
-            <span className={styles.metricLabel}>제외 시간</span>
-            <span className={styles.metricValue}>{formatDuration(joint.excludedDurationMs)}</span>
-            <span className={styles.metricFootWarning}>낮은 신뢰도 구간 제외</span>
-          </div>
-        </section>
       </section>
 
       <section className={styles.detailGrid}>
         <article className={styles.detailCard}>
           <header className={styles.detailHead}>
             <h3 className={styles.detailTitle}>
-              좌우 {joint.name} 비교
-              <InfoTip tip="왼쪽과 오른쪽 관절의 각도 변화량 평균을 비교합니다. 차이가 크면 한쪽 동작이 더 크게 기록된 것입니다." />
+              좌우 {joint.name} 움직임 비교
+              <InfoTip tip="왼쪽과 오른쪽 관절이 각각 얼마나 움직였는지 비교합니다. 값이 커도 점수가 높은 것이 아니라 더 크게 움직였다는 뜻입니다." />
             </h3>
           </header>
           <div className={styles.balanceWrap}>
             <div className={styles.balanceRow}>
               <div className={styles.balanceSide}>
-                <span className={styles.balanceLabel}>왼쪽 {joint.name}</span>
+                <span className={styles.balanceLabel}>왼쪽 {joint.name} 움직임</span>
                 <span className={styles.balanceValue}>{formatDeg(joint.leftRangeDeg)}</span>
                 <div className={styles.balanceBar}>
                   <span
@@ -224,25 +271,12 @@ export function ROMAnalysisPanel({ joint }: Props) {
               </div>
 
               <div className={styles.balanceCenter}>
-                <ScoreRing
-                  value={joint.confidencePercent ?? 0}
-                  size={84}
-                  strokeWidth={7}
-                  fontSize={0}
-                  showUnit={false}
-                  gradientFrom="#a892ff"
-                  gradientTo="#7c5cff"
-                />
-                <div className={styles.balanceCenterText}>
-                  <span className={styles.balanceCenterValue}>
-                    {formatPercent(joint.confidencePercent)}
-                  </span>
-                  <span className={styles.balanceCenterMeta}>신뢰도</span>
-                </div>
+                <strong>{balanceLabel}</strong>
+                <span>차이 {formatDeg(rangeGap(joint.leftRangeDeg, joint.rightRangeDeg))}</span>
               </div>
 
               <div className={styles.balanceSide}>
-                <span className={styles.balanceLabel}>오른쪽 {joint.name}</span>
+                <span className={styles.balanceLabel}>오른쪽 {joint.name} 움직임</span>
                 <span className={styles.balanceValue}>{formatDeg(joint.rightRangeDeg)}</span>
                 <div className={styles.balanceBar}>
                   <span
@@ -252,6 +286,7 @@ export function ROMAnalysisPanel({ joint }: Props) {
                 </div>
               </div>
             </div>
+            <p className={styles.balanceSummary}>{balanceSummary}</p>
           </div>
         </article>
 
@@ -261,14 +296,17 @@ export function ROMAnalysisPanel({ joint }: Props) {
               <span className={styles.insightSparkle} aria-hidden>
                 ✦
               </span>
-              분석 메모
+              확인 메모
             </h3>
           </header>
-          <p className={styles.insightText}>{joint.insight}</p>
+          <div className={styles.nextAction}>
+            <span>다음에 해볼 것</span>
+            <strong>{nextAction}</strong>
+          </div>
           <p className={styles.insightHint}>
-            분석 시간 {formatDuration(joint.analyzedDurationMs)}
+            확인한 시간 {formatDuration(joint.analyzedDurationMs)}
             {firstExcludedSegment
-              ? ` · 최근 제외 구간 ${formatDuration(firstExcludedSegment.startMs ?? 0)}~${formatDuration(
+              ? ` · 제외 구간 ${formatDuration(firstExcludedSegment.startMs ?? 0)}~${formatDuration(
                   firstExcludedSegment.endMs ?? 0,
                 )}`
               : ''}
@@ -284,7 +322,7 @@ export function ROMAnalysisPanel({ joint }: Props) {
           i
         </span>
         <div className={styles.tipBody}>
-          <span className={styles.tipLabel}>해석 기준</span>
+          <span className={styles.tipLabel}>보는 기준</span>
           <p className={styles.tipText}>{joint.tip}</p>
         </div>
       </section>

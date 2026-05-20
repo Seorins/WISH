@@ -18,19 +18,6 @@ export type PhotoFrame = {
 
 export const PHOTO_BOOTH_FRAMES: PhotoFrame[] = [
   {
-    id: 'frame-1',
-    cutCount: 4,
-    aspect: 1463 / 978,
-    overlayKey: 'photo-booth-frame-1',
-    overlayPath: 'images/photo-booth/frames/frame1.png',
-    slots: [
-      { xRatio: 0.0902, yRatio: 0.0613, wRatio: 0.3281, hRatio: 0.4131 },
-      { xRatio: 0.4293, yRatio: 0.0613, wRatio: 0.3281, hRatio: 0.4131 },
-      { xRatio: 0.2461, yRatio: 0.5276, wRatio: 0.3308, hRatio: 0.4172 },
-      { xRatio: 0.5878, yRatio: 0.5276, wRatio: 0.3281, hRatio: 0.4172 },
-    ],
-  },
-  {
     id: 'frame-2',
     cutCount: 4,
     aspect: 1536 / 1024,
@@ -44,16 +31,42 @@ export const PHOTO_BOOTH_FRAMES: PhotoFrame[] = [
     ],
   },
   {
+    id: 'frame-1',
+    cutCount: 4,
+    aspect: 1029 / 1528,
+    overlayKey: 'photo-booth-frame-1',
+    overlayPath: 'images/photo-booth/frames/frame1.png',
+    slots: [
+      { xRatio: 0.5267, yRatio: 0.0602, wRatio: 0.4286, hRatio: 0.3501 },
+      { xRatio: 0.0573, yRatio: 0.2277, wRatio: 0.4354, hRatio: 0.3488 },
+      { xRatio: 0.5258, yRatio: 0.4208, wRatio: 0.4295, hRatio: 0.3403 },
+      { xRatio: 0.0564, yRatio: 0.5864, wRatio: 0.4354, hRatio: 0.3442 },
+    ],
+  },
+  {
     id: 'frame-3',
     cutCount: 4,
-    aspect: 1737 / 1157,
+    aspect: 941 / 1672,
     overlayKey: 'photo-booth-frame-3',
     overlayPath: 'images/photo-booth/frames/frame3.png',
     slots: [
-      { xRatio: 0.0391, yRatio: 0.0622, wRatio: 0.3615, hRatio: 0.4322 },
-      { xRatio: 0.4122, yRatio: 0.0588, wRatio: 0.3615, hRatio: 0.4356 },
-      { xRatio: 0.0415, yRatio: 0.5082, wRatio: 0.3592, hRatio: 0.4322 },
-      { xRatio: 0.4122, yRatio: 0.5117, wRatio: 0.3615, hRatio: 0.4322 },
+      { xRatio: 0.2359, yRatio: 0.1423, wRatio: 0.5218, hRatio: 0.1806 },
+      { xRatio: 0.2359, yRatio: 0.3421, wRatio: 0.5218, hRatio: 0.1794 },
+      { xRatio: 0.2349, yRatio: 0.5407, wRatio: 0.5228, hRatio: 0.18 },
+      { xRatio: 0.2359, yRatio: 0.7386, wRatio: 0.5218, hRatio: 0.1549 },
+    ],
+  },
+  {
+    id: 'frame-4',
+    cutCount: 4,
+    aspect: 941 / 1672,
+    overlayKey: 'photo-booth-frame-4',
+    overlayPath: 'images/photo-booth/frames/frame4.png',
+    slots: [
+      { xRatio: 0.2253, yRatio: 0.1489, wRatio: 0.5494, hRatio: 0.1848 },
+      { xRatio: 0.2274, yRatio: 0.3481, wRatio: 0.5473, hRatio: 0.186 },
+      { xRatio: 0.2274, yRatio: 0.5484, wRatio: 0.5473, hRatio: 0.174 },
+      { xRatio: 0.2274, yRatio: 0.7356, wRatio: 0.5473, hRatio: 0.1621 },
     ],
   },
 ]

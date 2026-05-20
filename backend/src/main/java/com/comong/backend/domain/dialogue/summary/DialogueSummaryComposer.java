@@ -121,7 +121,7 @@ public class DialogueSummaryComposer {
                 .catalogId()
                 .flatMap(catalogService::findNpc)
                 .map(CatalogNpcDefinition::displayName)
-                .orElseGet(() -> session.getNpcName().name());
+                .orElseGet(() -> session.getNpcName().displayName());
     }
 
     private Optional<String> scriptTitle(DialogueSession session) {

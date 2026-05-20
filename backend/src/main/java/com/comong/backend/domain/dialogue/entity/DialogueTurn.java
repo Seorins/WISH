@@ -68,6 +68,9 @@ public class DialogueTurn {
     @Column(name = "choice_text", nullable = false, columnDefinition = "text")
     private String choiceText;
 
+    @Column(name = "npc_response_text", columnDefinition = "text")
+    private String npcResponseText;
+
     @Column(nullable = false)
     private short intensity;
 
@@ -109,6 +112,7 @@ public class DialogueTurn {
             String questionText,
             String choiceIntentId,
             String choiceText,
+            String npcResponseText,
             short intensity,
             List<String> concernFlags,
             List<String> protectiveFactors,
@@ -125,6 +129,8 @@ public class DialogueTurn {
         this.choiceIntentId =
                 Objects.requireNonNull(choiceIntentId, "choiceIntentId must not be null");
         this.choiceText = Objects.requireNonNull(choiceText, "choiceText must not be null");
+        this.npcResponseText =
+                npcResponseText == null || npcResponseText.isBlank() ? null : npcResponseText;
         if (intensity < 0 || intensity > 3) {
             throw new IllegalArgumentException("intensity must be in [0, 3]");
         }

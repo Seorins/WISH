@@ -1,19 +1,26 @@
 import Phaser from 'phaser'
+import { playSceneBgm } from '@/game/systems/sceneBgm'
 import { fadeToScene } from '@/game/systems/sceneTransition'
 import { PHOTO_BOOTH_FRAMES, type PhotoFrame } from './frames'
+import { exitPhotoBoothToVillage } from './navigation'
 
 const FONT = "'Jua', 'Apple SD Gothic Neo', sans-serif"
-const THUMB_W = 320
-const THUMB_H = 240
+const THUMB_MAX_W = 320
+const THUMB_ASPECT = 4 / 3
 const THUMB_GAP_X = 20
 const THUMB_GAP_Y = 20
 const THUMB_COLS = 4
 const THUMB_ROWS = 2
+const GRID_TOP = 170
+const GRID_SIDE_MARGIN = 70
+const GRID_BOTTOM_SPACE = 110
 
 type ThumbnailSlot = {
   index: number
   x: number
   y: number
+  w: number
+  h: number
   bg: Phaser.GameObjects.Rectangle
   overlay: Phaser.GameObjects.Rectangle
   orderBadge: Phaser.GameObjects.Container
@@ -43,6 +50,7 @@ export class PhotoBoothPickScene extends Phaser.Scene {
   }
 
   create(data: PhotoBoothPickSceneData = {}) {
+    playSceneBgm(this)
     const { width: vw, height: vh } = this.scale
     this.isTransitioning = false
     this.frame = PHOTO_BOOTH_FRAMES.find(f => f.id === data.frameId) ?? PHOTO_BOOTH_FRAMES[0]
@@ -79,24 +87,32 @@ export class PhotoBoothPickScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
 
-    const gridW = THUMB_COLS * THUMB_W + (THUMB_COLS - 1) * THUMB_GAP_X
-    const gridH = THUMB_ROWS * THUMB_H + (THUMB_ROWS - 1) * THUMB_GAP_Y
+    const maxGridW = Math.max(360, vw - GRID_SIDE_MARGIN * 2)
+    const maxGridH = Math.max(280, vh - GRID_TOP - GRID_BOTTOM_SPACE)
+    const thumbW = Math.min(
+      THUMB_MAX_W,
+      (maxGridW - (THUMB_COLS - 1) * THUMB_GAP_X) / THUMB_COLS,
+      ((maxGridH - (THUMB_ROWS - 1) * THUMB_GAP_Y) / THUMB_ROWS) * THUMB_ASPECT,
+    )
+    const thumbH = thumbW / THUMB_ASPECT
+    const gridW = THUMB_COLS * thumbW + (THUMB_COLS - 1) * THUMB_GAP_X
+    const gridH = THUMB_ROWS * thumbH + (THUMB_ROWS - 1) * THUMB_GAP_Y
     const gridLeft = (vw - gridW) / 2
-    const gridTop = (vh - gridH) / 2 - 20
+    const gridTop = Math.max(GRID_TOP, (vh - gridH) / 2 + 10)
 
     for (let i = 0; i < this.captures.length && i < THUMB_COLS * THUMB_ROWS; i += 1) {
       const col = i % THUMB_COLS
       const row = Math.floor(i / THUMB_COLS)
-      const x = gridLeft + col * (THUMB_W + THUMB_GAP_X) + THUMB_W / 2
-      const y = gridTop + row * (THUMB_H + THUMB_GAP_Y) + THUMB_H / 2
+      const x = gridLeft + col * (thumbW + THUMB_GAP_X) + thumbW / 2
+      const y = gridTop + row * (thumbH + THUMB_GAP_Y) + thumbH / 2
 
       const bg = this.add
-        .rectangle(x, y, THUMB_W, THUMB_H, 0xf5f0ea, 1)
+        .rectangle(x, y, thumbW, thumbH, 0xf5f0ea, 1)
         .setOrigin(0.5)
         .setStrokeStyle(3, 0xe5d8cc, 1)
         .setInteractive({ useHandCursor: true })
 
-      const overlay = this.add.rectangle(x, y, THUMB_W, THUMB_H, 0xff7aa3, 0).setOrigin(0.5)
+      const overlay = this.add.rectangle(x, y, thumbW, thumbH, 0xff7aa3, 0).setOrigin(0.5)
 
       const badgeBg = this.add.circle(0, 0, 22, 0xff7aa3, 1).setStrokeStyle(3, 0xffffff, 1)
       const badgeText = this.add
@@ -107,13 +123,15 @@ export class PhotoBoothPickScene extends Phaser.Scene {
         })
         .setOrigin(0.5)
       const orderBadge = this.add
-        .container(x + THUMB_W / 2 - 22, y - THUMB_H / 2 + 22, [badgeBg, badgeText])
+        .container(x + thumbW / 2 - 22, y - thumbH / 2 + 22, [badgeBg, badgeText])
         .setVisible(false)
 
       const slot: ThumbnailSlot = {
         index: i,
         x,
         y,
+        w: thumbW,
+        h: thumbH,
         bg,
         overlay,
         orderBadge,
@@ -164,7 +182,7 @@ export class PhotoBoothPickScene extends Phaser.Scene {
     })
     this.nextButton.on('pointerout', () => this.refreshNextButtonStyle())
 
-    this.input.keyboard?.on('keydown-ESC', () => this.backToCamera())
+    this.input.keyboard?.on('keydown-ESC', () => this.exitToVillage())
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.cleanupTextures())
 
@@ -180,11 +198,11 @@ export class PhotoBoothPickScene extends Phaser.Scene {
       const key = `photo-booth-pick-${slot.index}-${Date.now()}`
       this.textures.addImage(key, img)
       const image = this.add.image(slot.x, slot.y, key).setOrigin(0.5)
-      const scale = Math.max(THUMB_W / image.width, THUMB_H / image.height)
+      const scale = Math.max(slot.w / image.width, slot.h / image.height)
       image.setScale(scale)
       const mask = this.make
         .graphics({ x: 0, y: 0 }, false)
-        .fillRect(slot.x - THUMB_W / 2, slot.y - THUMB_H / 2, THUMB_W, THUMB_H)
+        .fillRect(slot.x - slot.w / 2, slot.y - slot.h / 2, slot.w, slot.h)
       image.setMask(mask.createGeometryMask())
       slot.image = image
       slot.textureKey = key
@@ -252,6 +270,12 @@ export class PhotoBoothPickScene extends Phaser.Scene {
       duration: 250,
       data: { frameId: this.frame.id },
     })
+  }
+
+  private exitToVillage() {
+    if (this.isTransitioning) return
+    this.isTransitioning = true
+    exitPhotoBoothToVillage(this)
   }
 
   private cleanupTextures() {

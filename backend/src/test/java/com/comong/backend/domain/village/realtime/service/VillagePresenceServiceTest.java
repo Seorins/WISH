@@ -153,7 +153,7 @@ class VillagePresenceServiceTest {
         presenceService.join("s1", 1L, ROOM);
 
         Optional<PlayerState> updated =
-                presenceService.updatePosition(ROOM, 1L, "s1", 0.42, 0.78, "left");
+                presenceService.updatePosition(ROOM, 1L, "s1", 0.42, 0.78, "left", null);
 
         assertThat(updated).isPresent();
         assertThat(updated.get().x()).isEqualTo(0.42);
@@ -163,9 +163,24 @@ class VillagePresenceServiceTest {
     }
 
     @Test
+    void updatePositionAppliesTextureKeyWhenProvided() {
+        stubProfile(1L, 100L, "n1");
+        presenceService.join("s1", 1L, ROOM);
+
+        Optional<PlayerState> updated =
+                presenceService.updatePosition(
+                        ROOM, 1L, "s1", 0.42, 0.78, "left", "character-outfit-girl1");
+
+        assertThat(updated).isPresent();
+        assertThat(updated.get().textureKey()).isEqualTo("character-outfit-girl1");
+        assertThat(presenceService.findByUserId(ROOM, 1L).get().textureKey())
+                .isEqualTo("character-outfit-girl1");
+    }
+
+    @Test
     void updatePositionReturnsEmptyForUnknownUser() {
         Optional<PlayerState> updated =
-                presenceService.updatePosition(ROOM, 999L, "any", 0.1, 0.1, "down");
+                presenceService.updatePosition(ROOM, 999L, "any", 0.1, 0.1, "down", null);
 
         assertThat(updated).isEmpty();
     }
@@ -178,7 +193,7 @@ class VillagePresenceServiceTest {
         presenceService.join("s1-new", 1L, ROOM); // replaced
 
         Optional<PlayerState> ghost =
-                presenceService.updatePosition(ROOM, 1L, "s1-old", 0.9, 0.9, "right");
+                presenceService.updatePosition(ROOM, 1L, "s1-old", 0.9, 0.9, "right", null);
 
         assertThat(ghost).isEmpty();
         assertThat(presenceService.findByUserId(ROOM, 1L).get().x()).isNotEqualTo(0.9);
@@ -287,7 +302,9 @@ class VillagePresenceServiceTest {
         assertThat(presenceService.findByUserId("village.default", 2L)).isEmpty();
         assertThat(presenceService.findByUserId("gymnastics.select", 1L)).isEmpty();
         // 다른 룸 멤버는 position/emote 업데이트가 들어와도 영향 없음
-        assertThat(presenceService.updatePosition("village.default", 2L, "s2", 0.9, 0.9, "left"))
+        assertThat(
+                        presenceService.updatePosition(
+                                "village.default", 2L, "s2", 0.9, 0.9, "left", null))
                 .isEmpty();
     }
 

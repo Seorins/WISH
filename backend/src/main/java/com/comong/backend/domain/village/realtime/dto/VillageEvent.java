@@ -46,7 +46,7 @@ public record VillageEvent(
                 "move",
                 member.userId(),
                 null,
-                null,
+                member.textureKey(),
                 member.x(),
                 member.y(),
                 member.dir(),

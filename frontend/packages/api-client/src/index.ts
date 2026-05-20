@@ -13,14 +13,18 @@ export {
 export {
   createQuizRoom,
   getQuizRoom,
+  getWaitingQuizRooms,
   joinQuizRoom,
   leaveQuizRoom,
   startQuizRoom,
   type PromptAssignment,
   type QuizGameStartedResponse,
   type QuizMember,
+  type QuizRoomListItem,
   type QuizRoomSnapshot,
   type QuizRoomStatus,
+  type QuizStrokeMessage,
+  type StartQuizRoomRequest,
 } from './quiz'
 export {
   createPhotoBooth,
@@ -39,10 +43,9 @@ export {
   updateExerciseMotion,
 } from './exercise-motions'
 export {
-  calculateAverageCompletionRate,
-  calculateAverageAccuracy,
   CREATE_EXERCISE_SESSION_ERROR_MESSAGE,
   createExerciseSession,
+  createExerciseSessionMotion,
   EXERCISE_MOTION_MOVEMENT_ANALYSIS_ERROR_MESSAGE,
   EXERCISE_SESSION_DETAIL_ERROR_MESSAGE,
   EXERCISE_SESSION_ERROR_MESSAGE,
@@ -52,9 +55,27 @@ export {
   getExerciseSessionDetail,
   getExerciseSessions,
   getMyExerciseSessions,
-  toCreateExerciseSessionRequest,
+  validateCreateExerciseSessionMotionRequest,
   validateCreateExerciseSessionRequest,
 } from './exercise-sessions'
+export {
+  createGomokuRoom,
+  getGomokuMessages,
+  getGomokuRanking,
+  getGomokuRoom,
+  getMyGomokuMatches,
+  getMyGomokuStats,
+  getWaitingGomokuRooms,
+  heartbeatGomokuRoom,
+  joinGomokuRoom,
+  leaveGomokuRoom,
+  playGomokuMove,
+  rematchGomokuRoom,
+  resignGomokuRoom,
+  sendGomokuMessage,
+  startGomokuRoom,
+  swapGomokuRoomStones,
+} from './gomoku'
 export {
   getChartRanking,
   getChartStats,
@@ -70,8 +91,9 @@ export {
   getGuardianDialogueWeeklyTrend,
   listGuardianDialogueSessions,
 } from './guardian-dialogue'
+export { getReportAiSummary } from './guardian-report'
 export { requestPresignedUploadUrls, uploadToPresignedUrl } from './uploads'
-export { createPatientProfile, listPatientProfiles } from './patient-profiles'
+export { createPatientProfile, listPatientProfiles, updatePatientProfile } from './patient-profiles'
 export { endLoginSession, heartbeatLoginSession, startLoginSession } from './login-sessions'
 export {
   endContent,
@@ -83,7 +105,12 @@ export {
   subscribeRealtimeEvents,
   subscribeWatching,
 } from './realtime'
-export { getCumulativeUsageStats, getDailyUsageStats, getUsageAverages } from './usage-stats'
+export {
+  getCumulativeUsageStats,
+  getDailyUsageStats,
+  getUsageAverages,
+  getUsageRankings,
+} from './usage-stats'
 export {
   createTaekwondoMotion,
   deleteTaekwondoMotion,
@@ -104,9 +131,8 @@ export {
   TAEKWONDO_BELT_COLORS,
 } from './taekwondo-belt-history'
 export {
-  calculateTaekwondoAverageAccuracy,
-  calculateTaekwondoMonstersDefeated,
   createTaekwondoSession,
+  createTaekwondoSessionMotion,
   formatTaekwondoAiFeedback,
   getMyTaekwondoSessions,
   getTaekwondoSessions,
@@ -114,6 +140,8 @@ export {
   toCreateTaekwondoSessionMotionRequest,
   toTaekwondoAccuracy,
 } from './taekwondo-sessions'
+export { getTaekwondoProgress } from './taekwondo-progress'
+export type { TaekwondoProgressResponse } from './taekwondo-progress'
 export { aiApiClient, analyzeTaegeuk1Motion } from './taekwondo-ai'
 export type { TaegeukAnalyzeRequest, TaegeukAnalyzeResponse } from './taekwondo-ai'
 export { changeUserRole, listUsers } from './users'
@@ -182,11 +210,10 @@ export type {
   UpdateExerciseMotionRequest,
 } from './exercise-motions'
 export type {
-  CreateExerciseMotionRecord,
-  CreateExerciseMotionResultRequest,
-  CreateExerciseSessionRecord,
+  CreateExerciseSessionMotionRequest,
   CreateExerciseSessionRequest,
   ExerciseSessionDetail,
+  ExerciseSessionMotionSaveResponse,
   ExerciseMotionMovementAnalysisJointRange,
   ExerciseMotionMovementAnalysisResponse,
   ExerciseMotionMovementAnalysisSegment,
@@ -201,6 +228,28 @@ export type {
   MotionReplayLandmarkTuple,
   MotionReplaySegment,
 } from './exercise-sessions'
+export type {
+  GomokuEndReason,
+  GomokuMatchPage,
+  GomokuChatMessage,
+  GomokuChatMessageSendRequest,
+  GomokuMatchResult,
+  GomokuMatchStatus,
+  GomokuMatchSummary,
+  GomokuMoveRecord,
+  GomokuMoveRequest,
+  GomokuPageParams,
+  GomokuPlayer,
+  GomokuRanking,
+  GomokuRankingEntry,
+  GomokuRoom,
+  GomokuRoomCreateRequest,
+  GomokuRoomJoinRequest,
+  GomokuRoomPage,
+  GomokuRuleSet,
+  GomokuStats,
+  GomokuStone,
+} from './gomoku'
 export type {
   ChartStats,
   GetMyMusicResultsParams,
@@ -242,12 +291,18 @@ export type {
   GuardianNpcVisited,
   ListGuardianDialogueSessionsParams,
 } from './guardian-dialogue'
+export type { WeeklyReportAiSummary } from './guardian-report'
 export type {
   PresignedUploadItem,
   PresignedUploadRequest,
   PresignedUploadResponse,
 } from './uploads'
-export type { Gender, PatientProfile, PatientProfileCreateRequest } from './patient-profiles'
+export type {
+  Gender,
+  PatientProfile,
+  PatientProfileCreateRequest,
+  PatientProfileUpdateRequest,
+} from './patient-profiles'
 export type { LoginSession, LoginSessionStartRequest } from './login-sessions'
 export type {
   ActiveLiveSessionResponse,
@@ -266,6 +321,9 @@ export type {
   UsageAverage,
   UsageAverages,
   UsageAveragesParams,
+  UsageRankingEntry,
+  UsageRankings,
+  UsageRankingsParams,
 } from './usage-stats'
 export type {
   CreateTaekwondoMotionParams,
@@ -279,11 +337,13 @@ export type {
 } from './taekwondo-motions'
 export type { TaekwondoBeltColor, TaekwondoBeltHistory } from './taekwondo-belt-history'
 export type {
+  BeltPromotionResponse,
   CreateTaekwondoSessionMotionRequest,
   CreateTaekwondoSessionRequest,
   GetMyTaekwondoSessionsParams,
   TaekwondoSessionDetail,
   TaekwondoSessionMotionResult,
+  TaekwondoSessionMotionSaveResponse,
   TaekwondoSessionPage,
   ToCreateTaekwondoSessionMotionRequestParams,
   TaekwondoSessionSummary,

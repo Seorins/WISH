@@ -1,10 +1,11 @@
 import Phaser from 'phaser'
+import { playSceneBgm } from '@/game/systems/sceneBgm'
 import { assetPath } from '@/game/assets/assetPath'
 import {
   createClickTargetMarker,
   createPlayer,
   ensurePlayerWalkAnimations,
-  loadPlayerSpritesheet,
+  loadPlayerSpritesheets,
   type PlayerDirection,
   type PlayerSprite,
   type RatioPoint,
@@ -20,6 +21,7 @@ import {
   setInteractionIconActive,
 } from '@/game/ui/interactionIcon'
 import {
+  NPC_DIALOG_FRAME_LAYOUT,
   createSimpleDialogUi,
   fadeSimpleDialog,
   setCenteredDialogText,
@@ -74,8 +76,6 @@ const LIGHTHOUSE_RETURN_SPAWN = { xRatio: 0.7, yRatio: 0.68 }
 const YOUNGCHEOL_POSITION = { xRatio: 0.28, yRatio: 0.66, heightRatio: 0.18 }
 const YOUNGCHEOL_TALK_ICON_OFFSET_RATIO = 0.205
 const YOUNGCHEOL_INTERACTION = { xRatio: 0.28, yRatio: 0.64, radiusRatio: 0.06 }
-const DIALOG_TEXT_BOX = { x: 520, y: 190, width: 1320, height: 330 }
-const DIALOG_NAME_BOX = { x: 455, y: 125, width: 390, height: 90 }
 const SYSTEM_PROMPT_DEPTH = 28
 const CHOICE_BUTTON_DEPTH = 29
 const ENGAGEMENT_DEPTH = 31
@@ -297,13 +297,14 @@ export class LighthouseSelectScene extends Phaser.Scene {
     )
     this.load.image(
       'lighthouse-youngcheol-dialog-frame',
-      assetPath('images/themes/lighthouse/ui/youngcheol_dialogframe.png'),
+      assetPath('images/npcs/yeongcheol/dialog-frame.png'),
     )
     loadInteractionIcons(this)
-    loadPlayerSpritesheet(this)
+    loadPlayerSpritesheets(this)
   }
 
   create(data: LighthouseSelectSceneData = {}) {
+    playSceneBgm(this)
     const { width: vw, height: vh } = this.scale
     this.cameras.main.resetFX()
     this.cameras.main.setAlpha(1)
@@ -470,6 +471,10 @@ export class LighthouseSelectScene extends Phaser.Scene {
   }
 
   private readonly handlePointerDown = (pointer: Phaser.Input.Pointer) => {
+    if (this.emojiPalette?.consumePointerDown(pointer)) {
+      return
+    }
+
     if (this.handleObstacleEditorPointerDown(pointer)) {
       return
     }
@@ -491,6 +496,13 @@ export class LighthouseSelectScene extends Phaser.Scene {
         )
         if (!clickedChoice) return
       }
+
+      // 영철(LLM) 자유 대화는 React 측 "오늘은 여기까지 대화할래요!" 버튼만이 정상 종료 경로.
+      // 실수 클릭으로 BE 세션이 IN_PROGRESS 로 남고 보호자 페이지 누락되는 사고를 막기 위해
+      // Phaser 포인터로 인한 advance/close 는 LLM 대화 중에는 모두 무시한다. 진짜 advance/close 가
+      // 필요한 opening/closing 상태에서는 React 측 dialogue-advance-hitarea 가 capture 단계에서
+      // 먼저 받아 처리한다.
+      if (this.isBackendEmotionDialogueOpen) return
 
       const clickedDialog = this.dialog.frame.getBounds().contains(pointer.x, pointer.y)
       if (clickedDialog) this.advanceDialog()
@@ -553,6 +565,8 @@ export class LighthouseSelectScene extends Phaser.Scene {
       this.skipEngagementAnimation()
       return
     }
+    // 영철 LLM 대화 중에는 ESC 로 종료되지 않도록 차단 — "오늘은 여기까지 대화할래요!" 버튼이 유일 종료 경로.
+    if (this.isBackendEmotionDialogueOpen) return
     if (this.isDialogVisible) this.closeDialog(true)
   }
 
@@ -837,19 +851,9 @@ export class LighthouseSelectScene extends Phaser.Scene {
 
   private createDialogUi() {
     this.dialog = createSimpleDialogUi(this, {
+      ...NPC_DIALOG_FRAME_LAYOUT,
       frameKey: 'lighthouse-youngcheol-dialog-frame',
-      textBox: DIALOG_TEXT_BOX,
-      dialogWidthRatio: 0.78,
-      maxDialogWidth: 1120,
-      fontColor: '#3b2a1f',
-      fontSize: 40,
-      lineSpacing: 6,
-      frameBottomMargin: -22,
-      nameBox: DIALOG_NAME_BOX,
       nameText: '등대지기 영철',
-      nameFontColor: '#3b2414',
-      nameFontSize: 34,
-      opticalOffsets: { single: 18, double: 14, multi: 4 },
     })
   }
 

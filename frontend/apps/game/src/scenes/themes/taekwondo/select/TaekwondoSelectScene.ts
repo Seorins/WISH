@@ -1,11 +1,12 @@
 import Phaser from 'phaser'
+import { playSceneBgm } from '@/game/systems/sceneBgm'
 import { assetPath } from '@/game/assets/assetPath'
 import {
   createClickTargetMarker,
   createPlayer,
   ensurePlayerWalkAnimations,
   getTaekwondoBeltPlayerTextureKey,
-  loadPlayerSpritesheet,
+  loadPlayerSpritesheets,
   loadTaekwondoBeltPlayerSpritesheets,
   type PlayerDirection,
   type PlayerSprite,
@@ -25,6 +26,7 @@ import {
   setInteractionIconActive,
 } from '@/game/ui/interactionIcon'
 import {
+  NPC_DIALOG_FRAME_LAYOUT,
   createSimpleDialogUi,
   fadeSimpleDialog,
   setCenteredDialogText,
@@ -49,8 +51,6 @@ const SEOKJAE_INTERACTION = { radiusRatio: 0.08 }
 const SEOKJAE_TALK_ICON_OFFSET = { yRatio: 0.15 }
 const SEOKJAE_POSES = [4, 6, 7]
 const RANDOM_POSE_DELAY = 500
-const DIALOG_TEXT_BOX = { x: 580, y: 180, width: 1500, height: 400 }
-const DIALOG_NAME_BOX = { x: 505, y: 109, width: 390, height: 150 }
 const DEBUG_OBSTACLES = false
 const OBSTACLE_EDITOR_ENABLED = import.meta.env.DEV
 const OBSTACLE_EDITOR_MIN_SIZE = 0.003
@@ -127,6 +127,10 @@ export class TaekwondoSelectScene extends Phaser.Scene {
   private dialogDismissed = false
 
   private readonly handlePointerDown = (pointer: Phaser.Input.Pointer) => {
+    if (this.emojiPalette?.consumePointerDown(pointer)) {
+      return
+    }
+
     if (this.handleObstacleEditorPointerDown(pointer)) {
       return
     }
@@ -186,11 +190,12 @@ export class TaekwondoSelectScene extends Phaser.Scene {
         spacing: 0,
       },
     )
-    loadPlayerSpritesheet(this)
+    loadPlayerSpritesheets(this)
     loadTaekwondoBeltPlayerSpritesheets(this)
   }
 
   create() {
+    playSceneBgm(this)
     const { width: vw, height: vh } = this.scale
     this.isTransitioning = false
     this.isSceneShuttingDown = false
@@ -539,18 +544,9 @@ export class TaekwondoSelectScene extends Phaser.Scene {
 
   private createDialogUi() {
     this.dialog = createSimpleDialogUi(this, {
+      ...NPC_DIALOG_FRAME_LAYOUT,
       frameKey: 'seokjae-dialog-frame',
-      textBox: DIALOG_TEXT_BOX,
-      dialogWidthRatio: 0.7,
-      maxDialogWidth: 1000,
-      fontSize: 46,
-      lineSpacing: 6,
-      nameBox: DIALOG_NAME_BOX,
       nameText: '석재',
-      nameFontColor: '#2a1f17',
-      nameFontSize: 48,
-      nameLetterSpacing: 6,
-      opticalOffsets: { single: 0 },
     })
   }
 

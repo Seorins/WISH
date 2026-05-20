@@ -8,12 +8,14 @@ export type MoveSpeedMultiplier = 1 | 1.5 | 2
 export type GameSettings = {
   masterVolume: number
   effectVolume: number
+  bgmEnabled: boolean
   moveSpeedMultiplier: MoveSpeedMultiplier
 }
 
 const DEFAULT_SETTINGS: GameSettings = {
   masterVolume: 0.8,
   effectVolume: 0.8,
+  bgmEnabled: true,
   moveSpeedMultiplier: 1,
 }
 
@@ -42,6 +44,7 @@ function loadSettings(): GameSettings {
     return {
       masterVolume: normalizeVolume(parsed.masterVolume, DEFAULT_SETTINGS.masterVolume),
       effectVolume: normalizeVolume(parsed.effectVolume, DEFAULT_SETTINGS.effectVolume),
+      bgmEnabled: normalizeBoolean(parsed.bgmEnabled, DEFAULT_SETTINGS.bgmEnabled),
       moveSpeedMultiplier: normalizeSpeed(parsed.moveSpeedMultiplier),
     }
   } catch {
@@ -55,4 +58,8 @@ function normalizeVolume(value: unknown, fallback: number) {
 
 function normalizeSpeed(value: unknown): MoveSpeedMultiplier {
   return value === 1.5 || value === 2 ? value : 1
+}
+
+function normalizeBoolean(value: unknown, fallback: boolean) {
+  return typeof value === 'boolean' ? value : fallback
 }

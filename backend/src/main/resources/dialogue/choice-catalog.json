@@ -27,7 +27,7 @@
     "squirrel_friend": {
       "npcId": "squirrel_friend",
       "displayName": "세현",
-      "tone": "활발하고 말괄량이 같은 또래 친구",
+      "tone": "활발하지만 곁을 편하게 지켜주는 또래 친구",
       "scripts": ["squirrel_shade", "squirrel_word", "squirrel_apart"]
     },
     "dain": {
@@ -195,7 +195,7 @@
           "questionText": "오늘은 좀 가볍게 놀까?",
           "npcLines": [
             "오늘은 좀 가볍게 놀까?",
-            "코몽이가 심심해 죽겠어."
+            "코몽이가 심심해서 꼬리가 간질간질해."
           ],
           "choices": ["mky_play_music", "mky_play_dance", "mky_play_still"]
         },
@@ -369,7 +369,7 @@
           "questionText": "어떤 부분부터 궁금해?",
           "npcLines": [
             "약은 다 이유가 있지.",
-            "조은이도 약 처음 받았을 때 통 안에 든 거 다 까봤어.",
+            "조은이도 약 처음 받았을 때 궁금해서 이름을 하나씩 읽어봤어.",
             "어떤 부분부터 궁금해?"
           ],
           "choices": ["nurse_cur_med_why", "nurse_cur_med_when", "nurse_cur_med_good"]
@@ -945,7 +945,7 @@
           "nodeId": "dain_greet_02b_well_how",
           "questionText": "어떻게 보낼까?",
           "npcLines": [
-            "잘 지내라는 한마디, 따뜻한 거야.",
+            "'잘 지내?'라는 한마디, 따뜻한 거야.",
             "어떻게 보낼까?"
           ],
           "choices": ["dain_greet_well_short", "dain_greet_well_drawing", "dain_greet_well_mom"]
@@ -1058,7 +1058,7 @@
       "sentimentWords": [],
       "endingType": "ASK_ADULT_FIRST",
       "endingNpcLines": [
-        "엄마도 그 한 마디면 마음 놓일걸.",
+        "엄마도 네 마음을 알기 쉬울 거야.",
         "오늘 와줘서 고마워."
       ],
       "closingLine": "(꼬리로 손 잡으며) 또 와!"
@@ -1096,8 +1096,8 @@
       "sentimentWords": [],
       "endingType": "REST_ONLY",
       "endingNpcLines": [
-        "말 없이 가도 엄마가 알아챌 거야.",
-        "그 정도 사이잖아."
+        "말이 어렵다면 손을 살짝 잡아도 돼.",
+        "그래도 아프거나 무서우면 한마디로 알려보자."
       ],
       "closingLine": "(꼬리 살랑) 잘 갔다 와!"
     },
@@ -1194,8 +1194,9 @@
       "sentimentWords": [],
       "endingType": "ASK_MEDICAL_FIRST",
       "endingNpcLines": [
-        "(꼬리 살랑) 좋은 선택이야.",
-        "'오늘 뭐 해요?' 한 마디만 던져봐 — 선생님이 차근차근 풀어주실 거야."
+        "좋아. 선생님께 차근차근 물어볼 수 있어.",
+        "'오늘 뭐 해요?' 한 마디만.",
+        "모르는 건 묻는 게 빠른 길이거든."
       ],
       "closingLine": "들은 거 와서 알려줘!"
     },
@@ -1875,7 +1876,7 @@
       "topicKeywords": [], "sentimentWords": [],
       "endingType": "PRIVATE_OKAY",
       "endingNpcLines": [
-        "(작게 끄덕) 자리 잡혀가는 중인 거.",
+        "(작게 끄덕) 아직 몸 느낌을 찾는 중일 수 있어.",
         "잠깐 옆에 앉아 있다 가."
       ],
       "closingLine": "(의자 끌어다 놓으며) 또 와."
@@ -1900,8 +1901,8 @@
       "topicKeywords": ["가족"], "sentimentWords": [],
       "endingType": "ASK_ADULT_FIRST",
       "endingNpcLines": [
-        "머리 무거운 거 진짜 힘들지.",
-        "엄마 옆에 가서 잠깐 누워봐. 엄마도 그 마음 들으면 옆에 와주실걸."
+        "엄마한테 '머리 좀 무거워' 한 줄.",
+        "옆에 있어 달라고 말해보자."
       ],
       "closingLine": "엄마 옆에서 푹 쉬다 와."
     },
@@ -1914,8 +1915,8 @@
       "topicKeywords": ["의료진"], "sentimentWords": [],
       "endingType": "ASK_MEDICAL_FIRST",
       "endingNpcLines": [
-        "(가까이 와서 작은 목소리로) 잘 결정했어.",
-        "혼자 가기 무서우면 조은이가 옆에서 같이 갈게."
+        "(가까이 와서 작은 목소리로) 좋은 선택.",
+        "같이 가서 어디가 불편한지 말해보자."
       ],
       "closingLine": "여기 자리 비워둘게."
     },
@@ -1929,8 +1930,8 @@
       "sentimentWords": [{"phrase": "아플까봐", "tone": "NEGATIVE"}],
       "endingType": "ASK_MEDICAL_FIRST",
       "endingNpcLines": [
-        "괜찮아, 아픈 걸 줄이는 방법은 여러 가지 있어.",
-        "(노트 펼치며) 어떤 방법이 너한테 맞을지 선생님께 같이 물어보자."
+        "(노트 펼치며) 선생님께 '덜 아프게 하는 방법 있어요?' 라고.",
+        "조은이도 옆에서 같이 들을게."
       ],
       "closingLine": "노트 챙겨두고 기다릴게."
     },
@@ -2104,8 +2105,8 @@
       "topicKeywords": ["가족"], "sentimentWords": [],
       "endingType": "ASK_ADULT_FIRST",
       "endingNpcLines": [
-        "엄마 옆에서 자면 잠도 더 푹 와.",
-        "가서 슬쩍 손 잡아봐. 같이 누워줄걸."
+        "엄마한테 '옆에 있어줘' 한 줄.",
+        "같이 있어 달라고 말해보자."
       ],
       "closingLine": "엄마 손 잡고 푹 자."
     },
@@ -2133,8 +2134,8 @@
       "topicKeywords": ["어지러움"], "sentimentWords": [],
       "endingType": "ASK_MEDICAL_FIRST",
       "endingNpcLines": [
-        "잠깐도 몸이 보내는 신호니까 지나치진 말자.",
-        "물 한 모금 마시고 5분만 앉아 있어봐. 그래도 또 그러면 조은이한테 와줘."
+        "그래도 한 번 알려드리자.",
+        "혹시 약 먹은 시간이랑 관련 있는지도 같이 보자."
       ],
       "closingLine": "어땠는지 와서 알려줘."
     },
@@ -2292,8 +2293,8 @@
       "topicKeywords": ["시술"], "sentimentWords": [],
       "endingType": "ASK_MEDICAL_FIRST",
       "endingNpcLines": [
-        "(작게 끄덕) 무서운 거 당연해.",
-        "괜찮아, 아픈 걸 줄이는 방법이 여러 가지 있거든."
+        "(작게 끄덕) 그것도 꼭 물어봐.",
+        "덜 아프게 하는 방법이 있는지 같이 들어보자."
       ],
       "closingLine": "(작게 끄덕) 무서울 땐 와."
     },
@@ -2467,10 +2468,7 @@
       "protectiveFactors": ["emotion_named", "support_seeking"],
       "topicKeywords": ["가족"], "sentimentWords": [],
       "endingType": "ASK_ADULT_FIRST",
-      "endingNpcLines": [
-        "그럴 땐 혼자보다 둘이 더 잘 풀려.",
-        "엄마 옆에 가서 손 잡고 다시 한 번 같이 쉬어봐."
-      ],
+      "endingNpcLines": ["그럼 엄마한테 '같이 호흡 한 번' 해달라고 해봐.", "같이 하면 조금 덜 막막해질 수 있어."],
       "closingLine": "엄마 옆에서 풀리면 와줘."
     },
     "sleep_eyes_side": {
@@ -2583,7 +2581,7 @@
       "protectiveFactors": ["agency_coping", "family_support_preference"],
       "topicKeywords": ["가족"], "sentimentWords": [],
       "endingType": "REST_ONLY",
-      "endingNpcLines": ["(작게 웃으며) 그 정도면 엄마는 다 알아채.", "옆자리 비워주신다."],
+      "endingNpcLines": ["(작게 웃으며) 말이 어렵다면 옆에 조용히 앉아도 돼.", "필요하면 한마디만 보태보자."],
       "closingLine": "다녀와."
     },
     "sleep_fam_mom_hand": {
@@ -2594,10 +2592,7 @@
       "protectiveFactors": ["family_support_preference", "support_need_named"],
       "topicKeywords": ["가족", "손잡기"], "sentimentWords": [],
       "endingType": "ASK_ADULT_FIRST",
-      "endingNpcLines": [
-        "엄마 손은 데워져 있어.",
-        "가서 슬쩍 잡아봐 — 잡아주실 거야."
-      ],
+      "endingNpcLines": ["손 잡고 싶다고 말해도 돼.", "'잠깐만 잡아줘' 한마디면 충분해."],
       "closingLine": "엄마 손 잡고 푹 자."
     },
     "sleep_fam_say_near": {
@@ -2608,7 +2603,7 @@
       "protectiveFactors": ["verbal_expression", "support_need_named", "family_support_preference"],
       "topicKeywords": ["가족"], "sentimentWords": [],
       "endingType": "ASK_ADULT_FIRST",
-      "endingNpcLines": ["그 한 줄, 엄마한테 가닿아.", "끝까지 길게 안 해도 돼."],
+      "endingNpcLines": ["그 한 줄이면 마음을 전할 수 있어.", "끝까지 길게 안 해도 돼."],
       "closingLine": "엄마 옆에서 푹 쉬다 와."
     },
     "sleep_fam_say_hold": {
@@ -2634,7 +2629,7 @@
       "topicKeywords": ["가족", "마음"],
       "sentimentWords": [{"phrase": "무거워", "tone": "NEGATIVE"}],
       "endingType": "ASK_ADULT_FIRST",
-      "endingNpcLines": ["처음 꺼낼 땐 두근거리지만, 듣는 사람은 안심해.", "엄마가 옆자리 데워줄 거야."],
+      "endingNpcLines": ["처음 꺼낼 땐 두근거리지만, 듣는 사람도 네 마음을 알 수 있어.", "옆에 있어 달라고 천천히 말해보자."],
       "closingLine": "엄마 옆자리에서 푹 쉬어."
     },
     "sleep_fam_dad_hug": {
@@ -2645,7 +2640,7 @@
       "protectiveFactors": ["family_support_preference", "support_need_named"],
       "topicKeywords": ["가족"], "sentimentWords": [],
       "endingType": "ASK_ADULT_FIRST",
-      "endingNpcLines": ["(끄덕) 아빠 어깨는 넓어.", "오래 안겨도 돼."],
+      "endingNpcLines": ["(끄덕) 안기고 싶다고 말해도 돼.", "괜찮은 만큼만 기대보자."],
       "closingLine": "(끄덕) 푹 안기다 와."
     },
     "sleep_fam_dad_quiet": {
@@ -2656,7 +2651,7 @@
       "protectiveFactors": ["agency_coping", "family_support_preference"],
       "topicKeywords": ["가족"], "sentimentWords": [],
       "endingType": "REST_ONLY",
-      "endingNpcLines": ["(작게 웃으며) 같은 자리에 있는 게 다야.", "아빠도 옆에 있는 거 좋아하셔."],
+      "endingNpcLines": ["(작게 웃으며) 같은 자리에 있는 게 다야.", "말이 적어도 옆에 있다는 건 전해져."],
       "closingLine": "다녀와."
     },
     "sleep_fam_dad_ask": {
@@ -2703,10 +2698,7 @@
       "protectiveFactors": ["support_need_named", "family_support_preference"],
       "topicKeywords": ["가족"], "sentimentWords": [],
       "endingType": "ASK_ADULT_FIRST",
-      "endingNpcLines": [
-        "엄마든 아빠든, 먼저 보이는 사람한테 다가가봐.",
-        "누구든 옆자리 비워줄 거야."
-      ],
+      "endingNpcLines": ["가까운 어른에게 '와줘' 하고 말해보자.", "누구든 편한 사람부터."],
       "closingLine": "옆자리 따뜻해지면 와."
     },
 
@@ -2750,10 +2742,7 @@
       "protectiveFactors": ["medical_support_preference", "verbal_expression"],
       "topicKeywords": ["의료진"], "sentimentWords": [],
       "endingType": "ASK_MEDICAL_FIRST",
-      "endingNpcLines": [
-        "치료 페이스, 선생님이랑 같이 정해도 돼.",
-        "한 번 부탁해봐 — 들어주실 거야."
-      ],
+      "endingNpcLines": ["선생님께 '오늘 조금만 천천히' 라고 해봐.", "어른이 같이 속도를 맞춰줄 수 있어."],
       "closingLine": "들은 거 와서 알려줘."
     },
     "sleep_pace_all": {
@@ -2815,7 +2804,7 @@
       "closingLine": "잠깐 멈췄다 와도 돼."
     },
     "sleep_pace_quick_safe": {
-      "choiceIntentId": "sleep_pace_quick_safe", "text": "빨리 가도 안 다쳐요",
+      "choiceIntentId": "sleep_pace_quick_safe", "text": "빨리 가도 조심할게요",
       "nextNodeId": null, "isEnding": true,
       "valence": "POSITIVE", "tone": "CALM", "intensity": 1,
       "concernFlags": [],
@@ -2833,7 +2822,7 @@
       "protectiveFactors": ["self_regulation", "pause_coping"],
       "topicKeywords": ["페이스", "휴식"], "sentimentWords": [],
       "endingType": "REST_THEN_ACTIVITY",
-      "endingNpcLines": ["(작게 웃으며) 가운데 한 번이.", "끝까지 가는 비결이야."],
+      "endingNpcLines": ["(작게 웃으며) 중간에 한 번 쉬는 게,", "끝까지 가는 비결이야."],
       "closingLine": "가운데 쉬고 또 와."
     },
     "sleep_pace_heavy": {
@@ -3383,7 +3372,7 @@
       "endingType": "EXPRESS_WITH_DRAWING",
       "endingNpcLines": [
         "(작게 끄덕) 그것도 마음이야.",
-        "좋아하는 거 그리면서 마음이 옮겨가."
+        "좋아하는 거 그리면서 마음도 조금 편해질 수 있어."
       ],
       "closingLine": "(작게 끄덕) 그린 거 보여줘."
     },
@@ -3546,7 +3535,7 @@
       "protectiveFactors": ["social_connection", "positive_activity"],
       "topicKeywords": ["세현"], "sentimentWords": [],
       "endingType": "SOCIAL_CONNECT",
-      "endingNpcLines": ["오! 어제 도토리 굴리다 그루터기 박았어.", "진짜 멍청했어. (꼬리 휙)"],
+      "endingNpcLines": ["오! 어제 도토리 굴리다 그루터기 박았어.", "나도 깜짝 놀랐어. (꼬리 휙)"],
       "closingLine": "또 와서 들어줘!"
     },
     "squirrel_shade_more_go": {
@@ -3663,7 +3652,7 @@
       "topicKeywords": ["가족", "마음"],
       "sentimentWords": [{"phrase": "힘들어", "tone": "NEGATIVE"}],
       "endingType": "ASK_ADULT_FIRST",
-      "endingNpcLines": ["그 짧은 한 줄.", "엄마는 듣자마자 옆으로 와줄걸!"],
+      "endingNpcLines": ["그 짧은 한 줄.", "엄마도 네 마음을 알아차리기 쉬울 거야!"],
       "closingLine": "엄마랑 어땠는지 와서 알려줘!"
     },
     "squirrel_word_say_hug": {
@@ -3674,7 +3663,7 @@
       "protectiveFactors": ["verbal_expression", "support_need_named", "family_support_preference"],
       "topicKeywords": ["가족"], "sentimentWords": [],
       "endingType": "ASK_ADULT_FIRST",
-      "endingNpcLines": ["(꼬리 살랑) 안기는 시간 짱이지.", "그거 약이야."],
+      "endingNpcLines": ["(꼬리 살랑) 안기는 시간 짱이지.", "그것도 마음 쉬는 방법이야."],
       "closingLine": "푹 안기다 와!"
     },
     "squirrel_word_say_near": {
@@ -3685,7 +3674,7 @@
       "protectiveFactors": ["verbal_expression", "support_need_named", "family_support_preference"],
       "topicKeywords": ["가족"], "sentimentWords": [],
       "endingType": "ASK_ADULT_FIRST",
-      "endingNpcLines": ["응!", "옆자리만 채워줘도 마음이 옮겨가."],
+      "endingNpcLines": ["응!", "옆자리만 채워줘도 마음이 조금 편해질 수 있어."],
       "closingLine": "옆자리 채워지면 와!"
     },
     "squirrel_word_walk": {
@@ -3773,7 +3762,7 @@
       "protectiveFactors": ["sets_boundary"],
       "topicKeywords": [], "sentimentWords": [],
       "endingType": "NO_PRESSURE",
-      "endingNpcLines": ["(꼬리 살랑) 다리 가는 대로!", "가끔 그래야 마음이 잡혀."],
+      "endingNpcLines": ["(꼬리 살랑) 천천히 둘러봐도 돼!", "가끔 그래야 마음이 잡혀."],
       "closingLine": "(꼬리 흔들며) 기다릴게!"
     },
     "squirrel_apart_walk_alone": {
@@ -3872,7 +3861,7 @@
       "protectiveFactors": ["medical_support_preference", "support_seeking"],
       "topicKeywords": ["의료진"], "sentimentWords": [],
       "endingType": "ASK_MEDICAL_FIRST",
-      "endingNpcLines": ["응!", "무거운 거 있으면 거기서 풀어."],
+      "endingNpcLines": ["응!", "몸이나 마음이 무거우면 조은이한테 가리켜줘도 돼."],
       "closingLine": "조은이한테 다녀와!"
     },
 
@@ -3945,7 +3934,7 @@
       "closingLine": "다음에 와서 답장 왔는지 알려줘!"
     },
     "dain_miss_say_meet": {
-      "choiceIntentId": "dain_miss_say_meet", "text": "「언제 만날래?」",
+      "choiceIntentId": "dain_miss_say_meet", "text": "「언제 만날 수 있을까?」",
       "nextNodeId": null, "isEnding": true,
       "valence": "POSITIVE", "tone": "CALM", "intensity": 1,
       "concernFlags": [],
@@ -4115,13 +4104,13 @@
       "topicKeywords": ["가족", "학교"], "sentimentWords": [],
       "endingType": "ASK_HELP_FIRST",
       "endingNpcLines": [
-        "엄마한테 한 번 슬쩍 물어보면 어떨까?",
-        "의외로 알고 계실지도 몰라!"
+        "엄마랑 같이 알아볼 수 있어.",
+        "들은 거 다음에 알려줘!"
       ],
       "closingLine": "엄마한테 들은 거 와서 알려줘!"
     },
     "dain_school_mom_missed": {
-      "choiceIntentId": "dain_school_mom_missed", "text": "「내가 빠진 거 있어요?」",
+      "choiceIntentId": "dain_school_mom_missed", "text": "「놓친 소식 있어요?」",
       "nextNodeId": null, "isEnding": true,
       "valence": "POSITIVE", "tone": "CALM", "intensity": 1,
       "concernFlags": ["information_need"],
@@ -4129,8 +4118,8 @@
       "topicKeywords": ["친구", "학교"], "sentimentWords": [],
       "endingType": "SOCIAL_CONNECT",
       "endingNpcLines": [
-        "(눈 빛내며) 그건 친구가 더 잘 알 수도 있어.",
-        "친구한테 한 줄 보내봐. 답장 오면 다인이한테도 알려줘!"
+        "엄마가 아는 만큼 알려주실 수 있어.",
+        "더 궁금하면 친구한테도 한 줄 물어보자."
       ],
       "closingLine": "(눈 빛내며) 답장 오면 와!"
     },
@@ -4239,7 +4228,7 @@
       "topicKeywords": ["친구"], "sentimentWords": []
     },
     "dain_greet_well": {
-      "choiceIntentId": "dain_greet_well", "text": "「잘 지내라」 라고 보낼래요",
+      "choiceIntentId": "dain_greet_well", "text": "「잘 지내?」 라고 보낼래요",
       "nextNodeId": "dain_greet_02b_well_how", "isEnding": false,
       "valence": "POSITIVE", "tone": "CALM", "intensity": 0,
       "concernFlags": [],
@@ -4297,7 +4286,7 @@
       "endingType": "SOCIAL_CONNECT",
       "endingNpcLines": [
         "(눈 빛내며) 빨리 답장 올 수도!",
-        "친구도 기다리고 있을지 몰라."
+        "친구도 반가워할 수 있어."
       ],
       "closingLine": "다음에 답장 왔는지 알려줘!"
     },
@@ -4324,8 +4313,8 @@
       "topicKeywords": ["가족", "친구"], "sentimentWords": [],
       "endingType": "ASK_ADULT_FIRST",
       "endingNpcLines": [
-        "(눈 빛내며) 엄마가 가운데서 전해주면 마음 더 잘 닿더라.",
-        "같이 부탁하면 엄마도 신나서 도와주실걸."
+        "엄마가 어떻게 전하면 좋을지 같이 정해주실 수 있어.",
+        "같이 부탁하자."
       ],
       "closingLine": "(눈 빛내며) 전해진 거 와서 알려줘!"
     },
@@ -4351,8 +4340,8 @@
       "topicKeywords": ["그림", "친구"], "sentimentWords": [],
       "endingType": "EXPRESS_WITH_DRAWING",
       "endingNpcLines": [
-        "(끄덕끄덕) '잘 지내라' 그림으로 보내면",
-        "친구 책상에 걸어두고 매일 볼걸."
+        "(끄덕끄덕) '잘 지내?'를 그림으로 보내면",
+        "친구가 두고두고 볼 수 있어."
       ],
       "closingLine": "또 와서 보여줘!"
     },
@@ -4365,13 +4354,12 @@
       "topicKeywords": ["가족", "친구"], "sentimentWords": [],
       "endingType": "ASK_ADULT_FIRST",
       "endingNpcLines": [
-        "(끄덕) 그것도 좋은 방법.",
-        "엄마가 가운데서 전해주면 더 다정하게 가닿거든."
+        "엄마랑 어떻게 전할지 같이 정해보자."
       ],
       "closingLine": "엄마한테 부탁하고 와."
     },
     "dain_greet_meet_soon": {
-      "choiceIntentId": "dain_greet_meet_soon", "text": "「곧」 이라고",
+      "choiceIntentId": "dain_greet_meet_soon", "text": "「곧 만나자」 라고",
       "nextNodeId": null, "isEnding": true,
       "valence": "POSITIVE", "tone": "CALM", "intensity": 0,
       "concernFlags": [],
@@ -4392,12 +4380,12 @@
       "topicKeywords": ["학교", "친구"], "sentimentWords": [],
       "endingType": "SOCIAL_CONNECT",
       "endingNpcLines": [
-        "학교 갈 날이 마음에 새겨져."
+        "학교에서 만날 날을 떠올리면 힘이 날 수 있어."
       ],
       "closingLine": "학교 가는 날 와서 알려줘!"
     },
     "dain_greet_meet_home": {
-      "choiceIntentId": "dain_greet_meet_home", "text": "「우리 집으로 와줘」",
+      "choiceIntentId": "dain_greet_meet_home", "text": "「엄마랑 정해서 만나자」",
       "nextNodeId": null, "isEnding": true,
       "valence": "POSITIVE", "tone": "CALM", "intensity": 1,
       "concernFlags": [],
@@ -4405,8 +4393,8 @@
       "topicKeywords": ["가족", "친구"], "sentimentWords": [],
       "endingType": "ASK_ADULT_FIRST",
       "endingNpcLines": [
-        "(눈 빛내며) 친구 우리 집 오면 진짜 신나지!",
-        "엄마랑 같이 날짜 정해보자."
+        "엄마랑 같이 정하자.",
+        "친구도 반가워할 수 있어."
       ],
       "closingLine": "(눈 빛내며) 날짜 정해지면 알려줘!"
     }

@@ -2,7 +2,7 @@ import Phaser from 'phaser'
 import { ensureFreshAccessToken } from '@wish/api-client'
 
 import { useAuthStore } from '@/features/auth/store'
-import type { PlayerDirection, PlayerSprite } from '@/game/entities/player'
+import { PLAYER_TEXTURE_KEY, type PlayerDirection, type PlayerSprite } from '@/game/entities/player'
 
 import { extractUserIdFromToken } from './jwtUserId'
 import { RemotePlayersGroup } from './RemotePlayersGroup'
@@ -87,6 +87,7 @@ export function attachVillageRealtime(opts: AttachOptions): VillageRealtimeInteg
   let lastY = Number.NaN
   let lastDir: PlayerDirection | null = null
   let lastMoving = false
+  let lastTextureKey: string | null = null
   // publishEmote throttling
   let lastEmoteMs = 0
 
@@ -101,6 +102,7 @@ export function attachVillageRealtime(opts: AttachOptions): VillageRealtimeInteg
         y: lastY,
         dir: lastDir ?? 'down',
         moving: lastMoving,
+        textureKey: lastTextureKey ?? PLAYER_TEXTURE_KEY,
       })
     ) {
       return
@@ -119,19 +121,22 @@ export function attachVillageRealtime(opts: AttachOptions): VillageRealtimeInteg
         Math.abs(xRatio - lastX) > POSITION_CHANGE_THRESHOLD ||
         Math.abs(yRatio - lastY) > POSITION_CHANGE_THRESHOLD
       const stateChanged = moving !== lastMoving || dir !== lastDir
+      const textureKey = player.texture.key
+      const textureChanged = textureKey !== lastTextureKey
 
       // heartbeat 는 setInterval 이 wall-clock 으로 별도 처리 (S14P31E103-791) — 게임 루프 안에서 중복 발화 불필요.
-      if (!positionChanged && !stateChanged) return
+      if (!positionChanged && !stateChanged && !textureChanged) return
 
       // 연결 전이면 publishPosition 이 false 반환 → throttle state 유지해야 onReady 후 첫 publish 가
       // skip 되지 않는다 (S14P31E103-763).
-      if (!client.publishPosition({ x: xRatio, y: yRatio, dir, moving })) return
+      if (!client.publishPosition({ x: xRatio, y: yRatio, dir, moving, textureKey })) return
       lastPublishMs = now
       lastPublishWallMs = Date.now()
       lastX = xRatio
       lastY = yRatio
       lastDir = dir
       lastMoving = moving
+      lastTextureKey = textureKey
     },
 
     publishEmote(emoji) {

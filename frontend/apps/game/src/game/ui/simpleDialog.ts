@@ -7,9 +7,27 @@ export type SimpleDialogTextBox = {
   height: number
 }
 
+const DIALOG_FONT_FAMILY =
+  '"Pretendard Variable", Pretendard, "Noto Sans KR", "Malgun Gothic", sans-serif'
+
+export const NPC_DIALOG_FRAME_LAYOUT = {
+  layoutSourceWidth: 2172,
+  textBox: { x: 580, y: 180, width: 1500, height: 400 },
+  nameBox: { x: 505, y: 107, width: 390, height: 150 },
+  dialogWidthRatio: 0.7,
+  maxDialogWidth: 1000,
+  fontSize: 46,
+  lineSpacing: 30,
+  nameFontColor: '#2a1f17',
+  nameFontSize: 48,
+  nameLetterSpacing: 6,
+  opticalOffsets: { single: -12, double: -12, multi: -12 },
+} as const
+
 type CreateSimpleDialogOptions = {
   frameKey: string
   textBox: SimpleDialogTextBox
+  layoutSourceWidth?: number
   dialogWidthRatio?: number
   maxDialogWidth?: number
   frameDepth?: number
@@ -54,6 +72,7 @@ export function createSimpleDialogUi(
     fontColor = '#3b2a1f',
     fontSize = 44,
     lineSpacing = 6,
+    layoutSourceWidth,
     frameBottomMargin = -30,
     nameBox,
     nameText,
@@ -76,16 +95,17 @@ export function createSimpleDialogUi(
   frame.setDepth(frameDepth).setAlpha(0).setScrollFactor(0)
   frame.y = vh - frameBottomMargin - frame.displayHeight / 2
 
-  const scale = frame.displayWidth / source.width
+  const scale = frame.displayWidth / (layoutSourceWidth ?? source.width)
   const dialogLeft = frame.x - frame.displayWidth / 2
   const dialogTop = frame.y - frame.displayHeight / 2
   const textBaseX = dialogLeft + textBox.x * scale
   const textBaseY = dialogTop + textBox.y * scale
   const textBoxHeight = textBox.height * scale
   const text = scene.add.text(textBaseX, textBaseY, '', {
-    fontFamily: 'sans-serif',
+    fontFamily: DIALOG_FONT_FAMILY,
     fontSize: `${Math.round(fontSize * scale)}px`,
     color: fontColor,
+    align: 'left',
     wordWrap: { width: textBox.width * scale, useAdvancedWrap: true },
     lineSpacing: Math.round(lineSpacing * scale),
   })
@@ -96,7 +116,7 @@ export function createSimpleDialogUi(
     const nameCenterX = dialogLeft + (nameBox.x + nameBox.width / 2) * scale
     const nameCenterY = dialogTop + (nameBox.y + nameBox.height / 2) * scale
     nameLabel = scene.add.text(nameCenterX, nameCenterY, nameText, {
-      fontFamily: '"Pretendard", "Noto Sans KR", "Malgun Gothic", sans-serif',
+      fontFamily: DIALOG_FONT_FAMILY,
       fontSize: `${Math.round(nameFontSize * scale)}px`,
       fontStyle: 'bold',
       color: nameFontColor,

@@ -1,12 +1,12 @@
 ﻿import Phaser from 'phaser'
+import { playSceneBgm } from '@/game/systems/sceneBgm'
 import {
-  calculateAverageCompletionRate,
   createExerciseSession,
+  createExerciseSessionMotion,
   listExerciseMotions,
   requestPresignedUploadUrls,
-  toCreateExerciseSessionRequest,
   uploadToPresignedUrl,
-  type CreateExerciseSessionRecord,
+  type CreateExerciseSessionMotionRequest,
   type ExerciseMotion,
   type ExerciseMotionReplayClip,
   type ExerciseType,
@@ -267,11 +267,11 @@ const AI_BASE_URL = (import.meta.env.VITE_AI_BASE_URL ?? 'http://localhost:8001/
 const GYMNASTICS_PLAY_BACKGROUND_TEXTURE_KEY = 'gymnastics-play-background-v3'
 
 const TOP_AI_SEQUENCE: AiMotionSpec[] = [
-  { type: 'top', kind: 'march', exerciseMotionId: 1, targetSteps: 8 },
-  { type: 'top', kind: 'side-step', exerciseMotionId: 2, targetSteps: 8 },
-  { type: 'top', kind: 'diagonal-body-punch', exerciseMotionId: 3, targetSteps: 8 },
-  { type: 'top', kind: 'diagonal-face-punch', exerciseMotionId: 4, targetSteps: 8 },
-  { type: 'top', kind: 'squat', exerciseMotionId: 5, targetSteps: 8 },
+  { type: 'top', kind: 'march', exerciseMotionId: 1, targetSteps: 5 },
+  { type: 'top', kind: 'side-step', exerciseMotionId: 2, targetSteps: 5 },
+  { type: 'top', kind: 'diagonal-body-punch', exerciseMotionId: 3, targetSteps: 5 },
+  { type: 'top', kind: 'diagonal-face-punch', exerciseMotionId: 4, targetSteps: 5 },
+  { type: 'top', kind: 'squat', exerciseMotionId: 5, targetSteps: 5 },
 ]
 
 const DEFAULT_DANIEL_TARGET_HOLD_MS = 10_000
@@ -612,9 +612,13 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
   private motionRecords: LocalExerciseMotionRecord[] = []
   private motionRecorderHandle: ScreenRecorderHandle | null = null
   private pendingMotionUploads: Promise<void>[] = []
+  private sessionIdPromise: Promise<number> | null = null
+  private exerciseSessionPatientProfileId: number | null = null
   private hasSubmittedSession = false
   private saveState: 'idle' | 'saving' | 'success' | 'error' = 'idle'
   private saveRetryButton?: Phaser.GameObjects.Text
+  private finishButton?: Phaser.GameObjects.Text
+  private sessionResultPanel?: Phaser.GameObjects.Container
   private lastTtsKey: string | null = null
   private lastTtsPlayedAtMs = 0
   private guideOverlay?: Phaser.GameObjects.Container
@@ -663,6 +667,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
   }
 
   create() {
+    playSceneBgm(this)
     const { width: vw, height: vh } = this.scale
     this.phase = 'GUIDE_PREVIEW'
     this.motionIndex = 0
@@ -690,6 +695,8 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     this.motionRecords = []
     this.motionRecorderHandle = null
     this.pendingMotionUploads = []
+    this.sessionIdPromise = null
+    this.exerciseSessionPatientProfileId = null
     this.hasSubmittedSession = false
     this.saveState = 'idle'
     this.lastTtsKey = null
@@ -723,6 +730,92 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.cleanup())
     this.cameras.main.fadeIn(220, 0, 0, 0)
+    this.createFinishButton(vw)
+  }
+
+  private createFinishButton(vw: number) {
+    if (this.finishButton) return
+    this.finishButton = this.add
+      .text(vw - 32, 32, '종료', {
+        fontFamily: 'sans-serif',
+        fontSize: '24px',
+        color: '#ffffff',
+        backgroundColor: '#7c1d1d',
+        padding: { left: 18, right: 18, top: 8, bottom: 8 },
+        fontStyle: '700',
+      })
+      .setOrigin(1, 0)
+      .setDepth(40)
+      .setInteractive({ useHandCursor: true })
+    this.finishButton.on('pointerdown', () => {
+      if (
+        this.hasSubmittedSession ||
+        this.saveState === 'saving' ||
+        this.saveState === 'success' ||
+        this.sessionResultPanel
+      ) {
+        return
+      }
+      void this.finishExerciseSession()
+    })
+  }
+
+  private showSessionResultPanel(motionCount: number, averageAccuracy: number): boolean {
+    if (this.sessionResultPanel) return true
+    this.finishButton?.setVisible(false)
+
+    const { width: vw, height: vh } = this.scale
+    const overlay = this.add.container(vw / 2, vh / 2).setDepth(46)
+    const dim = this.add.rectangle(0, 0, vw, vh, 0x2d1b10, 0.6).setInteractive()
+    const panelWidth = Math.min(vw * 0.5, 520)
+    const panelHeight = Math.min(vh * 0.5, 440)
+    const panel = this.add
+      .rectangle(0, 0, panelWidth, panelHeight, 0xfff5dc, 0.98)
+      .setStrokeStyle(4, 0xd7a750, 0.95)
+    const title = this.add
+      .text(0, -panelHeight * 0.36, '체조 완료', {
+        fontFamily: 'sans-serif',
+        fontSize: '32px',
+        color: '#5a3517',
+        fontStyle: '800',
+      })
+      .setOrigin(0.5)
+    const lines = [
+      `완료한 동작  ${motionCount}개`,
+      `평균 수행률  ${Math.round(averageAccuracy * 100)}%`,
+    ]
+    const stats = this.add
+      .text(0, -panelHeight * 0.06, lines.join('\n'), {
+        fontFamily: 'sans-serif',
+        fontSize: '22px',
+        color: '#4d2d18',
+        align: 'center',
+        lineSpacing: 14,
+      })
+      .setOrigin(0.5)
+    const confirmBtn = this.add
+      .text(0, panelHeight * 0.35, '확인', {
+        fontFamily: 'sans-serif',
+        fontSize: '26px',
+        color: '#ffffff',
+        backgroundColor: '#4d9b5d',
+        padding: { left: 36, right: 36, top: 10, bottom: 10 },
+        fontStyle: '700',
+      })
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: true })
+    confirmBtn.on('pointerdown', () => this.closeSessionResultPanel())
+
+    overlay.add([dim, panel, title, stats, confirmBtn])
+    this.sessionResultPanel = overlay
+    return true
+  }
+
+  private closeSessionResultPanel() {
+    const overlay = this.sessionResultPanel
+    this.sessionResultPanel = undefined
+    overlay?.destroy(true)
+    fadeToScene(this, 'GymnasticsSelectScene')
   }
 
   update() {
@@ -868,9 +961,6 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(12)
 
-    this.createDeleteButton(rightHeaderX + rightHeaderW - headerH / 2, y, headerH, () =>
-      fadeToScene(this, 'GymnasticsSelectScene'),
-    )
     this.updateHeaderStats()
   }
 
@@ -1515,19 +1605,6 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
       width: maxX - minX + 1,
       height: maxY - minY + 1,
     }
-  }
-
-  private createDeleteButton(x: number, y: number, size: number, onClick: () => void) {
-    const bg = this.add
-      .image(0, 0, 'gymnastics-delete-button')
-      .setDisplaySize(size, size)
-      .setDepth(14)
-    const hitArea = this.add.rectangle(0, 0, size, size, 0xffffff, 0).setInteractive({
-      useHandCursor: true,
-    })
-    hitArea.on('pointerdown', onClick)
-
-    return this.add.container(x, y, [bg, hitArea]).setDepth(14)
   }
 
   private createArrowButton(
@@ -3172,8 +3249,8 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
 
     const handle = this.motionRecorderHandle
     this.motionRecorderHandle = null
-    if (handle) {
-      const uploadPromise = (async () => {
+    const persistPromise = (async () => {
+      if (handle) {
         try {
           const rec = await handle.stop()
           const presigned = await requestPresignedUploadUrls({
@@ -3191,9 +3268,47 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
         } catch (error) {
           console.warn('[GymnasticsPlayScene] motion recording upload failed', error)
         }
-      })()
-      this.pendingMotionUploads.push(uploadPromise)
+      }
+      try {
+        const sessionId = await this.ensureExerciseSessionId()
+        await createExerciseSessionMotion(sessionId, this.toMotionRequest(motionRecord))
+      } catch (error) {
+        console.warn('[GymnasticsPlayScene] motion persist failed', error)
+      }
+    })()
+    this.pendingMotionUploads.push(persistPromise)
+  }
+
+  private toMotionRequest(record: LocalExerciseMotionRecord): CreateExerciseSessionMotionRequest {
+    return {
+      exerciseMotionId: record.exerciseMotionId,
+      durationSec: record.durationSec,
+      accuracy: record.completionRate,
+      completedReps: record.completedCount,
+      feedback: record.feedback,
+      ...(record.videoKey ? { videoKey: record.videoKey } : {}),
+      ...(record.thumbKey ? { thumbKey: record.thumbKey } : {}),
+      ...(record.poseReplay ? { poseReplay: record.poseReplay } : {}),
+      ...(record.compactPoseReplay ? { compactPoseReplay: record.compactPoseReplay } : {}),
     }
+  }
+
+  private ensureExerciseSessionId(): Promise<number> {
+    if (!this.sessionIdPromise) {
+      this.sessionIdPromise = (async () => {
+        const patientProfileId = await resolvePatientProfileIdOrFetch()
+        if (!patientProfileId) {
+          throw new Error('환자 정보가 올바르지 않습니다.')
+        }
+        this.exerciseSessionPatientProfileId = patientProfileId
+        const session = await createExerciseSession({
+          patientProfileId,
+          exerciseType: this.exerciseType,
+        })
+        return session.id
+      })()
+    }
+    return this.sessionIdPromise
   }
 
   private normalizeSessionFeedback(feedback: string | null | undefined) {
@@ -3201,25 +3316,13 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     return trimmedFeedback ? trimmedFeedback.slice(0, 255) : '\uC6B4\uB3D9 \uC644\uB8CC'
   }
 
-  private async buildExerciseSessionRecord(): Promise<CreateExerciseSessionRecord> {
-    const patientProfileId = await resolvePatientProfileIdOrFetch()
-    if (!patientProfileId) {
-      throw new Error('환자 정보가 올바르지 않습니다.')
-    }
-
-    const durationSec = this.motionRecords.reduce((total, record) => total + record.durationSec, 0)
-    return {
-      patientProfileId,
-      exerciseType: this.exerciseType,
-      durationSec,
-      averageCompletionRate: calculateAverageCompletionRate(this.motionRecords),
-      motions: this.motionRecords,
-    }
-  }
-
   private async finishExerciseSession() {
     if (this.hasSubmittedSession || this.saveState === 'saving' || this.saveState === 'success')
       return
+
+    // 시범 영상/카운트다운 오버레이 (HTML video 포함) 가 떠 있으면 먼저 정리해야 결과 패널이 위에 보인다.
+    this.clearGuideOverlay()
+    this.clearCountdownOverlay()
 
     this.recordCurrentMotionResult()
     this.hasSubmittedSession = true
@@ -3231,25 +3334,34 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     this.renderSaveState()
 
     try {
+      // 동작 단건 저장이 fire-and-forget 으로 진행되었으므로, 남은 persist 들이 끝나길 기다린다.
+      // 한 번도 motion 이 저장 안 됐다면 lazy 생성으로 빈 세션이라도 만들어 둔다.
+      await this.ensureExerciseSessionId()
       if (this.pendingMotionUploads.length > 0) {
         await Promise.allSettled(this.pendingMotionUploads)
         this.pendingMotionUploads = []
       }
-      const payload = toCreateExerciseSessionRequest(await this.buildExerciseSessionRecord())
-      const savedSession = await createExerciseSession(payload)
       this.saveState = 'success'
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: [EXERCISE_SESSIONS_QUERY_KEY, savedSession.patientProfileId],
-        }),
-        queryClient.invalidateQueries({
-          queryKey: [EXERCISE_SESSION_REPORT_QUERY_KEY, savedSession.patientProfileId],
-        }),
-      ])
+      const patientProfileId = this.exerciseSessionPatientProfileId
+      if (patientProfileId) {
+        await Promise.all([
+          queryClient.invalidateQueries({
+            queryKey: [EXERCISE_SESSIONS_QUERY_KEY, patientProfileId],
+          }),
+          queryClient.invalidateQueries({
+            queryKey: [EXERCISE_SESSION_REPORT_QUERY_KEY, patientProfileId],
+          }),
+        ])
+      }
       this.renderSaveState()
-      this.time.delayedCall(1500, () => fadeToScene(this, 'GymnasticsSelectScene'))
+      const motionCount = this.motionRecords.length
+      const averageAccuracy =
+        motionCount === 0
+          ? 0
+          : this.motionRecords.reduce((sum, r) => sum + r.completionRate, 0) / motionCount
+      this.showSessionResultPanel(motionCount, averageAccuracy)
     } catch (error) {
-      console.warn('[GymnasticsPlayScene] Failed to save exercise session.', {
+      console.warn('[GymnasticsPlayScene] Failed to finalize exercise session.', {
         error,
         apiBaseUrl: import.meta.env.VITE_API_BASE_URL,
         hasAccessToken: Boolean(window.localStorage.getItem('wish_access_token')),
@@ -3933,6 +4045,12 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     this.cancelCurrentMotionRecording()
     this.resetCurrentMotionReplay()
     this.pendingMotionUploads = []
+    this.sessionIdPromise = null
+    this.exerciseSessionPatientProfileId = null
+    this.sessionResultPanel?.destroy(true)
+    this.sessionResultPanel = undefined
+    this.finishButton?.destroy()
+    this.finishButton = undefined
   }
 }
 

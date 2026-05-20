@@ -32,6 +32,88 @@
   letter-spacing: 0;
 }
 
+.quickGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+  gap: var(--dash-space-2);
+}
+
+.quickCard {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  min-height: 84px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: #f6f7fc;
+  border: 1px solid var(--dash-color-border);
+  min-width: 0;
+}
+
+.quickCardWarn {
+  background: #fff7f7;
+  border-color: rgba(239, 127, 133, 0.28);
+}
+
+.quickLabel {
+  color: var(--dash-color-text-muted);
+  font-size: 11.5px;
+  font-weight: 800;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.quickValue {
+  color: var(--dash-color-text-strong);
+  font-size: 18px;
+  font-weight: 900;
+  line-height: 1.1;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+.quickHint {
+  color: var(--dash-color-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.35;
+  word-break: keep-all;
+}
+
+.guardianNote {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #f8fbff 0%, #f5f0ff 100%);
+  border: 1px solid rgba(124, 92, 255, 0.1);
+}
+
+.guardianNoteLabel {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--dash-color-primary);
+}
+
+.guardianNote strong {
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.55;
+  color: var(--dash-color-text-strong);
+  word-break: keep-all;
+}
+
+.guardianNote p {
+  margin: 0;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--dash-color-text-muted);
+  word-break: keep-all;
+}
+
 .summaryCard {
   display: flex;
   flex-direction: column;
@@ -96,6 +178,12 @@
   gap: var(--dash-space-3);
 }
 
+.metricSection {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dash-space-2);
+}
+
 .metricCard {
   position: relative;
   display: flex;
@@ -136,11 +224,11 @@
 }
 
 .metricValue {
-  font-size: 22px;
+  font-size: 20px;
   font-weight: 800;
   color: var(--dash-color-text-strong);
   letter-spacing: 0;
-  line-height: 1;
+  line-height: 1.1;
   white-space: nowrap;
 }
 
@@ -149,7 +237,9 @@
   font-size: 11.5px;
   font-weight: 600;
   margin-top: 4px;
-  white-space: nowrap;
+  line-height: 1.35;
+  white-space: normal;
+  word-break: keep-all;
 }
 
 .metricFoot {
@@ -196,6 +286,9 @@
   background: #f6f7fc;
   border-radius: 14px;
   padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .balanceRow {
@@ -219,11 +312,11 @@
 }
 
 .balanceValue {
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 800;
   color: var(--dash-color-text-strong);
   letter-spacing: 0;
-  line-height: 1;
+  line-height: 1.1;
   white-space: nowrap;
 }
 
@@ -244,35 +337,41 @@
 }
 
 .balanceCenter {
-  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-}
-
-.balanceCenterText {
-  position: absolute;
-  inset: 0;
-  display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  pointer-events: none;
+  gap: 4px;
+  min-width: 118px;
+  padding: 12px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.82);
+  text-align: center;
 }
 
-.balanceCenterValue {
-  font-size: 18px;
+.balanceCenter strong {
+  font-size: 13px;
   font-weight: 800;
   color: var(--dash-color-text-strong);
   letter-spacing: 0;
-  line-height: 1;
+  line-height: 1.25;
+  word-break: keep-all;
 }
 
-.balanceCenterMeta {
-  font-size: 10.5px;
-  font-weight: 500;
+.balanceCenter span {
+  font-size: 11px;
+  font-weight: 600;
   color: var(--dash-color-text-muted);
-  margin-top: 3px;
+  white-space: nowrap;
+}
+
+.balanceSummary {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--dash-color-text-muted);
+  word-break: keep-all;
 }
 
 .insightCard {
@@ -303,6 +402,30 @@
   font-weight: 500;
   color: var(--dash-color-text-muted);
   line-height: 1.55;
+  word-break: keep-all;
+}
+
+.nextAction {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.74);
+  border: 1px solid rgba(124, 92, 255, 0.1);
+}
+
+.nextAction span {
+  font-size: 11.5px;
+  font-weight: 800;
+  color: var(--dash-color-success);
+}
+
+.nextAction strong {
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: 1.45;
+  color: var(--dash-color-text-strong);
   word-break: keep-all;
 }
 
@@ -363,6 +486,10 @@
 }
 
 @media (max-width: 768px) {
+  .quickGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .metricGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: var(--dash-space-2);

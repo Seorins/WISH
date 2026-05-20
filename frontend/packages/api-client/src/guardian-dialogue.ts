@@ -14,7 +14,7 @@ export type GuardianDialogueSessionStatus = 'IN_PROGRESS' | 'FINISHED' | 'ABANDO
 
 export type GuardianDialogueFinishReason = 'COMPLETED' | 'REST_TODAY' | 'TIMEOUT' | null
 
-export type GuardianDialogueGeneratedBy = 'CLAUDE' | 'TEMPLATE' | 'FALLBACK'
+export type GuardianDialogueGeneratedBy = 'CLAUDE' | 'FALLBACK' | 'NPC_SCRIPT'
 
 export type GuardianDialogueChoiceValence = 'POSITIVE' | 'NEUTRAL' | 'NEGATIVE'
 export type GuardianDialogueChoiceTone = 'CALM' | 'TIRED' | 'WORRIED'
@@ -43,6 +43,7 @@ export type GuardianDialogueTurn = {
   questionText: string
   choiceIntentId: string | null
   choiceText: string | null
+  npcResponseText: string | null
   intensity: number | null
   concernFlags: string[]
   protectiveFactors: string[]

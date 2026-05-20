@@ -231,11 +231,23 @@ describe('VillageRealtimeClient', () => {
     client.connect()
     await fake().triggerConnect()
 
-    client.publishPosition({ x: 0.42, y: 0.78, dir: 'left', moving: true })
+    client.publishPosition({
+      x: 0.42,
+      y: 0.78,
+      dir: 'left',
+      moving: true,
+      textureKey: 'character-outfit-man1',
+    })
 
     expect(fake().published).toContainEqual({
       destination: '/app/village.default/position',
-      body: JSON.stringify({ x: 0.42, y: 0.78, dir: 'left', moving: true }),
+      body: JSON.stringify({
+        x: 0.42,
+        y: 0.78,
+        dir: 'left',
+        moving: true,
+        textureKey: 'character-outfit-man1',
+      }),
     })
   })
 
@@ -266,16 +278,32 @@ describe('VillageRealtimeClient', () => {
     const { client, fake } = createClient()
 
     // 미연결 — false 반환 + 송신 없음
-    expect(client.publishPosition({ x: 0.1, y: 0.1, dir: 'down', moving: false })).toBe(false)
+    expect(
+      client.publishPosition({
+        x: 0.1,
+        y: 0.1,
+        dir: 'down',
+        moving: false,
+        textureKey: 'character',
+      }),
+    ).toBe(false)
     expect(fake().published).toEqual([])
 
     // 연결 후 — true 반환 + 송신
     client.connect()
     await fake().triggerConnect()
-    expect(client.publishPosition({ x: 0.2, y: 0.3, dir: 'up', moving: true })).toBe(true)
+    expect(
+      client.publishPosition({
+        x: 0.2,
+        y: 0.3,
+        dir: 'up',
+        moving: true,
+        textureKey: 'character',
+      }),
+    ).toBe(true)
     expect(fake().published).toContainEqual({
       destination: '/app/village.default/position',
-      body: JSON.stringify({ x: 0.2, y: 0.3, dir: 'up', moving: true }),
+      body: JSON.stringify({ x: 0.2, y: 0.3, dir: 'up', moving: true, textureKey: 'character' }),
     })
   })
 

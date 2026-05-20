@@ -1,12 +1,13 @@
 import type { CSSProperties } from 'react'
 import type { ChatCharacter, EmotionTone } from '../data/mock'
+import type { NpcDialogueStatus } from '../hooks'
 import styles from './CharacterSidebar.module.css'
 
 type Props = {
   characters: ChatCharacter[]
   selectedId: string
   onSelect: (id: string) => void
-  tones?: Record<string, EmotionTone | null>
+  statuses?: Record<string, NpcDialogueStatus>
 }
 
 const TONE_LABEL: Record<EmotionTone, string> = {
@@ -21,14 +22,16 @@ const TONE_CLASS: Record<EmotionTone, string> = {
   worried: styles.toneWorried,
 }
 
-export function CharacterSidebar({ characters, selectedId, onSelect, tones }: Props) {
+export function CharacterSidebar({ characters, selectedId, onSelect, statuses }: Props) {
   return (
     <div className={styles.card}>
       <h3 className={styles.title}>대화 캐릭터</h3>
       <div className={styles.list}>
         {characters.map(c => {
           const isActive = c.id === selectedId
-          const resolvedTone = tones?.[c.id] ?? null
+          const status = statuses?.[c.id]
+          const tone = status?.tone ?? null
+          const hasSession = !!status?.hasSession
           return (
             <button
               key={c.id}
@@ -53,10 +56,10 @@ export function CharacterSidebar({ characters, selectedId, onSelect, tones }: Pr
               </span>
               <span className={styles.meta}>
                 <span className={styles.name}>{c.name}</span>
-                {resolvedTone ? (
-                  <span className={`${styles.tone} ${TONE_CLASS[resolvedTone]}`}>
-                    {TONE_LABEL[resolvedTone]}
-                  </span>
+                {tone ? (
+                  <span className={`${styles.tone} ${TONE_CLASS[tone]}`}>{TONE_LABEL[tone]}</span>
+                ) : hasSession ? (
+                  <span className={`${styles.tone} ${styles.toneNeutral}`}>보통</span>
                 ) : (
                   <span className={`${styles.tone} ${styles.toneNone}`}>대화 없음</span>
                 )}

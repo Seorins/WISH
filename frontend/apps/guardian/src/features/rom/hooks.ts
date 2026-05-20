@@ -149,31 +149,31 @@ function buildExcludedSegments(
 
 function buildInsight(group: RomJointGroup, detail: RomJointDetail): string {
   if (!detail.analysisAvailable) {
-    return `${group.name}은 최근 세션에서 분석 가능한 좌표가 부족합니다. 다음 세션에서 카메라 정면과 전신이 보이도록 기록하면 더 안정적으로 확인할 수 있습니다.`
+    return `${group.name}은 최근 체조에서 화면에 충분히 잡히지 않아 움직임을 확인하기 어렵습니다. 다음에는 아이의 전신이 카메라 정면에 보이도록 기록해 주세요.`
   }
   // Backend confidenceThreshold decides frame inclusion; this UI threshold only marks guardian-facing quality warnings.
   if ((detail.confidencePercent ?? 0) < MOVEMENT_ANALYSIS_QUALITY_WARNING_CONFIDENCE_PERCENT) {
-    return `${group.name}은 좌표 신뢰도가 낮은 구간이 있어 해석을 보수적으로 봐야 합니다. 분석 제외 시간이 줄어드는지 먼저 확인하세요.`
+    return `${group.name}은 카메라가 관절 위치를 놓친 구간이 있어 참고용으로만 보는 것이 좋습니다. 잘 안 보인 시간이 줄어드는지 먼저 봐 주세요.`
   }
   if ((detail.coveragePercent ?? 0) < MOVEMENT_ANALYSIS_QUALITY_WARNING_COVERAGE_PERCENT) {
-    return `${group.name}은 전체 세션 중 분석에 사용된 프레임 비율이 낮습니다. 움직임 범위보다 기록 품질을 먼저 확인하는 것이 좋습니다.`
+    return `${group.name}은 화면에 안정적으로 잡힌 시간이 적습니다. 움직임 크기보다 촬영 위치와 조명 상태를 먼저 확인하는 것이 좋습니다.`
   }
   const left = detail.leftRangeDeg
   const right = detail.rightRangeDeg
   if (left !== null && right !== null && Math.abs(left - right) >= 15) {
-    return `${group.name}은 좌우 움직임 범위 차이가 크게 나타났습니다. 어느 한쪽으로만 크게 움직인 동작이 있었는지 확인해 보세요.`
+    return `${group.name}은 왼쪽과 오른쪽의 움직임 차이가 크게 기록됐습니다. 특정 동작에서 한쪽만 더 크게 움직였는지 확인해 보세요.`
   }
-  return `${group.name}은 최근 세션에서 분석 가능한 좌표가 안정적으로 확보되었습니다. 이 값은 의료적 관절 가동 범위가 아니라 운동 중 관절 각도 변화량입니다.`
+  return `${group.name}은 최근 체조에서 비교적 안정적으로 확인됐습니다. 화면의 각도 값은 점수가 아니라 운동 중 관절이 움직인 크기입니다.`
 }
 
 function buildTip(group: RomJointGroup): string {
   const tips: Record<RomJointGroup['id'], string> = {
     elbow:
-      '팔꿈치는 팔 흔들기와 몸통 지르기 동작에서 크게 변합니다. 손목과 어깨가 화면 밖으로 나가면 범위가 작게 잡힐 수 있습니다.',
+      '팔꿈치는 팔 흔들기와 몸통 지르기 동작에서 크게 움직입니다. 손목과 어깨가 화면 밖으로 나가면 실제보다 작게 보일 수 있습니다.',
     shoulder:
-      '어깨는 팔을 들어 올리거나 몸통을 비트는 동작에서 민감합니다. 상체가 화면 중앙에 있는 세션일수록 신뢰도가 높습니다.',
-    hip: '고관절은 걷기, 사이드 스텝, 앉았다 일어서기에서 유의미합니다. 골반과 무릎이 함께 보여야 안정적으로 계산됩니다.',
-    knee: '무릎은 앉았다 일어서기와 제자리 걷기에서 변화가 큽니다. 발목이 가려지면 무릎 각도 계산이 제외될 수 있습니다.',
+      '어깨는 팔을 들어 올리거나 몸통을 비트는 동작에서 많이 움직입니다. 상체가 화면 중앙에 있을수록 더 안정적으로 확인됩니다.',
+    hip: '고관절은 걷기, 사이드 스텝, 앉았다 일어서기에서 의미 있게 보입니다. 골반과 무릎이 함께 보여야 안정적으로 확인됩니다.',
+    knee: '무릎은 앉았다 일어서기와 제자리 걷기에서 변화가 큽니다. 발목이 가려지면 무릎 움직임을 확인하지 못할 수 있습니다.',
   }
   return tips[group.id]
 }

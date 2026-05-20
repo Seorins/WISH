@@ -445,6 +445,18 @@
   color: var(--dash-color-text-muted);
 }
 
+.romCollecting {
+  padding: var(--dash-space-5) var(--dash-space-4);
+  background: var(--dash-color-surface-muted);
+  border-radius: var(--dash-radius-md);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--dash-color-text-muted);
+  line-height: 1.55;
+  text-align: center;
+  margin: 0;
+}
+
 .romHighlight {
   margin-top: var(--dash-space-1);
   padding: 10px 14px;

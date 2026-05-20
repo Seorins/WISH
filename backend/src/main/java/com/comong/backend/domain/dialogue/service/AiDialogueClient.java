@@ -22,9 +22,6 @@ import com.comong.backend.domain.dialogue.entity.NpcName;
  *
  * <p>인자는 모두 primitive/value 만 받는다 — 비동기 스레드는 호출자 트랜잭션 밖에서 실행되므로 JPA 엔티티(lazy 연관)를 직접 들고 들어오면 {@link
  * org.hibernate.LazyInitializationException} 위험. 호출자가 트랜잭션 안에서 미리 unpack 해 넘긴다.
- *
- * <p>주의: 현재 {@link DialogueTurn} 엔티티에 NPC 응답 컬럼이 없어 임베딩 페이로드의 {@code npc_response} 는 빈 문자열로 보낸다.
- * 임베딩 콘텐츠는 질문 + 아이 발화로만 구성되며, RAG 검색의 의미적 매칭은 동작하지만 응답 텍스트는 컨텍스트에 포함되지 않는다. 추후 컬럼 추가 작업에서 보강 예정.
  */
 @Component
 public class AiDialogueClient {
@@ -95,8 +92,11 @@ public class AiDialogueClient {
 
     private static Map<String, Object> toTurnPayload(DialogueTurn turn) {
         return Map.of(
-                "question_text", turn.getQuestionText(),
-                "choice_text", turn.getChoiceText(),
-                "npc_response", "");
+                "question_text",
+                turn.getQuestionText(),
+                "choice_text",
+                turn.getChoiceText(),
+                "npc_response",
+                turn.getNpcResponseText() == null ? "" : turn.getNpcResponseText());
     }
 }

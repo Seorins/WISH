@@ -13,6 +13,7 @@ export type CreateTaekwondoSessionMotionRequest = {
   accuracy: number
   completedReps: number
   feedback: string
+  monstersDefeated: number
   videoKey?: string
   thumbKey?: string
 }
@@ -20,10 +21,11 @@ export type CreateTaekwondoSessionMotionRequest = {
 export type CreateTaekwondoSessionRequest = {
   patientProfileId: number
   poomsae: Poomsae
-  durationSec: number
-  averageAccuracy: number
-  monstersDefeated: number
-  motions: CreateTaekwondoSessionMotionRequest[]
+}
+
+export type BeltPromotionResponse = {
+  fromBelt: string
+  toBelt: string
 }
 
 export type TaekwondoSessionSummary = {
@@ -53,16 +55,17 @@ export type TaekwondoSessionMotionResult = {
 
 export type TaekwondoSessionDetail = TaekwondoSessionSummary & {
   motions: TaekwondoSessionMotionResult[]
-  beltPromotion?: unknown
+  beltPromotion?: BeltPromotionResponse | null
 }
 
-export function calculateTaekwondoAverageAccuracy(motions: CreateTaekwondoSessionMotionRequest[]) {
-  if (motions.length === 0) {
-    return 0
-  }
-
-  const total = motions.reduce((sum, motion) => sum + motion.accuracy, 0)
-  return total / motions.length
+export type TaekwondoSessionMotionSaveResponse = {
+  sessionId: number
+  sessionDurationSec: number
+  sessionAverageAccuracy: number
+  sessionCompletedMotionCount: number
+  sessionMonstersDefeated: number
+  savedMotion: TaekwondoSessionMotionResult
+  beltPromotion: BeltPromotionResponse | null
 }
 
 function clampTaekwondoAccuracy(value: number) {
@@ -83,10 +86,6 @@ function normalizeTaekwondoTargetReps(value: number) {
 
 export function toTaekwondoAccuracy(score: number) {
   return clampTaekwondoAccuracy(score / 100)
-}
-
-export function calculateTaekwondoMonstersDefeated(motions: CreateTaekwondoSessionMotionRequest[]) {
-  return motions.reduce((count, motion) => count + (motion.completedReps > 0 ? 1 : 0), 0)
 }
 
 const MAX_TAEKWONDO_FEEDBACK_LENGTH = 255
@@ -132,11 +131,13 @@ export function toCreateTaekwondoSessionMotionRequest({
   analysis,
   feedbackFallback,
 }: ToCreateTaekwondoSessionMotionRequestParams): CreateTaekwondoSessionMotionRequest {
+  const completedReps = analysis?.passed ? normalizeTaekwondoTargetReps(targetReps) : 0
   return {
     taekwondoMotionId,
     durationSec,
     accuracy: analysis ? toTaekwondoAccuracy(analysis.score) : 0,
-    completedReps: analysis?.passed ? normalizeTaekwondoTargetReps(targetReps) : 0,
+    completedReps,
+    monstersDefeated: completedReps > 0 ? 1 : 0,
     feedback: analysis
       ? formatTaekwondoAiFeedback(analysis, feedbackFallback)
       : feedbackFallback || 'Taekwondo motion analysis was not completed.',
@@ -164,6 +165,34 @@ export async function createTaekwondoSession(
   }
 
   return session
+}
+
+export async function createTaekwondoSessionMotion(
+  sessionId: number,
+  payload: CreateTaekwondoSessionMotionRequest,
+  client: AxiosInstance = apiClient,
+): Promise<TaekwondoSessionMotionSaveResponse> {
+  if (!Number.isInteger(sessionId) || sessionId <= 0) {
+    throw new Error('태권도 세션 ID가 올바르지 않습니다.')
+  }
+
+  const response = await client.post<ApiResponse<TaekwondoSessionMotionSaveResponse | null>>(
+    `/taekwondo-sessions/${sessionId}/motions`,
+    payload,
+    {
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
+    },
+  )
+
+  const saved = response.data.data
+  if (!saved) {
+    throw new Error(response.data.message || 'Failed to save taekwondo motion.')
+  }
+
+  return saved
 }
 
 export type TaekwondoSessionPage = PageResponse<TaekwondoSessionDetail>
