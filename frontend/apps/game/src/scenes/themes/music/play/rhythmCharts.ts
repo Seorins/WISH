@@ -37,12 +37,13 @@ type TwinkleStep = {
 const TWINKLE_BPM = 120
 const TWINKLE_BEAT_MS = 60_000 / TWINKLE_BPM
 const TWINKLE_START_MS = 1_800
-const TWINKLE_DURATION_MS = 27_000
+const TWINKLE_DURATION_MS = 11_000
 
 // 노래 박자(beats)는 그대로 유지하고, 레인만 4개로 골고루 흩뿌림.
 // 같은 레인이 연속으로 오지 않도록 → 손가락 인식 기반 입력에 친화적.
+// "반짝반짝 작은별 아름답게 빛나네" 한 줄만 사용.
 const twinkleSteps: TwinkleStep[] = [
-  // 도-도-솔-솔-라-라-솔
+  // 반짝반짝 작은별 (도-도-솔-솔-라-라-솔)
   { lane: 0, beats: 1 },
   { lane: 2, beats: 1 },
   { lane: 1, beats: 1 },
@@ -50,39 +51,7 @@ const twinkleSteps: TwinkleStep[] = [
   { lane: 0, beats: 1 },
   { lane: 2, beats: 1 },
   { lane: 1, beats: 2 },
-  // 파-파-미-미-레-레-도
-  { lane: 3, beats: 1 },
-  { lane: 1, beats: 1 },
-  { lane: 2, beats: 1 },
-  { lane: 0, beats: 1 },
-  { lane: 1, beats: 1 },
-  { lane: 3, beats: 1 },
-  { lane: 2, beats: 2 },
-  // 솔-솔-파-파-미-미-레
-  { lane: 0, beats: 1 },
-  { lane: 1, beats: 1 },
-  { lane: 2, beats: 1 },
-  { lane: 3, beats: 1 },
-  { lane: 2, beats: 1 },
-  { lane: 1, beats: 1 },
-  { lane: 0, beats: 2 },
-  // 솔-솔-파-파-미-미-레
-  { lane: 3, beats: 1 },
-  { lane: 2, beats: 1 },
-  { lane: 1, beats: 1 },
-  { lane: 0, beats: 1 },
-  { lane: 1, beats: 1 },
-  { lane: 2, beats: 1 },
-  { lane: 3, beats: 2 },
-  // 도-도-솔-솔-라-라-솔
-  { lane: 0, beats: 1 },
-  { lane: 2, beats: 1 },
-  { lane: 1, beats: 1 },
-  { lane: 3, beats: 1 },
-  { lane: 0, beats: 1 },
-  { lane: 2, beats: 1 },
-  { lane: 1, beats: 2 },
-  // 파-파-미-미-레-레-도
+  // 아름답게 빛나네 (파-파-미-미-레-레-도)
   { lane: 3, beats: 1 },
   { lane: 1, beats: 1 },
   { lane: 2, beats: 1 },
