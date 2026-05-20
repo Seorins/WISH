@@ -3,6 +3,8 @@ package com.comong.backend.domain.dialogue.dto;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import com.comong.backend.domain.dialogue.catalog.model.ChoiceTone;
+import com.comong.backend.domain.dialogue.catalog.model.ChoiceValence;
 import com.comong.backend.domain.dialogue.entity.DialogueFinishReason;
 import com.comong.backend.domain.dialogue.entity.DialogueSession;
 import com.comong.backend.domain.dialogue.entity.DialogueStatus;
@@ -20,6 +22,13 @@ public record SessionDetailResponse(
         DialogueFinishReason finishReason,
         LocalDateTime startedAt,
         LocalDateTime endedAt,
+        ChoiceValence emotionValence,
+        ChoiceTone emotionTone,
+        Short emotionIntensity,
+        List<String> emotionConcernFlags,
+        List<String> emotionProtectiveFactors,
+        String guardianMessage,
+        LocalDateTime emotionAnalyzedAt,
         List<TurnDetailResponse> turns) {
 
     public static SessionDetailResponse from(DialogueSession session, List<DialogueTurn> turns) {
@@ -33,6 +42,13 @@ public record SessionDetailResponse(
                 session.getFinishReason(),
                 session.getStartedAt(),
                 session.getEndedAt(),
+                session.getEmotionValence(),
+                session.getEmotionTone(),
+                session.getEmotionIntensity(),
+                session.getEmotionConcernFlags(),
+                session.getEmotionProtectiveFactors(),
+                session.getGuardianMessage(),
+                session.getEmotionAnalyzedAt(),
                 turns.stream().map(TurnDetailResponse::from).toList());
     }
 }

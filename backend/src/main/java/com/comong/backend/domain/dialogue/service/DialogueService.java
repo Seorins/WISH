@@ -77,6 +77,7 @@ public class DialogueService {
     private final CatalogSceneProvider catalogSceneProvider;
     private final DialogueCatalogService dialogueCatalogService;
     private final AiDialogueClient aiDialogueClient;
+    private final DialogueEmotionAnalysisService dialogueEmotionAnalysisService;
 
     @Transactional
     public StartSessionResponse createSession(Long currentUserId, StartSessionRequest request) {
@@ -302,6 +303,14 @@ public class DialogueService {
                     public void afterCommit() {
                         aiDialogueClient.embedSessionAsync(
                                 patientProfileId, sessionIdValue, npcName, turns);
+                        if (npcName.isLlmDriven()) {
+                            dialogueEmotionAnalysisService.analyzeAndPublishAsync(
+                                    currentUserId,
+                                    patientProfileId,
+                                    sessionIdValue,
+                                    npcName,
+                                    turns);
+                        }
                     }
                 });
 

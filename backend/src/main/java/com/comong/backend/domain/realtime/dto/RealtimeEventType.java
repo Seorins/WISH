@@ -5,5 +5,6 @@ public enum RealtimeEventType {
     GAME_STARTED,
     GAME_ENDED,
     CONTENT_STARTED,
-    CONTENT_ENDED
+    CONTENT_ENDED,
+    DIALOGUE_EMOTION_UPDATED
 }

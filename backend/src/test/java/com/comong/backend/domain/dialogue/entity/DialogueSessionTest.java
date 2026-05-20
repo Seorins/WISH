@@ -4,8 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 
+import java.time.LocalDateTime;
+import java.util.List;
+
 import org.junit.jupiter.api.Test;
 
+import com.comong.backend.domain.dialogue.catalog.model.ChoiceTone;
+import com.comong.backend.domain.dialogue.catalog.model.ChoiceValence;
 import com.comong.backend.domain.patient.entity.PatientProfile;
 
 class DialogueSessionTest {
@@ -134,6 +139,29 @@ class DialogueSessionTest {
         assertThatThrownBy(session::incrementStepCount)
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("IN_PROGRESS");
+    }
+
+    @Test
+    void applyEmotionSummary_setsGuardianSummaryFields() {
+        DialogueSession session = newSession();
+        LocalDateTime analyzedAt = LocalDateTime.now();
+
+        session.applyEmotionSummary(
+                ChoiceValence.NEGATIVE,
+                ChoiceTone.WORRIED,
+                (short) 2,
+                List.of("needs_rest"),
+                List.of("verbal_expression"),
+                "오늘 대화에서 피로감이 표현됐어요.",
+                analyzedAt);
+
+        assertThat(session.getEmotionValence()).isEqualTo(ChoiceValence.NEGATIVE);
+        assertThat(session.getEmotionTone()).isEqualTo(ChoiceTone.WORRIED);
+        assertThat(session.getEmotionIntensity()).isEqualTo((short) 2);
+        assertThat(session.getEmotionConcernFlags()).containsExactly("needs_rest");
+        assertThat(session.getEmotionProtectiveFactors()).containsExactly("verbal_expression");
+        assertThat(session.getGuardianMessage()).isEqualTo("오늘 대화에서 피로감이 표현됐어요.");
+        assertThat(session.getEmotionAnalyzedAt()).isEqualTo(analyzedAt);
     }
 
     private DialogueSession newSession() {

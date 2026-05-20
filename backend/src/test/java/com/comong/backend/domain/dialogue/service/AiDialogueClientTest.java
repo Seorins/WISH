@@ -1,9 +1,11 @@
 package com.comong.backend.domain.dialogue.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 import java.util.List;
+import java.util.Optional;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -32,6 +34,19 @@ class AiDialogueClientTest {
     }
 
     @Test
+    @DisplayName("base-url 비활성화 시 emotion-summary 호출도 생략한다")
+    void skipsEmotionSummaryWhenBaseUrlEmpty() {
+        AiDialogueClient client = new AiDialogueClient(restClient, new AiDialogueProperties("", 5));
+
+        Optional<AiDialogueClient.EmotionSummaryResult> result =
+                client.summarizeEmotion(
+                        7L, 42L, NpcName.YEONGCHEOL, List.of(mock(DialogueTurn.class)));
+
+        assertThat(result).isEmpty();
+        verifyNoInteractions(restClient);
+    }
+
+    @Test
     @DisplayName("turns 가 빈 리스트면 호출 없이 스킵")
     void skipsWhenTurnsEmpty() {
         AiDialogueClient client =
@@ -52,6 +67,20 @@ class AiDialogueClientTest {
 
         client.embedSessionAsync(7L, 7L, NpcName.JOEUN, null);
 
+        verifyNoInteractions(restClient);
+    }
+
+    @Test
+    @DisplayName("emotion-summary turn이 비어 있으면 RestClient 호출을 생략한다")
+    void skipsEmotionSummaryWhenTurnsEmpty() {
+        AiDialogueClient client =
+                new AiDialogueClient(
+                        restClient, new AiDialogueProperties("http://ai-test:8001/api/v1", 5));
+
+        Optional<AiDialogueClient.EmotionSummaryResult> result =
+                client.summarizeEmotion(7L, 42L, NpcName.YEONGCHEOL, List.of());
+
+        assertThat(result).isEmpty();
         verifyNoInteractions(restClient);
     }
 }
