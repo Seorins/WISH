@@ -65,9 +65,9 @@ const PATH_NODES: readonly PathNode[] = [
   // 여고생 이석재 — 분수 위쪽 고정
   { id: 'sok-stand', xRatio: 0.515, yRatio: 0.335 },
   // 조은밤조은꿈 — 건빈 NPC (0.43, 0.31) 오른쪽 작은 산책 루프
-  { id: 'joeun-a', xRatio: 0.47, yRatio: 0.32 },
-  { id: 'joeun-b', xRatio: 0.5, yRatio: 0.33 },
-  { id: 'joeun-c', xRatio: 0.48, yRatio: 0.35 },
+  { id: 'joeun-a', xRatio: 0.505, yRatio: 0.315 },
+  { id: 'joeun-b', xRatio: 0.535, yRatio: 0.315 },
+  { id: 'joeun-c', xRatio: 0.52, yRatio: 0.345 },
 ]
 
 /** 각 봇 루프 내부 edge — 다른 봇 영역과 절대 연결 안 됨. */
@@ -279,15 +279,26 @@ export class VillageBotsController {
   }
 
   destroy(): void {
+    if (this.destroyed) return
     this.destroyed = true
     for (const bot of this.bots) {
-      bot.sprite.setVelocity(0, 0)
       bot.hopTimer?.remove(false)
       bot.emoteTimer?.remove(false)
-      bot.nameText.destroy()
-      bot.sprite.destroy()
+
+      if (bot.sprite.active && bot.sprite.body) {
+        bot.sprite.body.setVelocity(0, 0)
+        bot.sprite.anims.stop()
+      }
+      if (bot.nameText.active) {
+        bot.nameText.destroy()
+      }
+      if (bot.sprite.active) {
+        bot.sprite.destroy()
+      }
     }
-    this.physicsGroup.clear(false, false)
+    if (this.physicsGroup.scene) {
+      this.physicsGroup.clear(false, false)
+    }
     this.bots.length = 0
   }
 
