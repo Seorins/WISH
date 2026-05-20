@@ -15,6 +15,7 @@ import type {
 } from './types'
 
 const RESPONSE_HOLD_MS = 200
+const DEMO_RESPONSE_DELAY_MS = 2000
 
 export const LIGHTHOUSE_OPENING_WELCOME_LINES = ['안녕, 반가워!']
 
@@ -270,6 +271,8 @@ export function useLighthouseEmotionSession({
       if (demoTurn) {
         npcMessage = demoTurn.npcMessage
         isFallback = true
+        await wait(DEMO_RESPONSE_DELAY_MS)
+        if (!isMountedRef.current || requestSeq !== requestSeqRef.current) return
       } else {
         try {
           const result = await chatWithLighthouseLlm(
