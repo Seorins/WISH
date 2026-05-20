@@ -111,6 +111,7 @@ const GOMOKU_BOARD_INTERACT_RECT = {
 } as const
 const DEFAULT_PLAYER_SPAWN = { xRatio: 0.5, yRatio: 0.3 }
 const JEONGHO_NPC_ID: VillagerNpcId = 'gardener_bear'
+const JEONGHO_NORMAL_KEY = 'village-character-jungho'
 const JEONGHO_ANGRY_KEY = 'village-character-jungho-angry'
 const JEONGHO_ANGRY_PATH = 'images/village/background/character/jungho-angry.png'
 const JEONGHO_FIELD_WARNING_HOLD_MS = 3_000
@@ -179,7 +180,7 @@ const VILLAGE_CHARACTERS: VillageCharacterConfig[] = [
   },
   {
     id: 'gardener_bear',
-    key: 'village-character-jungho',
+    key: JEONGHO_NORMAL_KEY,
     path: 'images/village/background/character/jungho.png',
     dialogFrameKey: 'village-jeongho-dialog-frame',
     dialogFramePath: 'images/npcs/jeongho/dialog-frame.png',
@@ -224,7 +225,6 @@ type JeonghoFieldWarningBubble = {
   container: Phaser.GameObjects.Container
   background: Phaser.GameObjects.Graphics
   text: Phaser.GameObjects.Text
-  angryImage: Phaser.GameObjects.Image
   phase: JeonghoFieldWarningPhase | null
 }
 
@@ -2570,6 +2570,7 @@ export class VillageScene extends Phaser.Scene {
 
   private resetJeonghoFieldWarning() {
     this.jeonghoFieldEnteredAt = null
+    this.setJeonghoNpcTexture(JEONGHO_NORMAL_KEY)
     if (!this.jeonghoFieldWarningBubble) return
 
     this.tweens.killTweensOf(this.jeonghoFieldWarningBubble.container)
@@ -2580,6 +2581,8 @@ export class VillageScene extends Phaser.Scene {
   private showJeonghoFieldWarning(phase: JeonghoFieldWarningPhase) {
     const npc = this.villageNpcs.find(candidate => candidate.id === JEONGHO_NPC_ID)
     if (!npc) return
+
+    this.setJeonghoNpcTexture(phase === 'angry' ? JEONGHO_ANGRY_KEY : JEONGHO_NORMAL_KEY)
 
     const bubble = this.getOrCreateJeonghoFieldWarningBubble()
     bubble.container.setPosition(npc.object.x, npc.object.y - npc.object.displayHeight - 18)
@@ -2608,7 +2611,6 @@ export class VillageScene extends Phaser.Scene {
 
     const container = this.add.container(0, 0).setDepth(40).setVisible(false).setAlpha(0)
     const background = this.add.graphics()
-    const angryImage = this.add.image(0, 0, JEONGHO_ANGRY_KEY).setVisible(false)
     const text = this.add.text(0, 0, '', {
       fontSize: '18px',
       fontFamily: "'Jua', 'Apple SD Gothic Neo', sans-serif",
@@ -2617,16 +2619,22 @@ export class VillageScene extends Phaser.Scene {
       resolution: 2,
     })
 
-    container.add([background, angryImage, text])
+    container.add([background, text])
     this.jeonghoFieldWarningBubble = {
       container,
       background,
       text,
-      angryImage,
       phase: null,
     }
 
     return this.jeonghoFieldWarningBubble
+  }
+
+  private setJeonghoNpcTexture(textureKey: string) {
+    const npc = this.villageNpcs.find(candidate => candidate.id === JEONGHO_NPC_ID)
+    if (!npc || npc.object.texture.key === textureKey) return
+
+    npc.object.setTexture(textureKey)
   }
 
   private layoutJeonghoFieldWarningBubble(
@@ -2634,8 +2642,8 @@ export class VillageScene extends Phaser.Scene {
     phase: JeonghoFieldWarningPhase,
   ) {
     const isAngry = phase === 'angry'
-    const width = isAngry ? 224 : 142
-    const height = isAngry ? 64 : 44
+    const width = isAngry ? 184 : 142
+    const height = 44
     const top = -height - 12
     const radius = 12
 
@@ -2662,21 +2670,11 @@ export class VillageScene extends Phaser.Scene {
     bubble.background.lineTo(10, top + height - 1)
     bubble.background.strokePath()
 
-    bubble.angryImage.setVisible(isAngry)
-    if (isAngry) {
-      bubble.angryImage.setDisplaySize(52, 52).setPosition(-width / 2 + 37, top + height / 2)
-      bubble.text
-        .setText(JEONGHO_FIELD_WARNING_ANGRY_TEXT)
-        .setFontSize(19)
-        .setOrigin(0, 0.5)
-        .setPosition(-width / 2 + 72, top + height / 2)
-    } else {
-      bubble.text
-        .setText(JEONGHO_FIELD_WARNING_TEXT)
-        .setFontSize(18)
-        .setOrigin(0.5, 0.5)
-        .setPosition(0, top + height / 2)
-    }
+    bubble.text
+      .setText(isAngry ? JEONGHO_FIELD_WARNING_ANGRY_TEXT : JEONGHO_FIELD_WARNING_TEXT)
+      .setFontSize(18)
+      .setOrigin(0.5, 0.5)
+      .setPosition(0, top + height / 2)
   }
 
   private updateThemePortalTransitions() {
