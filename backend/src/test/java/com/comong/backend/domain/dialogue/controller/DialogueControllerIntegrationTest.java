@@ -324,6 +324,56 @@ class DialogueControllerIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
+    @DisplayName("등대지기 FREE_INPUT 은 FE 가 분류한 intensity/flags 를 저장")
+    void submitTurn_yeongcheol_freeInputPersistsClientClassifiedMetadata() throws Exception {
+        TestUser user = setupUserWithProfile("free-input-flags@example.com", "free-input-flags");
+        long sessionId = startSession(user, "YEONGCHEOL");
+
+        mockMvc.perform(
+                        post("/dialogue/sessions/{id}/turns", sessionId)
+                                .header("Authorization", "Bearer " + user.token())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(
+                                        """
+                                        {
+                                          "questionText": "How are you feeling today?",
+                                          "selectedChoice": {
+                                            "choiceIntentId": "FREE_INPUT",
+                                            "text": "My belly hurts and I feel dizzy",
+                                            "intensity": 3,
+                                            "concernFlags": ["body_discomfort"],
+                                            "protectiveFactors": ["body_state_named", "verbal_expression"]
+                                          },
+                                          "npcResponseText": "I hear that your belly hurts."
+                                        }
+                                        """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.nextScene").doesNotExist());
+
+        mockMvc.perform(
+                        get(
+                                        "/guardian/patients/{patientProfileId}/dialogue/sessions/{sessionId}",
+                                        user.patientProfileId(),
+                                        sessionId)
+                                .header("Authorization", "Bearer " + user.token()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.turns[0].choiceIntentId").value("FREE_INPUT"))
+                .andExpect(
+                        jsonPath("$.data.turns[0].choiceText")
+                                .value("My belly hurts and I feel dizzy"))
+                .andExpect(
+                        jsonPath("$.data.turns[0].npcResponseText")
+                                .value("I hear that your belly hurts."))
+                .andExpect(jsonPath("$.data.turns[0].intensity").value(3))
+                .andExpect(jsonPath("$.data.turns[0].concernFlags[0]").value("body_discomfort"))
+                .andExpect(
+                        jsonPath("$.data.turns[0].protectiveFactors[0]").value("body_state_named"))
+                .andExpect(
+                        jsonPath("$.data.turns[0].protectiveFactors[1]")
+                                .value("verbal_expression"));
+    }
+
+    @Test
     @DisplayName("등대지기: 화이트리스트 밖 choiceIntentId → 400 DL-006 (S14P31E103-708)")
     void submitTurn_yeongcheol_unknownIntent_returnsBadRequest() throws Exception {
         TestUser user = setupUserWithProfile("unknown@example.com", "unknown-user");

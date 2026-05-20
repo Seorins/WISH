@@ -136,11 +136,11 @@ public class DialogueService {
         List<String> concernFlags;
         List<String> protectiveFactors;
         if (isFreeInput) {
-            // 자유 발화는 catalog 정의가 없는 사용자 발화. 의미 메타데이터는 후속 단계에서
-            // RAG/임베딩 기반으로 다루며 여기서는 텍스트만 적재한다.
-            intensity = 0;
-            concernFlags = List.of();
-            protectiveFactors = List.of();
+            // STT free input has no catalog choice id, so persist the client-classified
+            // signal metadata. Catalog-backed choices below still use BE metadata.
+            intensity = choice.intensity();
+            concernFlags = List.copyOf(choice.concernFlags());
+            protectiveFactors = List.copyOf(choice.protectiveFactors());
         } else {
             LighthouseIntentCatalog.ChoiceIntentMetadata meta =
                     lighthouseIntentCatalog
@@ -160,6 +160,7 @@ public class DialogueService {
                 request.questionText(),
                 choice.choiceIntentId(),
                 choice.text(),
+                request.npcResponseText(),
                 intensity,
                 concernFlags,
                 protectiveFactors,
@@ -196,6 +197,7 @@ public class DialogueService {
                 request.questionText(),
                 def.choiceIntentId(),
                 def.text(),
+                null,
                 (short) def.intensity(),
                 def.concernFlags(),
                 def.protectiveFactors(),
@@ -215,6 +217,7 @@ public class DialogueService {
             String questionText,
             String choiceIntentId,
             String choiceText,
+            String npcResponseText,
             short intensity,
             List<String> concernFlags,
             List<String> protectiveFactors,
@@ -231,6 +234,7 @@ public class DialogueService {
                             .questionText(questionText)
                             .choiceIntentId(choiceIntentId)
                             .choiceText(choiceText)
+                            .npcResponseText(npcResponseText)
                             .intensity(intensity)
                             .concernFlags(concernFlags)
                             .protectiveFactors(protectiveFactors)
