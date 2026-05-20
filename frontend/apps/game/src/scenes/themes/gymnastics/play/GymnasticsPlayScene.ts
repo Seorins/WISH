@@ -267,11 +267,11 @@ const AI_BASE_URL = (import.meta.env.VITE_AI_BASE_URL ?? 'http://localhost:8001/
 const GYMNASTICS_PLAY_BACKGROUND_TEXTURE_KEY = 'gymnastics-play-background-v3'
 
 const TOP_AI_SEQUENCE: AiMotionSpec[] = [
-  { type: 'top', kind: 'march', exerciseMotionId: 1, targetSteps: 8 },
-  { type: 'top', kind: 'side-step', exerciseMotionId: 2, targetSteps: 8 },
-  { type: 'top', kind: 'diagonal-body-punch', exerciseMotionId: 3, targetSteps: 8 },
-  { type: 'top', kind: 'diagonal-face-punch', exerciseMotionId: 4, targetSteps: 8 },
-  { type: 'top', kind: 'squat', exerciseMotionId: 5, targetSteps: 8 },
+  { type: 'top', kind: 'march', exerciseMotionId: 1, targetSteps: 5 },
+  { type: 'top', kind: 'side-step', exerciseMotionId: 2, targetSteps: 5 },
+  { type: 'top', kind: 'diagonal-body-punch', exerciseMotionId: 3, targetSteps: 5 },
+  { type: 'top', kind: 'diagonal-face-punch', exerciseMotionId: 4, targetSteps: 5 },
+  { type: 'top', kind: 'squat', exerciseMotionId: 5, targetSteps: 5 },
 ]
 
 const DEFAULT_DANIEL_TARGET_HOLD_MS = 10_000

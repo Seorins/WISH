@@ -140,6 +140,8 @@ export {
   toCreateTaekwondoSessionMotionRequest,
   toTaekwondoAccuracy,
 } from './taekwondo-sessions'
+export { getTaekwondoProgress } from './taekwondo-progress'
+export type { TaekwondoProgressResponse } from './taekwondo-progress'
 export { aiApiClient, analyzeTaegeuk1Motion } from './taekwondo-ai'
 export type { TaegeukAnalyzeRequest, TaegeukAnalyzeResponse } from './taekwondo-ai'
 export { changeUserRole, listUsers } from './users'
