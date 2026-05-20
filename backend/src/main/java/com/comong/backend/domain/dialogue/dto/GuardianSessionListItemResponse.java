@@ -3,6 +3,8 @@ package com.comong.backend.domain.dialogue.dto;
 import java.time.Duration;
 import java.time.LocalDateTime;
 
+import com.comong.backend.domain.dialogue.catalog.model.ChoiceTone;
+import com.comong.backend.domain.dialogue.catalog.model.ChoiceValence;
 import com.comong.backend.domain.dialogue.entity.DialogueFinishReason;
 import com.comong.backend.domain.dialogue.entity.DialogueSession;
 import com.comong.backend.domain.dialogue.entity.DialogueStatus;
@@ -26,6 +28,11 @@ public record GuardianSessionListItemResponse(
         DialogueFinishReason finishReason,
         LocalDateTime startedAt,
         LocalDateTime endedAt,
+        ChoiceValence emotionValence,
+        ChoiceTone emotionTone,
+        Short emotionIntensity,
+        String guardianMessage,
+        LocalDateTime emotionAnalyzedAt,
         Long durationSeconds) {
 
     public static GuardianSessionListItemResponse from(DialogueSession session) {
@@ -43,6 +50,11 @@ public record GuardianSessionListItemResponse(
                 session.getFinishReason(),
                 session.getStartedAt(),
                 session.getEndedAt(),
+                session.getEmotionValence(),
+                session.getEmotionTone(),
+                session.getEmotionIntensity(),
+                session.getGuardianMessage(),
+                session.getEmotionAnalyzedAt(),
                 duration);
     }
 }

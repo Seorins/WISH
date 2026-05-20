@@ -1,6 +1,7 @@
 package com.comong.backend.domain.dialogue.entity;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Objects;
 
 import jakarta.persistence.Column;
@@ -16,6 +17,11 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
+import com.comong.backend.domain.dialogue.catalog.model.ChoiceTone;
+import com.comong.backend.domain.dialogue.catalog.model.ChoiceValence;
 import com.comong.backend.domain.patient.entity.PatientProfile;
 
 import lombok.AccessLevel;
@@ -75,6 +81,31 @@ public class DialogueSession {
 
     @Column(name = "ended_at")
     private LocalDateTime endedAt;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "emotion_valence", length = 16)
+    private ChoiceValence emotionValence;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "emotion_tone", length = 16)
+    private ChoiceTone emotionTone;
+
+    @Column(name = "emotion_intensity")
+    private Short emotionIntensity;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "emotion_concern_flags", nullable = false, columnDefinition = "jsonb")
+    private List<String> emotionConcernFlags = List.of();
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "emotion_protective_factors", nullable = false, columnDefinition = "jsonb")
+    private List<String> emotionProtectiveFactors = List.of();
+
+    @Column(name = "guardian_message", columnDefinition = "text")
+    private String guardianMessage;
+
+    @Column(name = "emotion_analyzed_at")
+    private LocalDateTime emotionAnalyzedAt;
 
     @Builder
     private DialogueSession(
@@ -139,6 +170,32 @@ public class DialogueSession {
     /** 다음 턴이 들어오면 종료해야 하는 상태인지 (= 마지막 step 이 적재된 상태). */
     public boolean isAtMaxSteps() {
         return stepCount >= maxSteps;
+    }
+
+    public void applyEmotionSummary(
+            ChoiceValence valence,
+            ChoiceTone tone,
+            short intensity,
+            List<String> concernFlags,
+            List<String> protectiveFactors,
+            String guardianMessage,
+            LocalDateTime analyzedAt) {
+        Objects.requireNonNull(valence, "valence must not be null");
+        Objects.requireNonNull(tone, "tone must not be null");
+        if (intensity < 0 || intensity > 3) {
+            throw new IllegalArgumentException("intensity must be in [0, 3]");
+        }
+        this.emotionValence = valence;
+        this.emotionTone = tone;
+        this.emotionIntensity = intensity;
+        this.emotionConcernFlags =
+                concernFlags == null ? List.of() : List.copyOf(concernFlags);
+        this.emotionProtectiveFactors =
+                protectiveFactors == null ? List.of() : List.copyOf(protectiveFactors);
+        this.guardianMessage =
+                guardianMessage == null || guardianMessage.isBlank() ? null : guardianMessage;
+        this.emotionAnalyzedAt =
+                analyzedAt == null ? LocalDateTime.now() : analyzedAt;
     }
 
     private void requireInProgress() {
