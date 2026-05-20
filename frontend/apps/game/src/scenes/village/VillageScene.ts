@@ -341,6 +341,7 @@ type VillageMinimapMarkerHit = {
   bounds: Phaser.Geom.Rectangle
   worldX: number
   worldY: number
+  dot: Phaser.GameObjects.Arc
 }
 
 type VillageMinimapUi =
@@ -421,6 +422,7 @@ export class VillageScene extends Phaser.Scene {
   private fuelNotice: VillageFuelNoticeUi | null = null
   private minimapZoomIndex = 1
   private isMinimapCollapsed = false
+  private hoveredMinimapMarkerIndex: number | null = null
   private hasPendingFuelNotice = false
   private isFuelNoticeOpen = false
   private isFuelInboxNoticeRequestPending = false
@@ -728,6 +730,7 @@ export class VillageScene extends Phaser.Scene {
       createClickTargetMarker(this, pointer.worldX, pointer.worldY)
     })
     this.input.on('pointermove', this.handleObstacleEditorPointerMove, this)
+    this.input.on('pointermove', this.handleMinimapPointerMove, this)
     this.input.on('pointerup', this.handleObstacleEditorPointerUp, this)
     this.input.mouse?.disableContextMenu()
     this.input.keyboard!.on('keydown-E', this.handleNpcInteract, this)
@@ -1152,6 +1155,7 @@ export class VillageScene extends Phaser.Scene {
   }
 
   private createVillageMinimap(worldWidth: number, worldHeight: number) {
+    this.setHoveredMinimapMarker(null)
     if (this.isMinimapCollapsed) {
       this.createCollapsedVillageMinimap(worldWidth, worldHeight)
       return
@@ -1320,6 +1324,7 @@ export class VillageScene extends Phaser.Scene {
         bounds: new Phaser.Geom.Rectangle(x - hitSize / 2, y - hitSize / 2, hitSize, hitSize),
         worldX: marker.targetXRatio * worldWidth,
         worldY: marker.targetYRatio * worldHeight,
+        dot,
       })
     })
 
@@ -1858,6 +1863,44 @@ export class VillageScene extends Phaser.Scene {
       pointer.y >= container.y &&
       pointer.y <= container.y + container.height
     )
+  }
+
+  private handleMinimapPointerMove(pointer: Phaser.Input.Pointer) {
+    if (!this.minimap || this.minimap.collapsed || !this.minimap.container.visible) {
+      this.setHoveredMinimapMarker(null)
+      return
+    }
+    const { container, markerHits } = this.minimap
+    const localX = pointer.x - container.x
+    const localY = pointer.y - container.y
+    let hovered: number | null = null
+    for (let index = 0; index < markerHits.length; index += 1) {
+      if (Phaser.Geom.Rectangle.Contains(markerHits[index].bounds, localX, localY)) {
+        hovered = index
+        break
+      }
+    }
+    this.setHoveredMinimapMarker(hovered)
+  }
+
+  private setHoveredMinimapMarker(index: number | null) {
+    if (this.hoveredMinimapMarkerIndex === index) return
+    const prev = this.hoveredMinimapMarkerIndex
+    if (prev !== null && this.minimap && !this.minimap.collapsed && this.minimap.markerHits[prev]) {
+      this.minimap.markerHits[prev].dot.setScale(1)
+    }
+    if (
+      index !== null &&
+      this.minimap &&
+      !this.minimap.collapsed &&
+      this.minimap.markerHits[index]
+    ) {
+      this.minimap.markerHits[index].dot.setScale(1.4)
+      this.input.setDefaultCursor('pointer')
+    } else {
+      this.input.setDefaultCursor('default')
+    }
+    this.hoveredMinimapMarkerIndex = index
   }
 
   private teleportPlayerToWorld(worldX: number, worldY: number) {
