@@ -28,20 +28,6 @@ const LIGHTHOUSE_IDENTITY = getNpcIdentity('lighthouse_keeper')
 const ACCESS_TOKEN_STORAGE_KEY = 'wish_access_token'
 const DIALOGUE_SESSION_DETAIL_ERROR_MESSAGE = 'Dialogue session detail response is invalid.'
 
-const LIGHTHOUSE_DEMO_CHAT_TURNS: Array<{
-  patterns: RegExp[]
-  npcMessage: string
-}> = [
-  {
-    patterns: [/태권도/, /기분/, /좋/, /어려/],
-    npcMessage: '우와 태권도를 했구나! 그래도 잘하는 걸?',
-  },
-  {
-    patterns: [/띠/, /승급/, /엄마/, /자랑/, /안녕/],
-    npcMessage: '이야~ 멋있구나! 나중에 또 들리렴',
-  },
-]
-
 type LighthouseFreeInputSignal = Required<
   Pick<
     EmotionChoiceViewModel,
@@ -450,16 +436,6 @@ export async function chatWithLighthouseLlm(
   signal?: AbortSignal,
 ): Promise<LighthouseChatResponse> {
   const trimmed = userMessage.trim().slice(0, MAX_USER_MESSAGE_LENGTH)
-  const demoTurn = LIGHTHOUSE_DEMO_CHAT_TURNS.find(turn =>
-    turn.patterns.every(pattern => pattern.test(trimmed)),
-  )
-  if (demoTurn) {
-    return {
-      npcMessage: demoTurn.npcMessage,
-      isFallback: false,
-    }
-  }
-
   const trimmedHistory = conversationHistory.slice(-MAX_CONVERSATION_HISTORY_TURNS)
 
   const response = await fetch(`${AI_BASE_URL}/dialogue/chat`, {
