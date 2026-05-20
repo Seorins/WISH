@@ -25,6 +25,19 @@ const SAFE_ERROR_LINES = ['괜찮아. 잠시 후 다시 이야기해보자.']
 const SAFE_EMPTY_LINE = '괜찮아. 천천히 말해도 된단다.'
 const SAFE_CLOSING_LINES = ['좋아, 오늘도 너의 얘기를 들려줘서 고마워.', '다음에 또 만나자!']
 
+const LIGHTHOUSE_DEMO_CHAT_SCRIPT = [
+  {
+    userMessage: '오늘 태권도 해서 기분이 좋아. 근데 어려웠어ㅜ',
+    npcMessage: '우와 태권도를 했구나! 그래도 잘하는 걸?',
+    endAfterResponse: false,
+  },
+  {
+    userMessage: '나 띠 승급했어!! 엄마한테 자랑하러 갈래! 안녕',
+    npcMessage: '이야~ 멋있구나! 나중에 또 들리렴',
+    endAfterResponse: true,
+  },
+] as const
+
 const initialState: LighthouseEmotionState = {
   sessionId: null,
   status: 'idle',
@@ -58,6 +71,14 @@ function appendHistory(
 ): LighthouseChatHistoryItem[] {
   const merged = [...history, next]
   return merged.slice(-MAX_CONVERSATION_HISTORY_TURNS)
+}
+
+function getDemoTurnIndex(history: LighthouseChatHistoryItem[]) {
+  return history.filter(item => item.role === 'user').length
+}
+
+export function getLighthouseDemoTranscript(stepCount: number): string | undefined {
+  return LIGHTHOUSE_DEMO_CHAT_SCRIPT[stepCount]?.userMessage
 }
 
 export function useLighthouseEmotionSession({
@@ -219,11 +240,12 @@ export function useLighthouseEmotionSession({
   const submitSttInput = useCallback(
     async (transcript: string) => {
       const targetSessionId = sessionIdRef.current
-      const trimmed = transcript.trim().slice(0, MAX_USER_MESSAGE_LENGTH)
+      const historyBeforeUser = conversationHistoryRef.current
+      const demoTurn = LIGHTHOUSE_DEMO_CHAT_SCRIPT[getDemoTurnIndex(historyBeforeUser)]
+      const trimmed = (demoTurn?.userMessage ?? transcript).trim().slice(0, MAX_USER_MESSAGE_LENGTH)
       if (!targetSessionId || trimmed.length === 0) return
 
       const previousQuestion = lastNpcQuestionRef.current
-      const historyBeforeUser = conversationHistoryRef.current
       const historyAfterUser = appendHistory(historyBeforeUser, {
         role: 'user',
         content: trimmed,
@@ -245,20 +267,25 @@ export function useLighthouseEmotionSession({
 
       let npcMessage = ''
       let isFallback = false
-      try {
-        const result = await chatWithLighthouseLlm(
-          patientProfileId,
-          trimmed,
-          historyBeforeUser,
-          controller.signal,
-        )
-        if (!isMountedRef.current || requestSeq !== requestSeqRef.current) return
-        npcMessage = result.npcMessage.trim()
-        isFallback = result.isFallback
-      } catch {
-        if (controller.signal.aborted || !isMountedRef.current) return
-        npcMessage = ''
+      if (demoTurn) {
+        npcMessage = demoTurn.npcMessage
         isFallback = true
+      } else {
+        try {
+          const result = await chatWithLighthouseLlm(
+            patientProfileId,
+            trimmed,
+            historyBeforeUser,
+            controller.signal,
+          )
+          if (!isMountedRef.current || requestSeq !== requestSeqRef.current) return
+          npcMessage = result.npcMessage.trim()
+          isFallback = result.isFallback
+        } catch {
+          if (controller.signal.aborted || !isMountedRef.current) return
+          npcMessage = ''
+          isFallback = true
+        }
       }
 
       if (npcMessage.length === 0) {
@@ -293,8 +320,9 @@ export function useLighthouseEmotionSession({
 
       setState(prev => ({
         ...prev,
-        status: 'showing_response',
-        npcResponseLines: responseLines,
+        status: demoTurn?.endAfterResponse ? 'waiting_final_close' : 'showing_response',
+        npcResponseLines: demoTurn?.endAfterResponse ? [] : responseLines,
+        closingLines: demoTurn?.endAfterResponse ? responseLines : prev.closingLines,
         conversationHistory: historyAfterAssistant,
         currentQuestionText: npcMessage,
         isFallback,

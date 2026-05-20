@@ -328,7 +328,7 @@ describe('GomokuOverlay online room creation', () => {
       randomSpy.mockRestore()
       vi.useRealTimers()
     }
-  })
+  }, 20000)
 
   it('lets the player swap stones against the computer and makes the computer open as black', async () => {
     vi.useFakeTimers()

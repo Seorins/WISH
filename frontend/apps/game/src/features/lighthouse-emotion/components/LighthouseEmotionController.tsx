@@ -6,6 +6,7 @@ import {
   LIGHTHOUSE_LOADING_LINE,
   LIGHTHOUSE_OPENING_SAFE_LINES,
   LIGHTHOUSE_OPENING_WELCOME_LINES,
+  getLighthouseDemoTranscript,
   useLighthouseEmotionSession,
 } from '../useLighthouseEmotionSession'
 import type { LighthouseDialogueStatus } from '../types'
@@ -195,6 +196,7 @@ export function LighthouseEmotionController({
         visible={isAwaitingUserSpeech && !loading}
         disabled={loading}
         onSubmit={handleSttSubmit}
+        scriptedTranscript={getLighthouseDemoTranscript(state.stepCount)}
       />
       {showFinishButton ? (
         <div style={finishButtonAnchorStyle}>
