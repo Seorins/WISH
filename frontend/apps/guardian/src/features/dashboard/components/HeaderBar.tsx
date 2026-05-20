@@ -52,7 +52,7 @@ export function HeaderBar() {
   const { data: patient } = useMyPatient()
   const itemCount = useNotificationStore(s => s.items.length)
 
-  const displayName = patient?.name ?? ''
+  const displayName = patient?.nickname ?? patient?.name ?? ''
   const ageValue = patient?.birthDate ? calcKoreanAge(patient.birthDate) : null
   const displayMeta = patient ? (ageValue != null ? `아이 · ${ageValue}세` : '아이') : ''
 
