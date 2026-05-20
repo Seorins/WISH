@@ -261,6 +261,30 @@ describe('chatWithLighthouseLlm', () => {
     vi.unstubAllGlobals()
   })
 
+  it('returns hardcoded lighthouse demo responses without calling AI chat', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(
+      chatWithLighthouseLlm(7, '오늘 태권도 해서 기분이 좋아. 근데 어려웠어ㅜ', []),
+    ).resolves.toEqual({
+      npcMessage: '우와 태권도를 했구나! 그래도 잘하는 걸?',
+      isFallback: false,
+    })
+
+    await expect(
+      chatWithLighthouseLlm(7, '나 띠 승급했어!! 엄마한테 자랑하러 갈래! 안녕', [
+        { role: 'user', content: '오늘 태권도 해서 기분이 좋아. 근데 어려웠어ㅜ' },
+        { role: 'assistant', content: '우와 태권도를 했구나! 그래도 잘하는 걸?' },
+      ]),
+    ).resolves.toEqual({
+      npcMessage: '이야~ 멋있구나! 나중에 또 들리렴',
+      isFallback: false,
+    })
+
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
   it('calls AI server /dialogue/chat with trimmed message and history', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse({
