@@ -116,13 +116,13 @@ const JEONGHO_ANGRY_KEY = 'village-character-jungho-angry'
 const JEONGHO_ANGRY_PATH = 'images/village/background/character/jungho-angry.png'
 const JEONGHO_FIELD_WARNING_HOLD_MS = 3_000
 const JEONGHO_FIELD_WARNING_FOOT_SAMPLE_RADIUS = 28
-const JEONGHO_FIELD_WARNING_TEXT = '\uBC1F\uC9C0 \uB9D0\uB77C\uACE0!'
-const JEONGHO_FIELD_WARNING_ANGRY_TEXT = '\uBC1F\uC9C0 \uB9D0\uB77C\uB2C8\uAE4C!!!'
+const JEONGHO_FIELD_WARNING_TEXT = '\uAF43\uC744 \uBC1F\uC73C\uBA74 \uC548\uB3FC..'
+const JEONGHO_FIELD_WARNING_ANGRY_TEXT = '\uBC1F\uC9C0 \uB9D0\uB77C\uB2C8\uAE4C!!'
 const JEONGHO_FIELD_WARNING_ZONE_POINTS: RatioPoint[] = [
   { xRatio: 0.575, yRatio: 0.262 },
   { xRatio: 0.63, yRatio: 0.264 },
-  { xRatio: 0.628, yRatio: 0.316 },
-  { xRatio: 0.574, yRatio: 0.314 },
+  { xRatio: 0.628, yRatio: 0.306 },
+  { xRatio: 0.574, yRatio: 0.304 },
 ]
 const MAP_TILE_ROWS = 3
 const MAP_TILE_COLUMNS = 3
@@ -2642,7 +2642,7 @@ export class VillageScene extends Phaser.Scene {
     phase: JeonghoFieldWarningPhase,
   ) {
     const isAngry = phase === 'angry'
-    const width = isAngry ? 184 : 142
+    const width = isAngry ? 184 : 204
     const height = 44
     const top = -height - 12
     const radius = 12
