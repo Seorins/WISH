@@ -20,6 +20,7 @@ public record GomokuRoomResponse(
         GomokuPlayerResponse whitePlayer,
         GomokuStone currentTurn,
         GomokuStone myStone,
+        GomokuViewerRole viewerRole,
         GomokuMatchResult result,
         GomokuEndReason endReason,
         GomokuPlayerResponse winner,
@@ -32,6 +33,8 @@ public record GomokuRoomResponse(
     public static GomokuRoomResponse of(
             GomokuMatch match, List<GomokuMoveRecord> moves, Long myPatientProfileId) {
         GomokuStone myStone = myPatientProfileId == null ? null : match.stoneOf(myPatientProfileId);
+        GomokuViewerRole viewerRole =
+                myStone != null ? GomokuViewerRole.PLAYER : GomokuViewerRole.SPECTATOR;
         return new GomokuRoomResponse(
                 match.getId(),
                 match.getRoomCode(),
@@ -46,6 +49,7 @@ public record GomokuRoomResponse(
                         match.textureKeyOf(match.getWhitePatientProfile())),
                 match.getCurrentTurn(),
                 myStone,
+                viewerRole,
                 match.getResult(),
                 match.getEndReason(),
                 GomokuPlayerResponse.from(

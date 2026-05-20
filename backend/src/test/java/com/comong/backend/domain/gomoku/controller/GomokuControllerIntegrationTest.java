@@ -53,6 +53,7 @@ class GomokuControllerIntegrationTest extends IntegrationTestSupport {
     }
 
     private void cleanAll() {
+        jdbc.execute("DELETE FROM gomoku_chat_messages");
         gomokuMatchRepository.deleteAll();
         patientProfileRepository.deleteAll();
         userRepository.deleteAll();
@@ -581,6 +582,128 @@ class GomokuControllerIntegrationTest extends IntegrationTestSupport {
                 .andExpect(jsonPath("$.data.status").value("FINISHED"))
                 .andExpect(jsonPath("$.data.result").value("BLACK_WIN"))
                 .andExpect(jsonPath("$.data.endReason").value("FIVE"));
+    }
+
+    @Test
+    void openRooms_listsWaitingAndPlayingExcludesFinished() throws Exception {
+        TestUser waitingHost =
+                setupUserWithProfile(
+                        "gomoku-open-waiting@example.com", "open-waiting", "open-waiting");
+        TestUser playingBlack =
+                setupUserWithProfile(
+                        "gomoku-open-playing-black@example.com",
+                        "open-playing-black",
+                        "open-playing-black");
+        TestUser playingWhite =
+                setupUserWithProfile(
+                        "gomoku-open-playing-white@example.com",
+                        "open-playing-white",
+                        "open-playing-white");
+        TestUser viewer =
+                setupUserWithProfile(
+                        "gomoku-open-viewer@example.com", "open-viewer", "open-viewer");
+
+        long waitingRoomId = createWaitingRoom(waitingHost, "FREESTYLE");
+        long playingRoomId = createJoinedRoom(playingBlack, playingWhite, "FREESTYLE");
+
+        mockMvc.perform(get("/gomoku/rooms").header("Authorization", "Bearer " + viewer.token()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content.length()").value(2));
+
+        play(playingBlack.token(), playingRoomId, 7, 7);
+        play(playingWhite.token(), playingRoomId, 0, 0);
+        play(playingBlack.token(), playingRoomId, 7, 8);
+        play(playingWhite.token(), playingRoomId, 0, 1);
+        play(playingBlack.token(), playingRoomId, 7, 9);
+        play(playingWhite.token(), playingRoomId, 0, 2);
+        play(playingBlack.token(), playingRoomId, 7, 10);
+        play(playingWhite.token(), playingRoomId, 0, 3);
+        play(playingBlack.token(), playingRoomId, 7, 11)
+                .andExpect(jsonPath("$.data.status").value("FINISHED"));
+
+        mockMvc.perform(get("/gomoku/rooms").header("Authorization", "Bearer " + viewer.token()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content.length()").value(1))
+                .andExpect(jsonPath("$.data.content[0].id").value(waitingRoomId));
+    }
+
+    @Test
+    void findRoom_allowsSpectatorOnPlayingRoom() throws Exception {
+        TestUser black =
+                setupUserWithProfile("gomoku-spec-black@example.com", "spec-black", "spec-black");
+        TestUser white =
+                setupUserWithProfile("gomoku-spec-white@example.com", "spec-white", "spec-white");
+        TestUser spectator =
+                setupUserWithProfile(
+                        "gomoku-spec-viewer@example.com", "spec-viewer", "spec-viewer");
+
+        long roomId = createJoinedRoom(black, white, "FREESTYLE");
+
+        mockMvc.perform(
+                        get("/gomoku/rooms/{roomId}", roomId)
+                                .header("Authorization", "Bearer " + spectator.token()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.viewerRole").value("SPECTATOR"))
+                .andExpect(jsonPath("$.data.status").value("PLAYING"));
+
+        mockMvc.perform(
+                        get("/gomoku/rooms/{roomId}", roomId)
+                                .header("Authorization", "Bearer " + black.token()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.viewerRole").value("PLAYER"))
+                .andExpect(jsonPath("$.data.myStone").value("BLACK"));
+    }
+
+    @Test
+    void findRoom_rejectsNonParticipantWhenWaiting() throws Exception {
+        TestUser host =
+                setupUserWithProfile("gomoku-wait-host@example.com", "wait-host", "wait-host");
+        TestUser outsider =
+                setupUserWithProfile("gomoku-wait-out@example.com", "wait-out", "wait-out");
+
+        long roomId = createWaitingRoom(host, "FREESTYLE");
+
+        mockMvc.perform(
+                        get("/gomoku/rooms/{roomId}", roomId)
+                                .header("Authorization", "Bearer " + outsider.token()))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("GM-003"));
+    }
+
+    @Test
+    void chat_allowsSpectatorSendDuringPlayAndTagsRole() throws Exception {
+        TestUser black =
+                setupUserWithProfile("gomoku-chat-black@example.com", "chat-black", "chat-black");
+        TestUser white =
+                setupUserWithProfile("gomoku-chat-white@example.com", "chat-white", "chat-white");
+        TestUser spectator =
+                setupUserWithProfile("gomoku-chat-spec@example.com", "chat-spec", "chat-spec");
+
+        long roomId = createJoinedRoom(black, white, "FREESTYLE");
+
+        mockMvc.perform(
+                        post("/gomoku/rooms/{roomId}/messages", roomId)
+                                .header("Authorization", "Bearer " + black.token())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"content\":\"hi\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.senderRole").value("PLAYER"));
+
+        mockMvc.perform(
+                        post("/gomoku/rooms/{roomId}/messages", roomId)
+                                .header("Authorization", "Bearer " + spectator.token())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"content\":\"good game!\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.senderRole").value("SPECTATOR"));
+
+        mockMvc.perform(
+                        get("/gomoku/rooms/{roomId}/messages", roomId)
+                                .header("Authorization", "Bearer " + spectator.token()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(2))
+                .andExpect(jsonPath("$.data[0].senderRole").value("PLAYER"))
+                .andExpect(jsonPath("$.data[1].senderRole").value("SPECTATOR"));
     }
 
     private void finishBlackWin(TestUser black, TestUser white) throws Exception {
