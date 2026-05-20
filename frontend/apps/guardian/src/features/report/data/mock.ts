@@ -35,7 +35,7 @@ function buildParticipation(week: WeekRange, seed: number): ParticipationDay[] {
   })
 }
 
-function buildRomTrends(): RomJointTrend[] {
+export function buildRomTrends(): RomJointTrend[] {
   return [
     {
       joint: '어깨 외전',
