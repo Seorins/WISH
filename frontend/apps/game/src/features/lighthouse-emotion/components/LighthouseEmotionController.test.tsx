@@ -72,7 +72,7 @@ describe('LighthouseEmotionController', () => {
         }),
       }),
     )
-    expect(onTextChange).toHaveBeenCalledWith('오늘 기분 어때 ?')
+    expect(onTextChange).toHaveBeenCalledWith('안녕, 반가워!')
     expect(screen.queryByRole('group', { name: '말하기' })).toBeNull()
   })
 
@@ -104,7 +104,7 @@ describe('LighthouseEmotionController', () => {
     await flushPromises()
     await advanceOpeningToEntry()
 
-    expect(onTextChange).toHaveBeenCalledWith('오늘은 어떻게 지내고 싶니?')
+    expect(onTextChange).toHaveBeenCalledWith('오늘은 기분이 어때?')
     expect(screen.getByRole('group', { name: '말하기' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: '쉬고 싶어요' })).toBeNull()
   })

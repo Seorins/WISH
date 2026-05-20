@@ -173,7 +173,7 @@ const LIGHTHOUSE_FREE_INPUT_SIGNAL_RULES: LighthouseFreeInputSignalRule[] = [
   },
 ]
 
-export const LIGHTHOUSE_ENTRY_QUESTION = '오늘은 어떻게 지내고 싶니?'
+export const LIGHTHOUSE_ENTRY_QUESTION = '오늘은 기분이 어때?'
 
 export const LIGHTHOUSE_ENTRY_CHOICES: EmotionChoiceViewModel[] = [
   {
