@@ -5,6 +5,8 @@ from fastapi import APIRouter, File, UploadFile
 from app.schemas.dialogue import (
     EmbedSessionRequest,
     EmbedSessionResponse,
+    DialogueEmotionSummaryRequest,
+    DialogueEmotionSummaryResponse,
     SearchMemoryRequest,
     SearchMemoryResponse,
     MemoryResult,
@@ -13,6 +15,7 @@ from app.schemas.dialogue_chat import ChatRequest, ChatResponse
 from app.schemas.dialogue_stt import TranscribeResponse
 from app.services.dialogue.vector_store import dialogue_vector_store
 from app.services.dialogue.chat_service import generate_response
+from app.services.dialogue.emotion_service import summarize_dialogue_emotion
 from app.services.dialogue.stt_service import transcribe_audio
 
 router = APIRouter(prefix="/dialogue", tags=["Dialogue RAG"])
@@ -75,6 +78,13 @@ async def chat(request: ChatRequest) -> ChatResponse:
         conversation_history=request.conversation_history,
     )
     return ChatResponse(npc_message=npc_message, is_fallback=is_fallback)
+
+
+@router.post("/emotion-summary", response_model=DialogueEmotionSummaryResponse)
+async def emotion_summary(
+    request: DialogueEmotionSummaryRequest,
+) -> DialogueEmotionSummaryResponse:
+    return await summarize_dialogue_emotion(request)
 
 
 @router.post("/transcribe", response_model=TranscribeResponse)
