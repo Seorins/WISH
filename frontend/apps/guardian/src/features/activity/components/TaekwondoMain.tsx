@@ -154,7 +154,6 @@ export function TaekwondoMain() {
         ) : (
           <>
             <VideoCard motion={selectedMotion} stats={selectedStats} />
-            <DescriptionCard motion={selectedMotion} />
             <StatsCard motion={selectedMotion} stats={selectedStats} />
           </>
         )}
@@ -229,16 +228,6 @@ function VideoCard({ motion, stats }: { motion: TaekwondoMotion; stats: MotionSt
         <span className={styles.tag}>태권도</span>
         <h3 className={styles.motionTitle}>{motion.name}</h3>
       </div>
-    </section>
-  )
-}
-
-function DescriptionCard({ motion }: { motion: TaekwondoMotion }) {
-  const description = motion.description?.trim() || '동작 설명이 곧 추가될 예정이에요.'
-  return (
-    <section className={styles.descCard}>
-      <h3 className={styles.cardTitle}>동작 설명</h3>
-      <p className={styles.descText}>{description}</p>
     </section>
   )
 }
