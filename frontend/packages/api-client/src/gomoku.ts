@@ -6,6 +6,7 @@ export type GomokuRuleSet = 'FREESTYLE' | 'RENJU_LITE'
 export type GomokuMatchStatus = 'WAITING' | 'PLAYING' | 'FINISHED' | 'CANCELLED'
 export type GomokuMatchResult = 'BLACK_WIN' | 'WHITE_WIN' | 'DRAW'
 export type GomokuEndReason = 'FIVE' | 'RESIGN' | 'LEAVE' | 'TIMEOUT' | 'BOARD_FULL'
+export type GomokuViewerRole = 'PLAYER' | 'SPECTATOR'
 
 export type GomokuPlayer = {
   patientProfileId: number
@@ -30,6 +31,7 @@ export type GomokuRoom = {
   whitePlayer: GomokuPlayer | null
   currentTurn: GomokuStone
   myStone: GomokuStone | null
+  viewerRole?: GomokuViewerRole
   result: GomokuMatchResult | null
   endReason: GomokuEndReason | null
   winner: GomokuPlayer | null
@@ -122,6 +124,17 @@ export async function getWaitingGomokuRooms({
   return response.data
 }
 
+export async function getGomokuRooms({
+  page = 0,
+  size = 12,
+  sort = 'createdAt,desc',
+}: GomokuPageParams = {}) {
+  const response = await apiClient.get<ApiResponse<GomokuRoomPage>>('/gomoku/rooms', {
+    params: { page, size, sort },
+  })
+  return response.data
+}
+
 export async function getGomokuRoom(roomId: number) {
   const response = await apiClient.get<ApiResponse<GomokuRoom>>(`/gomoku/rooms/${roomId}`)
   return response.data
@@ -204,6 +217,7 @@ export type GomokuChatMessage = {
   id: number
   senderPatientProfileId: number
   senderNickname: string
+  senderRole?: GomokuViewerRole
   content: string
   createdAt: string
 }

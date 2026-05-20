@@ -3,8 +3,9 @@ import {
   createGomokuRoom,
   getGomokuMessages,
   getGomokuRanking,
+  getGomokuRoom,
+  getGomokuRooms,
   getMyGomokuStats,
-  getWaitingGomokuRooms,
   heartbeatGomokuRoom,
   joinGomokuRoom,
   leaveGomokuRoom,
@@ -119,7 +120,13 @@ const text = {
   join: '\uC785\uC7A5',
   leaveRoom: '\uBC29 \uB098\uAC00\uAE30',
   resign: '\uAE30\uAD8C',
-  waitingRooms: '\uB300\uAE30 \uC911\uC778 \uBC29',
+  roomList: '\uBC29 \uBAA9\uB85D',
+  roomStatusWaiting: '\uB300\uAE30 \uC911',
+  roomStatusPlaying: '\uAC8C\uC784 \uC911',
+  spectate: '\uAD00\uC804',
+  spectateMode: '\uAD00\uC804 \uBAA8\uB4DC',
+  exitSpectate: '\uAD00\uC804 \uB098\uAC00\uAE30',
+  spectatorBadge: '\uAD00\uC804',
   waiting: '\uB300\uAE30',
   waitingOpponent: '\uC0C1\uB300\uB97C \uAE30\uB2E4\uB9AC\uB294 \uC911',
   noOpponent: '\uC544\uC9C1 \uC5C6\uC74C',
@@ -223,7 +230,7 @@ export function GomokuOverlay({
   const [hintMove, setHintMove] = useState<Position | null>(null)
   const [scoreboard, setScoreboard] = useState({ black: 0, white: 0, draw: 0 })
   const [onlineRoom, setOnlineRoom] = useState<GomokuRoom | null>(null)
-  const [waitingRooms, setWaitingRooms] = useState<GomokuRoom[]>([])
+  const [lobbyRooms, setLobbyRooms] = useState<GomokuRoom[]>([])
   const [onlineStats, setOnlineStats] = useState<GomokuStats | null>(null)
   const [onlineRanking, setOnlineRanking] = useState<GomokuRanking | null>(null)
   const [onlineBusy, setOnlineBusy] = useState(false)
@@ -272,6 +279,7 @@ export function GomokuOverlay({
   const onlineRoomId = onlineRoom?.id ?? null
   const onlineRoomStatus = onlineRoom?.status ?? null
   const myOnlineStone = onlineRoom?.myStone ? fromApiStone(onlineRoom.myStone) : null
+  const isOnlineSpectator = onlineRoom?.viewerRole === 'SPECTATOR'
   const onlineStatusMessage = onlineRoom
     ? getOnlineStatusMessage(onlineRoom, myOnlineStone, currentTurn)
     : ''
@@ -323,7 +331,7 @@ export function GomokuOverlay({
     setHintMove(null)
     setScoreboard({ black: 0, white: 0, draw: 0 })
     setOnlineRoom(null)
-    setWaitingRooms([])
+    setLobbyRooms([])
     setOnlineStats(null)
     setOnlineRanking(null)
     setOnlineBusy(false)
@@ -338,6 +346,7 @@ export function GomokuOverlay({
 
   const leaveOnlineRoomSilently = useCallback((room: GomokuRoom | null) => {
     if (!room || room.status === 'FINISHED' || room.status === 'CANCELLED') return
+    if (room.viewerRole === 'SPECTATOR') return
     if (leavingRoomIdsRef.current.has(room.id)) return
 
     leavingRoomIdsRef.current.add(room.id)
@@ -363,11 +372,11 @@ export function GomokuOverlay({
   const loadOnlineDashboard = useCallback(async () => {
     try {
       const [roomsResponse, statsResponse, rankingResponse] = await Promise.all([
-        getWaitingGomokuRooms({ size: 12 }),
+        getGomokuRooms({ size: 12 }),
         getMyGomokuStats(),
         getGomokuRanking(10, 1),
       ])
-      setWaitingRooms(roomsResponse.data?.content ?? [])
+      setLobbyRooms(roomsResponse.data?.content ?? [])
       setOnlineStats(statsResponse.data ?? null)
       setOnlineRanking(rankingResponse.data ?? null)
       setOnlineError('')
@@ -376,9 +385,9 @@ export function GomokuOverlay({
     }
   }, [])
 
-  const refreshOnlineRoom = useCallback(async (roomId: number) => {
+  const refreshOnlineRoom = useCallback(async (roomId: number, asSpectator: boolean) => {
     try {
-      const response = await heartbeatGomokuRoom(roomId)
+      const response = asSpectator ? await getGomokuRoom(roomId) : await heartbeatGomokuRoom(roomId)
       if (!response.data) {
         throw new Error(text.onlineLoadingFailed)
       }
@@ -465,12 +474,18 @@ export function GomokuOverlay({
       if (!(await ensureOnlinePatientProfile())) return
       await loadOnlineDashboard()
       if (onlineRoomId) {
-        await refreshOnlineRoom(onlineRoomId)
+        await refreshOnlineRoom(onlineRoomId, isOnlineSpectator)
       }
     } finally {
       setOnlineBusy(false)
     }
-  }, [ensureOnlinePatientProfile, loadOnlineDashboard, onlineRoomId, refreshOnlineRoom])
+  }, [
+    ensureOnlinePatientProfile,
+    isOnlineSpectator,
+    loadOnlineDashboard,
+    onlineRoomId,
+    refreshOnlineRoom,
+  ])
 
   const handleOnlineJoin = useCallback(
     async (roomId: number) => {
@@ -497,6 +512,26 @@ export function GomokuOverlay({
       }
     },
     [ensureOnlinePatientProfile, loadOnlineDashboard, selectedOnlineOutfit.textureKey],
+  )
+
+  const handleOnlineSpectate = useCallback(
+    async (roomId: number) => {
+      setOnlineBusy(true)
+      try {
+        if (!(await ensureOnlinePatientProfile())) return
+        const response = await getGomokuRoom(roomId)
+        if (!response.data) {
+          throw new Error(text.onlineActionFailed)
+        }
+        setOnlineRoom(response.data)
+        setOnlineError('')
+      } catch (error) {
+        setOnlineError(getApiErrorMessage(error, text.onlineActionFailed))
+      } finally {
+        setOnlineBusy(false)
+      }
+    },
+    [ensureOnlinePatientProfile],
   )
 
   const handleOnlineStart = useCallback(async () => {
@@ -577,6 +612,11 @@ export function GomokuOverlay({
 
   const handleOnlineLeave = useCallback(async () => {
     if (!onlineRoomId) return
+    if (onlineRoom?.viewerRole === 'SPECTATOR') {
+      setOnlineRoom(null)
+      await loadOnlineDashboard()
+      return
+    }
     if (onlineRoom?.status === 'FINISHED' || onlineRoom?.status === 'CANCELLED') {
       setOnlineRoom(null)
       await loadOnlineDashboard()
@@ -819,11 +859,11 @@ export function GomokuOverlay({
     }
 
     const intervalId = window.setInterval(() => {
-      void refreshOnlineRoom(onlineRoomId)
+      void refreshOnlineRoom(onlineRoomId, isOnlineSpectator)
     }, ONLINE_POLL_INTERVAL_MS)
 
     return () => window.clearInterval(intervalId)
-  }, [mode, onlineRoomId, onlineRoomStatus, open, refreshOnlineRoom])
+  }, [isOnlineSpectator, mode, onlineRoomId, onlineRoomStatus, open, refreshOnlineRoom])
 
   useEffect(() => {
     if (!open || mode !== 'online' || onlineRoomStatus !== 'PLAYING') return
@@ -1024,7 +1064,7 @@ export function GomokuOverlay({
                 <>
                   <OnlinePanel
                     room={onlineRoom}
-                    waitingRooms={waitingRooms}
+                    lobbyRooms={lobbyRooms}
                     stats={onlineStats}
                     ranking={onlineRanking}
                     busy={onlineBusy}
@@ -1033,6 +1073,7 @@ export function GomokuOverlay({
                     onRematchRoom={handleOnlineRematch}
                     onRefreshRooms={handleOnlineRefresh}
                     onJoinRoom={handleOnlineJoin}
+                    onSpectateRoom={handleOnlineSpectate}
                   />
                   <OnlineVersusPanel
                     room={onlineRoom}
@@ -1077,40 +1118,62 @@ export function GomokuOverlay({
               <MoveHistory moves={activeMoves} />
               {mode === 'online' ? (
                 <div className="gomoku-actions" aria-label="\uB300\uAD6D \uBA85\uB839">
-                  {canRematchOnlineRoom ? (
-                    <button type="button" onClick={handleOnlineRematch} disabled={onlineBusy}>
-                      {text.nextOnlineGame}
-                    </button>
-                  ) : null}
-                  <button type="button" onClick={handleOnlineRefresh} disabled={onlineBusy}>
-                    {text.refresh}
-                  </button>
-                  {!canRematchOnlineRoom ? (
-                    <button
-                      type="button"
-                      onClick={handleOnlineStart}
-                      disabled={!canStartOnlineRoom || onlineBusy}
-                    >
-                      {text.startRoom}
-                    </button>
-                  ) : null}
-                  {canSwapOnlineStones ? (
-                    <button type="button" onClick={handleOnlineSwapStones} disabled={onlineBusy}>
-                      {text.swapStones}
-                    </button>
-                  ) : null}
-                  {onlineRoom?.status === 'PLAYING' ? (
-                    <button type="button" onClick={handleOnlineResign} disabled={onlineBusy}>
-                      {text.resign}
-                    </button>
-                  ) : null}
-                  <button
-                    type="button"
-                    onClick={handleOnlineLeave}
-                    disabled={!onlineRoom || onlineBusy}
-                  >
-                    {text.leaveRoom}
-                  </button>
+                  {isOnlineSpectator ? (
+                    <>
+                      <span className="gomoku-spectator-badge">{text.spectateMode}</span>
+                      <button type="button" onClick={handleOnlineRefresh} disabled={onlineBusy}>
+                        {text.refresh}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleOnlineLeave}
+                        disabled={!onlineRoom || onlineBusy}
+                      >
+                        {text.exitSpectate}
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      {canRematchOnlineRoom ? (
+                        <button type="button" onClick={handleOnlineRematch} disabled={onlineBusy}>
+                          {text.nextOnlineGame}
+                        </button>
+                      ) : null}
+                      <button type="button" onClick={handleOnlineRefresh} disabled={onlineBusy}>
+                        {text.refresh}
+                      </button>
+                      {!canRematchOnlineRoom ? (
+                        <button
+                          type="button"
+                          onClick={handleOnlineStart}
+                          disabled={!canStartOnlineRoom || onlineBusy}
+                        >
+                          {text.startRoom}
+                        </button>
+                      ) : null}
+                      {canSwapOnlineStones ? (
+                        <button
+                          type="button"
+                          onClick={handleOnlineSwapStones}
+                          disabled={onlineBusy}
+                        >
+                          {text.swapStones}
+                        </button>
+                      ) : null}
+                      {onlineRoom?.status === 'PLAYING' ? (
+                        <button type="button" onClick={handleOnlineResign} disabled={onlineBusy}>
+                          {text.resign}
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        onClick={handleOnlineLeave}
+                        disabled={!onlineRoom || onlineBusy}
+                      >
+                        {text.leaveRoom}
+                      </button>
+                    </>
+                  )}
                 </div>
               ) : (
                 <div className="gomoku-actions" aria-label="\uB300\uAD6D \uBA85\uB839">
@@ -1227,9 +1290,14 @@ function ChatPanel({
               key={message.id}
               className={`gomoku-chat-message ${
                 message.senderPatientProfileId === myPatientProfileId ? 'mine' : 'opponent'
-              }`}
+              }${message.senderRole === 'SPECTATOR' ? ' is-spectator' : ''}`}
             >
-              <span className="gomoku-chat-message-author">{message.senderNickname}</span>
+              <span className="gomoku-chat-message-author">
+                {message.senderNickname}
+                {message.senderRole === 'SPECTATOR' ? (
+                  <em className="gomoku-chat-message-role-badge">{text.spectatorBadge}</em>
+                ) : null}
+              </span>
               <span className="gomoku-chat-message-content">{message.content}</span>
             </div>
           ))
@@ -1584,7 +1652,7 @@ function PracticePlayerCard({
 
 function OnlinePanel({
   room,
-  waitingRooms,
+  lobbyRooms,
   stats,
   ranking,
   busy,
@@ -1592,10 +1660,11 @@ function OnlinePanel({
   onRematchRoom,
   onRefreshRooms,
   onJoinRoom,
+  onSpectateRoom,
   profileNotice,
 }: {
   room: GomokuRoom | null
-  waitingRooms: GomokuRoom[]
+  lobbyRooms: GomokuRoom[]
   stats: GomokuStats | null
   ranking: GomokuRanking | null
   busy: boolean
@@ -1604,6 +1673,7 @@ function OnlinePanel({
   onRematchRoom: () => void
   onRefreshRooms: () => void
   onJoinRoom: (roomId: number) => void
+  onSpectateRoom: (roomId: number) => void
 }) {
   const [activeTab, setActiveTab] = useState<OnlinePanelTab>('rooms')
   const canChooseNextRoom = !room || isClosedOnlineRoom(room)
@@ -1684,29 +1754,50 @@ function OnlinePanel({
               </div>
               {profileNotice ? <p className="gomoku-online-message">{profileNotice}</p> : null}
 
-              <div className="gomoku-room-list" aria-label={text.waitingRooms}>
-                <h3>{text.waitingRooms}</h3>
-                {waitingRooms.length === 0 ? (
+              <div className="gomoku-room-list" aria-label={text.roomList}>
+                <h3>{text.roomList}</h3>
+                {lobbyRooms.length === 0 ? (
                   <p>{text.noRooms}</p>
                 ) : (
-                  waitingRooms.map(waitingRoom => (
-                    <div className="gomoku-room-row" key={waitingRoom.id}>
-                      <div>
-                        <strong>{waitingRoom.blackPlayer.nickname}</strong>
-                        <span>
-                          {waitingRoom.roomCode} ·{' '}
-                          {formatRuleSet(fromApiRuleSet(waitingRoom.ruleSet))}
-                        </span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => onJoinRoom(waitingRoom.id)}
-                        disabled={busy}
+                  lobbyRooms.map(lobbyRoom => {
+                    const isPlaying = lobbyRoom.status === 'PLAYING'
+                    const opponentNickname = lobbyRoom.whitePlayer?.nickname ?? null
+                    return (
+                      <div
+                        className={`gomoku-room-row${isPlaying ? ' is-playing' : ''}`}
+                        key={lobbyRoom.id}
                       >
-                        {text.join}
-                      </button>
-                    </div>
-                  ))
+                        <div>
+                          <strong>
+                            {lobbyRoom.blackPlayer.nickname}
+                            {opponentNickname ? ` vs ${opponentNickname}` : ''}
+                          </strong>
+                          <span>
+                            <em
+                              className={`gomoku-room-status-badge ${
+                                isPlaying ? 'is-playing' : 'is-waiting'
+                              }`}
+                            >
+                              {isPlaying ? text.roomStatusPlaying : text.roomStatusWaiting}
+                            </em>
+                            {' · '}
+                            {lobbyRoom.roomCode}
+                            {' · '}
+                            {formatRuleSet(fromApiRuleSet(lobbyRoom.ruleSet))}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            isPlaying ? onSpectateRoom(lobbyRoom.id) : onJoinRoom(lobbyRoom.id)
+                          }
+                          disabled={busy}
+                        >
+                          {isPlaying ? text.spectate : text.join}
+                        </button>
+                      </div>
+                    )
+                  })
                 )}
               </div>
             </>

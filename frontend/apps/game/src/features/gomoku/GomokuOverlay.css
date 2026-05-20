@@ -450,6 +450,24 @@
   font-size: 11px;
   color: #45625b;
   font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.gomoku-chat-message-role-badge {
+  display: inline-block;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: rgba(112, 73, 191, 0.18);
+  color: #5a3da6;
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.gomoku-chat-message.is-spectator {
+  border-style: dashed;
 }
 
 .gomoku-chat-message-content {
@@ -805,6 +823,18 @@
   background: linear-gradient(180deg, rgba(245, 248, 239, 0) 0%, #f5f8ef 36%, #f5f8ef 100%);
 }
 
+.gomoku-spectator-badge {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(112, 73, 191, 0.18);
+  color: #5a3da6;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
 .gomoku-segmented button.active,
 .gomoku-timer-options button.active,
 .gomoku-online-tabs button.active {
@@ -1145,6 +1175,28 @@
   border-radius: 8px;
   background: #eef5ee;
   padding: 7px;
+}
+
+.gomoku-room-row.is-playing {
+  background: #f1ecfb;
+}
+
+.gomoku-room-status-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  font-style: normal;
+  letter-spacing: 0.02em;
+  margin-right: 2px;
+  background: rgba(58, 138, 76, 0.18);
+  color: #2f6a3c;
+}
+
+.gomoku-room-status-badge.is-playing {
+  background: rgba(112, 73, 191, 0.18);
+  color: #5a3da6;
 }
 
 .gomoku-room-row div {
