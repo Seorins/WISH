@@ -1901,8 +1901,8 @@
       "topicKeywords": ["가족"], "sentimentWords": [],
       "endingType": "ASK_ADULT_FIRST",
       "endingNpcLines": [
-        "엄마한테 '머리 좀 무거워' 한 줄.",
-        "옆에 와주실 거야."
+        "머리 무거운 거 진짜 힘들지.",
+        "엄마 옆에 가서 잠깐 누워봐. 엄마도 그 마음 들으면 옆에 와주실걸."
       ],
       "closingLine": "또 와."
     },
@@ -1915,8 +1915,8 @@
       "topicKeywords": ["의료진"], "sentimentWords": [],
       "endingType": "ASK_MEDICAL_FIRST",
       "endingNpcLines": [
-        "(가까이 와서 작은 목소리로) 좋은 선택.",
-        "같이 가서 짚어드리자."
+        "(가까이 와서 작은 목소리로) 잘 결정했어.",
+        "혼자 가기 무서우면 조은이가 옆에서 같이 갈게."
       ],
       "closingLine": "또 와줘."
     },
@@ -1958,8 +1958,8 @@
       "topicKeywords": ["시술"], "sentimentWords": [],
       "endingType": "ASK_MEDICAL_FIRST",
       "endingNpcLines": [
-        "'순서 한 번 알려주세요' 라고.",
-        "조은이가 종이에 같이 적어줄게."
+        "모르는 게 제일 무섭지.",
+        "조은이가 종이에 순서 같이 적어줄게. 한 단계씩 보면 마음 가벼워져."
       ],
       "closingLine": "또 와줘."
     },
@@ -1986,7 +1986,8 @@
       "topicKeywords": ["의료진"], "sentimentWords": [],
       "endingType": "ASK_MEDICAL_FIRST",
       "endingNpcLines": [
-        "응. '오늘 좀 무거워요' 같이 짧은 한 줄이면 돼."
+        "말로 알리는 거, 진짜 잘하는 거야.",
+        "조은이도 처음엔 그렇게 배웠어. '오늘 좀 무거워요' 같이 짧은 한 줄이면 돼."
       ],
       "closingLine": "또 와."
     },
@@ -2048,8 +2049,8 @@
       "topicKeywords": ["가족"], "sentimentWords": [],
       "endingType": "ASK_ADULT_FIRST",
       "endingNpcLines": [
-        "엄마한테 '오늘 좀 옆에 있어줘' 한 줄.",
-        "짧게도 잘 전해져."
+        "엄마 옆은 진짜 안전한 자리지.",
+        "가서 잠깐 기대 있어. 마음이 천천히 가라앉을 거야."
       ],
       "closingLine": "또 와."
     },
@@ -2104,8 +2105,8 @@
       "topicKeywords": ["가족"], "sentimentWords": [],
       "endingType": "ASK_ADULT_FIRST",
       "endingNpcLines": [
-        "엄마한테 '같이 자줘' 한 줄.",
-        "옆에 있어주실 거야."
+        "엄마 옆에서 자면 잠도 더 푹 와.",
+        "가서 슬쩍 손 잡아봐. 같이 누워줄걸."
       ],
       "closingLine": "또 와."
     },
@@ -2119,8 +2120,8 @@
       "sentimentWords": [{"phrase": "빙빙 돌아요", "tone": "NEGATIVE"}],
       "endingType": "ASK_MEDICAL_FIRST",
       "endingNpcLines": [
-        "(노트 펼치며) 그건 바로 알려야 해.",
-        "조은이가 지금 같이 선생님께 갈게."
+        "지금 어지러운 거 그냥 두지 말자.",
+        "조은이 손 잡고, 천천히 일어나서 같이 가자."
       ],
       "closingLine": "오늘 와줘서 고마워."
     },
@@ -2133,8 +2134,8 @@
       "topicKeywords": ["어지러움"], "sentimentWords": [],
       "endingType": "ASK_MEDICAL_FIRST",
       "endingNpcLines": [
-        "그래도 한 번 짚어드리자.",
-        "혹시 약 먹은 시간이랑 관련 있는지도 같이 보자."
+        "잠깐도 몸이 보내는 신호니까 지나치진 말자.",
+        "물 한 모금 마시고 5분만 앉아 있어봐. 그래도 또 그러면 조은이한테 와줘."
       ],
       "closingLine": "또 와."
     },
@@ -2147,8 +2148,8 @@
       "topicKeywords": ["어지러움"], "sentimentWords": [],
       "endingType": "ASK_MEDICAL_FIRST",
       "endingNpcLines": [
-        "조금이라도 알려두는 게 안전해.",
-        "함께 가서 한 줄만 전하자."
+        "조금이어도 알아두는 게 좋아.",
+        "잠깐 앉아서 천천히 숨 쉬어봐. 가라앉지 않으면 조은이한테 알려줘."
       ],
       "closingLine": "또 와."
     },
@@ -2236,8 +2237,8 @@
       "topicKeywords": ["가족"], "sentimentWords": [],
       "endingType": "ASK_HELP_FIRST",
       "endingNpcLines": [
-        "엄마랑 같이 있으면 더 든든해.",
-        "손 잡고 가도 돼."
+        "엄마 손이 닿으면 마음 한결 가벼워지지.",
+        "둘이서 물어보면 들은 거 더 잘 기억나."
       ],
       "closingLine": "또 와."
     },
@@ -2250,8 +2251,8 @@
       "topicKeywords": ["의료진"], "sentimentWords": [],
       "endingType": "ASK_MEDICAL_FIRST",
       "endingNpcLines": [
-        "조은이 아는 만큼 알려줄게.",
-        "모르는 건 같이 적어두고 선생님께 가자."
+        "(노트 펼치며) 조은이 아는 만큼 알려줄게.",
+        "모르는 건 같이 적어두자. 다음에 선생님 만날 때 같이 가져가면 돼."
       ],
       "closingLine": "같이 갈래?"
     },
@@ -2265,7 +2266,7 @@
       "endingType": "ASK_MEDICAL_FIRST",
       "endingNpcLines": [
         "(끄덕) 짧고 좋아.",
-        "그 한 줄이면 선생님이 다 풀어주셔."
+        "오늘 무슨 일 있는지 미리 알면 마음이 한결 가벼워질 거야."
       ],
       "closingLine": "또 와."
     },
@@ -2278,8 +2279,8 @@
       "topicKeywords": ["가족"], "sentimentWords": [],
       "endingType": "ASK_HELP_FIRST",
       "endingNpcLines": [
-        "시간 정보는 엄마도 먼저 들으셨을 수 있어.",
-        "엄마랑 같이 한 번 더 정리해보자."
+        "시간 보이면 마음이 좀 잡혀.",
+        "엄마도 시간 들으면 같이 기다려주실 거야."
       ],
       "closingLine": "또 와줘."
     },
@@ -2292,8 +2293,8 @@
       "topicKeywords": ["시술"], "sentimentWords": [],
       "endingType": "ASK_MEDICAL_FIRST",
       "endingNpcLines": [
-        "(작게 끄덕) 그것도 꼭 물어봐.",
-        "진통 방법 있는지 같이 들어보자."
+        "(작게 끄덕) 무서운 거 당연해.",
+        "괜찮아, 아픈 걸 줄이는 방법이 여러 가지 있거든."
       ],
       "closingLine": "또 와."
     },
@@ -4057,8 +4058,8 @@
       "topicKeywords": ["친구"], "sentimentWords": [],
       "endingType": "SOCIAL_CONNECT",
       "endingNpcLines": [
-        "직접 묻는 게 제일 빠르지.",
-        "'학교 요즘 어때?' 한 줄."
+        "(눈 빛내며) 친구도 너 소식 궁금했을걸.",
+        "'학교 요즘 어때?' 한 줄이면 둘 다 신나서 얘기 시작할 거야."
       ],
       "closingLine": "다음에 와서 얘기해."
     },
@@ -4085,8 +4086,8 @@
       "topicKeywords": ["가족", "학교"], "sentimentWords": [],
       "endingType": "ASK_HELP_FIRST",
       "endingNpcLines": [
-        "엄마가 학교 선생님이랑 자주 연락하시거든. 한 줄이면 다 알아봐주실 거야.",
-        "들은 거 다음에 알려줘!"
+        "엄마한테 한 번 슬쩍 물어보면 어떨까?",
+        "의외로 알고 계실지도 몰라!"
       ],
       "closingLine": "또 와!"
     },
@@ -4099,8 +4100,8 @@
       "topicKeywords": ["친구", "학교"], "sentimentWords": [],
       "endingType": "SOCIAL_CONNECT",
       "endingNpcLines": [
-        "(눈 빛내며) 근데 그건 친구가 더 잘 알걸.",
-        "친구한테 한 줄 보내보자. 다인이도 같이."
+        "(눈 빛내며) 그건 친구가 더 잘 알 수도 있어.",
+        "친구한테 한 줄 보내봐. 답장 오면 다인이한테도 알려줘!"
       ],
       "closingLine": "또 와!"
     },
@@ -4113,7 +4114,8 @@
       "topicKeywords": ["가족", "친구"], "sentimentWords": [],
       "endingType": "ASK_HELP_FIRST",
       "endingNpcLines": [
-        "(눈 빛내며) 들으면 마음이 따뜻해질걸."
+        "(눈 빛내며) 친구 안부 들으면 마음 따뜻해지지.",
+        "엄마가 알면 풀어주실 거야. 모르면 같이 친구한테 물어봐도 돼."
       ],
       "closingLine": "또 와!"
     },
@@ -4140,7 +4142,8 @@
       "topicKeywords": ["학교", "가족"], "sentimentWords": [],
       "endingType": "ASK_HELP_FIRST",
       "endingNpcLines": [
-        "(펜 굴리며) 엄마한테 가서 같이 알아보자."
+        "(펜 굴리며) 수업 진도, 나도 가끔 궁금했어.",
+        "엄마가 알면 좀 더 풀어주실지도 몰라."
       ],
       "closingLine": "또 와!"
     },
@@ -4292,8 +4295,8 @@
       "topicKeywords": ["가족", "친구"], "sentimentWords": [],
       "endingType": "ASK_ADULT_FIRST",
       "endingNpcLines": [
-        "엄마가 친구 집에 전해주실 수도 있어.",
-        "같이 부탁하자."
+        "(눈 빛내며) 엄마가 가운데서 전해주면 마음 더 잘 닿더라.",
+        "같이 부탁하면 엄마도 신나서 도와주실걸."
       ],
       "closingLine": "또 와!"
     },
@@ -4333,7 +4336,8 @@
       "topicKeywords": ["가족", "친구"], "sentimentWords": [],
       "endingType": "ASK_ADULT_FIRST",
       "endingNpcLines": [
-        "엄마가 친구 집에 전해주실 수 있어."
+        "(끄덕) 그것도 좋은 방법.",
+        "엄마가 가운데서 전해주면 더 다정하게 가닿거든."
       ],
       "closingLine": "또 와."
     },
@@ -4372,8 +4376,8 @@
       "topicKeywords": ["가족", "친구"], "sentimentWords": [],
       "endingType": "ASK_ADULT_FIRST",
       "endingNpcLines": [
-        "엄마랑 같이 정하자.",
-        "친구도 좋아할걸."
+        "(눈 빛내며) 친구 우리 집 오면 진짜 신나지!",
+        "엄마랑 같이 날짜 정해보자."
       ],
       "closingLine": "또 와!"
     }
