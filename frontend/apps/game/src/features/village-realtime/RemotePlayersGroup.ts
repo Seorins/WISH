@@ -27,9 +27,9 @@ const MOVE_TWEEN_DURATION_MS = 200
 /** 원격 sprite depth 는 VillageScene 의 local player 와 동일하게 두어 자연스러운 레이어링. */
 const REMOTE_SPRITE_DEPTH = 5
 /** 닉네임 텍스트는 sprite 보다 약간 위에 배치. */
-const NAME_VERTICAL_GAP_PX = 8
+export const VILLAGE_PLAYER_NAME_VERTICAL_GAP_PX = 8
 
-const NAME_TEXT_STYLE = {
+export const VILLAGE_PLAYER_NAME_TEXT_STYLE = {
   fontSize: '16px',
   color: '#ffffff',
   stroke: '#000000',
@@ -130,9 +130,9 @@ export class RemotePlayersGroup {
       ? this.options.scene.add
           .text(
             sprite.x,
-            sprite.y - sprite.displayHeight / 2 - NAME_VERTICAL_GAP_PX,
+            sprite.y - sprite.displayHeight / 2 - VILLAGE_PLAYER_NAME_VERTICAL_GAP_PX,
             payload.nickname,
-            NAME_TEXT_STYLE,
+            VILLAGE_PLAYER_NAME_TEXT_STYLE,
           )
           .setOrigin(0.5, 1)
           .setDepth(REMOTE_SPRITE_DEPTH + 1)
@@ -259,6 +259,6 @@ function syncNameText(member: RemoteMember): void {
   if (!member.nameText) return
   member.nameText.setPosition(
     member.sprite.x,
-    member.sprite.y - member.sprite.displayHeight / 2 - NAME_VERTICAL_GAP_PX,
+    member.sprite.y - member.sprite.displayHeight / 2 - VILLAGE_PLAYER_NAME_VERTICAL_GAP_PX,
   )
 }

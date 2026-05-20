@@ -8,12 +8,15 @@ import {
   type PlayerSprite,
 } from '@/game/entities/player'
 import { emitEmoteBubble } from '@/features/village-realtime/emoteBubble'
+import {
+  VILLAGE_PLAYER_NAME_TEXT_STYLE,
+  VILLAGE_PLAYER_NAME_VERTICAL_GAP_PX,
+} from '@/features/village-realtime/RemotePlayersGroup'
 import { VILLAGE_BASE_EMOJIS } from '@/features/village-realtime/types'
 
 const BOT_SPRITE_DEPTH = 5
 const NAME_TEXT_DEPTH = 6
 const EMOTE_DEPTH = 100
-const NAME_VERTICAL_GAP_PX = 8
 const OBSTACLE_FOOT_RADIUS_PX = 8
 const BOT_ARRIVAL_DISTANCE_PX = 5
 const BOT_IDLE_INTERVAL_MS = [400, 1_200] as const
@@ -24,15 +27,6 @@ const BOT_WALK_SPEED_PX_PER_SEC = 70
  * 좌표 확정되면 false 로 바꿔서 다음 빌드에 안 나오게.
  */
 const DEBUG_DRAW_PATH_GRAPH = false
-
-const NAME_TEXT_STYLE = {
-  fontSize: '14px',
-  color: '#fef3c7',
-  stroke: '#000000',
-  strokeThickness: 3,
-  fontFamily: "'Jua', 'Apple SD Gothic Neo', sans-serif",
-  resolution: 2,
-} as const
 
 /**
  * 봇이 사용할 수 있는 부분만 추려낸 obstacle 인터페이스. VillageObstacleManager 와 결합도 낮춤 — 봇 feature 가 마을 모듈에
@@ -384,7 +378,12 @@ export class VillageBotsController {
     this.physicsGroup.add(sprite)
 
     const nameText = this.scene.add
-      .text(x, y - sprite.displayHeight / 2 - NAME_VERTICAL_GAP_PX, config.name, NAME_TEXT_STYLE)
+      .text(
+        x,
+        y - sprite.displayHeight / 2 - VILLAGE_PLAYER_NAME_VERTICAL_GAP_PX,
+        config.name,
+        VILLAGE_PLAYER_NAME_TEXT_STYLE,
+      )
       .setOrigin(0.5, 1)
       .setDepth(NAME_TEXT_DEPTH)
 
@@ -537,7 +536,7 @@ export class VillageBotsController {
   private syncNameText(bot: BotInstance): void {
     bot.nameText.setPosition(
       bot.sprite.x,
-      bot.sprite.y - bot.sprite.displayHeight / 2 - NAME_VERTICAL_GAP_PX,
+      bot.sprite.y - bot.sprite.displayHeight / 2 - VILLAGE_PLAYER_NAME_VERTICAL_GAP_PX,
     )
   }
 }
