@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   chatWithLighthouseLlm,
+  classifyLighthouseFreeInputSignal,
   getDialogueSessionDetail,
   LIGHTHOUSE_ENTRY_QUESTION,
   sanitizeEmotionScene,
@@ -303,13 +304,33 @@ describe('chatWithLighthouseLlm', () => {
   })
 })
 
+describe('classifyLighthouseFreeInputSignal', () => {
+  it('maps free text body discomfort into the same signal shape used by NPC choices', () => {
+    expect(classifyLighthouseFreeInputSignal('My belly hurts and I feel dizzy')).toEqual({
+      choiceIntentId: 'hard_body',
+      intensity: 3,
+      concernFlags: ['body_discomfort'],
+      protectiveFactors: ['body_state_named', 'verbal_expression'],
+    })
+  })
+
+  it('keeps neutral free text as verbal expression metadata', () => {
+    expect(classifyLighthouseFreeInputSignal('I want to talk a little')).toEqual({
+      choiceIntentId: 'entry_talk',
+      intensity: 0,
+      concernFlags: [],
+      protectiveFactors: ['verbal_expression'],
+    })
+  })
+})
+
 describe('submitLighthouseChatTurn', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
     localStorage.clear()
   })
 
-  it('persists the user/assistant pair with FREE_INPUT choice intent', async () => {
+  it('persists the user/assistant pair with FREE_INPUT choice intent and signal metadata', async () => {
     localStorage.setItem('wish_access_token', 'token-1')
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ data: { sessionId: 42 } }))
     vi.stubGlobal('fetch', fetchMock)
@@ -333,9 +354,9 @@ describe('submitLighthouseChatTurn', () => {
           selectedChoice: {
             choiceIntentId: 'FREE_INPUT',
             text: '오늘은 조금 피곤해요',
-            intensity: 0,
-            concernFlags: [],
-            protectiveFactors: [],
+            intensity: 2,
+            concernFlags: ['fatigue_present', 'body_discomfort'],
+            protectiveFactors: ['body_state_named', 'rest_need_named', 'verbal_expression'],
           },
           route: 'free_input',
           npcResponseText: '응, 피곤한 날도 있지.',

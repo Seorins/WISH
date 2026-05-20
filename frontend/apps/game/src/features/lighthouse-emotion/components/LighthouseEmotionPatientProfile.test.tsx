@@ -102,6 +102,6 @@ describe('LighthouseEmotionController patient profile readiness', () => {
       await Promise.resolve()
     })
 
-    expect(onTextChange).toHaveBeenCalledWith('오늘 기분 어때 ?')
+    expect(onTextChange).toHaveBeenCalledWith('안녕, 반가워!')
   })
 })

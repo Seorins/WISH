@@ -16,14 +16,14 @@ import type {
 
 const RESPONSE_HOLD_MS = 200
 
-export const LIGHTHOUSE_OPENING_WELCOME_LINES = ['오늘 기분 어때 ?']
+export const LIGHTHOUSE_OPENING_WELCOME_LINES = ['안녕, 반가워!']
 
-export const LIGHTHOUSE_OPENING_SAFE_LINES = ['여기서는 천천히 쉬어도 괜찮아.']
-export const LIGHTHOUSE_LOADING_LINE = '등대지기가 불빛을 살피고 있어요...'
+export const LIGHTHOUSE_OPENING_SAFE_LINES = ['나는 너의 얘기를 들어주는 등대지기야!']
+export const LIGHTHOUSE_LOADING_LINE = '...'
 
 const SAFE_ERROR_LINES = ['괜찮아. 잠시 후 다시 이야기해보자.']
 const SAFE_EMPTY_LINE = '괜찮아. 천천히 말해도 된단다.'
-const SAFE_CLOSING_LINES = ['오늘은 여기까지 해도 괜찮아.', '등대 불빛은 천천히 쉬고 있을게.']
+const SAFE_CLOSING_LINES = ['좋아, 오늘도 너의 얘기를 들려줘서 고마워.', '다음에 또 만나자!']
 
 const initialState: LighthouseEmotionState = {
   sessionId: null,

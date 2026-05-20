@@ -1,12 +1,11 @@
-import { memo, useEffect, useState, type CSSProperties } from 'react'
+import { memo, useEffect, useRef, useState, type CSSProperties } from 'react'
 import type { ChatMessage, ConversationSummary } from '../data/mock'
 import styles from './ConversationMain.module.css'
 import { WishCharacter3D } from './WishCharacter3D'
 
-const VISIBLE_MAX = 3
 const TICK_MS = 800
 
-/** 가상의 대화 흐름: tick 이 증가할 때마다 messages 를 한 칸씩 슬라이드. 최근 3개만 노출.
+/** 가상의 대화 흐름: tick 이 증가할 때마다 messages 를 한 칸씩 누적 노출.
  *  마지막 메시지가 노출된 뒤로는 더 이상 진행하지 않음 (한 번만 재생). */
 function useStreamingMessages(messages: ChatMessage[]) {
   const [tick, setTick] = useState(0)
@@ -24,8 +23,7 @@ function useStreamingMessages(messages: ChatMessage[]) {
 
   if (messages.length === 0) return []
   const out: Array<ChatMessage & { _streamId: string }> = []
-  const start = Math.max(0, tick - (VISIBLE_MAX - 1))
-  for (let i = start; i <= tick && i < messages.length; i++) {
+  for (let i = 0; i <= tick && i < messages.length; i++) {
     out.push({ ...messages[i], _streamId: `s-${i}` })
   }
   return out
@@ -74,9 +72,17 @@ const StableRightStage = memo(function StableRightStage({
 })
 
 const StreamingBubbles = memo(function StreamingBubbles({ messages }: { messages: ChatMessage[] }) {
+  const scrollerRef = useRef<HTMLDivElement | null>(null)
   const visibleMessages = useStreamingMessages(messages)
+
+  useEffect(() => {
+    const node = scrollerRef.current
+    if (!node) return
+    node.scrollTop = node.scrollHeight
+  }, [visibleMessages.length])
+
   return (
-    <div className={styles.bubbles}>
+    <div ref={scrollerRef} className={styles.bubbles} role="log">
       {visibleMessages.map(m => (
         <div
           key={m._streamId}

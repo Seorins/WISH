@@ -18,5 +18,7 @@ public record SubmitTurnRequest(
                 @NotBlank
                 @Size(max = 1024)
                 String questionText,
-        @Schema(description = "아이가 누른 선택지 정보") @NotNull @Valid
-                SelectedChoiceRequest selectedChoice) {}
+        @Schema(description = "아이가 누른 선택지 정보") @NotNull @Valid SelectedChoiceRequest selectedChoice,
+        @Schema(description = "NPC response text generated after the child answer")
+                @Size(max = 2048)
+                String npcResponseText) {}

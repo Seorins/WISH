@@ -267,11 +267,11 @@ const AI_BASE_URL = (import.meta.env.VITE_AI_BASE_URL ?? 'http://localhost:8001/
 const GYMNASTICS_PLAY_BACKGROUND_TEXTURE_KEY = 'gymnastics-play-background-v3'
 
 const TOP_AI_SEQUENCE: AiMotionSpec[] = [
-  { type: 'top', kind: 'march', exerciseMotionId: 1, targetSteps: 8 },
-  { type: 'top', kind: 'side-step', exerciseMotionId: 2, targetSteps: 8 },
-  { type: 'top', kind: 'diagonal-body-punch', exerciseMotionId: 3, targetSteps: 8 },
-  { type: 'top', kind: 'diagonal-face-punch', exerciseMotionId: 4, targetSteps: 8 },
-  { type: 'top', kind: 'squat', exerciseMotionId: 5, targetSteps: 8 },
+  { type: 'top', kind: 'march', exerciseMotionId: 1, targetSteps: 5 },
+  { type: 'top', kind: 'side-step', exerciseMotionId: 2, targetSteps: 5 },
+  { type: 'top', kind: 'diagonal-body-punch', exerciseMotionId: 3, targetSteps: 5 },
+  { type: 'top', kind: 'diagonal-face-punch', exerciseMotionId: 4, targetSteps: 5 },
+  { type: 'top', kind: 'squat', exerciseMotionId: 5, targetSteps: 5 },
 ]
 
 const DEFAULT_DANIEL_TARGET_HOLD_MS = 10_000
@@ -617,7 +617,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
   private hasSubmittedSession = false
   private saveState: 'idle' | 'saving' | 'success' | 'error' = 'idle'
   private saveRetryButton?: Phaser.GameObjects.Text
-  private finishButton?: Phaser.GameObjects.Text
+  private finishButton?: Phaser.GameObjects.Container
   private sessionResultPanel?: Phaser.GameObjects.Container
   private lastTtsKey: string | null = null
   private lastTtsPlayedAtMs = 0
@@ -735,19 +735,32 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
 
   private createFinishButton(vw: number) {
     if (this.finishButton) return
-    this.finishButton = this.add
-      .text(vw - 32, 32, '종료', {
+    const btnW = 116
+    const btnH = 50
+    const radius = 14
+    const container = this.add.container(vw - 28, 28).setDepth(40)
+    const shadow = this.add.graphics()
+    shadow.fillStyle(0x2d1b10, 0.32)
+    shadow.fillRoundedRect(-btnW + 2, 4, btnW, btnH, radius)
+    const bg = this.add.graphics()
+    bg.fillStyle(0x6b3f1c, 0.96)
+    bg.fillRoundedRect(-btnW, 0, btnW, btnH, radius)
+    bg.lineStyle(2, 0xd6a56d, 0.95)
+    bg.strokeRoundedRect(-btnW, 0, btnW, btnH, radius)
+    const label = this.add
+      .text(-btnW / 2, btnH / 2 - 1, '종료', {
         fontFamily: 'sans-serif',
-        fontSize: '24px',
-        color: '#ffffff',
-        backgroundColor: '#7c1d1d',
-        padding: { left: 18, right: 18, top: 8, bottom: 8 },
-        fontStyle: '700',
+        fontSize: '22px',
+        color: '#ffefc0',
+        fontStyle: '800',
+        stroke: '#3a2110',
+        strokeThickness: 2,
       })
-      .setOrigin(1, 0)
-      .setDepth(40)
+      .setOrigin(0.5)
+    const hitArea = this.add
+      .rectangle(-btnW / 2, btnH / 2, btnW, btnH, 0xffffff, 0)
       .setInteractive({ useHandCursor: true })
-    this.finishButton.on('pointerdown', () => {
+    hitArea.on('pointerdown', () => {
       if (
         this.hasSubmittedSession ||
         this.saveState === 'saving' ||
@@ -758,6 +771,10 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
       }
       void this.finishExerciseSession()
     })
+    hitArea.on('pointerover', () => container.setScale(1.04))
+    hitArea.on('pointerout', () => container.setScale(1))
+    container.add([shadow, bg, label, hitArea])
+    this.finishButton = container
   }
 
   private showSessionResultPanel(motionCount: number, averageAccuracy: number): boolean {
@@ -961,9 +978,6 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(12)
 
-    this.createDeleteButton(rightHeaderX + rightHeaderW - headerH / 2, y, headerH, () =>
-      fadeToScene(this, 'GymnasticsSelectScene'),
-    )
     this.updateHeaderStats()
   }
 
@@ -1608,19 +1622,6 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
       width: maxX - minX + 1,
       height: maxY - minY + 1,
     }
-  }
-
-  private createDeleteButton(x: number, y: number, size: number, onClick: () => void) {
-    const bg = this.add
-      .image(0, 0, 'gymnastics-delete-button')
-      .setDisplaySize(size, size)
-      .setDepth(14)
-    const hitArea = this.add.rectangle(0, 0, size, size, 0xffffff, 0).setInteractive({
-      useHandCursor: true,
-    })
-    hitArea.on('pointerdown', onClick)
-
-    return this.add.container(x, y, [bg, hitArea]).setDepth(14)
   }
 
   private createArrowButton(
@@ -3336,6 +3337,10 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     if (this.hasSubmittedSession || this.saveState === 'saving' || this.saveState === 'success')
       return
 
+    // 시범 영상/카운트다운 오버레이 (HTML video 포함) 가 떠 있으면 먼저 정리해야 결과 패널이 위에 보인다.
+    this.clearGuideOverlay()
+    this.clearCountdownOverlay()
+
     this.recordCurrentMotionResult()
     this.hasSubmittedSession = true
     this.phase = 'SESSION_COMPLETE'
@@ -3412,8 +3417,47 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
     this.requestInFlight = false
     this.recordCurrentMotionResult()
     this.setFeedbackTitle('완료!', { force: true })
+    this.showMotionAdvanceText('성공!')
     this.time.delayedCall(700, () => {
       this.advanceToNextMotion(false)
+    })
+  }
+
+  private showMotionAdvanceText(label: string) {
+    const { width: vw, height: vh } = this.scale
+    const fontSize = Math.round(Phaser.Math.Clamp(vh * 0.16, 80, 200))
+    const text = this.add
+      .text(vw / 2, vh / 2, label, {
+        fontFamily: 'sans-serif',
+        fontSize: `${fontSize}px`,
+        color: '#ffefc0',
+        fontStyle: '900',
+        stroke: '#5a3517',
+        strokeThickness: 10,
+        align: 'center',
+      })
+      .setOrigin(0.5)
+      .setDepth(42)
+      .setAlpha(0)
+      .setScale(0.7)
+    text.setShadow(0, 5, '#000000', 12, false, true)
+    this.tweens.add({
+      targets: text,
+      alpha: 1,
+      scale: 1.12,
+      duration: 180,
+      ease: 'Back.easeOut',
+      onComplete: () => {
+        this.tweens.add({
+          targets: text,
+          alpha: 0,
+          scale: 1,
+          delay: 500,
+          duration: 200,
+          ease: 'Sine.easeIn',
+          onComplete: () => text.destroy(),
+        })
+      },
     })
   }
 
