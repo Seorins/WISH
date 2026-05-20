@@ -111,6 +111,20 @@ const GOMOKU_BOARD_INTERACT_RECT = {
   height: 0.9,
 } as const
 const DEFAULT_PLAYER_SPAWN = { xRatio: 0.5, yRatio: 0.3 }
+const JEONGHO_NPC_ID: VillagerNpcId = 'gardener_bear'
+const JEONGHO_NORMAL_KEY = 'village-character-jungho'
+const JEONGHO_ANGRY_KEY = 'village-character-jungho-angry'
+const JEONGHO_ANGRY_PATH = 'images/village/background/character/jungho-angry.png'
+const JEONGHO_FIELD_WARNING_HOLD_MS = 3_000
+const JEONGHO_FIELD_WARNING_FOOT_SAMPLE_RADIUS = 28
+const JEONGHO_FIELD_WARNING_TEXT = '\uAF43\uC744 \uBC1F\uC73C\uBA74 \uC548\uB3FC..'
+const JEONGHO_FIELD_WARNING_ANGRY_TEXT = '\uBC1F\uC9C0 \uB9D0\uB77C\uB2C8\uAE4C!!'
+const JEONGHO_FIELD_WARNING_ZONE_POINTS: RatioPoint[] = [
+  { xRatio: 0.575, yRatio: 0.262 },
+  { xRatio: 0.63, yRatio: 0.264 },
+  { xRatio: 0.628, yRatio: 0.306 },
+  { xRatio: 0.574, yRatio: 0.304 },
+]
 const MAP_TILE_ROWS = 3
 const MAP_TILE_COLUMNS = 3
 const MAP_TILE_KEYS = Array.from({ length: MAP_TILE_ROWS * MAP_TILE_COLUMNS }, (_, index) => {
@@ -167,7 +181,7 @@ const VILLAGE_CHARACTERS: VillageCharacterConfig[] = [
   },
   {
     id: 'gardener_bear',
-    key: 'village-character-jungho',
+    key: JEONGHO_NORMAL_KEY,
     path: 'images/village/background/character/jungho.png',
     dialogFrameKey: 'village-jeongho-dialog-frame',
     dialogFramePath: 'images/npcs/jeongho/dialog-frame.png',
@@ -204,6 +218,15 @@ const SEHYUN_NPC = {
 type VillageNpcInstance = {
   id: VillagerNpcId
   object: Phaser.GameObjects.Image | Phaser.GameObjects.Sprite
+}
+
+type JeonghoFieldWarningPhase = 'normal' | 'angry'
+
+type JeonghoFieldWarningBubble = {
+  container: Phaser.GameObjects.Container
+  background: Phaser.GameObjects.Graphics
+  text: Phaser.GameObjects.Text
+  phase: JeonghoFieldWarningPhase | null
 }
 
 const VILLAGE_MINIMAP = {
@@ -326,6 +349,8 @@ type VillageMinimapMarker = {
   label: string
   xRatio: number
   yRatio: number
+  targetXRatio: number
+  targetYRatio: number
   color: number
   radius: number
 }
@@ -334,6 +359,13 @@ type VillageMinimapBaseUi = {
   container: Phaser.GameObjects.Container
   worldWidth: number
   worldHeight: number
+}
+
+type VillageMinimapMarkerHit = {
+  bounds: Phaser.Geom.Rectangle
+  worldX: number
+  worldY: number
+  dot: Phaser.GameObjects.Arc
 }
 
 type VillageMinimapUi =
@@ -347,6 +379,7 @@ type VillageMinimapUi =
       playerDot: Phaser.GameObjects.Arc
       zoomOutBounds: Phaser.Geom.Rectangle
       zoomInBounds: Phaser.Geom.Rectangle
+      markerHits: VillageMinimapMarkerHit[]
       mapX: number
       mapY: number
       mapWidth: number
@@ -374,6 +407,14 @@ function setStoredFlag(key: string) {
   } catch {
     // localStorage can be unavailable in private mode; the hint still works for this session.
   }
+}
+
+function createRatioPolygon(points: RatioPoint[], worldWidth: number, worldHeight: number) {
+  return new Phaser.Geom.Polygon(
+    points.map(
+      point => new Phaser.Geom.Point(point.xRatio * worldWidth, point.yRatio * worldHeight),
+    ),
+  )
 }
 
 export class VillageScene extends Phaser.Scene {
@@ -406,6 +447,9 @@ export class VillageScene extends Phaser.Scene {
   private dialogDismissed = false
   private nearestNpcId: VillagerNpcId | null = null
   private activeDialogNpcId: VillagerNpcId | null = null
+  private jeonghoFieldWarningZone?: Phaser.Geom.Polygon
+  private jeonghoFieldEnteredAt: number | null = null
+  private jeonghoFieldWarningBubble: JeonghoFieldWarningBubble | null = null
   private settingsMenu!: ReturnType<typeof createSettingsMenu>
   private interactionHint!: NpcInteractionHintUi
   private villageRealtime: VillageRealtimeIntegration | null = null
@@ -414,6 +458,7 @@ export class VillageScene extends Phaser.Scene {
   private fuelNotice: VillageFuelNoticeUi | null = null
   private minimapZoomIndex = 1
   private isMinimapCollapsed = false
+  private hoveredMinimapMarkerIndex: number | null = null
   private hasPendingFuelNotice = false
   private isFuelNoticeOpen = false
   private isFuelInboxNoticeRequestPending = false
@@ -450,6 +495,7 @@ export class VillageScene extends Phaser.Scene {
     this.load.image(VILLAGE_PHOTO_BOOTH_KEY, assetPath(VILLAGE_PHOTO_BOOTH_PATH))
     this.load.image(VILLAGE_PHOTO_GALLERY_KEY, assetPath(VILLAGE_PHOTO_GALLERY_PATH))
     this.load.image(VILLAGE_GOMOKU_BOARD_KEY, assetPath(VILLAGE_GOMOKU_BOARD_PATH))
+    this.load.image(JEONGHO_ANGRY_KEY, assetPath(JEONGHO_ANGRY_PATH))
     this.load.spritesheet('sehyun', assetPath('images/npcs/sehyun/sprite.png'), {
       frameWidth: 313,
       frameHeight: 313,
@@ -488,6 +534,10 @@ export class VillageScene extends Phaser.Scene {
     this.isGomokuOpen = false
     this.isPhotoGalleryOpen = false
     this.activeDialogNpcId = null
+    this.jeonghoFieldWarningBubble?.container.destroy(true)
+    this.jeonghoFieldWarningBubble = null
+    this.jeonghoFieldEnteredAt = null
+    this.jeonghoFieldWarningZone = undefined
     this.nearestNpcId = null
     this.portalCooldownUntil = this.time.now + (data.portalCooldownMs ?? 0)
     this.worldInteractionCooldownUntil = this.time.now + (data.portalCooldownMs ?? 0)
@@ -518,6 +568,7 @@ export class VillageScene extends Phaser.Scene {
     this.cameras.main.setBounds(0, 0, W, H)
     this.playerWasInPortal = createInitialVillagePortalState()
     this.portals = createVillagePortalRectangles(W, H)
+    this.jeonghoFieldWarningZone = createRatioPolygon(JEONGHO_FIELD_WARNING_ZONE_POINTS, W, H)
 
     this.obstacles = this.physics.add.staticGroup()
     this.obstacleManager = new VillageObstacleManager(this, this.obstacles, W, H)
@@ -721,6 +772,7 @@ export class VillageScene extends Phaser.Scene {
       createClickTargetMarker(this, pointer.worldX, pointer.worldY)
     })
     this.input.on('pointermove', this.handleObstacleEditorPointerMove, this)
+    this.input.on('pointermove', this.handleMinimapPointerMove, this)
     this.input.on('pointerup', this.handleObstacleEditorPointerUp, this)
     this.input.mouse?.disableContextMenu()
     this.input.keyboard!.on('keydown-E', this.handleNpcInteract, this)
@@ -860,6 +912,10 @@ export class VillageScene extends Phaser.Scene {
       document.removeEventListener('visibilitychange', this.handleFuelNoticeFocus)
       this.fuelNotice?.container.destroy()
       this.fuelNotice = null
+      this.jeonghoFieldWarningBubble?.container.destroy(true)
+      this.jeonghoFieldWarningBubble = null
+      this.jeonghoFieldEnteredAt = null
+      this.jeonghoFieldWarningZone = undefined
     })
   }
 
@@ -889,6 +945,7 @@ export class VillageScene extends Phaser.Scene {
     })
     this.target = movement.target
     this.lastDirection = movement.lastDirection
+    this.updateJeonghoFieldWarning(delta)
     this.preventPolygonObstaclePenetration(delta)
     this.resolvePolygonObstacleCollision()
     this.villageBots?.update(delta)
@@ -1158,6 +1215,7 @@ export class VillageScene extends Phaser.Scene {
   }
 
   private createVillageMinimap(worldWidth: number, worldHeight: number) {
+    this.setHoveredMinimapMarker(null)
     if (this.isMinimapCollapsed) {
       this.createCollapsedVillageMinimap(worldWidth, worldHeight)
       return
@@ -1243,23 +1301,39 @@ export class VillageScene extends Phaser.Scene {
       label: VILLAGE_MINIMAP_THEME_LABELS[portal.key],
       xRatio: portal.xRatio,
       yRatio: portal.yRatio,
+      // 포털 사각형 내부 중앙 좌표. teleport 시 didEnter 가 다음 update 에서 true 가 되도록 보장.
+      targetXRatio: portal.xRatio + portal.widthRatio / 2,
+      targetYRatio: portal.yRatio + portal.heightRatio / 2,
       color: 0xf2b65a,
       radius: 5.5,
     }))
+    const ferryPortal = VILLAGE_THEME_PORTALS.find(portal => portal.key === 'ferry')
+    const photoXRatio = (VILLAGE_PHOTO_BOOTH.xRatio + VILLAGE_PHOTO_GALLERY.xRatio) / 2
+    const photoYRatio = (VILLAGE_PHOTO_BOOTH.yRatio + VILLAGE_PHOTO_GALLERY.yRatio) / 2
+    const gomokuXRatio = this.gomokuBoard
+      ? this.gomokuBoard.x / worldWidth
+      : VILLAGE_GOMOKU_BOARD.xRatio
+    const gomokuYRatio = this.gomokuBoard
+      ? this.gomokuBoard.y / worldHeight
+      : VILLAGE_GOMOKU_BOARD.yRatio
     const facilityMarkers: VillageMinimapMarker[] = [
       {
         key: 'photo',
         label: '사진',
-        xRatio: (VILLAGE_PHOTO_BOOTH.xRatio + VILLAGE_PHOTO_GALLERY.xRatio) / 2,
-        yRatio: (VILLAGE_PHOTO_BOOTH.yRatio + VILLAGE_PHOTO_GALLERY.yRatio) / 2,
+        xRatio: photoXRatio,
+        yRatio: photoYRatio,
+        targetXRatio: photoXRatio,
+        targetYRatio: photoYRatio,
         color: 0x6fc6c7,
         radius: 5,
       },
       {
         key: 'gomoku',
         label: '오목',
-        xRatio: this.gomokuBoard ? this.gomokuBoard.x / worldWidth : VILLAGE_GOMOKU_BOARD.xRatio,
-        yRatio: this.gomokuBoard ? this.gomokuBoard.y / worldHeight : VILLAGE_GOMOKU_BOARD.yRatio,
+        xRatio: gomokuXRatio,
+        yRatio: gomokuYRatio,
+        targetXRatio: gomokuXRatio,
+        targetYRatio: gomokuYRatio,
         color: 0x7dc36b,
         radius: 5,
       },
@@ -1268,12 +1342,21 @@ export class VillageScene extends Phaser.Scene {
         label: '별빛 항구',
         xRatio: VILLAGE_SHIP.xRatio,
         yRatio: VILLAGE_SHIP.yRatio,
+        // 배 시각 위치는 ferry 포털 밖이라, 클릭 시엔 ferry 포털 중앙으로 텔레포트하여 즉시 항구로 진입.
+        targetXRatio: ferryPortal
+          ? ferryPortal.xRatio + ferryPortal.widthRatio / 2
+          : VILLAGE_SHIP.xRatio,
+        targetYRatio: ferryPortal
+          ? ferryPortal.yRatio + ferryPortal.heightRatio / 2
+          : VILLAGE_SHIP.yRatio,
         color: 0x9d8bd7,
         radius: 5,
       },
     ]
 
     const minimapMarkers = [...themeMarkers, ...facilityMarkers]
+    const markerHits: VillageMinimapMarkerHit[] = []
+    const hitSize = 30
     minimapMarkers.forEach(marker => {
       const offset = VILLAGE_MINIMAP_MARKER_OFFSETS[marker.key]
       const adjustedXRatio = Phaser.Math.Clamp(marker.xRatio + offset.xRatio, 0, 1)
@@ -1297,6 +1380,12 @@ export class VillageScene extends Phaser.Scene {
         })
         .setOrigin(labelOnLeft ? 1 : 0, 0.5)
       container.add([dot, label])
+      markerHits.push({
+        bounds: new Phaser.Geom.Rectangle(x - hitSize / 2, y - hitSize / 2, hitSize, hitSize),
+        worldX: marker.targetXRatio * worldWidth,
+        worldY: marker.targetYRatio * worldHeight,
+        dot,
+      })
     })
 
     const playerDot = this.add.circle(0, 0, 7, 0xff6f76, 1).setStrokeStyle(2.5, 0xffffff, 1)
@@ -1309,6 +1398,7 @@ export class VillageScene extends Phaser.Scene {
       playerDot,
       zoomOutBounds,
       zoomInBounds,
+      markerHits,
       worldWidth,
       worldHeight,
       mapX,
@@ -1813,6 +1903,13 @@ export class VillageScene extends Phaser.Scene {
       return true
     }
 
+    for (const marker of this.minimap.markerHits) {
+      if (Phaser.Geom.Rectangle.Contains(marker.bounds, localX, localY)) {
+        this.teleportPlayerToWorld(marker.worldX, marker.worldY)
+        return true
+      }
+    }
+
     return this.isPointerInsideMinimap(pointer)
   }
 
@@ -1826,6 +1923,65 @@ export class VillageScene extends Phaser.Scene {
       pointer.y >= container.y &&
       pointer.y <= container.y + container.height
     )
+  }
+
+  private handleMinimapPointerMove(pointer: Phaser.Input.Pointer) {
+    if (!this.minimap || this.minimap.collapsed || !this.minimap.container.visible) {
+      this.setHoveredMinimapMarker(null)
+      return
+    }
+    const { container, markerHits } = this.minimap
+    const localX = pointer.x - container.x
+    const localY = pointer.y - container.y
+    let hovered: number | null = null
+    for (let index = 0; index < markerHits.length; index += 1) {
+      if (Phaser.Geom.Rectangle.Contains(markerHits[index].bounds, localX, localY)) {
+        hovered = index
+        break
+      }
+    }
+    this.setHoveredMinimapMarker(hovered)
+  }
+
+  private setHoveredMinimapMarker(index: number | null) {
+    if (this.hoveredMinimapMarkerIndex === index) return
+    const prev = this.hoveredMinimapMarkerIndex
+    if (prev !== null && this.minimap && !this.minimap.collapsed && this.minimap.markerHits[prev]) {
+      this.minimap.markerHits[prev].dot.setScale(1)
+    }
+    if (
+      index !== null &&
+      this.minimap &&
+      !this.minimap.collapsed &&
+      this.minimap.markerHits[index]
+    ) {
+      this.minimap.markerHits[index].dot.setScale(1.4)
+      this.input.setDefaultCursor('pointer')
+    } else {
+      this.input.setDefaultCursor('default')
+    }
+    this.hoveredMinimapMarkerIndex = index
+  }
+
+  private teleportPlayerToWorld(worldX: number, worldY: number) {
+    if (this.isTransitioning) return
+    if (this.settingsMenu.isOpen()) return
+    if (this.isVillagerDialogueOpen) return
+    if (this.isGomokuOpen) return
+    if (this.isPhotoGalleryOpen) return
+    if (this.isFuelNoticeOpen) return
+
+    this.target = null
+    this.player.setVelocity(0, 0)
+    this.player.setPosition(worldX, worldY)
+    this.lastSafePlayerPosition?.set(worldX, worldY)
+    this.cameras.main.centerOn(worldX, worldY)
+    // 미니맵 fast-travel 은 사용자의 명시적 의사이므로, 직전 씬 복귀 cooldown 을 건너뛰어 즉시 진입 가능하게.
+    this.portalCooldownUntil = this.time.now
+    // 모든 포털 wasInside 를 false 로 초기화해, 도착지가 포털 내부면 다음 update 에서 didEnter=true 가 발화.
+    ;(Object.keys(this.playerWasInPortal) as VillagePortalKey[]).forEach(key => {
+      this.playerWasInPortal[key] = false
+    })
   }
 
   private createPhotoGallery(worldWidth: number, worldHeight: number) {
@@ -2341,6 +2497,199 @@ export class VillageScene extends Phaser.Scene {
     }
 
     return nearest
+  }
+
+  private updateJeonghoFieldWarning(delta: number) {
+    if (
+      !this.jeonghoFieldWarningZone ||
+      this.isTransitioning ||
+      Boolean(this.controlTutorial) ||
+      this.hasBlockingOverlayOpen()
+    ) {
+      this.resetJeonghoFieldWarning()
+      return
+    }
+
+    const isStandingOnField = this.getPlayerFootProbePoints(delta).some(point =>
+      this.isJeonghoFieldWarningPoint(point),
+    )
+
+    if (!isStandingOnField) {
+      this.resetJeonghoFieldWarning()
+      return
+    }
+
+    this.jeonghoFieldEnteredAt ??= this.time.now
+    const phase =
+      this.time.now - this.jeonghoFieldEnteredAt >= JEONGHO_FIELD_WARNING_HOLD_MS
+        ? 'angry'
+        : 'normal'
+    this.showJeonghoFieldWarning(phase)
+  }
+
+  private getPlayerFootProbePoints(delta: number) {
+    const foot = this.getPlayerFootWorldPoint()
+    const body = this.player.body
+    if (!body || (body.velocity.x === 0 && body.velocity.y === 0)) {
+      return [foot]
+    }
+
+    const direction = new Phaser.Math.Vector2(body.velocity.x, body.velocity.y)
+    direction.normalize()
+    const dt = Math.min(delta, 50) / 1000
+    const speedProbe = Math.max(
+      body.velocity.length() * dt * 4,
+      JEONGHO_FIELD_WARNING_FOOT_SAMPLE_RADIUS,
+    )
+
+    return [
+      foot,
+      new Phaser.Math.Vector2(foot.x + direction.x * speedProbe, foot.y + direction.y * speedProbe),
+    ]
+  }
+
+  private getPlayerFootWorldPoint() {
+    const body = this.player.body
+    if (!body) {
+      return new Phaser.Math.Vector2(this.player.x, this.player.y)
+    }
+
+    return new Phaser.Math.Vector2(body.center.x, body.bottom)
+  }
+
+  private isJeonghoFieldWarningPoint(point: Phaser.Math.Vector2) {
+    if (!this.jeonghoFieldWarningZone) return false
+
+    const radius = JEONGHO_FIELD_WARNING_FOOT_SAMPLE_RADIUS
+    const diagonal = radius * 0.707
+    const sampleOffsets = [
+      { x: 0, y: 0 },
+      { x: -radius, y: 0 },
+      { x: radius, y: 0 },
+      { x: 0, y: -radius },
+      { x: 0, y: radius },
+      { x: -diagonal, y: -diagonal },
+      { x: diagonal, y: -diagonal },
+      { x: -diagonal, y: diagonal },
+      { x: diagonal, y: diagonal },
+    ]
+
+    return sampleOffsets.some(offset =>
+      Phaser.Geom.Polygon.Contains(
+        this.jeonghoFieldWarningZone!,
+        point.x + offset.x,
+        point.y + offset.y,
+      ),
+    )
+  }
+
+  private resetJeonghoFieldWarning() {
+    this.jeonghoFieldEnteredAt = null
+    this.setJeonghoNpcTexture(JEONGHO_NORMAL_KEY)
+    if (!this.jeonghoFieldWarningBubble) return
+
+    this.tweens.killTweensOf(this.jeonghoFieldWarningBubble.container)
+    this.jeonghoFieldWarningBubble.container.setVisible(false).setAlpha(0).setScale(0.96)
+    this.jeonghoFieldWarningBubble.phase = null
+  }
+
+  private showJeonghoFieldWarning(phase: JeonghoFieldWarningPhase) {
+    const npc = this.villageNpcs.find(candidate => candidate.id === JEONGHO_NPC_ID)
+    if (!npc) return
+
+    this.setJeonghoNpcTexture(phase === 'angry' ? JEONGHO_ANGRY_KEY : JEONGHO_NORMAL_KEY)
+
+    const bubble = this.getOrCreateJeonghoFieldWarningBubble()
+    bubble.container.setPosition(npc.object.x, npc.object.y - npc.object.displayHeight - 18)
+
+    if (!bubble.container.visible) {
+      bubble.container.setVisible(true).setAlpha(0).setScale(0.96)
+      this.tweens.add({
+        targets: bubble.container,
+        alpha: 1,
+        scale: 1,
+        duration: 120,
+        ease: 'Back.Out',
+      })
+    }
+
+    if (bubble.phase === phase) return
+
+    this.layoutJeonghoFieldWarningBubble(bubble, phase)
+    bubble.phase = phase
+  }
+
+  private getOrCreateJeonghoFieldWarningBubble() {
+    if (this.jeonghoFieldWarningBubble) {
+      return this.jeonghoFieldWarningBubble
+    }
+
+    const container = this.add.container(0, 0).setDepth(40).setVisible(false).setAlpha(0)
+    const background = this.add.graphics()
+    const text = this.add.text(0, 0, '', {
+      fontSize: '18px',
+      fontFamily: "'Jua', 'Apple SD Gothic Neo', sans-serif",
+      color: '#3a2418',
+      align: 'center',
+      resolution: 2,
+    })
+
+    container.add([background, text])
+    this.jeonghoFieldWarningBubble = {
+      container,
+      background,
+      text,
+      phase: null,
+    }
+
+    return this.jeonghoFieldWarningBubble
+  }
+
+  private setJeonghoNpcTexture(textureKey: string) {
+    const npc = this.villageNpcs.find(candidate => candidate.id === JEONGHO_NPC_ID)
+    if (!npc || npc.object.texture.key === textureKey) return
+
+    npc.object.setTexture(textureKey)
+  }
+
+  private layoutJeonghoFieldWarningBubble(
+    bubble: JeonghoFieldWarningBubble,
+    phase: JeonghoFieldWarningPhase,
+  ) {
+    const isAngry = phase === 'angry'
+    const width = isAngry ? 184 : 204
+    const height = 44
+    const top = -height - 12
+    const radius = 12
+
+    bubble.background.clear()
+    bubble.background.fillStyle(0x000000, 0.16)
+    bubble.background.fillRoundedRect(-width / 2 + 3, top + 4, width, height, radius)
+    bubble.background.fillStyle(isAngry ? 0xfff0df : 0xfffff4, 0.98)
+    bubble.background.fillRoundedRect(-width / 2, top, width, height, radius)
+    bubble.background.lineStyle(2, isAngry ? 0xd86a42 : 0x8f6f48, 0.95)
+    bubble.background.strokeRoundedRect(-width / 2, top, width, height, radius)
+    bubble.background.fillStyle(isAngry ? 0xfff0df : 0xfffff4, 0.98)
+    bubble.background.fillTriangle(
+      -10,
+      top + height - 1,
+      10,
+      top + height - 1,
+      0,
+      top + height + 11,
+    )
+    bubble.background.lineStyle(2, isAngry ? 0xd86a42 : 0x8f6f48, 0.95)
+    bubble.background.beginPath()
+    bubble.background.moveTo(-10, top + height - 1)
+    bubble.background.lineTo(0, top + height + 11)
+    bubble.background.lineTo(10, top + height - 1)
+    bubble.background.strokePath()
+
+    bubble.text
+      .setText(isAngry ? JEONGHO_FIELD_WARNING_ANGRY_TEXT : JEONGHO_FIELD_WARNING_TEXT)
+      .setFontSize(18)
+      .setOrigin(0.5, 0.5)
+      .setPosition(0, top + height / 2)
   }
 
   private updateThemePortalTransitions() {

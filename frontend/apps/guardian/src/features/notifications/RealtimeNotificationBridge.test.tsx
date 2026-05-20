@@ -1,4 +1,5 @@
 import { act, cleanup, render, waitFor } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   getActiveLiveSession,
@@ -45,6 +46,23 @@ function gameStartedEvent(
   } satisfies Extract<RealtimeEvent, { type: 'GAME_STARTED' }>
 }
 
+function dialogueEmotionUpdatedEvent(
+  overrides: Partial<Extract<RealtimeEvent, { type: 'DIALOGUE_EMOTION_UPDATED' }>> = {},
+) {
+  return {
+    type: 'DIALOGUE_EMOTION_UPDATED',
+    patientProfileId: ACTIVE_SESSION.patientProfileId,
+    dialogueSessionId: 321,
+    npcName: 'SEORIN',
+    overallValence: 'NEGATIVE',
+    tone: 'WORRIED',
+    intensity: 2,
+    guardianMessage: '건빈이가 오늘 대화에서 걱정을 표현했어요.',
+    occurredAt: '2026-05-19T10:10:00',
+    ...overrides,
+  } satisfies Extract<RealtimeEvent, { type: 'DIALOGUE_EMOTION_UPDATED' }>
+}
+
 function deferred<T>() {
   let resolve!: (value: T) => void
   let reject!: (reason?: unknown) => void
@@ -54,6 +72,18 @@ function deferred<T>() {
   })
 
   return { promise, resolve, reject }
+}
+
+function renderBridge() {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
+
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <RealtimeNotificationBridge />
+    </QueryClientProvider>,
+  )
 }
 
 afterEach(() => {
@@ -70,7 +100,7 @@ describe('RealtimeNotificationBridge', () => {
     mockGetActiveLiveSession.mockResolvedValueOnce(ACTIVE_SESSION)
     setAuthToken('guardian-token')
 
-    render(<RealtimeNotificationBridge />)
+    renderBridge()
 
     await waitFor(() => {
       expect(useNotificationStore.getState().items).toHaveLength(1)
@@ -89,7 +119,7 @@ describe('RealtimeNotificationBridge', () => {
     mockGetActiveLiveSession.mockReturnValueOnce(staleSnapshot.promise).mockResolvedValueOnce(null)
     setAuthToken('old-token')
 
-    render(<RealtimeNotificationBridge />)
+    renderBridge()
 
     await waitFor(() => {
       expect(mockGetActiveLiveSession).toHaveBeenCalledTimes(1)
@@ -110,5 +140,21 @@ describe('RealtimeNotificationBridge', () => {
 
     expect(useRealtimeStore.getState().activeSession).toBeNull()
     expect(useNotificationStore.getState().items).toHaveLength(0)
+  })
+
+  it('pushes a chat deep-link notification when dialogue emotion is updated', () => {
+    mockGetActiveLiveSession.mockResolvedValueOnce(null)
+    setAuthToken('guardian-token')
+
+    renderBridge()
+
+    act(() => {
+      useRealtimeStore.getState().applyEvent(dialogueEmotionUpdatedEvent())
+    })
+
+    const [item] = useNotificationStore.getState().items
+    expect(item.kind).toBe('DIALOGUE_EMOTION_UPDATED')
+    expect(item.description).toBe('건빈이가 오늘 대화에서 걱정을 표현했어요.')
+    expect(item.href).toBe('/chat?npc=SEORIN&sessionId=321')
   })
 })

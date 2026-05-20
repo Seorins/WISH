@@ -25,6 +25,7 @@ import com.comong.backend.domain.gomoku.dto.GomokuRoomCreateRequest;
 import com.comong.backend.domain.gomoku.dto.GomokuRoomJoinRequest;
 import com.comong.backend.domain.gomoku.dto.GomokuRoomResponse;
 import com.comong.backend.domain.gomoku.dto.GomokuStatsResponse;
+import com.comong.backend.domain.gomoku.dto.GomokuViewerRole;
 import com.comong.backend.domain.gomoku.entity.GomokuChatMessage;
 import com.comong.backend.domain.gomoku.entity.GomokuEndReason;
 import com.comong.backend.domain.gomoku.entity.GomokuMatch;
@@ -106,6 +107,23 @@ public class GomokuService {
                 .map(match -> toRoomResponse(match, myPatientProfileId));
     }
 
+    public Page<GomokuRoomResponse> findOpenRooms(Long userId, Pageable pageable) {
+        Long myPatientProfileId =
+                patientProfileService
+                        .findEntityByUserId(userId)
+                        .map(PatientProfile::getId)
+                        .orElse(null);
+        LocalDateTime now = LocalDateTime.now();
+        return gomokuMatchRepository
+                .findOpenRooms(
+                        GomokuMatchStatus.WAITING,
+                        GomokuMatchStatus.PLAYING,
+                        now.minus(waitingRoomStaleTimeout),
+                        now.minus(playingRoomStaleTimeout),
+                        pageable)
+                .map(match -> toRoomResponse(match, myPatientProfileId));
+    }
+
     @Transactional
     public GomokuRoomResponse joinRoom(Long userId, Long roomId, GomokuRoomJoinRequest request) {
         PatientProfile patientProfile = findPatientProfileOrThrow(userId);
@@ -174,15 +192,12 @@ public class GomokuService {
 
     @Transactional
     public GomokuRoomResponse findRoom(Long userId, Long roomId) {
-        Long myPatientProfileId =
-                patientProfileService
-                        .findEntityByUserId(userId)
-                        .map(PatientProfile::getId)
-                        .orElse(null);
+        PatientProfile patientProfile = findPatientProfileOrThrow(userId);
         GomokuMatch match = findRoomForUpdateOrThrow(roomId);
+        ensureCanView(match, patientProfile.getId());
         List<GomokuMoveRecord> moves = parseMoves(match.getMovesJson());
         finishIfTimedOut(match, moves);
-        return GomokuRoomResponse.of(match, moves, myPatientProfileId);
+        return GomokuRoomResponse.of(match, moves, patientProfile.getId());
     }
 
     @Transactional
@@ -303,11 +318,7 @@ public class GomokuService {
             Long userId, Long roomId, GomokuChatMessageSendRequest request) {
         PatientProfile patientProfile = findPatientProfileOrThrow(userId);
         GomokuMatch match = findRoomForUpdateOrThrow(roomId);
-        ensureParticipant(match, patientProfile.getId());
-
-        if (match.getStatus() == GomokuMatchStatus.CANCELLED) {
-            throw new BusinessException(GomokuErrorCode.GOMOKU_MESSAGE_NOT_ALLOWED);
-        }
+        GomokuViewerRole senderRole = ensureCanChat(match, patientProfile.getId());
 
         String content = request.content() == null ? "" : request.content().trim();
         if (content.isBlank()) {
@@ -326,7 +337,9 @@ public class GomokuService {
             throw new BusinessException(GomokuErrorCode.GOMOKU_MESSAGE_RATE_LIMITED);
         }
 
-        match.markSeen(patientProfile.getId());
+        if (senderRole == GomokuViewerRole.PLAYER) {
+            match.markSeen(patientProfile.getId());
+        }
         GomokuChatMessage saved =
                 gomokuChatMessageRepository.save(
                         GomokuChatMessage.builder()
@@ -334,7 +347,7 @@ public class GomokuService {
                                 .senderPatientProfile(patientProfile)
                                 .content(content)
                                 .build());
-        return GomokuChatMessageResponse.from(saved);
+        return GomokuChatMessageResponse.from(saved, senderRole);
     }
 
     public List<GomokuChatMessageResponse> findRecentChatMessages(Long userId, Long roomId) {
@@ -344,12 +357,15 @@ public class GomokuService {
                         .findById(roomId)
                         .orElseThrow(
                                 () -> new BusinessException(GomokuErrorCode.GOMOKU_ROOM_NOT_FOUND));
-        ensureParticipant(match, patientProfile.getId());
+        ensureCanView(match, patientProfile.getId());
         List<GomokuChatMessageResponse> messages =
                 gomokuChatMessageRepository
                         .findRecentByMatchId(match.getId(), PageRequest.of(0, CHAT_RECENT_LIMIT))
                         .stream()
-                        .map(GomokuChatMessageResponse::from)
+                        .map(
+                                message ->
+                                        GomokuChatMessageResponse.from(
+                                                message, roleOfSender(match, message)))
                         .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
         messages.sort((a, b) -> Long.compare(a.id(), b.id()));
         return messages;
@@ -489,6 +505,38 @@ public class GomokuService {
             throw new BusinessException(GomokuErrorCode.GOMOKU_NOT_PARTICIPANT);
         }
         return stone;
+    }
+
+    private GomokuViewerRole ensureCanView(GomokuMatch match, Long patientProfileId) {
+        if (match.stoneOf(patientProfileId) != null) {
+            return GomokuViewerRole.PLAYER;
+        }
+        GomokuMatchStatus status = match.getStatus();
+        if (status == GomokuMatchStatus.PLAYING || status == GomokuMatchStatus.FINISHED) {
+            return GomokuViewerRole.SPECTATOR;
+        }
+        throw new BusinessException(GomokuErrorCode.GOMOKU_NOT_PARTICIPANT);
+    }
+
+    private GomokuViewerRole ensureCanChat(GomokuMatch match, Long patientProfileId) {
+        GomokuMatchStatus status = match.getStatus();
+        if (status == GomokuMatchStatus.CANCELLED) {
+            throw new BusinessException(GomokuErrorCode.GOMOKU_MESSAGE_NOT_ALLOWED);
+        }
+        if (match.stoneOf(patientProfileId) != null) {
+            return GomokuViewerRole.PLAYER;
+        }
+        if (status == GomokuMatchStatus.PLAYING || status == GomokuMatchStatus.FINISHED) {
+            return GomokuViewerRole.SPECTATOR;
+        }
+        throw new BusinessException(GomokuErrorCode.GOMOKU_NOT_PARTICIPANT);
+    }
+
+    private GomokuViewerRole roleOfSender(GomokuMatch match, GomokuChatMessage message) {
+        Long senderId = message.getSenderPatientProfile().getId();
+        return match.stoneOf(senderId) != null
+                ? GomokuViewerRole.PLAYER
+                : GomokuViewerRole.SPECTATOR;
     }
 
     private GomokuRoomResponse toRoomResponse(GomokuMatch match, Long myPatientProfileId) {

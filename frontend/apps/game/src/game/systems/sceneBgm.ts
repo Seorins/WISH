@@ -5,48 +5,47 @@ import { getGameSettings } from '@/game/settings/gameSettings'
 const FADE_IN_MS = 900
 const FADE_OUT_MS = 650
 const FADE_STEP_MS = 40
-const BGM_VOLUME_GAIN = 1.3
 
 const BGM_TRACKS = {
   start: {
     path: 'sounds/bgm/start-dawn.wav',
-    volume: 0.32,
+    volume: 1,
   },
   village: {
     path: 'sounds/bgm/village-day.wav',
-    volume: 0.24,
+    volume: 1,
   },
   art: {
     path: 'sounds/bgm/art-studio.wav',
-    volume: 0.31,
+    volume: 1,
   },
   quiz: {
     path: 'sounds/bgm/quiz-doodle.wav',
-    volume: 0.31,
+    volume: 1,
   },
   taekwondo: {
     path: 'sounds/bgm/taekwondo-dojang.wav',
-    volume: 0.33,
+    volume: 1,
   },
   gymnastics: {
     path: 'sounds/bgm/gymnastics-move.wav',
-    volume: 0.3,
+    volume: 1,
   },
   ferry: {
     path: 'sounds/bgm/ferry-harbor.wav',
-    volume: 0.33,
+    volume: 1,
   },
   lighthouse: {
     path: 'sounds/bgm/lighthouse-calm.wav',
-    volume: 0.34,
+    volume: 1,
   },
   musicLobby: {
     path: 'sounds/bgm/music-lobby.wav',
-    volume: 0.28,
+    volume: 1,
   },
   photoBooth: {
     path: 'sounds/bgm/photo-booth-spark.wav',
-    volume: 0.31,
+    volume: 1,
   },
 } as const
 
@@ -283,7 +282,7 @@ export function getBgmTrackForScene(sceneKey: string): SceneBgmTrackKey | null {
 }
 
 function getTargetVolume(trackKey: SceneBgmTrackKey) {
-  return Math.min(1, BGM_TRACKS[trackKey].volume * BGM_VOLUME_GAIN * getGameSettings().masterVolume)
+  return BGM_TRACKS[trackKey].volume
 }
 
 function tweenVolume(

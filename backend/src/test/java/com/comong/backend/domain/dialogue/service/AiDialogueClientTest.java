@@ -1,57 +1,76 @@
 package com.comong.backend.domain.dialogue.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verifyNoInteractions;
 
 import java.util.List;
+import java.util.Optional;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.web.client.RestClient;
 
 import com.comong.backend.domain.dialogue.config.AiDialogueProperties;
 import com.comong.backend.domain.dialogue.entity.DialogueTurn;
 import com.comong.backend.domain.dialogue.entity.NpcName;
 
-/**
- * {@link AiDialogueClient} 단위 테스트. RestClient 자체의 HTTP 호출은 통합 테스트에서 다루며, 본 테스트는 호출 자체를 스킵하는 가드 두
- * 가지만 검증한다 — 그렇지 않으면 RestClient 의 fluent chain 을 모킹하는 boilerplate 가 가치 대비 너무 크다.
- */
+import tools.jackson.databind.ObjectMapper;
+
 class AiDialogueClientTest {
 
-    private final RestClient restClient = mock(RestClient.class);
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Test
-    @DisplayName("base-url 미설정이면 RestClient 호출 없이 즉시 스킵")
+    @DisplayName("base-url is empty: embed call is skipped")
     void skipsWhenBaseUrlEmpty() {
-        AiDialogueClient client = new AiDialogueClient(restClient, new AiDialogueProperties("", 5));
+        AiDialogueClient client =
+                new AiDialogueClient(new AiDialogueProperties("", 5), objectMapper);
 
         client.embedSessionAsync(7L, 42L, NpcName.YEONGCHEOL, List.of(mock(DialogueTurn.class)));
-
-        verifyNoInteractions(restClient);
     }
 
     @Test
-    @DisplayName("turns 가 빈 리스트면 호출 없이 스킵")
+    @DisplayName("base-url is empty: emotion-summary call is skipped")
+    void skipsEmotionSummaryWhenBaseUrlEmpty() {
+        AiDialogueClient client =
+                new AiDialogueClient(new AiDialogueProperties("", 5), objectMapper);
+
+        Optional<AiDialogueClient.EmotionSummaryResult> result =
+                client.summarizeEmotion(
+                        7L, 42L, NpcName.YEONGCHEOL, List.of(mock(DialogueTurn.class)));
+
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    @DisplayName("empty turns: embed call is skipped")
     void skipsWhenTurnsEmpty() {
         AiDialogueClient client =
                 new AiDialogueClient(
-                        restClient, new AiDialogueProperties("http://ai-test:8001/api/v1", 5));
+                        new AiDialogueProperties("http://ai-test:8001/api/v1", 5), objectMapper);
 
         client.embedSessionAsync(7L, 42L, NpcName.YEONGCHEOL, List.of());
-
-        verifyNoInteractions(restClient);
     }
 
     @Test
-    @DisplayName("null turns 도 스킵 — 호출자 방어 보강")
+    @DisplayName("null turns: embed call is skipped")
     void skipsWhenTurnsNull() {
         AiDialogueClient client =
                 new AiDialogueClient(
-                        restClient, new AiDialogueProperties("http://ai-test:8001/api/v1", 5));
+                        new AiDialogueProperties("http://ai-test:8001/api/v1", 5), objectMapper);
 
         client.embedSessionAsync(7L, 7L, NpcName.JOEUN, null);
+    }
 
-        verifyNoInteractions(restClient);
+    @Test
+    @DisplayName("empty turns: emotion-summary call is skipped")
+    void skipsEmotionSummaryWhenTurnsEmpty() {
+        AiDialogueClient client =
+                new AiDialogueClient(
+                        new AiDialogueProperties("http://ai-test:8001/api/v1", 5), objectMapper);
+
+        Optional<AiDialogueClient.EmotionSummaryResult> result =
+                client.summarizeEmotion(7L, 42L, NpcName.YEONGCHEOL, List.of());
+
+        assertThat(result).isEmpty();
     }
 }

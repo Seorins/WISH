@@ -63,6 +63,7 @@ export {
   getGomokuMessages,
   getGomokuRanking,
   getGomokuRoom,
+  getGomokuRooms,
   getMyGomokuMatches,
   getMyGomokuStats,
   getWaitingGomokuRooms,
@@ -249,6 +250,7 @@ export type {
   GomokuRuleSet,
   GomokuStats,
   GomokuStone,
+  GomokuViewerRole,
 } from './gomoku'
 export type {
   ChartStats,

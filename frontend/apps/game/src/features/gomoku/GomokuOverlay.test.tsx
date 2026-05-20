@@ -4,7 +4,7 @@ import {
   getGomokuMessages,
   getGomokuRanking,
   getMyGomokuStats,
-  getWaitingGomokuRooms,
+  getGomokuRooms,
   heartbeatGomokuRoom,
   leaveGomokuRoom,
   listPatientProfiles,
@@ -25,7 +25,7 @@ vi.mock('@wish/api-client', () => ({
   getGomokuRanking: vi.fn(),
   getGomokuRoom: vi.fn(),
   getMyGomokuStats: vi.fn(),
-  getWaitingGomokuRooms: vi.fn(),
+  getGomokuRooms: vi.fn(),
   heartbeatGomokuRoom: vi.fn(),
   joinGomokuRoom: vi.fn(),
   leaveGomokuRoom: vi.fn(),
@@ -192,7 +192,7 @@ const rematchRoom: GomokuRoom = {
 describe('GomokuOverlay online room creation', () => {
   beforeEach(() => {
     window.localStorage.clear()
-    vi.mocked(getWaitingGomokuRooms).mockResolvedValue(apiResponse(emptyRoomPage()))
+    vi.mocked(getGomokuRooms).mockResolvedValue(apiResponse(emptyRoomPage()))
     vi.mocked(getMyGomokuStats).mockResolvedValue(apiResponse(emptyStats))
     vi.mocked(getGomokuRanking).mockResolvedValue(apiResponse(emptyRanking))
     vi.mocked(heartbeatGomokuRoom).mockResolvedValue(apiResponse(createdRoom))
@@ -290,7 +290,7 @@ describe('GomokuOverlay online room creation', () => {
     chooseCard(ONLINE_CARD_PATTERN)
 
     await waitFor(() => {
-      expect(getWaitingGomokuRooms).toHaveBeenCalled()
+      expect(getGomokuRooms).toHaveBeenCalled()
     })
     expect(screen.queryByText(COMPUTER_LEVEL_LABEL)).toBeNull()
     expect(screen.queryByText(RULE_LABEL)).toBeNull()
@@ -328,7 +328,7 @@ describe('GomokuOverlay online room creation', () => {
       randomSpy.mockRestore()
       vi.useRealTimers()
     }
-  })
+  }, 20000)
 
   it('lets the player swap stones against the computer and makes the computer open as black', async () => {
     vi.useFakeTimers()

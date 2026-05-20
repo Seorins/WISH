@@ -63,7 +63,7 @@ describe('scene BGM mapping', () => {
     expect(audioInstances[0].loop).toBe(true)
 
     vi.advanceTimersByTime(FADE_TEST_DURATION_MS)
-    expect(audioInstances[0].volume).toBeCloseTo(0.32 * 1.3 * 0.8)
+    expect(audioInstances[0].volume).toBe(1)
 
     audioInstances[0].dispatchEvent(new Event('ended'))
     await Promise.resolve()

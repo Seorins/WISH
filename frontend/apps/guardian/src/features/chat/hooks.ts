@@ -90,6 +90,8 @@ export function pickFirstFinished(
 export type NpcDialogueStatus = {
   tone: EmotionTone | null
   hasSession: boolean
+  isLatest: boolean
+  latestAt: string | null
 }
 
 export function useGuardianDialogueNpcStatuses(
@@ -137,15 +139,43 @@ export function useGuardianDialogueNpcStatuses(
     }),
   })
 
+  const latestTimes = npcs.map((_, i) => {
+    const detail = detailQueries[i]?.data
+    return toTimeValue(detail?.emotionAnalyzedAt ?? detail?.endedAt ?? detail?.startedAt)
+  })
+  const maxLatestTime = Math.max(0, ...latestTimes)
+
   const out = {} as Record<GuardianDialogueNpc, NpcDialogueStatus>
   npcs.forEach((npc, i) => {
     const detail = detailQueries[i]?.data
+    const latestTime = latestTimes[i] ?? 0
     out[npc] = {
-      tone: detail ? deriveDominantTone(detail.turns) : null,
+      tone: detail ? (toEmotionTone(detail.emotionTone) ?? deriveDominantTone(detail.turns)) : null,
       hasSession: !!detail,
+      isLatest: !!detail && latestTime > 0 && latestTime === maxLatestTime,
+      latestAt: detail?.emotionAnalyzedAt ?? detail?.endedAt ?? detail?.startedAt ?? null,
     }
   })
   return out
+}
+
+function toEmotionTone(tone: GuardianDialogueSessionMeta['emotionTone']): EmotionTone | null {
+  switch (tone) {
+    case 'CALM':
+      return 'calm'
+    case 'TIRED':
+      return 'tired'
+    case 'WORRIED':
+      return 'worried'
+    default:
+      return null
+  }
+}
+
+function toTimeValue(value: string | null | undefined): number {
+  if (!value) return 0
+  const time = new Date(value).getTime()
+  return Number.isFinite(time) ? time : 0
 }
 
 /**

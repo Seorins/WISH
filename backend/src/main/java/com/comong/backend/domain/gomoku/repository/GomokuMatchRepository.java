@@ -34,6 +34,22 @@ public interface GomokuMatchRepository extends JpaRepository<GomokuMatch, Long> 
             @Param("activeAfter") LocalDateTime activeAfter,
             Pageable pageable);
 
+    @Query(
+            "select m from GomokuMatch m "
+                    + "where (m.status = :waitingStatus "
+                    + "and m.whitePatientProfile is null "
+                    + "and coalesce(m.blackLastSeenAt, m.updatedAt) >= :waitingActiveAfter) "
+                    + "or (m.status = :playingStatus "
+                    + "and m.whitePatientProfile is not null "
+                    + "and (coalesce(m.blackLastSeenAt, m.updatedAt) >= :playingActiveAfter "
+                    + "or coalesce(m.whiteLastSeenAt, m.updatedAt) >= :playingActiveAfter))")
+    Page<GomokuMatch> findOpenRooms(
+            @Param("waitingStatus") GomokuMatchStatus waitingStatus,
+            @Param("playingStatus") GomokuMatchStatus playingStatus,
+            @Param("waitingActiveAfter") LocalDateTime waitingActiveAfter,
+            @Param("playingActiveAfter") LocalDateTime playingActiveAfter,
+            Pageable pageable);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query(
             "select m from GomokuMatch m "

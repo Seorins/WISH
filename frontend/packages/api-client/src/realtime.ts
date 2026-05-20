@@ -1,5 +1,10 @@
 import { apiClient } from './client'
 import type { ApiResponse } from './artworks'
+import type {
+  GuardianDialogueChoiceTone,
+  GuardianDialogueChoiceValence,
+  GuardianDialogueNpc,
+} from './guardian-dialogue'
 
 // 실시간 모니터링 콘텐츠 타입.
 // BE 의 ContentType enum 값(LOGIN 제외) 과 정확히 일치 — enum.name() 으로 직렬화되어 대문자.
@@ -62,6 +67,17 @@ export type RealtimeEvent =
       contentType: RealtimeContentType
       occurredAt: string
     }
+  | {
+      type: 'DIALOGUE_EMOTION_UPDATED'
+      patientProfileId: number
+      dialogueSessionId: number
+      npcName: GuardianDialogueNpc
+      overallValence: GuardianDialogueChoiceValence
+      tone: GuardianDialogueChoiceTone
+      intensity: number
+      guardianMessage: string | null
+      occurredAt: string
+    }
 
 export type GamePresenceEvent = {
   type: 'WATCHER_COUNT_CHANGED'
@@ -88,6 +104,7 @@ const KNOWN_EVENT_TYPES: ReadonlySet<RealtimeEvent['type']> = new Set([
   'GAME_ENDED',
   'CONTENT_STARTED',
   'CONTENT_ENDED',
+  'DIALOGUE_EMOTION_UPDATED',
 ])
 
 const KNOWN_GAME_PRESENCE_EVENT_TYPES: ReadonlySet<GamePresenceEvent['type']> = new Set([
