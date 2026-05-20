@@ -8,14 +8,16 @@ public record GomokuChatMessageResponse(
         Long id,
         Long senderPatientProfileId,
         String senderNickname,
+        GomokuViewerRole senderRole,
         String content,
         LocalDateTime createdAt) {
 
-    public static GomokuChatMessageResponse from(GomokuChatMessage message) {
+    public static GomokuChatMessageResponse from(GomokuChatMessage message, GomokuViewerRole role) {
         return new GomokuChatMessageResponse(
                 message.getId(),
                 message.getSenderPatientProfile().getId(),
                 message.getSenderPatientProfile().getNickname(),
+                role,
                 message.getContent(),
                 message.getCreatedAt());
     }

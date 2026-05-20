@@ -64,6 +64,16 @@ public class GomokuController {
                                 currentUser.userId(), withCreatedAtDesc(pageable))));
     }
 
+    @Operation(summary = "List open online Gomoku rooms (waiting or playing)")
+    @GetMapping("/rooms")
+    public ResponseEntity<ApiResponse<Page<GomokuRoomResponse>>> findOpenRooms(
+            @AuthenticationPrincipal AuthenticatedUser currentUser, Pageable pageable) {
+        return ResponseEntity.ok(
+                ApiResponse.success(
+                        gomokuService.findOpenRooms(
+                                currentUser.userId(), withCreatedAtDesc(pageable))));
+    }
+
     @Operation(summary = "Join online Gomoku room")
     @PostMapping("/rooms/{roomId}/join")
     public ResponseEntity<ApiResponse<GomokuRoomResponse>> joinRoom(
