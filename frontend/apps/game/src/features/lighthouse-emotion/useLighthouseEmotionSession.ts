@@ -316,6 +316,14 @@ export function useLighthouseEmotionSession({
         // Persisting the turn is best-effort; do not block the dialogue UI.
       }
 
+      if (demoTurn?.endAfterResponse) {
+        try {
+          await finishLighthouseEmotionSession(targetSessionId, 'COMPLETED', controller.signal)
+        } catch {
+          // Demo close should still proceed even if the guardian summary update is delayed.
+        }
+      }
+
       if (!isMountedRef.current || requestSeq !== requestSeqRef.current) return
 
       setState(prev => ({
