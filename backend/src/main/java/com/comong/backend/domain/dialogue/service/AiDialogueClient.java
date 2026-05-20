@@ -6,15 +6,15 @@ import java.util.Optional;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
-import com.comong.backend.domain.dialogue.config.AiDialogueProperties;
 import com.comong.backend.domain.dialogue.catalog.model.ChoiceTone;
 import com.comong.backend.domain.dialogue.catalog.model.ChoiceValence;
+import com.comong.backend.domain.dialogue.config.AiDialogueProperties;
 import com.comong.backend.domain.dialogue.entity.DialogueTurn;
 import com.comong.backend.domain.dialogue.entity.NpcName;
 
@@ -97,7 +97,9 @@ public class AiDialogueClient {
     public Optional<EmotionSummaryResult> summarizeEmotion(
             long patientProfileId, long sessionId, NpcName npcName, List<DialogueTurn> turns) {
         if (!properties.isEnabled()) {
-            log.debug("AI dialogue disabled (no base-url) - skip emotion summary for session={}", sessionId);
+            log.debug(
+                    "AI dialogue disabled (no base-url) - skip emotion summary for session={}",
+                    sessionId);
             return Optional.empty();
         }
         if (turns == null || turns.isEmpty()) {
@@ -126,12 +128,18 @@ public class AiDialogueClient {
                             .body(new ParameterizedTypeReference<>() {});
             Object success = response != null ? response.get("success") : null;
             if (Boolean.FALSE.equals(success)) {
-                log.warn("AI emotion-summary returned failure session={} body={}", sessionId, response);
+                log.warn(
+                        "AI emotion-summary returned failure session={} body={}",
+                        sessionId,
+                        response);
                 return Optional.empty();
             }
             return parseEmotionSummary(sessionId, response);
         } catch (Exception e) {
-            log.warn("AI emotion-summary call failed session={} reason={}", sessionId, e.getMessage());
+            log.warn(
+                    "AI emotion-summary call failed session={} reason={}",
+                    sessionId,
+                    e.getMessage());
             return Optional.empty();
         }
     }
@@ -151,8 +159,7 @@ public class AiDialogueClient {
         if (response == null) {
             return Optional.empty();
         }
-        ChoiceValence valence =
-                parseEnum(ChoiceValence.class, response.get("overall_valence"));
+        ChoiceValence valence = parseEnum(ChoiceValence.class, response.get("overall_valence"));
         ChoiceTone tone = parseEnum(ChoiceTone.class, response.get("tone"));
         Short intensity = parseIntensity(response.get("intensity"));
         if (valence == null || tone == null || intensity == null) {

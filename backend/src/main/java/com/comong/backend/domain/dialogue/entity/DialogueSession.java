@@ -188,14 +188,12 @@ public class DialogueSession {
         this.emotionValence = valence;
         this.emotionTone = tone;
         this.emotionIntensity = intensity;
-        this.emotionConcernFlags =
-                concernFlags == null ? List.of() : List.copyOf(concernFlags);
+        this.emotionConcernFlags = concernFlags == null ? List.of() : List.copyOf(concernFlags);
         this.emotionProtectiveFactors =
                 protectiveFactors == null ? List.of() : List.copyOf(protectiveFactors);
         this.guardianMessage =
                 guardianMessage == null || guardianMessage.isBlank() ? null : guardianMessage;
-        this.emotionAnalyzedAt =
-                analyzedAt == null ? LocalDateTime.now() : analyzedAt;
+        this.emotionAnalyzedAt = analyzedAt == null ? LocalDateTime.now() : analyzedAt;
     }
 
     private void requireInProgress() {

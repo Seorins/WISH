@@ -38,11 +38,7 @@ public record RealtimeEventResponse(
 
     public static RealtimeEventResponse contentStarted(
             Long loginSessionId, Long patientProfileId, String contentType) {
-        return of(
-                RealtimeEventType.CONTENT_STARTED,
-                loginSessionId,
-                patientProfileId,
-                contentType);
+        return of(RealtimeEventType.CONTENT_STARTED, loginSessionId, patientProfileId, contentType);
     }
 
     public static RealtimeEventResponse contentEnded(
@@ -51,7 +47,10 @@ public record RealtimeEventResponse(
     }
 
     public static RealtimeEventResponse of(
-            RealtimeEventType type, Long loginSessionId, Long patientProfileId, String contentType) {
+            RealtimeEventType type,
+            Long loginSessionId,
+            Long patientProfileId,
+            String contentType) {
         return basic(type, loginSessionId, patientProfileId, null, contentType);
     }
 
