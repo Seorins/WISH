@@ -244,10 +244,8 @@ export function GymnasticsMain() {
           />
         ) : (
           <>
-            <TodaySummaryCard summary={todaySummary} />
             <VideoCard motion={selectedMotion} stats={selectedStats} />
-            <DescriptionCard motion={selectedMotion} />
-            <StatsCard motion={selectedMotion} stats={selectedStats} summary={todaySummary} />
+            <StatsCard summary={todaySummary} />
           </>
         )}
       </div>
@@ -266,34 +264,6 @@ export function GymnasticsMain() {
         />
       </aside>
     </div>
-  )
-}
-
-function TodaySummaryCard({ summary }: { summary: GymnasticsTodaySummary }) {
-  return (
-    <section className={styles.todayCard}>
-      <div className={styles.todayMain}>
-        <span className={styles.todayEyebrow}>오늘 한마디</span>
-        <h3 className={styles.todayHeadline}>{summary.headline}</h3>
-        <p className={styles.todaySubline}>{summary.subline}</p>
-      </div>
-      <div className={styles.todayAside}>
-        <span className={styles.todayStars} aria-label={`동작 또렷함 ${summary.qualityLabel}`}>
-          {summary.qualityStars}
-        </span>
-        <strong>{summary.qualityLabel}</strong>
-        <span>동작 또렷함</span>
-      </div>
-      <div className={styles.todayHelp}>
-        <span>도와줄 점</span>
-        <strong>{summary.helpText}</strong>
-      </div>
-      <p className={styles.todayEvidence}>
-        근거 수치: 사용 시간 {formatDurationSec(summary.todaySeconds)} · 완료{' '}
-        {summary.completedMotionCount}/{summary.totalMotionCount}개 · 동작 또렷함{' '}
-        {formatOptionalPercent(summary.avgAccuracyPercent)}
-      </p>
-    </section>
   )
 }
 
@@ -371,25 +341,7 @@ function VideoCard({ motion, stats }: { motion: ExerciseMotion; stats: MotionSta
   )
 }
 
-function DescriptionCard({ motion }: { motion: ExerciseMotion }) {
-  const description = motion.description?.trim() || '동작 설명이 곧 추가될 예정이에요.'
-  return (
-    <section className={styles.descCard}>
-      <h3 className={styles.cardTitle}>동작 설명</h3>
-      <p className={styles.descText}>{description}</p>
-    </section>
-  )
-}
-
-function StatsCard({
-  motion,
-  stats,
-  summary,
-}: {
-  motion: ExerciseMotion
-  stats: MotionStats | undefined
-  summary: GymnasticsTodaySummary
-}) {
+function StatsCard({ summary }: { summary: GymnasticsTodaySummary }) {
   const cells = [
     {
       id: 'duration',
@@ -418,13 +370,6 @@ function StatsCard({
       label: '동작 또렷함',
       value: summary.qualityLabel,
       detail: `근거 ${formatOptionalPercent(summary.avgAccuracyPercent)}`,
-    },
-    {
-      id: 'selected',
-      icon: '▶',
-      label: '선택한 영상',
-      value: motion.name,
-      detail: stats ? `최근 ${formatDurationSec(stats.latestDurationSec)}` : '오늘 영상 없음',
     },
   ] as const
 
