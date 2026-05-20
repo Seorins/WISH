@@ -159,6 +159,7 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
   private beltPromotionOverlay?: Phaser.GameObjects.Container
   private sessionResultPanel?: Phaser.GameObjects.Container
   private finishButton?: Phaser.GameObjects.Container
+  private motionIntroCountdownElement: HTMLDivElement | null = null
   private motions: TaekwondoMotion[] = []
   private motionResults: CreateTaekwondoSessionMotionRequest[] = []
   private recordedMotionIndexes = new Set<number>()
@@ -585,7 +586,8 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
       this.currentMotionIndex = 0
       this.setCurrentMotionName(this.getCurrentMotionDisplayName())
       this.updatePoomsaeProgress()
-      this.showSideGuideVideo()
+      // side guide 영상은 motion intro 가 닫히는 startCurrentMotion 단계에서 표시.
+      // 인트로와 동시 호출하면 같은 guideVideoElement 를 서로 덮어써서 play() 가 abort 됨.
       this.showMotionIntroOverlay()
     } catch (error) {
       console.warn('[TaekwondoPoomsaePracticeScene] Failed to load taekwondo motions.', error)
@@ -784,25 +786,33 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
 
   private startMotionIntroCountdown() {
     if (this.isSceneShuttingDown || this.countdownTimer) return
-    this.destroyCountdownText()
+    this.destroyMotionIntroCountdownElement()
 
-    const { width: vw, height: vh } = this.scale
-    const fontSize = Math.round(Phaser.Math.Clamp(vh * 0.18, 86, 190))
-    const text = this.add
-      .text(vw / 2, vh * 0.86, String(MOTION_COUNTDOWN_FROM), {
-        fontFamily: 'sans-serif',
-        fontSize: `${fontSize}px`,
-        color: '#ffffff',
-        fontStyle: '900',
-        stroke: '#3a2110',
-        strokeThickness: 8,
-        align: 'center',
-      })
-      .setOrigin(0.5)
-      .setDepth(25)
-    text.setShadow(0, 5, '#000000', 10, false, true)
-    this.countdownText = text
-    this.playCountdownTextTween(text)
+    // 시범 영상이 HTML video element 라 Phaser depth 로 못 덮음.
+    // 카운트다운도 HTML element 로 만들어 영상 wrapper(z-index 25) 위 (z-index 50) 에 올린다.
+    const overlay = document.createElement('div')
+    overlay.style.position = 'fixed'
+    overlay.style.top = '50%'
+    overlay.style.left = '50%'
+    overlay.style.transform = 'translate(-50%, -50%) scale(0.85)'
+    overlay.style.zIndex = '50'
+    overlay.style.pointerEvents = 'none'
+    overlay.style.fontFamily = 'sans-serif'
+    overlay.style.fontWeight = '900'
+    overlay.style.color = '#ffffff'
+    overlay.style.fontSize = '180px'
+    overlay.style.lineHeight = '1'
+    overlay.style.textShadow = '0 6px 16px rgba(0,0,0,0.8)'
+    ;(overlay.style as CSSStyleDeclaration & { webkitTextStroke?: string }).webkitTextStroke =
+      '5px #3a2110'
+    overlay.style.transition = 'transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1)'
+    overlay.textContent = String(MOTION_COUNTDOWN_FROM)
+    document.body.appendChild(overlay)
+    this.motionIntroCountdownElement = overlay
+    // 한 프레임 뒤에 scale(1.1) 로 페이드 인.
+    requestAnimationFrame(() => {
+      overlay.style.transform = 'translate(-50%, -50%) scale(1.1)'
+    })
 
     let remaining = MOTION_COUNTDOWN_FROM
     this.countdownTimer = this.time.addEvent({
@@ -812,17 +822,25 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
         if (this.isSceneShuttingDown) return
         remaining -= 1
         if (remaining > 0) {
-          this.countdownText?.setText(String(remaining))
-          if (this.countdownText) {
-            this.playCountdownTextTween(this.countdownText)
-          }
+          overlay.textContent = String(remaining)
+          overlay.style.transform = 'translate(-50%, -50%) scale(0.85)'
+          requestAnimationFrame(() => {
+            overlay.style.transform = 'translate(-50%, -50%) scale(1.1)'
+          })
           return
         }
         this.countdownTimer = null
-        this.destroyCountdownText()
+        this.destroyMotionIntroCountdownElement()
         this.startCurrentMotion(true)
       },
     })
+  }
+
+  private destroyMotionIntroCountdownElement() {
+    if (this.motionIntroCountdownElement) {
+      this.motionIntroCountdownElement.remove()
+      this.motionIntroCountdownElement = null
+    }
   }
 
   private startCurrentMotion(skipCountdown = false) {
@@ -842,9 +860,11 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
       this.startReadyTutorialCountdown()
     } else if (skipCountdown) {
       // intro 카운트다운이 이미 화면에 진행됐으므로 캡쳐를 바로 시작.
+      this.showSideGuideVideo()
       this.motionRecorderHandle = startScreenRecording({ scene: this })
       this.beginMotionCapture()
     } else {
+      this.showSideGuideVideo()
       this.motionRecorderHandle = startScreenRecording({ scene: this })
       this.startMotionCountdown()
     }
@@ -1179,7 +1199,6 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
 
     this.currentMotionIndex = nextMotionIndex
     this.setCurrentMotionName(this.getCurrentMotionDisplayName())
-    this.showSideGuideVideo()
     this.showMotionIntroOverlay()
   }
 
@@ -1287,12 +1306,13 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
       return
     }
 
-    // 시범 영상/모션 인트로 오버레이 (HTML video 포함) 가 떠 있으면 먼저 정리해야 결과 패널이 위에 보인다.
+    // 시범 영상/모션 인트로 오버레이 (HTML video + HTML 카운트다운) 가 떠 있으면 먼저 정리.
     this.motionIntroOverlay?.destroy(true)
     this.motionIntroOverlay = undefined
     this.guideVideoExpandOverlay?.destroy(true)
     this.guideVideoExpandOverlay = undefined
     this.destroyGuideVideoElement()
+    this.destroyMotionIntroCountdownElement()
 
     if (recordCurrentMotion) {
       this.recordCurrentMotionResult()
@@ -1910,17 +1930,23 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
       wrapper.style.height = `${bounds.height * scaleY}px`
     }
 
-    video.addEventListener(
-      'loadeddata',
-      () => {
-        loadingText?.setVisible(false)
-        options?.onReady?.()
-      },
-      { once: true },
-    )
+    let readyHandled = false
+    const handleReady = () => {
+      if (readyHandled) return
+      readyHandled = true
+      loadingText?.setVisible(false)
+      options?.onReady?.()
+    }
+    video.addEventListener('loadeddata', handleReady)
+    video.addEventListener('canplay', handleReady)
+    video.addEventListener('playing', handleReady)
     video.addEventListener(
       'error',
       () => {
+        console.warn('[TaekwondoPoomsaePracticeScene] guide video load error', {
+          src: video.src,
+          mediaError: video.error,
+        })
         loadingText?.setText('가이드 영상을 재생할 수 없어요.').setVisible(true)
       },
       { once: true },
@@ -1933,7 +1959,12 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     this.guideVideoResizeHandler = positionWrapper
     window.addEventListener('resize', positionWrapper)
 
-    void video.play().catch(() => {
+    console.log('[TaekwondoPoomsaePracticeScene] guide video play attempt', {
+      src: video.src,
+      readyState: video.readyState,
+    })
+    void video.play().catch(err => {
+      console.warn('[TaekwondoPoomsaePracticeScene] guide video play rejected', err)
       loadingText?.setText('가이드 영상을 불러오는 중입니다.').setVisible(true)
     })
   }
@@ -2151,6 +2182,7 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     this.guideVideoExpandOverlay = undefined
     this.destroyGuideVideoElement()
     this.destroyGuideMagnifierElement()
+    this.destroyMotionIntroCountdownElement()
     this.beltPromotionOverlay?.destroy(true)
     this.beltPromotionOverlay = undefined
     this.sessionResultPanel?.destroy(true)
