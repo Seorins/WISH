@@ -22,7 +22,7 @@ import {
   useUsageRankings,
 } from '@/features/activity/hooks'
 import { useFuelStatus } from '@/features/fuel/hooks'
-import { buildUsageRanking } from './mock'
+import { buildRomTrends, buildUsageRanking } from './mock'
 import type {
   AchievementStat,
   GameAchievement,
@@ -474,8 +474,8 @@ export function useReportData({ patientId, patientName, week }: UseReportDataOpt
       oneLiner: buildOneLiner(summary, achievements),
       summary,
       participation,
-      // ROM 측정 데이터는 BE 미지원 — 빈 배열로 두고 컴포넌트가 '수집 중' 안내로 처리.
-      romTrends: [],
+      // ROM 측정 데이터는 BE 미지원 — 데모용 하드코딩 mock 사용.
+      romTrends: buildRomTrends(),
       usage,
       timeBuckets,
       topBucketId,
