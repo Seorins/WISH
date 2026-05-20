@@ -1,4 +1,5 @@
 import { act, cleanup, render, waitFor } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   getActiveLiveSession,
@@ -73,6 +74,18 @@ function deferred<T>() {
   return { promise, resolve, reject }
 }
 
+function renderBridge() {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
+
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <RealtimeNotificationBridge />
+    </QueryClientProvider>,
+  )
+}
+
 afterEach(() => {
   cleanup()
   vi.clearAllMocks()
@@ -87,7 +100,7 @@ describe('RealtimeNotificationBridge', () => {
     mockGetActiveLiveSession.mockResolvedValueOnce(ACTIVE_SESSION)
     setAuthToken('guardian-token')
 
-    render(<RealtimeNotificationBridge />)
+    renderBridge()
 
     await waitFor(() => {
       expect(useNotificationStore.getState().items).toHaveLength(1)
@@ -106,7 +119,7 @@ describe('RealtimeNotificationBridge', () => {
     mockGetActiveLiveSession.mockReturnValueOnce(staleSnapshot.promise).mockResolvedValueOnce(null)
     setAuthToken('old-token')
 
-    render(<RealtimeNotificationBridge />)
+    renderBridge()
 
     await waitFor(() => {
       expect(mockGetActiveLiveSession).toHaveBeenCalledTimes(1)
@@ -133,7 +146,7 @@ describe('RealtimeNotificationBridge', () => {
     mockGetActiveLiveSession.mockResolvedValueOnce(null)
     setAuthToken('guardian-token')
 
-    render(<RealtimeNotificationBridge />)
+    renderBridge()
 
     act(() => {
       useRealtimeStore.getState().applyEvent(dialogueEmotionUpdatedEvent())

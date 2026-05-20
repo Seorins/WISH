@@ -1,9 +1,23 @@
 import { useEffect, useRef } from 'react'
+import { useQueryClient, type QueryClient } from '@tanstack/react-query'
 import {
   getActiveLiveSession,
   type RealtimeContentType,
   type RealtimeEvent,
 } from '@wish/api-client'
+import {
+  MY_ARTWORKS_QUERY_KEY,
+  MY_EXERCISE_SESSIONS_QUERY_KEY,
+  MY_MUSIC_RESULTS_QUERY_KEY,
+  MY_TAEKWONDO_SESSIONS_QUERY_KEY,
+  USAGE_STATS_DAILY_QUERY_KEY,
+} from '@/features/activity/hooks'
+import {
+  GUARDIAN_DIALOGUE_DAILY_SUMMARY_QUERY_KEY,
+  GUARDIAN_DIALOGUE_SESSIONS_QUERY_KEY,
+  GUARDIAN_DIALOGUE_SESSION_QUERY_KEY,
+  GUARDIAN_DIALOGUE_WEEKLY_TREND_QUERY_KEY,
+} from '@/features/chat/hooks'
 import { useAuthStore } from '@/shared/auth/store'
 import { useNotificationStore, type NotificationItem } from '@/stores/notificationStore'
 import { useRealtimeStore } from '@/stores/realtimeStore'
@@ -11,6 +25,7 @@ import { useRealtimeStore } from '@/stores/realtimeStore'
 // realtimeStore 의 lastEventNonce 가 증가할 때마다 새 이벤트를 notificationStore 로 변환해 push 한다.
 // 토스트 컴포넌트를 대체 — 화면 가운데 팝업 대신 헤더 종 아이콘에 누적되는 형태.
 export function RealtimeNotificationBridge() {
+  const queryClient = useQueryClient()
   const token = useAuthStore(state => state.token)
   const activeSession = useRealtimeStore(state => state.activeSession)
   const hydrateActiveSession = useRealtimeStore(state => state.hydrateActiveSession)
@@ -58,13 +73,14 @@ export function RealtimeNotificationBridge() {
     }
 
     const built = buildNotification(lastEvent)
+    invalidateRealtimeEventQueries(queryClient, lastEvent)
     if (built) {
       if (lastEvent.type === 'GAME_STARTED') {
         notifiedActiveSessionIdRef.current = lastEvent.loginSessionId
       }
       push(built)
     }
-  }, [lastEvent, lastEventNonce, push])
+  }, [lastEvent, lastEventNonce, push, queryClient])
 
   useEffect(() => {
     if (!activeSession) {
@@ -132,6 +148,24 @@ function buildNotification(event: RealtimeEvent): BuiltNotification | null {
       }
     case 'CONNECTED':
       return null
+  }
+}
+
+function invalidateRealtimeEventQueries(queryClient: QueryClient, event: RealtimeEvent) {
+  if (event.type === 'CONTENT_ENDED') {
+    void queryClient.invalidateQueries({ queryKey: [USAGE_STATS_DAILY_QUERY_KEY] })
+    void queryClient.invalidateQueries({ queryKey: [MY_MUSIC_RESULTS_QUERY_KEY] })
+    void queryClient.invalidateQueries({ queryKey: [MY_ARTWORKS_QUERY_KEY] })
+    void queryClient.invalidateQueries({ queryKey: [MY_TAEKWONDO_SESSIONS_QUERY_KEY] })
+    void queryClient.invalidateQueries({ queryKey: [MY_EXERCISE_SESSIONS_QUERY_KEY] })
+    return
+  }
+
+  if (event.type === 'DIALOGUE_EMOTION_UPDATED') {
+    void queryClient.invalidateQueries({ queryKey: [GUARDIAN_DIALOGUE_SESSIONS_QUERY_KEY] })
+    void queryClient.invalidateQueries({ queryKey: [GUARDIAN_DIALOGUE_SESSION_QUERY_KEY] })
+    void queryClient.invalidateQueries({ queryKey: [GUARDIAN_DIALOGUE_DAILY_SUMMARY_QUERY_KEY] })
+    void queryClient.invalidateQueries({ queryKey: [GUARDIAN_DIALOGUE_WEEKLY_TREND_QUERY_KEY] })
   }
 }
 

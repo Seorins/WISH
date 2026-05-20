@@ -64,8 +64,8 @@ export function ChatPage() {
     for (const c of CHARACTERS) {
       const n = CHARACTER_ID_TO_NPC[c.id]
       out[c.id] = n
-        ? (npcStatuses[n] ?? { tone: null, hasSession: false })
-        : { tone: null, hasSession: false }
+        ? (npcStatuses[n] ?? { tone: null, hasSession: false, isLatest: false, latestAt: null })
+        : { tone: null, hasSession: false, isLatest: false, latestAt: null }
     }
     return out
   }, [npcStatuses])

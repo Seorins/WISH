@@ -25,7 +25,7 @@ const TONE_CLASS: Record<EmotionTone, string> = {
 export function CharacterSidebar({ characters, selectedId, onSelect, statuses }: Props) {
   return (
     <div className={styles.card}>
-      <h3 className={styles.title}>대화 캐릭터</h3>
+      <h3 className={styles.title}>대화 기록</h3>
       <div className={styles.list}>
         {characters.map(c => {
           const isActive = c.id === selectedId
@@ -57,9 +57,15 @@ export function CharacterSidebar({ characters, selectedId, onSelect, statuses }:
               <span className={styles.meta}>
                 <span className={styles.name}>{c.name}</span>
                 {tone ? (
-                  <span className={`${styles.tone} ${TONE_CLASS[tone]}`}>{TONE_LABEL[tone]}</span>
+                  <span className={styles.statusRow}>
+                    <span className={`${styles.tone} ${TONE_CLASS[tone]}`}>{TONE_LABEL[tone]}</span>
+                    {status?.isLatest ? <span className={styles.recentBadge}>최근</span> : null}
+                  </span>
                 ) : hasSession ? (
-                  <span className={`${styles.tone} ${styles.toneNeutral}`}>보통</span>
+                  <span className={styles.statusRow}>
+                    <span className={`${styles.tone} ${styles.toneNeutral}`}>대화 있음</span>
+                    {status?.isLatest ? <span className={styles.recentBadge}>최근</span> : null}
+                  </span>
                 ) : (
                   <span className={`${styles.tone} ${styles.toneNone}`}>대화 없음</span>
                 )}
