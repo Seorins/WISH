@@ -49,6 +49,7 @@ import {
   type VillagePortalKey,
 } from './villagePortals'
 import { VillageObstacleManager } from './villageObstacles'
+import { VillageBotsController } from '@/features/village-bots/VillageBotsController'
 
 const NPC_DIALOG_DISTANCE = 28
 const PHOTO_BOOTH_INTERACT_DISTANCE = 40
@@ -390,6 +391,7 @@ export class VillageScene extends Phaser.Scene {
   private isGomokuBoardInRange = false
   private dialogs = new Map<VillagerNpcId, SimpleDialogUi>()
   private villageNpcs: VillageNpcInstance[] = []
+  private villageBots: VillageBotsController | null = null
   private portalCooldownUntil = 0
   private worldInteractionCooldownUntil = 0
   private portals = new Map<VillagePortalKey, Phaser.Geom.Rectangle>()
@@ -733,6 +735,16 @@ export class VillageScene extends Phaser.Scene {
       worldHeight: H,
       roomId: 'village.default',
     })
+    this.villageBots = new VillageBotsController({
+      scene: this,
+      worldWidth: W,
+      worldHeight: H,
+      obstacleQuery: this.obstacleManager ?? null,
+    })
+    this.villageBots.start()
+    const villageBotColliders = this.villageBots.getPhysicsGroup()
+    this.physics.add.collider(this.player, villageBotColliders)
+    this.physics.add.collider(villageBotColliders, this.obstacles)
     this.emojiPalette = createVillageEmojiPalette(this, {
       onSelect: emoji => {
         if (this.isEmojiOverlayOpen()) return
@@ -826,6 +838,8 @@ export class VillageScene extends Phaser.Scene {
       this.input.keyboard?.off('keydown-BACKSPACE', this.undoObstaclePolygonPoint, this)
       this.villageRealtime?.destroy()
       this.villageRealtime = null
+      this.villageBots?.destroy()
+      this.villageBots = null
       this.disposeEmojiBeltSync?.()
       this.disposeEmojiBeltSync = null
       this.emojiPalette?.destroy()
@@ -877,6 +891,7 @@ export class VillageScene extends Phaser.Scene {
     this.lastDirection = movement.lastDirection
     this.preventPolygonObstaclePenetration(delta)
     this.resolvePolygonObstacleCollision()
+    this.villageBots?.update(delta)
 
     this.villageRealtime?.publishLocal(this.player, this.lastDirection, movement.moving)
     const overlaysOpen = this.isEmojiOverlayOpen()
