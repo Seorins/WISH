@@ -1,6 +1,15 @@
-import { Suspense, useCallback, useEffect, useRef, useState, type ComponentRef } from 'react'
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentRef,
+} from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
-import { Html, OrbitControls, useAnimations, useGLTF } from '@react-three/drei'
+import { OrbitControls, useAnimations, useGLTF } from '@react-three/drei'
+import { SkeletonUtils } from 'three-stdlib'
 import { Matrix4, MathUtils, Quaternion, Vector3, type Bone, type Group } from 'three'
 import squatGlbUrl from '@/assets/squat.glb?url'
 import walkingGlbUrl from '@/assets/walking.glb?url'
@@ -1182,7 +1191,10 @@ function CharacterModel({
   playbackTimeMs?: number | null
   onMotionFrame: (joints: Joint[]) => void
 }) {
-  const { scene } = useGLTF(wishGlbUrl)
+  // useGLTF 캐시 scene 을 직접 mutate 하면 같은 GLB 를 쓰는 다른 페이지(예: 채팅 WishCharacter3D)
+  // 모델에 자세가 누수됨. 본/스킨까지 깊은 복사해 인스턴스별로 격리.
+  const { scene: rawScene } = useGLTF(wishGlbUrl)
+  const scene = useMemo(() => SkeletonUtils.clone(rawScene), [rawScene])
   const { animations: walkingClips } = useGLTF(walkingGlbUrl)
   const { animations: squatClips } = useGLTF(squatGlbUrl)
   const allClips = [...walkingClips, ...squatClips]
@@ -1673,20 +1685,6 @@ function CharacterModel({
   return (
     <group ref={groupRef} position={[0, MODEL_OFFSET_Y, 0]} scale={BASE_SCALE}>
       <primitive object={scene} />
-      {joints.map(j => (
-        <group
-          key={j.id}
-          ref={el => {
-            if (el) markerRefs.current.set(j.id, el)
-            else markerRefs.current.delete(j.id)
-          }}
-          position={j.position}
-        >
-          <Html center zIndexRange={[40, 0]}>
-            <div className={styles.marker} aria-hidden />
-          </Html>
-        </group>
-      ))}
     </group>
   )
 }

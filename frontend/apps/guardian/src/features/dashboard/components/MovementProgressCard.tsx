@@ -95,7 +95,7 @@ export function MovementProgressCard() {
     () => movements.find(movement => movement.id === activeMotionId) ?? null,
     [activeMotionId, movements],
   )
-  const { data: replayResult, isFetching: isReplayFetching } = useGymnasticsMotionReplay(
+  const { data: replayResult } = useGymnasticsMotionReplay(
     activeMovement?.motionResultId,
     activeMovement?.replayAvailable === true,
   )
@@ -250,98 +250,31 @@ export function MovementProgressCard() {
         </div>
         {activeMovement && (
           <div className={styles.replayPanel}>
-            <div className={styles.replayHeader}>
-              <span className={styles.replayTitle}>{activeMovement.name}</span>
-              <span className={styles.replayState}>
-                {isReplayFetching
-                  ? '불러오는 중'
-                  : hasStoredReplay
-                    ? selectedReplayMode === 'compact'
-                      ? 'AI 요약'
-                      : '30fps 원본'
-                    : '기본 동작'}
-              </span>
-            </div>
-            {(rawReplayClip || compactReplayClip) && (
-              <div className={styles.replayModeTabs} aria-label="리플레이 방식 선택">
-                <button
-                  type="button"
-                  className={`${styles.replayModeButton} ${
-                    selectedReplayMode === 'raw' ? styles.replayModeButtonActive : ''
-                  }`}
-                  disabled={!rawReplayClip}
-                  onClick={() => setReplayMode('raw')}
-                >
-                  30fps 원본
-                </button>
-                <button
-                  type="button"
-                  className={`${styles.replayModeButton} ${
-                    selectedReplayMode === 'compact' ? styles.replayModeButtonActive : ''
-                  }`}
-                  disabled={!compactReplayClip}
-                  onClick={() => setReplayMode('compact')}
-                >
-                  AI 요약
-                </button>
-              </div>
-            )}
             {hasStoredReplay && activeClip ? (
-              <>
-                <div className={styles.replayControls}>
-                  <button
-                    type="button"
-                    className={styles.replayButton}
-                    onClick={() => setIsReplayPlaying(value => !value)}
-                  >
-                    {isReplayPlaying ? '일시정지' : '재생'}
-                  </button>
-                  <input
-                    className={styles.replaySlider}
-                    type="range"
-                    min={0}
-                    max={Math.max(1, activeClip.durationMs)}
-                    value={Math.min(replayTimeMs, Math.max(1, activeClip.durationMs))}
-                    onChange={event => {
-                      setIsReplayPlaying(false)
-                      setReplayTimeMs(Number(event.currentTarget.value))
-                    }}
-                    aria-label="리플레이 재생 위치"
-                  />
-                  <span className={styles.replayTime}>
-                    {formatReplayTime(replayTimeMs)} / {formatReplayTime(activeClip.durationMs)}
-                  </span>
-                  {activeClip.representativeSegment && (
-                    <button
-                      type="button"
-                      className={styles.replayButton}
-                      onClick={() => {
-                        setIsReplayPlaying(false)
-                        setReplayTimeMs(activeClip.representativeSegment?.startMs ?? 0)
-                      }}
-                    >
-                      대표 구간
-                    </button>
-                  )}
-                </div>
-                {activeClip.markers && activeClip.markers.length > 0 && (
-                  <div className={styles.replayMarkerList}>
-                    {activeClip.markers.slice(0, 3).map((marker, index) => (
-                      <button
-                        key={`${marker.startMs}-${marker.endMs}-${index}`}
-                        type="button"
-                        className={styles.replayMarker}
-                        onClick={() => {
-                          setIsReplayPlaying(false)
-                          setReplayTimeMs(marker.startMs)
-                        }}
-                      >
-                        {marker.reason || 'AI 표시 구간'} {formatReplayTime(marker.startMs)}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </>
+              <div className={styles.replayControls}>
+                <button
+                  type="button"
+                  className={styles.replayButton}
+                  onClick={() => setIsReplayPlaying(value => !value)}
+                >
+                  {isReplayPlaying ? '일시정지' : '재생'}
+                </button>
+                <input
+                  className={styles.replaySlider}
+                  type="range"
+                  min={0}
+                  max={Math.max(1, activeClip.durationMs)}
+                  value={Math.min(replayTimeMs, Math.max(1, activeClip.durationMs))}
+                  onChange={event => {
+                    setIsReplayPlaying(false)
+                    setReplayTimeMs(Number(event.currentTarget.value))
+                  }}
+                  aria-label="리플레이 재생 위치"
+                />
+                <span className={styles.replayTime}>
+                  {formatReplayTime(replayTimeMs)} / {formatReplayTime(activeClip.durationMs)}
+                </span>
+              </div>
             ) : (
               <p className={styles.replayFallback}>
                 {activeMovement.replayAvailable
