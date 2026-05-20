@@ -1061,7 +1061,7 @@
         "엄마도 그 한 마디면 마음 놓일걸.",
         "오늘 와줘서 고마워."
       ],
-      "closingLine": "또 놀러 와!"
+      "closingLine": "(꼬리로 손 잡으며) 또 와!"
     },
     "mky_inj_say_be_near": {
       "choiceIntentId": "mky_inj_say_be_near",
@@ -1080,7 +1080,7 @@
         "옆에만 있어도 든든하지.",
         "한 번 슬쩍 부탁해봐 — 옆자리 비워주실 거야."
       ],
-      "closingLine": "다음에 또 와!"
+      "closingLine": "옆자리 비워두고 기다릴게!"
     },
     "mky_inj_just_go": {
       "choiceIntentId": "mky_inj_just_go",
@@ -1099,7 +1099,7 @@
         "말 없이 가도 엄마가 알아챌 거야.",
         "그 정도 사이잖아."
       ],
-      "closingLine": "또 와!"
+      "closingLine": "(꼬리 살랑) 잘 갔다 와!"
     },
     "mky_inj_yes_together": {
       "choiceIntentId": "mky_inj_yes_together",
@@ -1118,7 +1118,7 @@
         "오케이! 다음에 무서울 때 코몽이 떠올려.",
         "(꼬리로 손 흔들며) 같이 갈게."
       ],
-      "closingLine": "또 와!"
+      "closingLine": "코몽이는 항상 여기야!"
     },
     "mky_inj_be_near_me": {
       "choiceIntentId": "mky_inj_be_near_me",
@@ -1137,7 +1137,7 @@
         "응, 옆에 있을게.",
         "무서울 때마다 코몽이 떠올려."
       ],
-      "closingLine": "또 놀러 와!"
+      "closingLine": "(꼬리 살랑) 여기 있을게."
     },
     "mky_inj_feel_good": {
       "choiceIntentId": "mky_inj_feel_good",
@@ -1157,7 +1157,7 @@
       "endingNpcLines": [
         "오케이! 그럼 다음에 주사 맞을 때 코몽이 꼬리 떠올려."
       ],
-      "closingLine": "또 놀러 와!"
+      "closingLine": "꼬리 흔들면서 기다릴게!"
     },
     "mky_inj_still_scared": {
       "choiceIntentId": "mky_inj_still_scared",
@@ -1178,7 +1178,7 @@
         "그럼 엄마 손도 같이 잡아.",
         "둘이면 두 배로 든든해."
       ],
-      "closingLine": "다음에 또 와!"
+      "closingLine": "무서울 때 또 와. 옆에 있을게."
     },
     "mky_inj_ask_teacher": {
       "choiceIntentId": "mky_inj_ask_teacher",
@@ -1197,7 +1197,7 @@
         "(꼬리 살랑) 좋은 선택이야.",
         "'오늘 뭐 해요?' 한 마디만 던져봐 — 선생님이 차근차근 풀어주실 거야."
       ],
-      "closingLine": "또 와!"
+      "closingLine": "들은 거 와서 알려줘!"
     },
     "mky_inj_ask_mom": {
       "choiceIntentId": "mky_inj_ask_mom",
@@ -1235,7 +1235,7 @@
         "응, 지금은 그게 편하면 그래도 돼.",
         "궁금해지면 그때 와도 늦지 않아."
       ],
-      "closingLine": "또 놀러 와!"
+      "closingLine": "마음 가벼울 때 들러!"
     },
     "mky_inj_with_monkey": {
       "choiceIntentId": "mky_inj_with_monkey",
@@ -1254,7 +1254,7 @@
         "오케이! 코몽이도 그게 좋아.",
         "(옆에 와서 앉으며) 말 안 해도 돼."
       ],
-      "closingLine": "또 와!"
+      "closingLine": "(꼬리 살랑) 가만히 있어도 좋아."
     },
     "mky_inj_stay_still": {
       "choiceIntentId": "mky_inj_stay_still",
@@ -1273,7 +1273,7 @@
         "응, 가만히 있어도 충분해.",
         "(꼬리 살랑) 코몽이 옆에서 같이 있을게."
       ],
-      "closingLine": "또 와!"
+      "closingLine": "쉬다가 또 와!"
     },
     "mky_inj_other_friend": {
       "choiceIntentId": "mky_inj_other_friend",
@@ -1292,7 +1292,7 @@
         "오, 좋아! 가볍게 놀다 와.",
         "코몽이는 여기서 기다릴게."
       ],
-      "closingLine": "또 와!"
+      "closingLine": "친구랑 놀고 또 와!"
     },
 
     "mky_fru_stuck": {
@@ -1394,7 +1394,7 @@
         "오케이! 코몽이도 좋아.",
         "(옆에 앉으며) 같이 있자."
       ],
-      "closingLine": "또 와."
+      "closingLine": "(꼬리 살랑) 또 와."
     },
     "mky_fru_angry_pause": {
       "choiceIntentId": "mky_fru_angry_pause",
@@ -1452,7 +1452,7 @@
         "오케이, 코로 쭈욱… 입으로 후우.",
         "코몽이도 같이. (후우) 됐어."
       ],
-      "closingLine": "또 와!"
+      "closingLine": "(꼬리 살랑) 호흡 잊지 마, 또 와!"
     },
     "mky_fru_close_eyes": {
       "choiceIntentId": "mky_fru_close_eyes",
@@ -1471,7 +1471,7 @@
         "응, 눈 감고 잠깐만.",
         "마음이 조금 차분해질 때까지."
       ],
-      "closingLine": "또 와!"
+      "closingLine": "(꼬리 살짝) 다음에 또 와서 같이 감자."
     },
     "mky_fru_tell_mom": {
       "choiceIntentId": "mky_fru_tell_mom",
@@ -1490,7 +1490,7 @@
         "(꼬리 살랑) 엄마한테 슬쩍 가서 '나 좀 화났어' 라고 해봐.",
         "말로 꺼내면 마음이 한결 가벼워져."
       ],
-      "closingLine": "또 와!"
+      "closingLine": "(꼬리 살랑) 풀고 또 와!"
     },
     "mky_fru_tell_monkey": {
       "choiceIntentId": "mky_fru_tell_monkey",
@@ -1528,7 +1528,7 @@
         "좋아! 발 까딱 손 흔들.",
         "너무 세게 말고."
       ],
-      "closingLine": "또 와!"
+      "closingLine": "또 흔들고 싶을 때 와!"
     },
     "mky_fru_lay_down": {
       "choiceIntentId": "mky_fru_lay_down",
@@ -1547,7 +1547,7 @@
         "응, 누워서 풀리기도 해.",
         "코몽이도 누울게."
       ],
-      "closingLine": "또 와!"
+      "closingLine": "(같이 누워서) 또 와!"
     },
     "mky_fru_quiet": {
       "choiceIntentId": "mky_fru_quiet",
@@ -1566,7 +1566,7 @@
         "응, 조용한 거 좋지.",
         "코몽이도 입 꾹."
       ],
-      "closingLine": "또 와."
+      "closingLine": "(입 꾹) 또 와."
     },
     "mky_fru_hug": {
       "choiceIntentId": "mky_fru_hug",
@@ -1585,7 +1585,7 @@
         "응, 안기고 싶은 마음 자연스러워.",
         "가족한테 슬쩍 가서 손 내밀어봐. 안아주실걸."
       ],
-      "closingLine": "또 와!"
+      "closingLine": "안긴 뒤에 또 와!"
     },
     "mky_fru_with_monkey": {
       "choiceIntentId": "mky_fru_with_monkey",
@@ -1603,7 +1603,7 @@
       "endingNpcLines": [
         "(꼬리 살랑) 코몽이가 옆에서 같이 있을게."
       ],
-      "closingLine": "또 와!"
+      "closingLine": "(꼬리 살랑) 또 와."
     },
 
     "mky_play_music": {
@@ -1719,7 +1719,7 @@
         "좋아, 살짝만.",
         "(코몽이 손 흔드는 흉내) 힘들면 바로 멈춰."
       ],
-      "closingLine": "또 놀러 와!"
+      "closingLine": "같이 손 흔들러 또 와!"
     },
     "mky_play_feet": {
       "choiceIntentId": "mky_play_feet",
@@ -1738,7 +1738,7 @@
         "오케이, 발 까딱!",
         "(꼬리도 까딱) 됐다."
       ],
-      "closingLine": "또 와!"
+      "closingLine": "발 까딱 하러 또 와!"
     },
     "mky_play_all": {
       "choiceIntentId": "mky_play_all",
@@ -1758,7 +1758,7 @@
         "코몽이는 꼬리, 너는 손발.",
         "너무 무리는 하지 말고."
       ],
-      "closingLine": "또 와!"
+      "closingLine": "다음엔 더 신나게 흔들자!"
     },
     "mky_play_with_me": {
       "choiceIntentId": "mky_play_with_me",
@@ -1777,7 +1777,7 @@
         "오케이!",
         "(옆에 와서 앉으며) 가만히 같이 있자. (하품)"
       ],
-      "closingLine": "또 와!"
+      "closingLine": "(옆에 누워서) 또 와!"
     },
     "mky_play_far_watch": {
       "choiceIntentId": "mky_play_far_watch",
@@ -1796,7 +1796,7 @@
         "응, 멀리서.",
         "(나무 위에서 손 흔들며) 코몽이 여기 있어."
       ],
-      "closingLine": "또 와!"
+      "closingLine": "나무 위에서 기다릴게!"
     },
     "mky_play_soft_music": {
       "choiceIntentId": "mky_play_soft_music",
@@ -1815,7 +1815,7 @@
         "오케이, 잔잔한 거 작게.",
         "코몽이도 졸린다. (하품)"
       ],
-      "closingLine": "다음에 또 와!"
+      "closingLine": "(하품) 다음엔 더 작게 틀어두자."
     },
 
     "nurse_pain_hurts": {
@@ -1864,7 +1864,7 @@
         "(노트 펼치며) 배 아픈 건 식사나 물 신호일 때도 있어.",
         "선생님께 알리고 같이 확인하자."
       ],
-      "closingLine": "또 와줘."
+      "closingLine": "(노트에 메모하며) 또 와."
     },
     "nurse_pain_dunno_where": {
       "choiceIntentId": "nurse_pain_dunno_where", "text": "잘 모르겠어요",
@@ -1878,7 +1878,7 @@
         "(작게 끄덕) 자리 잡혀가는 중인 거.",
         "잠깐 옆에 앉아 있다 가."
       ],
-      "closingLine": "또 와."
+      "closingLine": "(의자 끌어다 놓으며) 또 와."
     },
     "nurse_pain_bed": {
       "choiceIntentId": "nurse_pain_bed", "text": "침대로 갈래요",
@@ -1889,7 +1889,7 @@
       "topicKeywords": ["휴식"], "sentimentWords": [],
       "endingType": "REST_ONLY",
       "endingNpcLines": ["(끄덕) 같이 가줄게.", "베개 자리 데워둘게."],
-      "closingLine": "또 와줘."
+      "closingLine": "푹 쉬다 와."
     },
     "nurse_pain_mom_near": {
       "choiceIntentId": "nurse_pain_mom_near", "text": "엄마 옆이 좋아요",
@@ -1903,7 +1903,7 @@
         "머리 무거운 거 진짜 힘들지.",
         "엄마 옆에 가서 잠깐 누워봐. 엄마도 그 마음 들으면 옆에 와주실걸."
       ],
-      "closingLine": "또 와."
+      "closingLine": "엄마 옆에서 푹 쉬다 와."
     },
     "nurse_pain_tell_teacher": {
       "choiceIntentId": "nurse_pain_tell_teacher", "text": "선생님께 알릴래요",
@@ -1917,7 +1917,7 @@
         "(가까이 와서 작은 목소리로) 잘 결정했어.",
         "혼자 가기 무서우면 조은이가 옆에서 같이 갈게."
       ],
-      "closingLine": "또 와줘."
+      "closingLine": "여기 자리 비워둘게."
     },
     "nurse_pain_pain_worry": {
       "choiceIntentId": "nurse_pain_pain_worry", "text": "아플까봐요",
@@ -1932,7 +1932,7 @@
         "괜찮아, 아픈 걸 줄이는 방법은 여러 가지 있어.",
         "(노트 펼치며) 어떤 방법이 너한테 맞을지 선생님께 같이 물어보자."
       ],
-      "closingLine": "또 와."
+      "closingLine": "노트 챙겨두고 기다릴게."
     },
     "nurse_pain_time_worry": {
       "choiceIntentId": "nurse_pain_time_worry", "text": "오래 걸릴까봐",
@@ -1946,7 +1946,7 @@
         "시술마다 다르지만 대부분 짧아.",
         "오늘 거 정확히 몇 분인지 선생님께 같이 물어보자. 시간 보이면 마음이 좀 잡혀."
       ],
-      "closingLine": "또 와."
+      "closingLine": "물어보고 와서 알려줘."
     },
     "nurse_pain_unknown_worry": {
       "choiceIntentId": "nurse_pain_unknown_worry", "text": "뭐 하는지 몰라서요",
@@ -1960,7 +1960,7 @@
         "모르는 게 제일 무섭지.",
         "조은이가 종이에 순서 같이 적어줄게. 한 단계씩 보면 마음 가벼워져."
       ],
-      "closingLine": "또 와줘."
+      "closingLine": "노트 펴고 기다릴게."
     },
     "nurse_pain_fatigue_signal": {
       "choiceIntentId": "nurse_pain_fatigue_signal", "text": "피곤해질 때 알게 돼요",
@@ -1974,7 +1974,7 @@
         "(작게 끄덕) 그 신호 잘 봐.",
         "무리하지 말고 천천히 보내."
       ],
-      "closingLine": "또 와."
+      "closingLine": "(끄덕) 잘 보내."
     },
     "nurse_pain_words": {
       "choiceIntentId": "nurse_pain_words", "text": "말로 알릴래요",
@@ -1988,7 +1988,7 @@
         "말로 알리는 거, 진짜 잘하는 거야.",
         "조은이도 처음엔 그렇게 배웠어. '오늘 좀 무거워요' 같이 짧은 한 줄이면 돼."
       ],
-      "closingLine": "또 와."
+      "closingLine": "전한 거 어땠는지 와서 알려줘."
     },
     "nurse_pain_come_back": {
       "choiceIntentId": "nurse_pain_come_back", "text": "조은이한테 와요",
@@ -2002,7 +2002,7 @@
         "여기 자리는 항상 비워둘게.",
         "와줘서 고마워."
       ],
-      "closingLine": "또 와."
+      "closingLine": "(작게 끄덕) 언제든."
     },
 
     "nurse_check_tired": {
@@ -2051,7 +2051,7 @@
         "엄마 옆은 진짜 안전한 자리지.",
         "가서 잠깐 기대 있어. 마음이 천천히 가라앉을 거야."
       ],
-      "closingLine": "또 와."
+      "closingLine": "엄마 옆에서 푹 쉬어."
     },
     "nurse_check_sleep": {
       "choiceIntentId": "nurse_check_sleep", "text": "자고 싶어요",
@@ -2079,7 +2079,7 @@
         "(끄덕) 응.",
         "무슨 일 있으면 조은이 부르면 돼."
       ],
-      "closingLine": "또 와."
+      "closingLine": "(의자에서 기다릴게) 또 와."
     },
     "nurse_check_lay_with_joeun": {
       "choiceIntentId": "nurse_check_lay_with_joeun", "text": "조은이 옆에서",
@@ -2093,7 +2093,7 @@
         "(의자 끌어와 앉으며) 그래.",
         "가만히 옆에 있을게."
       ],
-      "closingLine": "또 와."
+      "closingLine": "(의자 안 치우고) 또 와."
     },
     "nurse_check_lay_with_mom": {
       "choiceIntentId": "nurse_check_lay_with_mom", "text": "엄마랑",
@@ -2107,7 +2107,7 @@
         "엄마 옆에서 자면 잠도 더 푹 와.",
         "가서 슬쩍 손 잡아봐. 같이 누워줄걸."
       ],
-      "closingLine": "또 와."
+      "closingLine": "엄마 손 잡고 푹 자."
     },
     "nurse_check_spinning": {
       "choiceIntentId": "nurse_check_spinning", "text": "방이 빙빙 돌아요",
@@ -2136,7 +2136,7 @@
         "잠깐도 몸이 보내는 신호니까 지나치진 말자.",
         "물 한 모금 마시고 5분만 앉아 있어봐. 그래도 또 그러면 조은이한테 와줘."
       ],
-      "closingLine": "또 와."
+      "closingLine": "어땠는지 와서 알려줘."
     },
     "nurse_check_mild_dizzy": {
       "choiceIntentId": "nurse_check_mild_dizzy", "text": "조금 어지러워요",
@@ -2150,7 +2150,7 @@
         "조금이어도 알아두는 게 좋아.",
         "잠깐 앉아서 천천히 숨 쉬어봐. 가라앉지 않으면 조은이한테 알려줘."
       ],
-      "closingLine": "또 와."
+      "closingLine": "괜찮아지면 또 와."
     },
     "nurse_check_play_light": {
       "choiceIntentId": "nurse_check_play_light", "text": "가볍게 놀고 싶어요",
@@ -2164,7 +2164,7 @@
         "(작게 끄덕) 좋아.",
         "가벼운 거면 뭐든. 마음 가는 대로 보내."
       ],
-      "closingLine": "또 와."
+      "closingLine": "(작게 웃으며) 즐거운 일 갖다 줘."
     },
     "nurse_check_walk": {
       "choiceIntentId": "nurse_check_walk", "text": "잠깐 산책요",
@@ -2178,7 +2178,7 @@
         "마을 한 바퀴 천천히.",
         "무리는 안 하고."
       ],
-      "closingLine": "또 와줘."
+      "closingLine": "한 바퀴 돌고 와."
     },
     "nurse_check_chat": {
       "choiceIntentId": "nurse_check_chat", "text": "조은이랑 얘기하고 싶어요",
@@ -2192,7 +2192,7 @@
         "오, 같이 앉을까?",
         "(노트 덮으며) 조은이도 쉬는 시간 좋아해."
       ],
-      "closingLine": "또 와."
+      "closingLine": "(의자 두고) 이쪽으로 와."
     },
 
     "nurse_cur_next": {
@@ -2239,7 +2239,7 @@
         "엄마 손이 닿으면 마음 한결 가벼워지지.",
         "둘이서 물어보면 들은 거 더 잘 기억나."
       ],
-      "closingLine": "또 와."
+      "closingLine": "엄마랑 들은 거 와서 알려줘."
     },
     "nurse_cur_ask_me": {
       "choiceIntentId": "nurse_cur_ask_me", "text": "조은이 알려주세요",
@@ -2267,7 +2267,7 @@
         "(끄덕) 짧고 좋아.",
         "오늘 무슨 일 있는지 미리 알면 마음이 한결 가벼워질 거야."
       ],
-      "closingLine": "또 와."
+      "closingLine": "들은 거 와서 같이 적자."
     },
     "nurse_cur_ask_how_long": {
       "choiceIntentId": "nurse_cur_ask_how_long", "text": "'얼마나 걸려요?'",
@@ -2281,7 +2281,7 @@
         "시간 보이면 마음이 좀 잡혀.",
         "엄마도 시간 들으면 같이 기다려주실 거야."
       ],
-      "closingLine": "또 와줘."
+      "closingLine": "시간 알면 와서 알려줘."
     },
     "nurse_cur_ask_will_hurt": {
       "choiceIntentId": "nurse_cur_ask_will_hurt", "text": "'아플까요?'",
@@ -2295,7 +2295,7 @@
         "(작게 끄덕) 무서운 거 당연해.",
         "괜찮아, 아픈 걸 줄이는 방법이 여러 가지 있거든."
       ],
-      "closingLine": "또 와."
+      "closingLine": "(작게 끄덕) 무서울 땐 와."
     },
     "nurse_cur_med_why": {
       "choiceIntentId": "nurse_cur_med_why", "text": "왜 이걸 먹어요?",
@@ -2309,7 +2309,7 @@
         "약은 너 나아지게 도와주는 거야.",
         "약마다 하는 일이 달라서, 자세한 건 선생님께 같이 가서 물어보자."
       ],
-      "closingLine": "또 와."
+      "closingLine": "같이 물어보고 또 와."
     },
     "nurse_cur_med_when": {
       "choiceIntentId": "nurse_cur_med_when", "text": "언제까지 먹어요?",
@@ -2323,7 +2323,7 @@
         "선생님께 '언제까지 먹어요?' 라고 물어봐.",
         "기간 보이면 마음이 가벼워."
       ],
-      "closingLine": "또 와."
+      "closingLine": "들은 기간 같이 적자."
     },
     "nurse_cur_med_good": {
       "choiceIntentId": "nurse_cur_med_good", "text": "먹으면 뭐가 좋아져요?",
@@ -2337,7 +2337,7 @@
         "아픈 게 조금씩 작아지거나, 몸이 회복하는 거 도와줘.",
         "(작게 웃으며) 정확한 변화는 선생님이 더 잘 알아. 같이 가서 들어보자."
       ],
-      "closingLine": "또 와줘."
+      "closingLine": "(작게 웃으며) 들은 거 와서 얘기해줘."
     },
     "nurse_cur_chat_today": {
       "choiceIntentId": "nurse_cur_chat_today", "text": "오늘 있었던 일이요",
@@ -2351,7 +2351,7 @@
         "(의자 끌어와 앉으며) 응.",
         "천천히 풀어줘. 조은이 노트 덮을게."
       ],
-      "closingLine": "또 와."
+      "closingLine": "노트 덮고 듣고 있을게."
     },
     "nurse_cur_chat_anything": {
       "choiceIntentId": "nurse_cur_chat_anything", "text": "뭐든지요",
@@ -2365,7 +2365,7 @@
         "오, 그것도 좋아.",
         "조은이는 듣는 거 잘해."
       ],
-      "closingLine": "또 와."
+      "closingLine": "(의자 끌어와) 또 와."
     },
     "nurse_cur_chat_joeun": {
       "choiceIntentId": "nurse_cur_chat_joeun", "text": "조은이 얘기 듣고 싶어요",
@@ -2379,7 +2379,7 @@
         "음… 어제 옆 방 친구가 그림책 빌려달라고 했어.",
         "근데 그 책 내 거 아닌데. (작게 웃으며)"
       ],
-      "closingLine": "또 와줘."
+      "closingLine": "(작게 웃으며) 또 와."
     },
 
     "sleep_eyes_close": {
@@ -2423,7 +2423,7 @@
       "topicKeywords": ["휴식"], "sentimentWords": [],
       "endingType": "REST_ONLY",
       "endingNpcLines": ["(하품) 응. 가만히도 일이야.", "건빈이가 옆에서 같이 있을게."],
-      "closingLine": "또 와줘."
+      "closingLine": "베개 자리 데워둘게."
     },
     "sleep_eyes_short": {
       "choiceIntentId": "sleep_eyes_short", "text": "조금만요",
@@ -2434,7 +2434,7 @@
       "topicKeywords": ["휴식"], "sentimentWords": [],
       "endingType": "REST_THEN_ACTIVITY",
       "endingNpcLines": ["(끄덕끄덕) 짧게도 마음은 가벼워져.", "마음 풀리면 그때 일어나자."],
-      "closingLine": "또 와."
+      "closingLine": "(끄덕끄덕) 푹 자고 또 와."
     },
     "sleep_eyes_breath_ok": {
       "choiceIntentId": "sleep_eyes_breath_ok", "text": "응, 풀렸어요",
@@ -2446,7 +2446,7 @@
       "sentimentWords": [{"phrase": "풀렸어요", "tone": "POSITIVE"}],
       "endingType": "CALM_DOWN",
       "endingNpcLines": ["(작게 웃으며) 다행이야.", "그 호흡, 기억해뒀다 다음에도 써."],
-      "closingLine": "또 와줘."
+      "closingLine": "(작게 웃으며) 또 와."
     },
     "sleep_eyes_breath_some": {
       "choiceIntentId": "sleep_eyes_breath_some", "text": "조금이요",
@@ -2457,7 +2457,7 @@
       "topicKeywords": ["호흡", "휴식"], "sentimentWords": [],
       "endingType": "REST_THEN_ACTIVITY",
       "endingNpcLines": ["(끄덕) 더 잠잠해질 때까지.", "건빈이도 같이 숨 쉴게."],
-      "closingLine": "또 와."
+      "closingLine": "숨 잠잠해지면 또 와."
     },
     "sleep_eyes_breath_still": {
       "choiceIntentId": "sleep_eyes_breath_still", "text": "아직이요",
@@ -2471,7 +2471,7 @@
         "그럴 땐 혼자보다 둘이 더 잘 풀려.",
         "엄마 옆에 가서 손 잡고 다시 한 번 같이 쉬어봐."
       ],
-      "closingLine": "또 와줘."
+      "closingLine": "엄마 옆에서 풀리면 와줘."
     },
     "sleep_eyes_side": {
       "choiceIntentId": "sleep_eyes_side", "text": "옆으로요",
@@ -2482,7 +2482,7 @@
       "topicKeywords": ["휴식"], "sentimentWords": [],
       "endingType": "REST_ONLY",
       "endingNpcLines": ["(같이 옆으로 누우며) 응.", "건빈이는 왼쪽이 좋더라."],
-      "closingLine": "또 와."
+      "closingLine": "푹신한 자리 비워둘게."
     },
     "sleep_eyes_back": {
       "choiceIntentId": "sleep_eyes_back", "text": "바로 누울래요",
@@ -2493,7 +2493,7 @@
       "topicKeywords": ["휴식"], "sentimentWords": [],
       "endingType": "REST_ONLY",
       "endingNpcLines": ["(끄덕) 천장 보는 것도 좋아.", "별 세는 것처럼 천장 무늬 세봐."],
-      "closingLine": "또 와."
+      "closingLine": "(돌아누우며) 또 와."
     },
     "sleep_eyes_mom_lap": {
       "choiceIntentId": "sleep_eyes_mom_lap", "text": "엄마 무릎 베고 싶어요",
@@ -2507,7 +2507,7 @@
         "엄마 무릎은 진짜 따뜻한 자리지.",
         "슬쩍 가서 누워봐. 엄마도 알아챌 거야."
       ],
-      "closingLine": "또 와줘."
+      "closingLine": "엄마 무릎에서 푹 쉬다 와."
     },
     "sleep_eyes_music_calm": {
       "choiceIntentId": "sleep_eyes_music_calm", "text": "잔잔한 거요",
@@ -2518,7 +2518,7 @@
       "topicKeywords": ["음악", "잔잔"], "sentimentWords": [],
       "endingType": "REST_ONLY",
       "endingNpcLines": ["(끄덕) 한 곡만 틀고 끝까지 들어.", "건빈이도 옆에서 같이 들을게."],
-      "closingLine": "또 와."
+      "closingLine": "한 곡 다 들으면 또 와."
     },
     "sleep_eyes_music_nature": {
       "choiceIntentId": "sleep_eyes_music_nature", "text": "자연 소리요",
@@ -2529,7 +2529,7 @@
       "topicKeywords": ["음악", "잔잔"], "sentimentWords": [],
       "endingType": "REST_ONLY",
       "endingNpcLines": ["비 소리, 바람 소리.", "머리 안이 닦이는 느낌이야."],
-      "closingLine": "또 와."
+      "closingLine": "(귀 기울이며) 또 와."
     },
     "sleep_eyes_music_rec": {
       "choiceIntentId": "sleep_eyes_music_rec", "text": "추천해주세요",
@@ -2598,7 +2598,7 @@
         "엄마 손은 데워져 있어.",
         "가서 슬쩍 잡아봐 — 잡아주실 거야."
       ],
-      "closingLine": "또 와."
+      "closingLine": "엄마 손 잡고 푹 자."
     },
     "sleep_fam_say_near": {
       "choiceIntentId": "sleep_fam_say_near", "text": "「옆에 있어줘」",
@@ -2609,7 +2609,7 @@
       "topicKeywords": ["가족"], "sentimentWords": [],
       "endingType": "ASK_ADULT_FIRST",
       "endingNpcLines": ["그 한 줄, 엄마한테 가닿아.", "끝까지 길게 안 해도 돼."],
-      "closingLine": "또 와."
+      "closingLine": "엄마 옆에서 푹 쉬다 와."
     },
     "sleep_fam_say_hold": {
       "choiceIntentId": "sleep_fam_say_hold", "text": "「손 잡아줘」",
@@ -2623,7 +2623,7 @@
         "(끄덕) 손 잡으면 둘 다 따뜻해지지.",
         "한 번 슬쩍 손 내밀어봐."
       ],
-      "closingLine": "또 와줘."
+      "closingLine": "(끄덕) 따뜻해지면 또 와."
     },
     "sleep_fam_say_heavy": {
       "choiceIntentId": "sleep_fam_say_heavy", "text": "「오늘 좀 무거워」",
@@ -2635,7 +2635,7 @@
       "sentimentWords": [{"phrase": "무거워", "tone": "NEGATIVE"}],
       "endingType": "ASK_ADULT_FIRST",
       "endingNpcLines": ["처음 꺼낼 땐 두근거리지만, 듣는 사람은 안심해.", "엄마가 옆자리 데워줄 거야."],
-      "closingLine": "또 와."
+      "closingLine": "엄마 옆자리에서 푹 쉬어."
     },
     "sleep_fam_dad_hug": {
       "choiceIntentId": "sleep_fam_dad_hug", "text": "가서 안길래요",
@@ -2646,7 +2646,7 @@
       "topicKeywords": ["가족"], "sentimentWords": [],
       "endingType": "ASK_ADULT_FIRST",
       "endingNpcLines": ["(끄덕) 아빠 어깨는 넓어.", "오래 안겨도 돼."],
-      "closingLine": "또 와."
+      "closingLine": "(끄덕) 푹 안기다 와."
     },
     "sleep_fam_dad_quiet": {
       "choiceIntentId": "sleep_fam_dad_quiet", "text": "조용히 옆에 앉을래요",
@@ -2671,7 +2671,7 @@
         "아빠한테 한 번 부탁해봐.",
         "아빠도 옆에 와주실 거야."
       ],
-      "closingLine": "또 와."
+      "closingLine": "아빠랑 어땠는지 와서 알려줘."
     },
     "sleep_fam_with_geonbin": {
       "choiceIntentId": "sleep_fam_with_geonbin", "text": "건빈이 옆에 더 있을래요",
@@ -2693,7 +2693,7 @@
       "topicKeywords": [], "sentimentWords": [],
       "endingType": "PRIVATE_OKAY",
       "endingNpcLines": ["응. 어디 가지 말라곤 안 해.", "혼자 시간도 약일 때 있어."],
-      "closingLine": "또 와."
+      "closingLine": "혼자 시간 갖다 와."
     },
     "sleep_fam_anyone": {
       "choiceIntentId": "sleep_fam_anyone", "text": "누구든 옆에 있어줬으면",
@@ -2707,7 +2707,7 @@
         "엄마든 아빠든, 먼저 보이는 사람한테 다가가봐.",
         "누구든 옆자리 비워줄 거야."
       ],
-      "closingLine": "또 와줘."
+      "closingLine": "옆자리 따뜻해지면 와."
     },
 
     "sleep_pace_slow": {
@@ -2754,7 +2754,7 @@
         "치료 페이스, 선생님이랑 같이 정해도 돼.",
         "한 번 부탁해봐 — 들어주실 거야."
       ],
-      "closingLine": "또 와."
+      "closingLine": "들은 거 와서 알려줘."
     },
     "sleep_pace_all": {
       "choiceIntentId": "sleep_pace_all", "text": "다 천천히요",
@@ -2776,7 +2776,7 @@
       "topicKeywords": ["식사"], "sentimentWords": [],
       "endingType": "NO_PRESSURE",
       "endingNpcLines": ["(끄덕) 셈.", "마음이 차분해지는 방법이야."],
-      "closingLine": "또 와."
+      "closingLine": "셈 끝나면 또 와."
     },
     "sleep_pace_meal_family": {
       "choiceIntentId": "sleep_pace_meal_family", "text": "가족이랑 같이요",
@@ -2790,7 +2790,7 @@
         "옆에 누가 있으면 한 입씩 잘 들어가지.",
         "엄마한테 슬쩍 가봐 — 같이 먹어주실걸."
       ],
-      "closingLine": "또 와."
+      "closingLine": "다 먹고 와."
     },
     "sleep_pace_meal_rest": {
       "choiceIntentId": "sleep_pace_meal_rest", "text": "쉬어가며요",
@@ -2801,7 +2801,7 @@
       "topicKeywords": ["식사", "휴식"], "sentimentWords": [],
       "endingType": "REST_THEN_ACTIVITY",
       "endingNpcLines": ["(끄덕) 쉬어가도 돼.", "한 입 먹고 한숨 자도 돼."],
-      "closingLine": "또 와."
+      "closingLine": "쉬엄쉬엄 먹고 와."
     },
     "sleep_pace_quick_stop": {
       "choiceIntentId": "sleep_pace_quick_stop", "text": "힘들면 멈출게요",
@@ -2812,7 +2812,7 @@
       "topicKeywords": ["페이스"], "sentimentWords": [],
       "endingType": "CALM_DOWN",
       "endingNpcLines": ["(끄덕) 그거면 됐어.", "멈춤 신호는 어른한테 보내."],
-      "closingLine": "또 와."
+      "closingLine": "잠깐 멈췄다 와도 돼."
     },
     "sleep_pace_quick_safe": {
       "choiceIntentId": "sleep_pace_quick_safe", "text": "빨리 가도 안 다쳐요",
@@ -2823,7 +2823,7 @@
       "topicKeywords": ["페이스"], "sentimentWords": [],
       "endingType": "NO_PRESSURE",
       "endingNpcLines": ["그래.", "그래도 한 호흡씩."],
-      "closingLine": "또 와."
+      "closingLine": "한 호흡씩 다녀와."
     },
     "sleep_pace_quick_pause": {
       "choiceIntentId": "sleep_pace_quick_pause", "text": "가운데 한 번만 쉴게요",
@@ -2834,7 +2834,7 @@
       "topicKeywords": ["페이스", "휴식"], "sentimentWords": [],
       "endingType": "REST_THEN_ACTIVITY",
       "endingNpcLines": ["(작게 웃으며) 가운데 한 번이.", "끝까지 가는 비결이야."],
-      "closingLine": "또 와줘."
+      "closingLine": "가운데 쉬고 또 와."
     },
     "sleep_pace_heavy": {
       "choiceIntentId": "sleep_pace_heavy", "text": "무거워요",
@@ -2846,7 +2846,7 @@
       "sentimentWords": [{"phrase": "무거워요", "tone": "NEGATIVE"}],
       "endingType": "REST_ONLY",
       "endingNpcLines": ["그럼 오늘은 더 쉬는 쪽.", "건빈이 옆에서 그대로."],
-      "closingLine": "또 와."
+      "closingLine": "푹 쉬다 또 와."
     },
     "sleep_pace_meh": {
       "choiceIntentId": "sleep_pace_meh", "text": "그냥 그래요",
@@ -2857,7 +2857,7 @@
       "topicKeywords": ["컨디션"], "sentimentWords": [],
       "endingType": "NO_PRESSURE",
       "endingNpcLines": ["그럼 그대로.", "가는 방향만 천천히."],
-      "closingLine": "또 와."
+      "closingLine": "천천히 와."
     },
     "sleep_pace_light": {
       "choiceIntentId": "sleep_pace_light", "text": "조금 가벼워요",
@@ -2869,7 +2869,7 @@
       "sentimentWords": [{"phrase": "가벼워요", "tone": "POSITIVE"}],
       "endingType": "GO_LIGHT_ACTIVITY",
       "endingNpcLines": ["(끄덕) 그럼 살짝 움직여봐.", "마을 한 바퀴 가벼운 산책 같은 거."],
-      "closingLine": "또 와."
+      "closingLine": "산책하고 와."
     },
 
     "garden_draw_fear": {
@@ -2914,7 +2914,7 @@
       "topicKeywords": ["그림", "색"], "sentimentWords": [],
       "endingType": "EXPRESS_WITH_DRAWING",
       "endingNpcLines": ["(작게 끄덕) 뜨거운 색이지.", "종이에 풀어줘."],
-      "closingLine": "또 와."
+      "closingLine": "다 그리면 와서 보여줘."
     },
     "garden_draw_unsure": {
       "choiceIntentId": "garden_draw_unsure", "text": "모르겠어요",
@@ -2958,7 +2958,7 @@
       "topicKeywords": ["그림"], "sentimentWords": [],
       "endingType": "EXPRESS_WITH_DRAWING",
       "endingNpcLines": ["정호도 선 그릴 때 마음이 가라앉아.", "천천히 한 선씩."],
-      "closingLine": "또 와."
+      "closingLine": "선 다 그으면 보여줘."
     },
     "garden_draw_friend_face": {
       "choiceIntentId": "garden_draw_friend_face", "text": "얼굴을요",
@@ -2983,7 +2983,7 @@
       "topicKeywords": ["친구", "그림"], "sentimentWords": [],
       "endingType": "EXPRESS_WITH_DRAWING",
       "endingNpcLines": ["그림이 그 자리에 친구를 데려와줄 때 있어."],
-      "closingLine": "또 와."
+      "closingLine": "그림 들고 또 와."
     },
     "garden_draw_friend_greet": {
       "choiceIntentId": "garden_draw_friend_greet", "text": "작은 인사 그림이요",
@@ -2994,7 +2994,7 @@
       "topicKeywords": ["친구", "그림"], "sentimentWords": [],
       "endingType": "SOCIAL_CONNECT",
       "endingNpcLines": ["그리고 나서 친구한테 보낼 수 있어."],
-      "closingLine": "또 와."
+      "closingLine": "보낸 거 어땠는지 와서 알려줘."
     },
     "garden_draw_seedling": {
       "choiceIntentId": "garden_draw_seedling", "text": "새싹 보고 싶어요",
@@ -3008,7 +3008,7 @@
         "(새싹 옆 무릎 굽히며) 같이 보자.",
         "이건 어제 빼꼼했어."
       ],
-      "closingLine": "또 와."
+      "closingLine": "새싹 옆에서 기다릴게."
     },
     "garden_draw_sit_quiet": {
       "choiceIntentId": "garden_draw_sit_quiet", "text": "조용히 앉을래요",
@@ -3021,7 +3021,7 @@
       "endingNpcLines": [
         "(작게 끄덕) 정호도 흙 만지면서 가만히 있을게."
       ],
-      "closingLine": "또 와."
+      "closingLine": "(흙 만지며) 또 와."
     },
     "garden_draw_later": {
       "choiceIntentId": "garden_draw_later", "text": "다음에 올래요",
@@ -3032,7 +3032,7 @@
       "topicKeywords": [], "sentimentWords": [],
       "endingType": "PRIVATE_OKAY",
       "endingNpcLines": ["정원은 같은 자리에 있어.", "정해두지 않아도 돼."],
-      "closingLine": "또 와."
+      "closingLine": "정원은 항상 여기 있어."
     },
 
     "garden_tend_what": {
@@ -3079,7 +3079,7 @@
         "(물뿌리개 건네며) 천천히. 너무 많이 안 줘도 돼.",
         "물 보면 마음도 시원해져."
       ],
-      "closingLine": "또 와."
+      "closingLine": "(물뿌리개 두고) 또 와."
     },
     "garden_tend_leaf": {
       "choiceIntentId": "garden_tend_leaf", "text": "잎 닦기",
@@ -3093,7 +3093,7 @@
         "(부드러운 천 건네며) 한 장씩 닦자.",
         "정호도 이거 하면 머리가 비워지더라."
       ],
-      "closingLine": "또 와줘."
+      "closingLine": "(천 두고) 또 와."
     },
     "garden_tend_seed_strength": {
       "choiceIntentId": "garden_tend_seed_strength", "text": "힘이 났으면 좋겠어요",
@@ -3107,7 +3107,7 @@
         "(씨앗 손에 올려주며) 그 마음 한 알.",
         "다 자라면 같이 보러 와."
       ],
-      "closingLine": "또 와."
+      "closingLine": "새싹 올라오면 보러 와."
     },
     "garden_tend_seed_friend": {
       "choiceIntentId": "garden_tend_seed_friend", "text": "친구 만나고 싶은 마음",
@@ -3121,7 +3121,7 @@
         "(끄덕) 그건 빨리 자라는 씨앗이야.",
         "옆에 친구 이름 한 줄 적어두자."
       ],
-      "closingLine": "또 와."
+      "closingLine": "(이름 적은 씨앗 옆에) 또 와."
     },
     "garden_tend_seed_dunno": {
       "choiceIntentId": "garden_tend_seed_dunno", "text": "잘 모르겠어요",
@@ -3135,7 +3135,7 @@
         "그럼 그냥 한 알 심자.",
         "자라면서 마음 이름이 떠오를 거야."
       ],
-      "closingLine": "또 와."
+      "closingLine": "심은 자리 옆에서 기다릴게."
     },
     "garden_tend_weed": {
       "choiceIntentId": "garden_tend_weed", "text": "잡초 뽑기",
@@ -3149,7 +3149,7 @@
         "(같이 무릎 굽히며) 마음 정리되는 일이지.",
         "한 줌만 뽑고 가자."
       ],
-      "closingLine": "또 와."
+      "closingLine": "(무릎 굽힌 자리) 또 와."
     },
     "garden_tend_smell": {
       "choiceIntentId": "garden_tend_smell", "text": "향기 한 번 맡기",
@@ -3163,7 +3163,7 @@
         "(꽃 가까이 가리키며) 한 번 코로 들이쉬어봐.",
         "향기는 머리도 가볍게 해줘."
       ],
-      "closingLine": "또 와줘."
+      "closingLine": "꽃 옆에서 기다릴게."
     },
     "garden_tend_beside": {
       "choiceIntentId": "garden_tend_beside", "text": "그냥 옆에 있을래요",
@@ -3176,7 +3176,7 @@
       "endingNpcLines": [
         "(흙 묻은 손 털며) 정호 흙 만지는 거 옆에서 봐도 돼."
       ],
-      "closingLine": "또 와."
+      "closingLine": "(흙 손 털며) 또 와."
     },
     "garden_tend_watch_seedling": {
       "choiceIntentId": "garden_tend_watch_seedling", "text": "새싹이요",
@@ -3190,7 +3190,7 @@
         "(새싹 옆 무릎 굽히며) 같이 보자.",
         "이건 어제 빼꼼했어."
       ],
-      "closingLine": "또 와."
+      "closingLine": "(새싹 보면서) 또 와."
     },
     "garden_tend_watch_flower": {
       "choiceIntentId": "garden_tend_watch_flower", "text": "꽃이요",
@@ -3204,7 +3204,7 @@
         "꽃 색이 매일 달라.",
         "오늘 어떤 색인지 같이 봐."
       ],
-      "closingLine": "또 와."
+      "closingLine": "내일 색은 또 다를 거야."
     },
     "garden_tend_watch_whole": {
       "choiceIntentId": "garden_tend_watch_whole", "text": "전체 정원이요",
@@ -3218,7 +3218,7 @@
         "응, 한 바퀴 같이 돌까?",
         "천천히."
       ],
-      "closingLine": "또 와."
+      "closingLine": "한 바퀴 돌고 와."
     },
 
     "garden_nv_color": {
@@ -3262,7 +3262,7 @@
       "topicKeywords": ["그림", "색"], "sentimentWords": [],
       "endingType": "EXPRESS_WITH_DRAWING",
       "endingNpcLines": ["노란 색. 따뜻한 색이네.", "종이에 풀어줘."],
-      "closingLine": "또 와."
+      "closingLine": "다 그리면 와서 보여줘."
     },
     "garden_nv_multi": {
       "choiceIntentId": "garden_nv_multi", "text": "여러 색이요",
@@ -3273,7 +3273,7 @@
       "topicKeywords": ["그림", "색"], "sentimentWords": [],
       "endingType": "EXPRESS_WITH_DRAWING",
       "endingNpcLines": ["여러 색. 마음이 여러 마음이구나.", "그것도 그림이야."],
-      "closingLine": "또 와."
+      "closingLine": "다 칠하면 와."
     },
     "garden_nv_blue_chest": {
       "choiceIntentId": "garden_nv_blue_chest", "text": "가슴 안에요",
@@ -3301,7 +3301,7 @@
         "머리 위에 비처럼.",
         "비처럼 흘러내리는 선으로 그려도 좋아."
       ],
-      "closingLine": "또 와."
+      "closingLine": "비 다 그리면 보여줘."
     },
     "garden_nv_blue_all": {
       "choiceIntentId": "garden_nv_blue_all", "text": "온몸에요",
@@ -3315,7 +3315,7 @@
         "온몸이면 좀 무거운 거.",
         "그 색 어른한테도 한 번 알려두자."
       ],
-      "closingLine": "또 와줘."
+      "closingLine": "어른한테 알린 뒤 또 와."
     },
     "garden_nv_point_body": {
       "choiceIntentId": "garden_nv_point_body", "text": "몸 어딘가요",
@@ -3329,7 +3329,7 @@
         "그럼 조은이한테 가서 가리켜주자.",
         "조은이가 옆에서 같이 봐줄 거야."
       ],
-      "closingLine": "또 와줘."
+      "closingLine": "조은이한테 다녀와."
     },
     "garden_nv_point_family": {
       "choiceIntentId": "garden_nv_point_family", "text": "가족이 있는 쪽이요",
@@ -3343,7 +3343,7 @@
         "(작게 끄덕) 응.",
         "그 쪽으로 같이 가줄게."
       ],
-      "closingLine": "또 와."
+      "closingLine": "(같이 걸으며) 또 와."
     },
     "garden_nv_point_garden": {
       "choiceIntentId": "garden_nv_point_garden", "text": "그냥 정원 한 곳을",
@@ -3357,7 +3357,7 @@
         "오, 한 곳?",
         "같이 거기 앉자. 무슨 자리인지 물어보고 싶어졌어."
       ],
-      "closingLine": "또 와."
+      "closingLine": "(같이 앉아) 또 와."
     },
     "garden_nv_draw_mood": {
       "choiceIntentId": "garden_nv_draw_mood", "text": "오늘 마음이요",
@@ -3371,7 +3371,7 @@
         "응. 한 장만 작게도 좋아.",
         "다 그리면 옆에 와서 보여줘."
       ],
-      "closingLine": "또 와."
+      "closingLine": "(모종삽 들고) 정원에서 기다릴게."
     },
     "garden_nv_draw_favorite": {
       "choiceIntentId": "garden_nv_draw_favorite", "text": "좋아하는 거요",
@@ -3385,7 +3385,7 @@
         "(작게 끄덕) 그것도 마음이야.",
         "좋아하는 거 그리면서 마음이 옮겨가."
       ],
-      "closingLine": "또 와줘."
+      "closingLine": "(작게 끄덕) 그린 거 보여줘."
     },
     "garden_nv_draw_free": {
       "choiceIntentId": "garden_nv_draw_free", "text": "모르겠어요, 손 가는 대로",
@@ -3399,7 +3399,7 @@
         "정호도 그래.",
         "가장 솔직한 그림이야."
       ],
-      "closingLine": "또 와."
+      "closingLine": "그린 거 들고 와."
     },
 
     "squirrel_shade_yes": {
@@ -3443,7 +3443,7 @@
       "topicKeywords": ["한마디"], "sentimentWords": [],
       "endingType": "NO_PRESSURE",
       "endingNpcLines": ["오케이! 던지면 내가 받을게.", "한 줄씩이라도 가벼워져."],
-      "closingLine": "또 와!"
+      "closingLine": "한 마디 잡으러 또 와!"
     },
     "squirrel_shade_lean": {
       "choiceIntentId": "squirrel_shade_lean", "text": "기대고요",
@@ -3454,7 +3454,7 @@
       "topicKeywords": ["동반"], "sentimentWords": [],
       "endingType": "REST_ONLY",
       "endingNpcLines": ["(가만히) 응! 기대도 돼.", "푹신할걸?"],
-      "closingLine": "또 와!"
+      "closingLine": "(꼬리로 자리 만들며) 또 와!"
     },
     "squirrel_shade_lighter": {
       "choiceIntentId": "squirrel_shade_lighter", "text": "가벼워졌어요",
@@ -3466,7 +3466,7 @@
       "sentimentWords": [{"phrase": "가벼워졌어요", "tone": "POSITIVE"}],
       "endingType": "CALM_DOWN",
       "endingNpcLines": ["그치! 그늘 효과야.", "(꼬리 살짝) 가벼울 때 일어나면 돼."],
-      "closingLine": "또 놀러 와!"
+      "closingLine": "(꼬리 살랑) 또 가벼워지면 와!"
     },
     "squirrel_shade_dunno": {
       "choiceIntentId": "squirrel_shade_dunno", "text": "잘 모르겠어요",
@@ -3492,7 +3492,7 @@
         "(꼬리 멈추며) 혼자 들고 있지 마.",
         "옆에 있는 어른한테 한 마디 던져봐 — 같이 들어주실 거야."
       ],
-      "closingLine": "또 와."
+      "closingLine": "어른한테 던지고 또 와."
     },
     "squirrel_shade_treat": {
       "choiceIntentId": "squirrel_shade_treat", "text": "치료 가야 해요",
@@ -3514,7 +3514,7 @@
       "topicKeywords": ["가족"], "sentimentWords": [],
       "endingType": "SOCIAL_CONNECT",
       "endingNpcLines": ["(꼬리 휙) 다녀와!", "가족 옆이 제일 따뜻해."],
-      "closingLine": "또 와!"
+      "closingLine": "가족 옆에서 푹 쉬고 와!"
     },
     "squirrel_shade_just_go": {
       "choiceIntentId": "squirrel_shade_just_go", "text": "그냥 가고 싶어요",
@@ -3525,7 +3525,7 @@
       "topicKeywords": [], "sentimentWords": [],
       "endingType": "PRIVATE_OKAY",
       "endingNpcLines": ["오케이, 이유 안 물어!", "어디로 가든 잘 갔다 와."],
-      "closingLine": "또 와!"
+      "closingLine": "(꼬리 휙) 잘 갔다 와!"
     },
     "squirrel_shade_more_still": {
       "choiceIntentId": "squirrel_shade_more_still", "text": "가만히 더요",
@@ -3596,7 +3596,7 @@
       "sentimentWords": [{"phrase": "피곤", "tone": "NEGATIVE"}],
       "endingType": "REST_ONLY",
       "endingNpcLines": ["어! 오늘은 피곤의 날.", "푹 쉬어!"],
-      "closingLine": "또 와!"
+      "closingLine": "푹 쉬다 와!"
     },
     "squirrel_word_heavy": {
       "choiceIntentId": "squirrel_word_heavy", "text": "'무거움'",
@@ -3611,7 +3611,7 @@
         "오케이! 그 단어, 그대로 한 번 다른 사람한테도 던져봐.",
         "들으면 옆에 와줄 사람 있어."
       ],
-      "closingLine": "또 와!"
+      "closingLine": "한 마디 던지고 와!"
     },
     "squirrel_word_blank": {
       "choiceIntentId": "squirrel_word_blank", "text": "떠오르지 않아요",
@@ -3622,7 +3622,7 @@
       "topicKeywords": [], "sentimentWords": [],
       "endingType": "NO_PRESSURE",
       "endingNpcLines": ["단어가 가끔 도망가기도 해.", "잡혀줄 때 또 와!"],
-      "closingLine": "또 놀러 와!"
+      "closingLine": "(꼬리 살랑) 잡혀줄 때 와!"
     },
     "squirrel_word_mom": {
       "choiceIntentId": "squirrel_word_mom", "text": "엄마한테",
@@ -3641,7 +3641,7 @@
       "topicKeywords": ["의료진"], "sentimentWords": [],
       "endingType": "ASK_MEDICAL_FIRST",
       "endingNpcLines": ["오케이! 선생님은 그 한마디 자주 들으셨을걸.", "도와줄 사람이야."],
-      "closingLine": "또 와!"
+      "closingLine": "(꼬리 휙) 다녀와!"
     },
     "squirrel_word_here": {
       "choiceIntentId": "squirrel_word_here", "text": "세현이한테만요",
@@ -3652,7 +3652,7 @@
       "topicKeywords": ["그늘"], "sentimentWords": [],
       "endingType": "REST_ONLY",
       "endingNpcLines": ["(꼬리 살랑) 그래!", "내가 다 외워뒀다 줄게."],
-      "closingLine": "또 와!"
+      "closingLine": "도토리 굴리며 기다릴게!"
     },
     "squirrel_word_say_hard": {
       "choiceIntentId": "squirrel_word_say_hard", "text": "「오늘 좀 힘들어」",
@@ -3664,7 +3664,7 @@
       "sentimentWords": [{"phrase": "힘들어", "tone": "NEGATIVE"}],
       "endingType": "ASK_ADULT_FIRST",
       "endingNpcLines": ["그 짧은 한 줄.", "엄마는 듣자마자 옆으로 와줄걸!"],
-      "closingLine": "또 와!"
+      "closingLine": "엄마랑 어땠는지 와서 알려줘!"
     },
     "squirrel_word_say_hug": {
       "choiceIntentId": "squirrel_word_say_hug", "text": "「안아줘」",
@@ -3675,7 +3675,7 @@
       "topicKeywords": ["가족"], "sentimentWords": [],
       "endingType": "ASK_ADULT_FIRST",
       "endingNpcLines": ["(꼬리 살랑) 안기는 시간 짱이지.", "그거 약이야."],
-      "closingLine": "또 와!"
+      "closingLine": "푹 안기다 와!"
     },
     "squirrel_word_say_near": {
       "choiceIntentId": "squirrel_word_say_near", "text": "「옆에만 있어줘」",
@@ -3686,7 +3686,7 @@
       "topicKeywords": ["가족"], "sentimentWords": [],
       "endingType": "ASK_ADULT_FIRST",
       "endingNpcLines": ["응!", "옆자리만 채워줘도 마음이 옮겨가."],
-      "closingLine": "또 와!"
+      "closingLine": "옆자리 채워지면 와!"
     },
     "squirrel_word_walk": {
       "choiceIntentId": "squirrel_word_walk", "text": "가볍게 산책요",
@@ -3697,7 +3697,7 @@
       "topicKeywords": ["산책"], "sentimentWords": [],
       "endingType": "GO_LIGHT_ACTIVITY",
       "endingNpcLines": ["(꼬리 휙) 그늘 밖 햇볕 좋아!", "한 바퀴 가볍게."],
-      "closingLine": "또 와!"
+      "closingLine": "한 바퀴 돌고 와!"
     },
     "squirrel_word_friend": {
       "choiceIntentId": "squirrel_word_friend", "text": "친구 만나러요",
@@ -3708,7 +3708,7 @@
       "topicKeywords": ["친구"], "sentimentWords": [],
       "endingType": "SOCIAL_CONNECT",
       "endingNpcLines": ["오! 다인 어디 있을까.", "같이 찾아주랴?"],
-      "closingLine": "또 와!"
+      "closingLine": "다인 만나고 와!"
     },
     "squirrel_word_stay": {
       "choiceIntentId": "squirrel_word_stay", "text": "그냥 여기 더 있을래요",
@@ -3719,7 +3719,7 @@
       "topicKeywords": ["그늘"], "sentimentWords": [],
       "endingType": "NO_PRESSURE",
       "endingNpcLines": ["오케이! 괜찮은 날 쉬는 거,", "진짜 잘 하는 거야."],
-      "closingLine": "또 와!"
+      "closingLine": "도토리 굴리며 같이 있을게!"
     },
 
     "squirrel_apart_go": {
@@ -3763,7 +3763,7 @@
       "topicKeywords": [], "sentimentWords": [],
       "endingType": "PRIVATE_OKAY",
       "endingNpcLines": ["응! 이유 안 물어.", "잘 갔다 와."],
-      "closingLine": "또 와!"
+      "closingLine": "그늘에서 기다릴게!"
     },
     "squirrel_apart_dunno": {
       "choiceIntentId": "squirrel_apart_dunno", "text": "잘 모르겠어요",
@@ -3774,7 +3774,7 @@
       "topicKeywords": [], "sentimentWords": [],
       "endingType": "NO_PRESSURE",
       "endingNpcLines": ["(꼬리 살랑) 다리 가는 대로!", "가끔 그래야 마음이 잡혀."],
-      "closingLine": "또 와!"
+      "closingLine": "(꼬리 흔들며) 기다릴게!"
     },
     "squirrel_apart_walk_alone": {
       "choiceIntentId": "squirrel_apart_walk_alone", "text": "혼자요",
@@ -3785,7 +3785,7 @@
       "topicKeywords": ["마을"], "sentimentWords": [],
       "endingType": "PRIVATE_OKAY",
       "endingNpcLines": ["응! 돌고 와도 안 와도 돼.", "정하지 않아도 돼."],
-      "closingLine": "또 와!"
+      "closingLine": "마을 한 바퀴 잘 갔다 와!"
     },
     "squirrel_apart_walk_sehyeon": {
       "choiceIntentId": "squirrel_apart_walk_sehyeon", "text": "세현이가 따라와줘",
@@ -3796,7 +3796,7 @@
       "topicKeywords": ["세현"], "sentimentWords": [],
       "endingType": "SOCIAL_CONNECT",
       "endingNpcLines": ["(꼬리 휙) 좋아!", "앞에서 길 만들어줄게."],
-      "closingLine": "또 와!"
+      "closingLine": "(꼬리로 길 만들며) 가자!"
     },
     "squirrel_apart_walk_dain": {
       "choiceIntentId": "squirrel_apart_walk_dain", "text": "다인 만나러요",
@@ -3807,7 +3807,7 @@
       "topicKeywords": ["친구"], "sentimentWords": [],
       "endingType": "SOCIAL_CONNECT",
       "endingNpcLines": ["(꼬리로 가리키며) 다인 잎사귀 옆에서 자주 봐.", "안내해줄까?"],
-      "closingLine": "또 와!"
+      "closingLine": "다인 찾고 와!"
     },
     "squirrel_apart_stay_still": {
       "choiceIntentId": "squirrel_apart_stay_still", "text": "가만히요",
@@ -3818,7 +3818,7 @@
       "topicKeywords": ["그늘"], "sentimentWords": [],
       "endingType": "REST_ONLY",
       "endingNpcLines": ["(가만히) 응! 같이.", "(의외로 입 꾹)"],
-      "closingLine": "또 와!"
+      "closingLine": "(같이 가만히) 또 와!"
     },
     "squirrel_apart_stay_more_word": {
       "choiceIntentId": "squirrel_apart_stay_more_word", "text": "한 줄 더 꺼내고 싶어요",
@@ -3829,7 +3829,7 @@
       "topicKeywords": ["한마디"], "sentimentWords": [],
       "endingType": "NO_PRESSURE",
       "endingNpcLines": ["(꼬리로 옆 자리 톡톡) 던져봐!", "잡을게."],
-      "closingLine": "또 와!"
+      "closingLine": "(꼬리로 자리 톡톡) 던지러 와!"
     },
     "squirrel_apart_stay_brief": {
       "choiceIntentId": "squirrel_apart_stay_brief", "text": "잠깐만 더요",
@@ -3840,7 +3840,7 @@
       "topicKeywords": ["그늘"], "sentimentWords": [],
       "endingType": "REST_ONLY",
       "endingNpcLines": ["(끄덕) 잠깐도 좋아.", "떠나고 싶을 때 떠나!"],
-      "closingLine": "또 와!"
+      "closingLine": "마음 가는 대로 가!"
     },
     "squirrel_apart_garden": {
       "choiceIntentId": "squirrel_apart_garden", "text": "정호한테",
@@ -3851,7 +3851,7 @@
       "topicKeywords": ["그림"], "sentimentWords": [],
       "endingType": "EXPRESS_WITH_DRAWING",
       "endingNpcLines": ["오! 새싹 옆이 그림 그리기 짱이지!", "정호한테 같이 따라가줄게."],
-      "closingLine": "또 와!"
+      "closingLine": "정호한테 잘 갔다 와!"
     },
     "squirrel_apart_friends": {
       "choiceIntentId": "squirrel_apart_friends", "text": "다인한테",
@@ -3862,7 +3862,7 @@
       "topicKeywords": ["친구"], "sentimentWords": [],
       "endingType": "SOCIAL_CONNECT",
       "endingNpcLines": ["(꼬리 휙) 다인 좋아할걸.", "같이 가자!"],
-      "closingLine": "또 와!"
+      "closingLine": "다인이랑 신나게 놀고 와!"
     },
     "squirrel_apart_nurse": {
       "choiceIntentId": "squirrel_apart_nurse", "text": "조은이한테",
@@ -3873,7 +3873,7 @@
       "topicKeywords": ["의료진"], "sentimentWords": [],
       "endingType": "ASK_MEDICAL_FIRST",
       "endingNpcLines": ["응!", "무거운 거 있으면 거기서 풀어."],
-      "closingLine": "또 와!"
+      "closingLine": "조은이한테 다녀와!"
     },
 
     "dain_miss_a_lot": {
@@ -3929,7 +3929,7 @@
       "topicKeywords": ["친구"], "sentimentWords": [],
       "endingType": "PRIVATE_OKAY",
       "endingNpcLines": ["마음에서 한 번 인사하는 것도 인사야."],
-      "closingLine": "또 와."
+      "closingLine": "(끄덕) 또 와."
     },
     "dain_miss_say_miss": {
       "choiceIntentId": "dain_miss_say_miss", "text": "「보고 싶다」",
@@ -3953,7 +3953,7 @@
       "topicKeywords": ["친구", "약속"], "sentimentWords": [],
       "endingType": "SOCIAL_CONNECT",
       "endingNpcLines": ["약속 생기면 마음이 가벼워져."],
-      "closingLine": "또 와!"
+      "closingLine": "(눈 빛내며) 답장 오면 알려줘!"
     },
     "dain_miss_letter": {
       "choiceIntentId": "dain_miss_letter", "text": "길게 편지요",
@@ -3967,7 +3967,7 @@
         "와, 편지!",
         "친구가 두고두고 볼 수 있어."
       ],
-      "closingLine": "또 와."
+      "closingLine": "편지 쓰면 와서 보여줘."
     },
     "dain_miss_think_alone": {
       "choiceIntentId": "dain_miss_think_alone", "text": "혼자 생각해요",
@@ -3978,7 +3978,7 @@
       "topicKeywords": ["친구"], "sentimentWords": [],
       "endingType": "PRIVATE_OKAY",
       "endingNpcLines": ["(작게 끄덕) 혼자 생각하는 시간도 인사야."],
-      "closingLine": "또 와."
+      "closingLine": "마음 정리되면 와."
     },
     "dain_miss_family_chat": {
       "choiceIntentId": "dain_miss_family_chat", "text": "가족이랑 얘기해요",
@@ -3991,7 +3991,7 @@
       "endingNpcLines": [
         "가족이 친구 얘기 들으면 같이 떠올려줘."
       ],
-      "closingLine": "또 와."
+      "closingLine": "가족이랑 얘기하고 와."
     },
     "dain_miss_tell_later": {
       "choiceIntentId": "dain_miss_tell_later", "text": "다음에 친구한테",
@@ -4004,7 +4004,7 @@
       "endingNpcLines": [
         "(눈 빛내며) 만나면 '가끔 생각났어' 라고."
       ],
-      "closingLine": "또 와!"
+      "closingLine": "(눈 빛내며) 만난 거 와서 알려줘!"
     },
     "dain_miss_other_chat": {
       "choiceIntentId": "dain_miss_other_chat", "text": "다른 얘기요",
@@ -4017,7 +4017,7 @@
       "endingNpcLines": [
         "(펜 굴리며) 다인이 오늘 본 것 중에 재밌는 거 한 개 있어."
       ],
-      "closingLine": "또 와!"
+      "closingLine": "(펜 굴리며) 또 와서 얘기해줘!"
     },
     "dain_miss_game": {
       "choiceIntentId": "dain_miss_game", "text": "게임 어때요?",
@@ -4030,7 +4030,7 @@
       "endingNpcLines": [
         "오! 가위바위보 한 판 어때?"
       ],
-      "closingLine": "또 와!"
+      "closingLine": "(펜 굴리며) 한 판 더 하러 와!"
     },
     "dain_miss_quiet": {
       "choiceIntentId": "dain_miss_quiet", "text": "조용히 있을래요",
@@ -4043,7 +4043,7 @@
       "endingNpcLines": [
         "응 응. 옆에서 가만히 있을게."
       ],
-      "closingLine": "또 와."
+      "closingLine": "(가만히 옆에서) 또 와."
     },
 
     "dain_school_a_lot": {
@@ -4104,7 +4104,7 @@
         "음… 나도 다 알진 못해서.",
         "그래도 우리끼리 학교 얘기 해볼래?"
       ],
-      "closingLine": "또 와!"
+      "closingLine": "(펜 굴리며) 같이 얘기하러 와!"
     },
     "dain_school_mom_how": {
       "choiceIntentId": "dain_school_mom_how", "text": "「학교 요즘 어때요?」",
@@ -4118,7 +4118,7 @@
         "엄마한테 한 번 슬쩍 물어보면 어떨까?",
         "의외로 알고 계실지도 몰라!"
       ],
-      "closingLine": "또 와!"
+      "closingLine": "엄마한테 들은 거 와서 알려줘!"
     },
     "dain_school_mom_missed": {
       "choiceIntentId": "dain_school_mom_missed", "text": "「내가 빠진 거 있어요?」",
@@ -4132,7 +4132,7 @@
         "(눈 빛내며) 그건 친구가 더 잘 알 수도 있어.",
         "친구한테 한 줄 보내봐. 답장 오면 다인이한테도 알려줘!"
       ],
-      "closingLine": "또 와!"
+      "closingLine": "(눈 빛내며) 답장 오면 와!"
     },
     "dain_school_mom_friends": {
       "choiceIntentId": "dain_school_mom_friends", "text": "「친구들 잘 지내요?」",
@@ -4146,7 +4146,7 @@
         "(눈 빛내며) 친구 안부 들으면 마음 따뜻해지지.",
         "엄마가 알면 풀어주실 거야. 모르면 같이 친구한테 물어봐도 돼."
       ],
-      "closingLine": "또 와!"
+      "closingLine": "안부 들으면 와서 알려줘!"
     },
     "dain_school_some_friends": {
       "choiceIntentId": "dain_school_some_friends", "text": "친구들이요",
@@ -4160,7 +4160,7 @@
         "친구한테 한 줄.",
         "'잘 지내?' 짧게도 돼."
       ],
-      "closingLine": "또 와."
+      "closingLine": "친구 답장 와서 보여줘."
     },
     "dain_school_some_class": {
       "choiceIntentId": "dain_school_some_class", "text": "수업이요",
@@ -4174,7 +4174,7 @@
         "(펜 굴리며) 수업 진도, 나도 가끔 궁금했어.",
         "엄마가 알면 좀 더 풀어주실지도 몰라."
       ],
-      "closingLine": "또 와!"
+      "closingLine": "(펜 굴리며) 들은 거 같이 보자!"
     },
     "dain_school_some_all": {
       "choiceIntentId": "dain_school_some_all", "text": "그냥 다요",
@@ -4188,7 +4188,7 @@
         "한 번에 안 풀고 천천히.",
         "마음 가는 거부터."
       ],
-      "closingLine": "또 와."
+      "closingLine": "마음 가는 대로 와."
     },
     "dain_school_other_chat": {
       "choiceIntentId": "dain_school_other_chat", "text": "다른 얘기요",
@@ -4201,7 +4201,7 @@
       "endingNpcLines": [
         "(눈 빛내며) 어제 다인이 새 펜 받았어. 보여줄까?"
       ],
-      "closingLine": "또 와!"
+      "closingLine": "(펜 굴리며) 보러 와!"
     },
     "dain_school_quiet": {
       "choiceIntentId": "dain_school_quiet", "text": "조용히 있을래요",
@@ -4214,7 +4214,7 @@
       "endingNpcLines": [
         "응 응. 가만히 있을게."
       ],
-      "closingLine": "또 와."
+      "closingLine": "(옆에서 가만히) 또 와."
     },
     "dain_school_other_friend": {
       "choiceIntentId": "dain_school_other_friend", "text": "다른 친구한테 갈래요",
@@ -4227,7 +4227,7 @@
       "endingNpcLines": [
         "세현이 잎사귀 옆에 있을걸."
       ],
-      "closingLine": "또 와!"
+      "closingLine": "세현이 찾으러 가!"
     },
 
     "dain_greet_miss": {
@@ -4271,7 +4271,7 @@
       "topicKeywords": ["편지"], "sentimentWords": [],
       "endingType": "SOCIAL_CONNECT",
       "endingNpcLines": ["글이면 친구가 두고두고 볼 수 있어."],
-      "closingLine": "또 와."
+      "closingLine": "글 다 쓰면 보여줘."
     },
     "dain_greet_draw": {
       "choiceIntentId": "dain_greet_draw", "text": "그림으로",
@@ -4313,7 +4313,7 @@
         "응. 천천히 보내도 돼.",
         "한 줄에 마음 다 담기는 거 아니야."
       ],
-      "closingLine": "또 와."
+      "closingLine": "마음 정리되면 와."
     },
     "dain_greet_when_mom": {
       "choiceIntentId": "dain_greet_when_mom", "text": "엄마한테 같이 보내달라고",
@@ -4327,7 +4327,7 @@
         "(눈 빛내며) 엄마가 가운데서 전해주면 마음 더 잘 닿더라.",
         "같이 부탁하면 엄마도 신나서 도와주실걸."
       ],
-      "closingLine": "또 와!"
+      "closingLine": "(눈 빛내며) 전해진 거 와서 알려줘!"
     },
     "dain_greet_well_short": {
       "choiceIntentId": "dain_greet_well_short", "text": "짧게 한 줄",
@@ -4340,7 +4340,7 @@
       "endingNpcLines": [
         "(끄덕) '잘 지내!' 그것만으로도 전해져."
       ],
-      "closingLine": "또 와!"
+      "closingLine": "(끄덕) 답장 오면 와!"
     },
     "dain_greet_well_drawing": {
       "choiceIntentId": "dain_greet_well_drawing", "text": "그림 그려서",
@@ -4368,7 +4368,7 @@
         "(끄덕) 그것도 좋은 방법.",
         "엄마가 가운데서 전해주면 더 다정하게 가닿거든."
       ],
-      "closingLine": "또 와."
+      "closingLine": "엄마한테 부탁하고 와."
     },
     "dain_greet_meet_soon": {
       "choiceIntentId": "dain_greet_meet_soon", "text": "「곧」 이라고",
@@ -4394,7 +4394,7 @@
       "endingNpcLines": [
         "학교 갈 날이 마음에 새겨져."
       ],
-      "closingLine": "또 와!"
+      "closingLine": "학교 가는 날 와서 알려줘!"
     },
     "dain_greet_meet_home": {
       "choiceIntentId": "dain_greet_meet_home", "text": "「우리 집으로 와줘」",
@@ -4408,7 +4408,7 @@
         "(눈 빛내며) 친구 우리 집 오면 진짜 신나지!",
         "엄마랑 같이 날짜 정해보자."
       ],
-      "closingLine": "또 와!"
+      "closingLine": "(눈 빛내며) 날짜 정해지면 알려줘!"
     }
   }
 }
