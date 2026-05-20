@@ -646,7 +646,13 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
   }
 
   private showMotionIntroOverlay() {
-    if (this.motions.length === 0 || this.isSceneShuttingDown) {
+    if (
+      this.motions.length === 0 ||
+      this.isSceneShuttingDown ||
+      this.hasSubmittedSession ||
+      this.isSavingSession ||
+      this.sessionResultPanel
+    ) {
       return
     }
 
@@ -785,7 +791,14 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
   }
 
   private startMotionIntroCountdown() {
-    if (this.isSceneShuttingDown || this.countdownTimer) return
+    if (
+      this.isSceneShuttingDown ||
+      this.hasSubmittedSession ||
+      this.isSavingSession ||
+      this.sessionResultPanel ||
+      this.countdownTimer
+    )
+      return
     this.destroyMotionIntroCountdownElement()
 
     // 시범 영상이 HTML video element 라 Phaser depth 로 못 덮음.
@@ -819,7 +832,16 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
       delay: MOTION_COUNTDOWN_TICK_MS,
       repeat: MOTION_COUNTDOWN_FROM - 1,
       callback: () => {
-        if (this.isSceneShuttingDown) return
+        if (
+          this.isSceneShuttingDown ||
+          this.hasSubmittedSession ||
+          this.isSavingSession ||
+          this.sessionResultPanel
+        ) {
+          this.countdownTimer = null
+          this.destroyMotionIntroCountdownElement()
+          return
+        }
         remaining -= 1
         if (remaining > 0) {
           overlay.textContent = String(remaining)
@@ -845,6 +867,9 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
 
   private startCurrentMotion(skipCountdown = false) {
     if (!this.isWaitingMotionStart) {
+      return
+    }
+    if (this.hasSubmittedSession || this.isSavingSession || this.sessionResultPanel) {
       return
     }
 
@@ -1167,12 +1192,24 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
   }
 
   private scheduleAdvanceAfterResult() {
-    if (this.isSceneShuttingDown) {
+    if (
+      this.isSceneShuttingDown ||
+      this.hasSubmittedSession ||
+      this.isSavingSession ||
+      this.sessionResultPanel
+    ) {
       return
     }
     this.showMotionAdvanceText('성공!')
     this.time.delayedCall(CAPTURE_RESULT_TO_ADVANCE_DELAY_MS, () => {
-      if (this.isSceneShuttingDown || this.isAiJudgementPaused || this.guideVideoExpandOverlay) {
+      if (
+        this.isSceneShuttingDown ||
+        this.isAiJudgementPaused ||
+        this.guideVideoExpandOverlay ||
+        this.hasSubmittedSession ||
+        this.isSavingSession ||
+        this.sessionResultPanel
+      ) {
         return
       }
       this.advanceToNextMotion()
@@ -1180,6 +1217,9 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
   }
 
   private advanceToNextMotion() {
+    if (this.hasSubmittedSession || this.isSavingSession || this.sessionResultPanel) {
+      return
+    }
     if (this.isWaitingMotionStart) {
       return
     }
@@ -1306,13 +1346,20 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
       return
     }
 
-    // 시범 영상/모션 인트로 오버레이 (HTML video + HTML 카운트다운) 가 떠 있으면 먼저 정리.
+    // 종료 처리: 진행 중인 모든 타이머/캡쳐/AI 분석을 즉시 멈추고 영상도 정리.
+    // 결과 패널이 떠 있는 동안 뒤에서 다음 동작/카운트다운이 계속 진행되어 정신없는 문제 방지.
+    this.isAiJudgementPaused = true
+    this.stopCaptureLoop()
+    this.countdownTimer?.remove(false)
+    this.countdownTimer = null
+    this.destroyCountdownText()
     this.motionIntroOverlay?.destroy(true)
     this.motionIntroOverlay = undefined
     this.guideVideoExpandOverlay?.destroy(true)
     this.guideVideoExpandOverlay = undefined
     this.destroyGuideVideoElement()
     this.destroyMotionIntroCountdownElement()
+    this.isWaitingMotionStart = false
 
     if (recordCurrentMotion) {
       this.recordCurrentMotionResult()
