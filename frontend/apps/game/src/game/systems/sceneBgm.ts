@@ -5,7 +5,7 @@ import { getGameSettings } from '@/game/settings/gameSettings'
 const FADE_IN_MS = 900
 const FADE_OUT_MS = 650
 const FADE_STEP_MS = 40
-const BGM_VOLUME_GAIN = 1.3
+const BGM_VOLUME_GAIN = 3
 
 const BGM_TRACKS = {
   start: {
