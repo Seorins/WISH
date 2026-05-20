@@ -145,7 +145,7 @@ ai:
   dialogue:
     base-url: ${AI_DIALOGUE_BASE_URL:}
     # 임베딩 호출 timeout. fire-and-forget 이라 사용자 응답에는 영향 없지만, ThreadPool 점유를 풀어주기 위해 10초 캡.
-    timeout-seconds: ${AI_DIALOGUE_TIMEOUT_SECONDS:10}
+    timeout-seconds: ${AI_DIALOGUE_TIMEOUT_SECONDS:30}
   # 보호자 주간 리포트 AI 요약 (S14P31E103-745). dialogue 와 동일한 AI 서버지만 timeout 이 다르고 동기 호출이라
   # 별도 RestClient 빈으로 운영한다. base-url 미설정 시 AI_DIALOGUE_BASE_URL 로 fallback — 보통 같은 서버라 한 번에 주입.
   report:
