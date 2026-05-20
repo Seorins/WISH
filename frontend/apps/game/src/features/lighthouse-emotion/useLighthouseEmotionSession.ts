@@ -27,13 +27,13 @@ const SAFE_CLOSING_LINES = ['좋아, 오늘도 너의 얘기를 들려줘서 고
 
 const LIGHTHOUSE_DEMO_CHAT_SCRIPT = [
   {
-    userMessage: '오늘 태권도 해서 기분이 좋아. 근데 어려웠어ㅜ',
-    npcMessage: '우와 태권도를 했구나! 그래도 잘하는 걸?',
+    userMessage: '오늘 음악 게임 했는데 너무 재밌었어요 !',
+    npcMessage: '오오 음악 게임을 했구나. 어느 부분이 재밌었니 ? ',
     endAfterResponse: false,
   },
   {
-    userMessage: '나 띠 승급했어!! 엄마한테 자랑하러 갈래! 안녕',
-    npcMessage: '이야~ 멋있구나! 나중에 또 들리렴',
+    userMessage: '손으로 게임하는게 재밌었어요 근데 저 좀 바빠서 이만 가볼게요',
+    npcMessage: '알겠다! 다음에 또 보자!',
     endAfterResponse: true,
   },
 ] as const
