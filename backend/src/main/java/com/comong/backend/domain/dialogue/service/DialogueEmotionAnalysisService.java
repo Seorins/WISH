@@ -5,9 +5,10 @@ import java.util.List;
 
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import com.comong.backend.domain.dialogue.entity.DialogueSession;
 import com.comong.backend.domain.dialogue.entity.DialogueTurn;
@@ -27,10 +28,33 @@ public class DialogueEmotionAnalysisService {
     private final AiDialogueClient aiDialogueClient;
     private final DialogueSessionRepository sessionRepository;
     private final RealtimeEventService realtimeEventService;
+    private final PlatformTransactionManager transactionManager;
 
     @Async("aiDialogueTaskExecutor")
-    @Transactional
     public void analyzeAndPublishAsync(
+            Long userId,
+            Long patientProfileId,
+            Long sessionId,
+            NpcName npcName,
+            List<DialogueTurn> turns) {
+        analyzeAndPublish(userId, patientProfileId, sessionId, npcName, turns);
+    }
+
+    @Async("aiDialogueTaskExecutor")
+    public void analyzePublishThenEmbedAsync(
+            Long userId,
+            Long patientProfileId,
+            Long sessionId,
+            NpcName npcName,
+            List<DialogueTurn> turns) {
+        try {
+            analyzeAndPublish(userId, patientProfileId, sessionId, npcName, turns);
+        } finally {
+            aiDialogueClient.embedSession(patientProfileId, sessionId, npcName, turns);
+        }
+    }
+
+    private void analyzeAndPublish(
             Long userId,
             Long patientProfileId,
             Long sessionId,
@@ -40,8 +64,15 @@ public class DialogueEmotionAnalysisService {
                 .summarizeEmotion(patientProfileId, sessionId, npcName, turns)
                 .ifPresent(
                         summary ->
-                                saveSummaryAndPublish(
-                                        userId, patientProfileId, sessionId, npcName, summary));
+                                new TransactionTemplate(transactionManager)
+                                        .executeWithoutResult(
+                                                status ->
+                                                        saveSummaryAndPublish(
+                                                                userId,
+                                                                patientProfileId,
+                                                                sessionId,
+                                                                npcName,
+                                                                summary)));
     }
 
     private void saveSummaryAndPublish(

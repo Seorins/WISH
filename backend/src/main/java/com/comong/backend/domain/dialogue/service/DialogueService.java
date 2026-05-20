@@ -301,15 +301,16 @@ public class DialogueService {
                 new TransactionSynchronization() {
                     @Override
                     public void afterCommit() {
-                        aiDialogueClient.embedSessionAsync(
-                                patientProfileId, sessionIdValue, npcName, turns);
                         if (npcName.isLlmDriven()) {
-                            dialogueEmotionAnalysisService.analyzeAndPublishAsync(
+                            dialogueEmotionAnalysisService.analyzePublishThenEmbedAsync(
                                     currentUserId,
                                     patientProfileId,
                                     sessionIdValue,
                                     npcName,
                                     turns);
+                        } else {
+                            aiDialogueClient.embedSessionAsync(
+                                    patientProfileId, sessionIdValue, npcName, turns);
                         }
                     }
                 });

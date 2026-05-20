@@ -1,5 +1,6 @@
 package com.comong.backend.domain.dialogue.service;
 
+import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -24,15 +25,6 @@ import com.comong.backend.domain.dialogue.entity.NpcName;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 
-/**
- * AI 서버 RAG 어댑터. 세션 종료 시 대화 내용을 환아별 벡터 DB에 임베딩하도록 트리거한다 (S14P31E103-788).
- *
- * <p>호출은 {@code @Async} 로 fire-and-forget — 사용자의 세션 종료 응답을 막지 않는다. 모든 예외(connect 실패, timeout, 5xx,
- * AI 측 success=false 응답)는 로깅만 하고 swallow 한다.
- *
- * <p>인자는 모두 primitive/value 만 받는다 — 비동기 스레드는 호출자 트랜잭션 밖에서 실행되므로 JPA 엔티티(lazy 연관)를 직접 들고 들어오면 {@link
- * org.hibernate.LazyInitializationException} 위험. 호출자가 트랜잭션 안에서 미리 unpack 해 넘긴다.
- */
 @Component
 public class AiDialogueClient {
 
@@ -49,49 +41,41 @@ public class AiDialogueClient {
         this.httpClient = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).build();
     }
 
-    /**
-     * 세션 종료 트랜잭션 커밋 직후 호출. AI 서버 {@code POST /dialogue/embed-session} 으로 turns 를 보내 환아별 벡터 DB 에
-     * 적재한다.
-     *
-     * <p>{@code @Async} 빈 외부 호출 시점에 Spring proxy 가 작동하여 별도 스레드로 위임. 호출자는 즉시 반환된다.
-     */
     @Async("aiDialogueTaskExecutor")
     public void embedSessionAsync(
             long patientProfileId, long sessionId, NpcName npcName, List<DialogueTurn> turns) {
+        embedSession(patientProfileId, sessionId, npcName, turns);
+    }
+
+    public boolean embedSession(
+            long patientProfileId, long sessionId, NpcName npcName, List<DialogueTurn> turns) {
         if (!properties.isEnabled()) {
-            log.debug("AI dialogue disabled (no base-url) — skip embed for session={}", sessionId);
-            return;
+            log.debug("AI dialogue disabled (no base-url) - skip embed for session={}", sessionId);
+            return false;
         }
         if (turns == null || turns.isEmpty()) {
-            log.debug("Empty turns — skip embed for session={}", sessionId);
-            return;
+            log.debug("Empty turns - skip embed for session={}", sessionId);
+            return false;
         }
 
-        Map<String, Object> body =
-                Map.of(
-                        "patient_profile_id",
-                        patientProfileId,
-                        "session_id",
-                        sessionId,
-                        "npc_name",
-                        npcName.name(),
-                        "turns",
-                        turns.stream().map(AiDialogueClient::toTurnPayload).toList());
+        Map<String, Object> body = buildPayload(patientProfileId, sessionId, npcName, turns);
 
         try {
             Map<String, Object> response = postJson("/dialogue/embed-session", body, sessionId);
-            Object success = response != null ? response.get("success") : null;
+            Object success = response.get("success");
             if (Boolean.TRUE.equals(success)) {
                 log.info("AI embed-session ok session={} turns={}", sessionId, turns.size());
-            } else {
-                log.warn(
-                        "AI embed-session returned non-success session={} body={}",
-                        sessionId,
-                        response);
+                return true;
             }
-        } catch (Exception e) {
+            log.warn(
+                    "AI embed-session returned non-success session={} body={}",
+                    sessionId,
+                    response);
+            return false;
+        } catch (RuntimeException e) {
             log.warn(
                     "AI embed-session call failed session={} reason={}", sessionId, e.getMessage());
+            return false;
         }
     }
 
@@ -108,20 +92,11 @@ public class AiDialogueClient {
             return Optional.empty();
         }
 
-        Map<String, Object> body =
-                Map.of(
-                        "patient_profile_id",
-                        patientProfileId,
-                        "session_id",
-                        sessionId,
-                        "npc_name",
-                        npcName.name(),
-                        "turns",
-                        turns.stream().map(AiDialogueClient::toTurnPayload).toList());
+        Map<String, Object> body = buildPayload(patientProfileId, sessionId, npcName, turns);
 
         try {
             Map<String, Object> response = postJson("/dialogue/emotion-summary", body, sessionId);
-            Object success = response != null ? response.get("success") : null;
+            Object success = response.get("success");
             if (Boolean.FALSE.equals(success)) {
                 log.warn(
                         "AI emotion-summary returned failure session={} body={}",
@@ -130,7 +105,7 @@ public class AiDialogueClient {
                 return Optional.empty();
             }
             return parseEmotionSummary(sessionId, response);
-        } catch (Exception e) {
+        } catch (RuntimeException e) {
             log.warn(
                     "AI emotion-summary call failed session={} reason={}",
                     sessionId,
@@ -139,9 +114,21 @@ public class AiDialogueClient {
         }
     }
 
+    private static Map<String, Object> buildPayload(
+            long patientProfileId, long sessionId, NpcName npcName, List<DialogueTurn> turns) {
+        return Map.of(
+                "patient_profile_id",
+                patientProfileId,
+                "session_id",
+                sessionId,
+                "npc_name",
+                npcName.name(),
+                "turns",
+                turns.stream().map(AiDialogueClient::toTurnPayload).toList());
+    }
+
     @SuppressWarnings("unchecked")
-    private Map<String, Object> postJson(String path, Map<String, Object> body, long sessionId)
-            throws Exception {
+    private Map<String, Object> postJson(String path, Map<String, Object> body, long sessionId) {
         byte[] jsonBytes;
         try {
             jsonBytes = objectMapper.writeValueAsBytes(body);
@@ -166,10 +153,26 @@ public class AiDialogueClient {
                         .POST(HttpRequest.BodyPublishers.ofByteArray(jsonBytes))
                         .build();
 
-        HttpResponse<byte[]> response =
-                httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
+        HttpResponse<byte[]> response;
+        try {
+            response = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("AI dialogue request interrupted", e);
+        } catch (IOException e) {
+            throw new IllegalStateException("AI dialogue request failed", e);
+        }
+
         int status = response.statusCode();
         byte[] responseBytes = response.body();
+        if (responseBytes == null || responseBytes.length == 0) {
+            log.warn(
+                    "AI dialogue empty response [{}] session={} uri={}",
+                    CODE_VERSION,
+                    sessionId,
+                    uri);
+            return Map.of("success", false);
+        }
         if (status / 100 != 2) {
             String preview = new String(responseBytes, StandardCharsets.UTF_8);
             if (preview.length() > 300) {
@@ -185,7 +188,11 @@ public class AiDialogueClient {
             return Map.of("success", false);
         }
 
-        return objectMapper.readValue(responseBytes, Map.class);
+        try {
+            return objectMapper.readValue(responseBytes, Map.class);
+        } catch (JacksonException e) {
+            throw new IllegalStateException("AI dialogue response parse failed", e);
+        }
     }
 
     private static Map<String, Object> toTurnPayload(DialogueTurn turn) {
