@@ -1941,6 +1941,10 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     video.addEventListener(
       'error',
       () => {
+        console.warn('[TaekwondoPoomsaePracticeScene] guide video load error', {
+          src: video.src,
+          mediaError: video.error,
+        })
         loadingText?.setText('가이드 영상을 재생할 수 없어요.').setVisible(true)
       },
       { once: true },
@@ -1953,7 +1957,12 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
     this.guideVideoResizeHandler = positionWrapper
     window.addEventListener('resize', positionWrapper)
 
-    void video.play().catch(() => {
+    console.log('[TaekwondoPoomsaePracticeScene] guide video play attempt', {
+      src: video.src,
+      readyState: video.readyState,
+    })
+    void video.play().catch(err => {
+      console.warn('[TaekwondoPoomsaePracticeScene] guide video play rejected', err)
       loadingText?.setText('가이드 영상을 불러오는 중입니다.').setVisible(true)
     })
   }
