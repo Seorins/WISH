@@ -1077,8 +1077,8 @@
       "sentimentWords": [],
       "endingType": "ASK_ADULT_FIRST",
       "endingNpcLines": [
-        "옆에만 있는 것도 든든해.",
-        "짧게 그 한 마디만."
+        "옆에만 있어도 든든하지.",
+        "한 번 슬쩍 부탁해봐 — 옆자리 비워주실 거야."
       ],
       "closingLine": "다음에 또 와!"
     },
@@ -1194,9 +1194,8 @@
       "sentimentWords": [],
       "endingType": "ASK_MEDICAL_FIRST",
       "endingNpcLines": [
-        "좋아. 선생님이 차근차근 알려줄 거야.",
-        "'오늘 뭐 해요?' 한 마디만.",
-        "모르는 건 묻는 게 빠른 길이거든."
+        "(꼬리 살랑) 좋은 선택이야.",
+        "'오늘 뭐 해요?' 한 마디만 던져봐 — 선생님이 차근차근 풀어주실 거야."
       ],
       "closingLine": "또 와!"
     },
@@ -1488,8 +1487,8 @@
       "sentimentWords": [],
       "endingType": "ASK_HELP_FIRST",
       "endingNpcLines": [
-        "엄마한테 '나 화나' 짧게 한마디만.",
-        "말하면 좀 가벼워질 거야."
+        "(꼬리 살랑) 엄마한테 슬쩍 가서 '나 좀 화났어' 라고 해봐.",
+        "말로 꺼내면 마음이 한결 가벼워져."
       ],
       "closingLine": "또 와!"
     },
@@ -1583,8 +1582,8 @@
       "sentimentWords": [],
       "endingType": "ASK_ADULT_FIRST",
       "endingNpcLines": [
-        "응, 안아달라는 마음 자연스러워.",
-        "엄마나 아빠한테 '안아줘' 한 마디."
+        "응, 안기고 싶은 마음 자연스러워.",
+        "가족한테 슬쩍 가서 손 내밀어봐. 안아주실걸."
       ],
       "closingLine": "또 와!"
     },
@@ -2468,7 +2467,10 @@
       "protectiveFactors": ["emotion_named", "support_seeking"],
       "topicKeywords": ["가족"], "sentimentWords": [],
       "endingType": "ASK_ADULT_FIRST",
-      "endingNpcLines": ["그럼 엄마한테 '같이 호흡 한 번' 해달라고 해봐.", "둘이 하면 더 잘 가."],
+      "endingNpcLines": [
+        "그럴 땐 혼자보다 둘이 더 잘 풀려.",
+        "엄마 옆에 가서 손 잡고 다시 한 번 같이 쉬어봐."
+      ],
       "closingLine": "또 와줘."
     },
     "sleep_eyes_side": {
@@ -2501,7 +2503,10 @@
       "protectiveFactors": ["family_support_preference", "support_need_named"],
       "topicKeywords": ["가족"], "sentimentWords": [],
       "endingType": "ASK_ADULT_FIRST",
-      "endingNpcLines": ["엄마한테 '무릎 좀 빌려줘' 해봐.", "그 자리 진짜 따뜻해."],
+      "endingNpcLines": [
+        "엄마 무릎은 진짜 따뜻한 자리지.",
+        "슬쩍 가서 누워봐. 엄마도 알아챌 거야."
+      ],
       "closingLine": "또 와줘."
     },
     "sleep_eyes_music_calm": {
@@ -2589,7 +2594,10 @@
       "protectiveFactors": ["family_support_preference", "support_need_named"],
       "topicKeywords": ["가족", "손잡기"], "sentimentWords": [],
       "endingType": "ASK_ADULT_FIRST",
-      "endingNpcLines": ["엄마 손은 데워져 있어.", "'잠깐만' 하고 잡아."],
+      "endingNpcLines": [
+        "엄마 손은 데워져 있어.",
+        "가서 슬쩍 잡아봐 — 잡아주실 거야."
+      ],
       "closingLine": "또 와."
     },
     "sleep_fam_say_near": {
@@ -2611,7 +2619,10 @@
       "protectiveFactors": ["verbal_expression", "support_need_named", "family_support_preference"],
       "topicKeywords": ["가족", "손잡기"], "sentimentWords": [],
       "endingType": "ASK_ADULT_FIRST",
-      "endingNpcLines": ["응. 손 잡으면 둘 다 따뜻해져.", "그 한 줄 짧게 전해."],
+      "endingNpcLines": [
+        "(끄덕) 손 잡으면 둘 다 따뜻해지지.",
+        "한 번 슬쩍 손 내밀어봐."
+      ],
       "closingLine": "또 와줘."
     },
     "sleep_fam_say_heavy": {
@@ -2656,7 +2667,10 @@
       "protectiveFactors": ["verbal_expression", "family_support_preference", "support_seeking"],
       "topicKeywords": ["가족"], "sentimentWords": [],
       "endingType": "ASK_ADULT_FIRST",
-      "endingNpcLines": ["'잠깐 옆에 와줘' 한 번 해봐.", "아빠도 같이 와줄 거야."],
+      "endingNpcLines": [
+        "아빠한테 한 번 부탁해봐.",
+        "아빠도 옆에 와주실 거야."
+      ],
       "closingLine": "또 와."
     },
     "sleep_fam_with_geonbin": {
@@ -2689,7 +2703,10 @@
       "protectiveFactors": ["support_need_named", "family_support_preference"],
       "topicKeywords": ["가족"], "sentimentWords": [],
       "endingType": "ASK_ADULT_FIRST",
-      "endingNpcLines": ["그럼 먼저 닿는 사람한테 '와줘' 해.", "엄마든 아빠든."],
+      "endingNpcLines": [
+        "엄마든 아빠든, 먼저 보이는 사람한테 다가가봐.",
+        "누구든 옆자리 비워줄 거야."
+      ],
       "closingLine": "또 와줘."
     },
 
@@ -2733,7 +2750,10 @@
       "protectiveFactors": ["medical_support_preference", "verbal_expression"],
       "topicKeywords": ["의료진"], "sentimentWords": [],
       "endingType": "ASK_MEDICAL_FIRST",
-      "endingNpcLines": ["선생님께 '오늘 조금만 천천히' 라고 해봐.", "들어주실 거야."],
+      "endingNpcLines": [
+        "치료 페이스, 선생님이랑 같이 정해도 돼.",
+        "한 번 부탁해봐 — 들어주실 거야."
+      ],
       "closingLine": "또 와."
     },
     "sleep_pace_all": {
@@ -2766,7 +2786,10 @@
       "protectiveFactors": ["family_support_preference", "self_care_action"],
       "topicKeywords": ["가족", "식사"], "sentimentWords": [],
       "endingType": "ASK_ADULT_FIRST",
-      "endingNpcLines": ["엄마한테 '같이 먹어줘' 해봐.", "옆에 누가 있으면 더 잘 가."],
+      "endingNpcLines": [
+        "옆에 누가 있으면 한 입씩 잘 들어가지.",
+        "엄마한테 슬쩍 가봐 — 같이 먹어주실걸."
+      ],
       "closingLine": "또 와."
     },
     "sleep_pace_meal_rest": {
@@ -3465,7 +3488,10 @@
       "topicKeywords": ["마음"],
       "sentimentWords": [{"phrase": "무거워요", "tone": "NEGATIVE"}],
       "endingType": "ASK_HELP_FIRST",
-      "endingNpcLines": ["그럼 어른한테 한 줄!", "'오늘 좀 무거워' — 짧게 던져."],
+      "endingNpcLines": [
+        "(꼬리 멈추며) 혼자 들고 있지 마.",
+        "옆에 있는 어른한테 한 마디 던져봐 — 같이 들어주실 거야."
+      ],
       "closingLine": "또 와."
     },
     "squirrel_shade_treat": {
@@ -3581,7 +3607,10 @@
       "topicKeywords": ["마음"],
       "sentimentWords": [{"phrase": "무거움", "tone": "NEGATIVE"}],
       "endingType": "ASK_HELP_FIRST",
-      "endingNpcLines": ["오케이. 어른한테 그대로 전해!", "'오늘 무거워' 라고 짧게."],
+      "endingNpcLines": [
+        "오케이! 그 단어, 그대로 한 번 다른 사람한테도 던져봐.",
+        "들으면 옆에 와줄 사람 있어."
+      ],
       "closingLine": "또 와!"
     },
     "squirrel_word_blank": {
