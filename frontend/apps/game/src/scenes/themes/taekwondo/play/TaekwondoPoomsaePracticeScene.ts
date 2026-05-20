@@ -586,7 +586,8 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
       this.currentMotionIndex = 0
       this.setCurrentMotionName(this.getCurrentMotionDisplayName())
       this.updatePoomsaeProgress()
-      this.showSideGuideVideo()
+      // side guide 영상은 motion intro 가 닫히는 startCurrentMotion 단계에서 표시.
+      // 인트로와 동시 호출하면 같은 guideVideoElement 를 서로 덮어써서 play() 가 abort 됨.
       this.showMotionIntroOverlay()
     } catch (error) {
       console.warn('[TaekwondoPoomsaePracticeScene] Failed to load taekwondo motions.', error)
@@ -859,9 +860,11 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
       this.startReadyTutorialCountdown()
     } else if (skipCountdown) {
       // intro 카운트다운이 이미 화면에 진행됐으므로 캡쳐를 바로 시작.
+      this.showSideGuideVideo()
       this.motionRecorderHandle = startScreenRecording({ scene: this })
       this.beginMotionCapture()
     } else {
+      this.showSideGuideVideo()
       this.motionRecorderHandle = startScreenRecording({ scene: this })
       this.startMotionCountdown()
     }
@@ -1196,7 +1199,6 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
 
     this.currentMotionIndex = nextMotionIndex
     this.setCurrentMotionName(this.getCurrentMotionDisplayName())
-    this.showSideGuideVideo()
     this.showMotionIntroOverlay()
   }
 
