@@ -122,6 +122,14 @@ function buildNotification(event: RealtimeEvent): BuiltNotification | null {
         kind: 'CONTENT_ENDED',
         title: `${contentLabel(event.contentType)} 활동이 끝났어요`,
       }
+    case 'DIALOGUE_EMOTION_UPDATED':
+      return {
+        kind: 'DIALOGUE_EMOTION_UPDATED',
+        title: `${npcLabel(event.npcName)} 대화 정서가 업데이트됐어요`,
+        description:
+          event.guardianMessage ?? `${emotionLabel(event.tone)} 흐름으로 대화가 정리됐어요.`,
+        href: `/chat?npc=${event.npcName}&sessionId=${event.dialogueSessionId}`,
+      }
     case 'CONNECTED':
       return null
   }
@@ -137,5 +145,36 @@ function contentLabel(contentType: RealtimeContentType): string {
       return '태권도'
     case 'ART':
       return '미술'
+  }
+}
+function npcLabel(
+  npcName: Extract<RealtimeEvent, { type: 'DIALOGUE_EMOTION_UPDATED' }>['npcName'],
+) {
+  switch (npcName) {
+    case 'YEONGCHEOL':
+      return '영철'
+    case 'JOEUN':
+      return '조은'
+    case 'DAIN':
+      return '다인'
+    case 'GEONBIN':
+      return '건빈'
+    case 'SEORIN':
+      return '코몽'
+    case 'JEONGHO':
+      return '정호'
+    case 'SEHYEON':
+      return '세현'
+  }
+}
+
+function emotionLabel(tone: Extract<RealtimeEvent, { type: 'DIALOGUE_EMOTION_UPDATED' }>['tone']) {
+  switch (tone) {
+    case 'CALM':
+      return '안정적인'
+    case 'TIRED':
+      return '피로가 보이는'
+    case 'WORRIED':
+      return '걱정이 보이는'
   }
 }

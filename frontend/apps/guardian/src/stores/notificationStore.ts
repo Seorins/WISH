@@ -1,6 +1,11 @@
 import { create } from 'zustand'
 
-export type NotificationKind = 'GAME_STARTED' | 'GAME_ENDED' | 'CONTENT_STARTED' | 'CONTENT_ENDED'
+export type NotificationKind =
+  | 'GAME_STARTED'
+  | 'GAME_ENDED'
+  | 'CONTENT_STARTED'
+  | 'CONTENT_ENDED'
+  | 'DIALOGUE_EMOTION_UPDATED'
 
 export type NotificationItem = {
   id: number

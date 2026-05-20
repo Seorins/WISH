@@ -141,11 +141,24 @@ export function useGuardianDialogueNpcStatuses(
   npcs.forEach((npc, i) => {
     const detail = detailQueries[i]?.data
     out[npc] = {
-      tone: detail ? deriveDominantTone(detail.turns) : null,
+      tone: detail ? (toEmotionTone(detail.emotionTone) ?? deriveDominantTone(detail.turns)) : null,
       hasSession: !!detail,
     }
   })
   return out
+}
+
+function toEmotionTone(tone: GuardianDialogueSessionMeta['emotionTone']): EmotionTone | null {
+  switch (tone) {
+    case 'CALM':
+      return 'calm'
+    case 'TIRED':
+      return 'tired'
+    case 'WORRIED':
+      return 'worried'
+    default:
+      return null
+  }
 }
 
 /**
