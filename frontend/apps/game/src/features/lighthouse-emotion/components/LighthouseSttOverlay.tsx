@@ -6,6 +6,7 @@ type LighthouseSttOverlayProps = {
   visible: boolean
   disabled: boolean
   onSubmit: (transcript: string) => void
+  scriptedTranscript?: string
 }
 
 const overlayStyle: CSSProperties = {
@@ -105,10 +106,15 @@ const transcriptTextStyle: CSSProperties = {
   color: '#2b1b10',
 }
 
-export function LighthouseSttOverlay({ visible, disabled, onSubmit }: LighthouseSttOverlayProps) {
+export function LighthouseSttOverlay({
+  visible,
+  disabled,
+  onSubmit,
+  scriptedTranscript,
+}: LighthouseSttOverlayProps) {
   const [transcript, setTranscript] = useState<string>('')
   const { supported, status, errorMessage, start, stop, reset } = useWhisperRecorder({
-    transcribe: audio => transcribeLighthouseAudio(audio),
+    transcribe: audio => Promise.resolve(scriptedTranscript ?? transcribeLighthouseAudio(audio)),
     onFinalResult: text => {
       setTranscript(text)
     },
