@@ -82,7 +82,6 @@ const DEFAULT_FEEDBACK_MESSAGE = '실시간 피드백'
 const MOTION_LOAD_ERROR_MESSAGE = '품새 동작 정보를 불러오지 못했어요.'
 const CAMERA_DENIED_MESSAGE = '카메라를 사용할 수 없어요.'
 const GUIDE_VIDEO_PENDING_MESSAGE = '영상을 준비 중입니다.'
-const MOTION_INTRO_START_LABEL = '시작하기'
 
 const MAX_CAPTURE_DURATION_MS = 15000
 const ANALYSIS_WINDOW_FRAMES = 60
@@ -97,7 +96,7 @@ const MOTION_COUNTDOWN_READY_FEEDBACK = '곧 시작해요!'
 const READY_TUTORIAL_DURATION_SEC = 5
 const READY_TUTORIAL_MOTION_LABEL = '카메라 준비'
 const READY_TUTORIAL_FEEDBACK = '전신이 보이게 서주세요'
-const GUIDE_INTRO_PLAY_COUNT = 2
+const GUIDE_INTRO_PLAY_COUNT = 1
 const GUIDE_INTRO_FALLBACK_MS = 5000
 const MOTION_CAPTURING_FEEDBACK = '동작 확인 중...'
 const GUIDE_VIDEO_OBJECT_POSITION = '50% 90%'
@@ -690,7 +689,6 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
       radius: boxRadius,
     })
     const innerPadX = boxWidth * 0.08
-    const innerPadY = boxHeight * 0.07
     const titleText = this.add
       .text(descBoxX, contentY - boxHeight * 0.28, this.getCurrentMotionDisplayName(), {
         fontFamily: 'sans-serif',
@@ -723,53 +721,7 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
       .setOrigin(0, 0)
       .setLineSpacing(8)
 
-    const buttonWidth = boxWidth - innerPadX * 2
-    const buttonHeight = boxHeight * 0.1
-    const buttonY = contentY + boxHeight / 2 - innerPadY - buttonHeight / 2
-    const startButtonGroup = this.add.container(descBoxX, buttonY)
-    const startButton = createTaekwondoRoundedPanel(this, 0, 0, buttonWidth, buttonHeight, {
-      depth: 0,
-      fillColor: 0x5fa15a,
-      fillAlpha: 1,
-      strokeColor: 0x3f7a3f,
-      strokeAlpha: 0.95,
-      strokeWidth: 3,
-      radius: Math.round(buttonHeight * 0.4),
-    })
-    const startLabel = this.add
-      .text(0, -buttonHeight * 0.04, MOTION_INTRO_START_LABEL, {
-        fontFamily: 'sans-serif',
-        fontSize: `${Math.round(Phaser.Math.Clamp(buttonHeight * 0.42, 22, 32))}px`,
-        color: '#ffffff',
-        fontStyle: '700',
-      })
-      .setOrigin(0.5)
-      .setShadow(0, 2, '#2e5a2e', 3, false, true)
-    startButtonGroup.add([startButton, startLabel])
-    const hitArea = this.add
-      .rectangle(descBoxX, buttonY, buttonWidth, buttonHeight, 0xffffff, 0)
-      .setInteractive({ useHandCursor: true })
-
-    hitArea.on('pointerdown', () => this.startCurrentMotion())
-    hitArea.on('pointerover', () => {
-      startButtonGroup.setScale(1.03)
-    })
-    hitArea.on('pointerout', () => {
-      startButtonGroup.setScale(1)
-    })
-
-    overlay.add([
-      dim,
-      panel,
-      videoBox,
-      pendingText,
-      descBox,
-      titleText,
-      goalLabel,
-      goalText,
-      startButtonGroup,
-      hitArea,
-    ])
+    overlay.add([dim, panel, videoBox, pendingText, descBox, titleText, goalLabel, goalText])
     overlay.setAlpha(0)
     this.tweens.add({
       targets: overlay,
