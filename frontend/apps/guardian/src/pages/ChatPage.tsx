@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { ChatLayout } from '@/features/chat/components/ChatLayout'
 import { CharacterSidebar } from '@/features/chat/components/CharacterSidebar'
 import { ConversationMain } from '@/features/chat/components/ConversationMain'
@@ -18,6 +19,7 @@ import type { ConversationSummary } from '@/features/chat/data/mock'
 import { HeaderBar } from '@/features/dashboard/components/HeaderBar'
 import {
   CHARACTER_ID_TO_NPC,
+  NPC_TO_CHARACTER_ID,
   deriveFromSession,
   formatDurationLabel,
   formatWhenLabel,
@@ -41,7 +43,10 @@ import { useMyPatient } from '@/features/auth/hooks/useMyPatient'
 import '@/features/dashboard/tokens.css'
 
 export function ChatPage() {
-  const [selectedId, setSelectedId] = useState(SESSION_META.characterId)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [selectedId, setSelectedId] = useState(
+    () => getCharacterIdFromNpcParam(searchParams.get('npc')) ?? SESSION_META.characterId,
+  )
   const selected = CHARACTERS.find(c => c.id === selectedId) ?? CHARACTERS[0]
 
   const { data: patient } = useMyPatient()
@@ -68,6 +73,18 @@ export function ChatPage() {
   // 캐릭터 전환 시 사용자가 고른 과거 세션은 리셋
   const [pickedSessionId, setPickedSessionId] = useState<number | null>(null)
   const [pastOpen, setPastOpen] = useState(false)
+
+  useEffect(() => {
+    const nextSelectedId = getCharacterIdFromNpcParam(searchParams.get('npc'))
+    const nextSessionId = getSessionIdFromParam(searchParams.get('sessionId'))
+
+    if (nextSelectedId) {
+      setSelectedId(nextSelectedId)
+    }
+    if (nextSessionId) {
+      setPickedSessionId(nextSessionId)
+    }
+  }, [searchParams])
 
   // 최신 FINISHED 세션을 찾기 위해 최근 10개 메타를 받아오고 클라이언트에서 필터
   const sessionsQuery = useGuardianDialogueSessions({ patientProfileId, npc, size: 10 })
@@ -178,6 +195,7 @@ export function ChatPage() {
   const handleSelectCharacter = (id: string) => {
     setSelectedId(id)
     setPickedSessionId(null)
+    setSearchParams({}, { replace: true })
   }
 
   return (
@@ -208,7 +226,10 @@ export function ChatPage() {
             emptyState={isEmptyForLoggedIn}
             onOpenPast={() => setPastOpen(true)}
             isViewingPast={!!pickedSessionId}
-            onReturnToLatest={() => setPickedSessionId(null)}
+            onReturnToLatest={() => {
+              setPickedSessionId(null)
+              setSearchParams({}, { replace: true })
+            }}
           />
         }
         rightPanel={
@@ -234,9 +255,21 @@ export function ChatPage() {
         activeSessionId={activeSessionId}
         onSelectSession={id => {
           setPickedSessionId(id)
+          setSearchParams({}, { replace: true })
           setPastOpen(false)
         }}
       />
     </>
   )
+}
+
+function getCharacterIdFromNpcParam(npcParam: string | null): string | null {
+  if (!npcParam) return null
+  return NPC_TO_CHARACTER_ID[npcParam as GuardianDialogueNpc] ?? null
+}
+
+function getSessionIdFromParam(sessionIdParam: string | null): number | null {
+  if (!sessionIdParam) return null
+  const parsed = Number(sessionIdParam)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null
 }

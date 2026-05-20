@@ -34,6 +34,11 @@ export type GuardianDialogueSessionMeta = {
   finishReason: GuardianDialogueFinishReason
   startedAt: string
   endedAt: string | null
+  emotionValence: GuardianDialogueChoiceValence | null
+  emotionTone: GuardianDialogueChoiceTone | null
+  emotionIntensity: number | null
+  guardianMessage: string | null
+  emotionAnalyzedAt: string | null
   durationSeconds: number | null
 }
 
@@ -57,6 +62,8 @@ export type GuardianDialogueTurn = {
 
 export type GuardianDialogueSessionDetail = GuardianDialogueSessionMeta & {
   patientProfileId: number
+  emotionConcernFlags: string[]
+  emotionProtectiveFactors: string[]
   turns: GuardianDialogueTurn[]
 }
 
