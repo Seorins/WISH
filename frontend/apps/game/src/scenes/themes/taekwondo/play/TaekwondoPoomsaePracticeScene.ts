@@ -158,7 +158,7 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
   private guideVideoExpandOverlay?: Phaser.GameObjects.Container
   private beltPromotionOverlay?: Phaser.GameObjects.Container
   private sessionResultPanel?: Phaser.GameObjects.Container
-  private finishButton?: Phaser.GameObjects.Text
+  private finishButton?: Phaser.GameObjects.Container
   private motions: TaekwondoMotion[] = []
   private motionResults: CreateTaekwondoSessionMotionRequest[] = []
   private recordedMotionIndexes = new Set<number>()
@@ -329,19 +329,30 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
 
   private createFinishButton(vw: number) {
     if (this.finishButton) return
-    this.finishButton = this.add
-      .text(vw - 32, 32, '종료', {
+    const btnW = 116
+    const btnH = 50
+    const radius = 14
+    const container = this.add.container(vw - 28, 28).setDepth(40)
+    const shadow = this.add.graphics()
+    shadow.fillStyle(0x2d1b10, 0.3)
+    shadow.fillRoundedRect(-btnW + 2, 4, btnW, btnH, radius)
+    const bg = this.add.graphics()
+    bg.fillStyle(0xfff5dc, 0.97)
+    bg.fillRoundedRect(-btnW, 0, btnW, btnH, radius)
+    bg.lineStyle(3, 0xd7a750, 0.95)
+    bg.strokeRoundedRect(-btnW, 0, btnW, btnH, radius)
+    const label = this.add
+      .text(-btnW / 2, btnH / 2 - 1, '종료', {
         fontFamily: 'sans-serif',
-        fontSize: '24px',
-        color: '#ffffff',
-        backgroundColor: '#7c1d1d',
-        padding: { left: 18, right: 18, top: 8, bottom: 8 },
-        fontStyle: '700',
+        fontSize: '22px',
+        color: '#7a471c',
+        fontStyle: '800',
       })
-      .setOrigin(1, 0)
-      .setDepth(40)
+      .setOrigin(0.5)
+    const hitArea = this.add
+      .rectangle(-btnW / 2, btnH / 2, btnW, btnH, 0xffffff, 0)
       .setInteractive({ useHandCursor: true })
-    this.finishButton.on('pointerdown', () => {
+    hitArea.on('pointerdown', () => {
       if (
         this.hasSubmittedSession ||
         this.isSavingSession ||
@@ -352,6 +363,10 @@ export class TaekwondoPoomsaePracticeScene extends Phaser.Scene {
       }
       void this.finishPracticeSession(true)
     })
+    hitArea.on('pointerover', () => container.setScale(1.04))
+    hitArea.on('pointerout', () => container.setScale(1))
+    container.add([shadow, bg, label, hitArea])
+    this.finishButton = container
   }
 
   private showSessionResultPanel(

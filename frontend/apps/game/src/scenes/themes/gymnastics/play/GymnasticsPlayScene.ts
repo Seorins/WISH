@@ -617,7 +617,7 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
   private hasSubmittedSession = false
   private saveState: 'idle' | 'saving' | 'success' | 'error' = 'idle'
   private saveRetryButton?: Phaser.GameObjects.Text
-  private finishButton?: Phaser.GameObjects.Text
+  private finishButton?: Phaser.GameObjects.Container
   private sessionResultPanel?: Phaser.GameObjects.Container
   private lastTtsKey: string | null = null
   private lastTtsPlayedAtMs = 0
@@ -735,19 +735,32 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
 
   private createFinishButton(vw: number) {
     if (this.finishButton) return
-    this.finishButton = this.add
-      .text(vw - 32, 32, '종료', {
+    const btnW = 116
+    const btnH = 50
+    const radius = 14
+    const container = this.add.container(vw - 28, 28).setDepth(40)
+    const shadow = this.add.graphics()
+    shadow.fillStyle(0x2d1b10, 0.32)
+    shadow.fillRoundedRect(-btnW + 2, 4, btnW, btnH, radius)
+    const bg = this.add.graphics()
+    bg.fillStyle(0x6b3f1c, 0.96)
+    bg.fillRoundedRect(-btnW, 0, btnW, btnH, radius)
+    bg.lineStyle(2, 0xd6a56d, 0.95)
+    bg.strokeRoundedRect(-btnW, 0, btnW, btnH, radius)
+    const label = this.add
+      .text(-btnW / 2, btnH / 2 - 1, '종료', {
         fontFamily: 'sans-serif',
-        fontSize: '24px',
-        color: '#ffffff',
-        backgroundColor: '#7c1d1d',
-        padding: { left: 18, right: 18, top: 8, bottom: 8 },
-        fontStyle: '700',
+        fontSize: '22px',
+        color: '#ffefc0',
+        fontStyle: '800',
+        stroke: '#3a2110',
+        strokeThickness: 2,
       })
-      .setOrigin(1, 0)
-      .setDepth(40)
+      .setOrigin(0.5)
+    const hitArea = this.add
+      .rectangle(-btnW / 2, btnH / 2, btnW, btnH, 0xffffff, 0)
       .setInteractive({ useHandCursor: true })
-    this.finishButton.on('pointerdown', () => {
+    hitArea.on('pointerdown', () => {
       if (
         this.hasSubmittedSession ||
         this.saveState === 'saving' ||
@@ -758,6 +771,10 @@ class GymnasticsPlaySceneBase extends Phaser.Scene {
       }
       void this.finishExerciseSession()
     })
+    hitArea.on('pointerover', () => container.setScale(1.04))
+    hitArea.on('pointerout', () => container.setScale(1))
+    container.add([shadow, bg, label, hitArea])
+    this.finishButton = container
   }
 
   private showSessionResultPanel(motionCount: number, averageAccuracy: number): boolean {
