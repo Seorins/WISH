@@ -4,7 +4,7 @@ import styles from './ConversationMain.module.css'
 import { WishCharacter3D } from './WishCharacter3D'
 
 const VISIBLE_MAX = 3
-const TICK_MS = 2400
+const TICK_MS = 800
 
 /** 가상의 대화 흐름: tick 이 증가할 때마다 messages 를 한 칸씩 슬라이드. 최근 3개만 노출.
  *  마지막 메시지가 노출된 뒤로는 더 이상 진행하지 않음 (한 번만 재생). */
