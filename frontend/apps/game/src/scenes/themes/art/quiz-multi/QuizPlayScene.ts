@@ -1,6 +1,7 @@
 import Phaser from 'phaser'
 import { playSceneBgm } from '@/game/systems/sceneBgm'
 import {
+  createArtwork,
   getQuizRoom,
   leaveQuizRoom,
   type PromptAssignment,
@@ -173,6 +174,15 @@ export class QuizPlayScene extends Phaser.Scene {
   private finalMembers: QuizMember[] | null = null
   private isLeaving = false
 
+  /**
+   * 출제자(drawer) 본인이 그린 라운드의 PNG 를 라운드 종료 시 자기 앨범에 자동 저장.
+   * usedColors: 지우개 제외 — 색상 카운트용. drawerRoundStartedAt: 플레이 시간 산출용.
+   * savedRoundNumber: round_ended → game_finished 가 연달아 와도 같은 라운드를 두 번 저장하지 않도록 가드.
+   */
+  private usedColors = new Set<string>()
+  private drawerRoundStartedAt: number | null = null
+  private savedRoundNumber: number | null = null
+
   constructor() {
     super('QuizPlayScene')
   }
@@ -211,6 +221,9 @@ export class QuizPlayScene extends Phaser.Scene {
     this.brushSize = 6
     this.wordLengthRevealed = false
     this.wordLengthRevealTimer = null
+    this.usedColors.clear()
+    this.drawerRoundStartedAt = null
+    this.savedRoundNumber = null
   }
 
   preload() {
@@ -267,6 +280,13 @@ export class QuizPlayScene extends Phaser.Scene {
     // 진입 시점에 이미 라운드가 진행 중이고 본인이 정답자라면 오버레이 즉시 노출.
     if (this.snapshot.status === 'PLAYING' && !this.isDrawer()) {
       this.setGuessOverlay(true)
+    }
+    // 재진입(이미 PLAYING) 시에도 출제자라면 라운드 시작 시각을 역산해 두기. round_started 를
+    // 받지 못한 상태에서 round_ended 가 와도 playDurationSeconds 를 그럴듯하게 계산하도록.
+    if (this.snapshot.status === 'PLAYING' && this.isDrawer()) {
+      this.drawerRoundStartedAt = this.snapshot.roundEndsAtEpochMillis
+        ? this.snapshot.roundEndsAtEpochMillis - ROUND_DURATION_MS
+        : Date.now()
     }
     // 재진입(스냅샷이 PLAYING 인 상태로 시작) 시에도 글자수 reveal 타이밍을 맞춤. 이미 30s
     // 지났으면 즉시 노출 / 아니면 남은 만큼 지연.
@@ -1205,6 +1225,9 @@ export class QuizPlayScene extends Phaser.Scene {
     if (!this.canDraw() || this.activePointerId !== pointer.id || !pointer.isDown) return
     const point = this.pointerToCanvasPoint(pointer)
     if (!point || !this.activeLastPoint) return
+    if (this.selectedTool === 'brush') {
+      this.usedColors.add(this.brushColor)
+    }
     this.appendSegment(
       this.activeLastPoint,
       point,
@@ -1224,6 +1247,9 @@ export class QuizPlayScene extends Phaser.Scene {
     if (this.activePointerId !== pointer.id) return
     const point = this.pointerToCanvasPoint(pointer) ?? this.activeLastPoint
     if (point && this.activeLastPoint) {
+      if (this.selectedTool === 'brush') {
+        this.usedColors.add(this.brushColor)
+      }
       this.appendSegment(
         this.activeLastPoint,
         point,
@@ -1288,6 +1314,9 @@ export class QuizPlayScene extends Phaser.Scene {
       this.roundEndedAt = null
       this.strokes = []
       this.remoteLastPoints.clear()
+      this.usedColors.clear()
+      // 출제자 본인이 그릴 라운드만 플레이 시간을 측정. 다른 사람 라운드는 저장 안 함.
+      this.drawerRoundStartedAt = this.isDrawer() ? Date.now() : null
       this.scheduleWordLengthReveal(event.roundEndsAtEpochMillis)
       // 정답자(=출제자 아님) 한정으로 정답 입력 오버레이 노출.
       this.setGuessOverlay(!this.isDrawer())
@@ -1321,6 +1350,8 @@ export class QuizPlayScene extends Phaser.Scene {
       this.cancelWordLengthReveal()
       this.drawLayout()
       this.showAnswerBanner(event.word, correctMember?.nickname ?? null)
+      // 본인이 출제자였던 라운드면 PNG 로 내려 자기 앨범에 자동 저장. 비공개로 둠.
+      this.maybeSaveDrawerArtwork()
     } else if (event.type === 'game_finished') {
       this.answerBanner?.destroy()
       this.answerBanner = null
@@ -1332,6 +1363,9 @@ export class QuizPlayScene extends Phaser.Scene {
       this.roundEndedAt = null
       this.cancelWordLengthReveal()
       this.drawLayout()
+      // round_ended 없이 곧장 game_finished 로 마지막 라운드가 끝나는 경우 대비 — 중복 저장은
+      // savedRoundNumber 가드로 막는다.
+      this.maybeSaveDrawerArtwork()
     }
   }
 
@@ -1574,6 +1608,82 @@ export class QuizPlayScene extends Phaser.Scene {
 
   private isDrawer() {
     return this.currentUserId !== null && this.snapshot.currentDrawerUserId === this.currentUserId
+  }
+
+  /**
+   * 본인이 출제자였던 라운드의 캔버스를 PNG 로 굽고 본인 앨범에 비공개로 저장.
+   * round_ended / game_finished 에서 호출되며 같은 라운드에 두 번 저장되지 않도록 savedRoundNumber 로 가드.
+   * 자유그리기({@link ArtFreeDrawingScene}) 의 저장 흐름과 동일한 createArtwork 엔드포인트 재사용.
+   */
+  private maybeSaveDrawerArtwork() {
+    if (!this.isDrawer()) return
+    if (this.strokes.length === 0) return
+    const roundNumber = this.snapshot.roundNumber
+    if (this.savedRoundNumber === roundNumber) return
+    this.savedRoundNumber = roundNumber
+
+    const startedAt = this.drawerRoundStartedAt ?? Date.now()
+    const elapsedMs = Math.max(0, Date.now() - startedAt)
+    const playDurationSeconds = Math.min(
+      ROUND_DURATION_MS / 1000,
+      Math.max(1, Math.round(elapsedMs / 1000)),
+    )
+    const colorCount = this.usedColors.size
+
+    void this.exportStrokesToPng()
+      .then(blob =>
+        createArtwork({
+          image: blob,
+          filename: `quiz-drawing-${Date.now()}.png`,
+          sketchCode: null,
+          playDurationSeconds,
+          isPublic: false,
+          colorCount,
+        }),
+      )
+      .catch(error => {
+        // 저장 실패해도 게임 진행은 영향 없음 — 콘솔에만 로깅.
+        console.error('Failed to save quiz drawing artwork.', error)
+      })
+  }
+
+  /**
+   * 현재 strokes 를 오프스크린 캔버스에 래스터화해서 PNG Blob 으로 반환.
+   * Phaser Graphics 의 WebGL 스냅샷을 거치는 대신, 정규화된 strokes 데이터를 직접 그려
+   * 캔버스 프레임/UI 영역 없이 그림만 담기게 한다.
+   */
+  private exportStrokesToPng(): Promise<Blob> {
+    return new Promise((resolve, reject) => {
+      const width = Math.max(1, Math.round(this.canvasBounds.width))
+      const height = Math.max(1, Math.round(this.canvasBounds.height))
+      const out = document.createElement('canvas')
+      out.width = width
+      out.height = height
+      const ctx = out.getContext('2d')
+      if (!ctx) {
+        reject(new Error('Failed to create export canvas context.'))
+        return
+      }
+      ctx.fillStyle = '#ffffff'
+      ctx.fillRect(0, 0, width, height)
+      ctx.lineCap = 'round'
+      ctx.lineJoin = 'round'
+      for (const seg of this.strokes) {
+        ctx.strokeStyle = seg.eraser ? '#ffffff' : seg.color
+        ctx.lineWidth = seg.size
+        ctx.beginPath()
+        ctx.moveTo(seg.from.x * width, seg.from.y * height)
+        ctx.lineTo(seg.to.x * width, seg.to.y * height)
+        ctx.stroke()
+      }
+      out.toBlob(blob => {
+        if (!blob) {
+          reject(new Error('Drawing canvas toBlob returned null.'))
+          return
+        }
+        resolve(blob)
+      }, 'image/png')
+    })
   }
 
   private canDraw() {
