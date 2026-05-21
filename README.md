@@ -1,1 +1,493 @@
-WISH
+# WISH
+
+> **소아암 환아를 위한 행동 기반 감정 회복 마을 플랫폼**
+
+WISH는 환아가 가상 마을을 탐험하며 미술, 체조, 태권도, 음악 콘텐츠를 경험하는 웹 기반 인터랙티브 게임 플랫폼입니다.  
+환아용 게임 웹, 관리자 웹, 보호자&의료진 웹이 하나의 백엔드와 AI 서비스로 연결되어 활동 수행, 콘텐츠 관리, 환아 활동 모니터링 흐름을 제공합니다.
+
+<br />
+
+## 🔎 목차
+
+<div align="center">
+
+### <a href="#overview">📌 프로젝트 소개</a>
+### <a href="#features">✨ 주요 기능</a>
+### <a href="#tech-stack">🛠 기술 스택</a>
+### <a href="#main-tech">🚀 핵심 기술</a>
+### <a href="#architecture">🌐 시스템 아키텍처</a>
+### <a href="#erd">🗂 ERD</a>
+### <a href="#directories">📂 프로젝트 구조</a>
+
+</div>
+
+---
+
+## 📌 프로젝트 소개
+
+<a name="overview"></a>
+
+WISH는 소아암 환아가 치료 과정에서 겪는 정서적 부담과 신체 활동 부족을 완화하기 위해 설계된 서비스입니다.  
+사용자는 게임 속 마을을 이동하며 여러 테마 공간에 입장하고, 각 공간에서 미술 활동이나 신체 활동 콘텐츠를 수행합니다.
+
+서비스는 다음 목표에 집중합니다.
+
+- 환아가 부담 없이 참여할 수 있는 게임형 활동 경험 제공
+- 카메라 기반 자세·동작 인식을 통한 실시간 운동 피드백 제공
+- 미술 작품과 운동 기록을 저장해 활동 이력을 관리
+- 관리자 웹을 통해 운동 콘텐츠와 미디어 리소스 관리
+- 보호자&의료진 웹을 통해 환아의 활동 기록, 작품, 운동 결과 확인
+- 백엔드, AI 서버, 프론트엔드 앱을 분리한 확장 가능한 구조 구성
+
+---
+
+## ✨ 주요 기능
+
+<a name="features"></a>
+
+### 🧩 서비스 구성
+
+| 웹 | 대상 | 역할 |
+| --- | --- | --- |
+| **환아용 게임 웹** | 환아 | 마을 탐험, 미술 활동, 체조/태권도 활동, 실시간 피드백 |
+| **관리자 웹** | 운영자 / 관리자 | 운동 콘텐츠, 썸네일, 시범 영상, 서비스 운영 데이터 관리 |
+| **보호자&의료진 웹** | 보호자 / 의료진 | 환아 프로필, 작품, 운동 세션, 피드백 기록 확인 |
+
+<br />
+
+### 🎮 환아용 게임 웹
+
+| 기능 | 설명 |
+| --- | --- |
+| **마을 탐험** | Phaser 기반 2D 마을에서 캐릭터를 조작하고 테마 포털로 이동합니다. |
+| **미술 활동** | 자유 그리기와 색칠하기 콘텐츠를 제공하며 손 추적 기반 조작을 지원합니다. |
+| **작품 앨범** | 저장한 작품을 목록/상세로 조회하고 수정 또는 삭제할 수 있습니다. |
+| **체조 콘텐츠** | 카메라로 자세를 인식해 제자리 걷기, 사이드 스텝, 대각선 지르기 등 체조 동작을 수행합니다. |
+| **태권도 콘텐츠** | 자세 정규화, 방향 분류, 품새 선택 등 태권도 활동 흐름을 제공합니다. |
+| **음악 테마** | 마을 내 음악 공간으로 이동할 수 있는 테마 구조를 제공합니다. |
+| **데모 인증** | MVP 환경에서 로그인 없이 데모 토큰을 발급받아 게임을 실행할 수 있습니다. |
+
+<br />
+
+### 🧑‍💼 관리자 웹
+
+| 기능 | 설명 |
+| --- | --- |
+| **관리자 로그인/회원가입** | JWT 기반 인증을 통해 관리자 기능에 접근합니다. |
+| **체조 동작 목록 조회** | 체조 타입별 동작을 루틴 순서대로 확인합니다. |
+| **체조 동작 등록/수정/삭제** | 동작명, 설명, 목표 횟수, 썸네일, 시범 영상을 관리합니다. |
+| **미디어 업로드** | multipart 요청으로 썸네일 이미지와 데모 영상을 함께 업로드합니다. |
+
+<br />
+
+### 👨‍👩‍👧 보호자&의료진 웹
+
+| 기능 | 설명 |
+| --- | --- |
+| **환아 프로필 관리** | 보호자 계정 하위의 환아 정보를 등록하고 조회합니다. |
+| **활동 기록 확인** | 환아가 수행한 미술 활동과 운동 세션 이력을 확인합니다. |
+| **작품 조회** | 환아가 저장한 색칠하기/그리기 작품과 공개 여부를 확인합니다. |
+| **운동 결과 모니터링** | 체조 세션별 수행 시간, 평균 정확도, 완료 동작 수를 확인합니다. |
+| **피드백 확인** | 동작별 정확도와 대표 피드백을 바탕으로 환아의 수행 상태를 파악합니다. |
+
+<br />
+
+### 🤖 AI 서비스
+
+| 영역 | 설명 |
+| --- | --- |
+| **Pose Normalization** | 카메라에서 전달된 Pose Landmark를 운동 평가에 적합한 좌표계로 정규화합니다. |
+| **Gymnastics Evaluation** | 제자리 걷기, 사이드 스텝, 대각선 몸통 지르기, 대각선 얼굴 지르기 동작을 평가합니다. |
+| **Taekwondo Classification** | 태권도 기본 동작, 자세, 방향 전환을 분류합니다. |
+| **Tracking Quality** | 랜드마크 누락, 평균 신뢰도, 추적 품질 점수를 계산합니다. |
+| **Feedback Stabilization** | 프레임 단위 피드백이 흔들리지 않도록 대표 피드백과 상태를 관리합니다. |
+
+---
+
+## 🛠 기술 스택
+
+<a name="tech-stack"></a>
+
+### Frontend
+
+<div align="center">
+
+![React](https://img.shields.io/badge/react-19-61DAFB?style=for-the-badge&logo=react&logoColor=black)
+![TypeScript](https://img.shields.io/badge/typescript-5.7-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
+![Vite](https://img.shields.io/badge/vite-6.2-646CFF?style=for-the-badge&logo=vite&logoColor=white)
+![Phaser](https://img.shields.io/badge/phaser-3.88-7A3E9D?style=for-the-badge)
+![MediaPipe](https://img.shields.io/badge/mediapipe-tasks_vision-0097A7?style=for-the-badge)
+![pnpm](https://img.shields.io/badge/pnpm-10.33-F69220?style=for-the-badge&logo=pnpm&logoColor=white)
+
+</div>
+
+| 기술 | 용도 |
+| --- | --- |
+| **React 19** | 환아용 게임 웹, 관리자 웹, 보호자&의료진 웹 Shell 구성 |
+| **TypeScript** | 프론트엔드 타입 안정성 |
+| **Vite** | 앱 개발 서버 및 번들링 |
+| **Phaser 3** | 2D 게임 월드, 씬, 캐릭터, 인터랙션 구현 |
+| **MediaPipe Tasks Vision** | 손/자세 랜드마크 기반 사용자 동작 인식 |
+| **TanStack Query** | 서버 상태 관리 |
+| **Zustand** | 클라이언트 전역 상태 관리 |
+| **React Hook Form + Zod** | 관리자 폼 처리 및 검증 |
+| **Turborepo + pnpm workspace** | 모노레포 빌드 파이프라인 |
+
+<br />
+
+### Backend
+
+<div align="center">
+
+![Java](https://img.shields.io/badge/java-21-007396?style=for-the-badge&logo=openjdk&logoColor=white)
+![Spring Boot](https://img.shields.io/badge/spring_boot-4.0.5-6DB33F?style=for-the-badge&logo=springboot&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/postgresql-15-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
+![Redis](https://img.shields.io/badge/redis-7-DC382D?style=for-the-badge&logo=redis&logoColor=white)
+![Flyway](https://img.shields.io/badge/flyway-migration-CC0200?style=for-the-badge&logo=flyway&logoColor=white)
+![Gradle](https://img.shields.io/badge/gradle-9.4.1-02303A?style=for-the-badge&logo=gradle&logoColor=white)
+
+</div>
+
+| 기술 | 용도 |
+| --- | --- |
+| **Spring Boot 4.0.5** | REST API 서버 |
+| **Java 21** | 백엔드 개발 언어 |
+| **Spring Security + JWT** | 인증/인가 |
+| **Spring Data JPA** | ORM 기반 데이터 접근 |
+| **PostgreSQL 15** | 서비스 데이터 저장 |
+| **Flyway** | DB 마이그레이션 |
+| **Springdoc OpenAPI** | Swagger API 문서 |
+| **Testcontainers** | PostgreSQL 기반 통합 테스트 |
+| **Spotless + Google Java Format** | 코드 포매팅 |
+
+<br />
+
+### AI
+
+<div align="center">
+
+![FastAPI](https://img.shields.io/badge/fastapi-0.115-009688?style=for-the-badge&logo=fastapi&logoColor=white)
+![Python](https://img.shields.io/badge/python-3.x-3776AB?style=for-the-badge&logo=python&logoColor=white)
+![Pydantic](https://img.shields.io/badge/pydantic-2.11-E92063?style=for-the-badge)
+![Pytest](https://img.shields.io/badge/pytest-8.3-0A9EDC?style=for-the-badge&logo=pytest&logoColor=white)
+
+</div>
+
+| 기술 | 용도 |
+| --- | --- |
+| **FastAPI** | AI 평가 API 서버 |
+| **Pydantic** | 요청/응답 스키마 검증 |
+| **Uvicorn** | ASGI 서버 |
+| **Pytest** | 동작 평가 로직 테스트 |
+
+<br />
+
+### Infra & DevOps
+
+<div align="center">
+
+![Docker](https://img.shields.io/badge/docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)
+![Nginx](https://img.shields.io/badge/nginx-009639?style=for-the-badge&logo=nginx&logoColor=white)
+![Jenkins](https://img.shields.io/badge/jenkins-D24939?style=for-the-badge&logo=jenkins&logoColor=white)
+![GitLab CI](https://img.shields.io/badge/gitlab_ci-FC6D26?style=for-the-badge&logo=gitlab&logoColor=white)
+![Prometheus](https://img.shields.io/badge/prometheus-E6522C?style=for-the-badge&logo=prometheus&logoColor=white)
+![Grafana](https://img.shields.io/badge/grafana-F46800?style=for-the-badge&logo=grafana&logoColor=white)
+
+</div>
+
+| 기술 | 용도 |
+| --- | --- |
+| **Docker / Docker Compose** | 로컬/개발/플랫폼 환경 구성 |
+| **Nginx** | 프론트/백엔드 라우팅 |
+| **GitLab CI** | verify → build → package → deploy 파이프라인 |
+| **Jenkins** | 개발 서버 배포 Job 트리거 |
+| **Prometheus / Grafana** | 서비스 및 인프라 모니터링 |
+
+---
+
+## 🚀 핵심 기술
+
+<a name="main-tech"></a>
+
+<details>
+<summary><b>Phaser 기반 마을형 게임 구조</b></summary>
+
+<br />
+
+게임 앱은 `StartScene`에서 시작해 `VillageScene`을 중심 허브로 사용합니다.  
+마을 안의 포털을 통해 미술, 체조, 태권도, 음악 테마 씬으로 이동하는 구조입니다.
+
+```text
+StartScene
+   │
+   ▼
+VillageScene
+   ├── ArtSelectScene
+   │   ├── ArtFreeDrawingScene
+   │   ├── ArtColoringSelectScene
+   │   ├── ArtColoringScene
+   │   └── ArtAlbumScene
+   ├── GymnasticsSelectScene
+   │   ├── GymnasticsTopScene
+   │   └── GymnasticsDanielScene
+   ├── TaekwondoSelectScene
+   │   └── TaekwondoPoomsaeSelectScene
+   └── MusicSelectScene
+```
+
+- 씬 전환은 Phaser Scene 시스템으로 관리합니다.
+- 캐릭터 이동, 카메라 Follow, 포털 진입 판정, 대화 UI가 분리되어 있습니다.
+- 이미지/사운드 리소스는 `frontend/apps/game/public/assets` 하위에 테마별로 관리합니다.
+
+</details>
+
+<details>
+<summary><b>MediaPipe 기반 손/자세 추적</b></summary>
+
+<br />
+
+프론트엔드는 MediaPipe Tasks Vision을 사용해 카메라 프레임에서 손과 자세 랜드마크를 추출합니다.  
+추출된 좌표는 게임 내 커서 조작, 색칠/그리기, 운동 동작 평가에 활용됩니다.
+
+```text
+Camera Frame
+   │
+   ├── Hand Landmark → 그림 도구 선택 / 색상 선택 / 캔버스 조작
+   │
+   └── Pose Landmark → AI 서버 자세 정규화 / 동작 평가 / 피드백 생성
+```
+
+- 손 추적: 브러시, 지우개, 색상, 저장/초기화 버튼 조작
+- 자세 추적: 체조 및 태권도 동작 평가용 랜드마크 전달
+- 프레임별 좌표 흔들림을 줄이기 위한 smoothing, confidence, reference 계산 로직 포함
+
+</details>
+
+<details>
+<summary><b>AI 동작 평가 파이프라인</b></summary>
+
+<br />
+
+AI 서비스는 FastAPI로 분리되어 있으며, 프론트엔드에서 전달한 랜드마크를 정규화한 뒤 동작별 평가 결과를 반환합니다.
+
+```text
+Pose Landmark
+   │
+   ▼
+Normalize
+   │
+   ├── Gymnastics Evaluator
+   │   ├── March
+   │   ├── Side Step
+   │   ├── Diagonal Body Punch
+   │   └── Diagonal Face Punch
+   │
+   └── Taekwondo Classifier
+       ├── Calibration
+       ├── Basic Motion
+       ├── Stance
+       └── Direction
+```
+
+평가 결과에는 다음 정보가 포함됩니다.
+
+- 동작 상태(`idle`, 진행 중, 완료 등)
+- 반복 횟수 및 목표 횟수
+- 정확도 점수
+- 실시간 피드백
+- 추적 품질
+- 대표 피드백 및 프레임 안정화 상태
+
+</details>
+
+<details>
+<summary><b>학습/튜닝 기반 동작 인식 기준</b></summary>
+
+<br />
+
+환아가 카메라 앞에서 수행하는 동작을 안정적으로 판단하기 위해, 동작별 특징값과 판정 기준을 설계하고 반복 테스트를 통해 보정했습니다.  
+현재 레포 기준으로는 별도 모델 파일을 로드하는 방식이 아니라, MediaPipe Pose Landmark에서 추출한 특징값을 기반으로 동작 상태, 정확도, 피드백을 계산하는 구조입니다.
+
+```text
+Pose Landmark
+   │
+   ▼
+Feature Extraction
+   ├── 관절 각도
+   ├── 손목 / 무릎 / 발목 위치
+   ├── 골반 중심 이동량
+   ├── 몸통 기울기
+   └── 기준 자세 대비 변화량
+   │
+   ▼
+Motion Scoring
+   ├── 동작 상태 분류
+   ├── 반복 횟수 카운팅
+   ├── 정확도 계산
+   └── 피드백 후보 선정
+   │
+   ▼
+Feedback Stabilization
+   ├── 프레임 단위 흔들림 완화
+   ├── 대표 피드백 누적
+   └── 보호자&의료진 기록용 결과 저장
+```
+
+| 구분 | 학습/튜닝한 기준 | 활용 |
+| --- | --- | --- |
+| **제자리 걷기** | 허벅지 각도, 좌우 우세 다리, 골반 이동량, 몸통 기울기 | 반복 횟수, 정확도, “다리를 더 높게 들어요” 등 피드백 |
+| **사이드 스텝** | 좌우 발 이동 폭, 발목 간 거리, 골반 깊이 이동, 몸통 기울기 | 좌우 스텝 판정, 제자리 이탈 감지 |
+| **대각선 몸통 지르기** | 손목 전방 이동량, 팔꿈치 각도, 보폭, 반대팔 접힘 | 지르기 동작 인식, 팔 펴기/보폭 피드백 |
+| **대각선 얼굴 지르기** | 손목 높이, 손목 전방 이동량, 팔꿈치 각도, 보폭 | 얼굴 높이 지르기 판정, 주먹 높이 피드백 |
+| **태권도 기본 동작** | 손목 위치, 중심선 거리, 팔꿈치 각도, 반대 손 위치 | 준비 자세, 아래막기, 몸통 지르기 분류 |
+| **태권도 자세/방향** | 발 간격, 무릎 각도, 어깨·골반·발목 좌표 변화 | 준비/걷기/앞굽이 자세와 방향 전환 분류 |
+
+동작 판정은 단일 프레임만 보지 않고, 이전 상태와 누적 상태를 함께 사용합니다.  
+이를 통해 같은 동작이 중복 카운트되는 문제를 줄이고, 피드백이 화면에서 빠르게 흔들리지 않도록 안정화했습니다.
+
+</details>
+
+<details>
+<summary><b>작품 저장 및 앨범 관리</b></summary>
+
+<br />
+
+미술 콘텐츠에서 생성한 결과물은 이미지 파일과 메타데이터를 함께 백엔드로 전송합니다.
+
+```text
+Canvas Result
+   │
+   ├── image Blob
+   └── metadata
+       ├── sketchCode
+       ├── playDurationSeconds
+       └── isPublic
+   │
+   ▼
+Multipart Upload
+   │
+   ▼
+Spring API
+   ├── LocalImageStorage
+   └── PostgreSQL artworks
+```
+
+- 내 작품 목록은 최신순 페이지네이션으로 조회합니다.
+- 공개 작품은 비로그인 사용자도 조회할 수 있는 갤러리 API로 분리했습니다.
+- 비공개 작품은 작성자만 조회/수정/삭제할 수 있도록 권한을 검사합니다.
+
+</details>
+
+<details>
+<summary><b>운동 콘텐츠 관리와 세션 기록</b></summary>
+
+<br />
+
+운동 콘텐츠는 관리자 웹에서 마스터 데이터를 관리하고, 환아가 수행한 결과는 세션 단위로 저장합니다. 저장된 결과는 보호자&의료진 웹에서 활동 기록과 피드백 확인에 활용됩니다.
+
+| 데이터 | 설명 |
+| --- | --- |
+| **Exercise Motion** | 운동 타입, 동작명, 루틴 순서, 목표 횟수, 설명, 썸네일, 시범 영상 |
+| **Exercise Session** | 환아별 운동 세션, 전체 수행 시간, 평균 정확도, 완료 동작 수 |
+| **Exercise Session Motion** | 세션 내 동작별 수행 시간, 정확도, 완료 횟수, 피드백 |
+
+기본 TOP 체조 루틴은 Flyway seed migration으로 관리합니다.
+
+- 제자리 걷기
+- 사이드 스텝
+- 대각선 몸통 지르기
+- 대각선 얼굴 지르기
+- 앉았다 일어서기
+
+</details>
+
+---
+
+## 🌐 시스템 아키텍처
+
+<a name="architecture"></a>
+
+<p align="center">
+  <img src="readme_assets/images/architecture.png" alt="시스템 아키텍처" width="900"/>
+</p>
+
+---
+
+## 🗂 ERD
+
+<a name="erd"></a>
+
+<p align="center">
+  <img src="readme_assets/images/erd.png" alt="시스템 아키텍처" width="900"/>
+</p>
+
+
+---
+
+## 📂 프로젝트 구조
+
+<a name="directories"></a>
+
+```bash
+S14P31E103/
+├── frontend/                         # 프론트엔드 모노레포
+│   ├── apps/
+│   │   ├── game/                     # 환아용 게임 웹
+│   │   │   ├── public/assets/        # 게임 이미지/사운드 리소스
+│   │   │   └── src/
+│   │   │       ├── scenes/           # Phaser 씬
+│   │   │       ├── game/             # 게임 공통 시스템
+│   │   │       ├── debug/            # 동작 추적 디버그 페이지
+│   │   │       └── auth/             # 데모 인증 처리
+│   │   ├── admin/                    # 관리자 웹
+│   │       └── src/
+│   │           ├── pages/            # 로그인, 회원가입, 모션 관리
+│   │           ├── routes/           # 관리자 권한 라우팅
+│   │           └── shared/           # 인증 상태, JWT 유틸
+│   │   └── guardian-medical/         # 보호자&의료진 웹
+│   │       └── src/                  # 환아 프로필, 작품, 운동 기록 확인
+│   ├── packages/
+│   │   ├── api-client/               # axios API 클라이언트
+│   │   ├── domain/                   # 공통 타입
+│   │   └── ui/                       # 공통 UI 컴포넌트
+│   ├── pnpm-workspace.yaml
+│   └── turbo.json
+│
+├── backend/                          # Spring Boot API 서버
+│   ├── src/main/java/com/comong/backend/
+│   │   ├── domain/
+│   │   │   ├── auth/                 # 인증
+│   │   │   ├── user/                 # 사용자
+│   │   │   ├── patient/              # 환자 프로필
+│   │   │   ├── artwork/              # 작품
+│   │   │   └── exercise/             # 체조 동작/세션
+│   │   └── global/
+│   │       ├── common/response/      # 공통 응답 포맷
+│   │       ├── config/               # Security, CORS, Storage, OpenAPI
+│   │       ├── exception/            # 예외 처리
+│   │       ├── security/             # JWT 인증 필터
+│   │       └── storage/              # 로컬 이미지/영상 저장소
+│   ├── src/main/resources/db/migration/
+│   ├── docs/
+│   └── build.gradle
+│
+├── ai/                               # FastAPI AI 서버
+│   ├── app/
+│   │   ├── api/v1/                   # health, gymnastics, taekwondo API
+│   │   ├── core/                     # 설정, 로깅, 공통 에러
+│   │   ├── schemas/                  # Pydantic 요청/응답 스키마
+│   │   └── services/
+│   │       ├── gymnastics/           # 체조 평가 로직
+│   │       └── taekwondo/            # 태권도 분류 로직
+│   └── tests/
+│
+├── infra/                            # 인프라 구성
+│   ├── docker-compose-local.yaml     # 로컬 PostgreSQL / Redis
+│   ├── docker-compose.dev.yml        # 개발 서버 서비스
+│   ├── docker-compose.platform.yml   # Nginx, Jenkins, Prometheus, Grafana
+│   ├── nginx/
+│   ├── jenkins/
+│   └── monitoring/
+│
+└── .gitlab-ci.yml                    # CI/CD 파이프라인
+```
