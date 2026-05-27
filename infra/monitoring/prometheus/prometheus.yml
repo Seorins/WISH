@@ -27,6 +27,13 @@ scrape_configs:
         labels:
           service: cadvisor
 
+  - job_name: docker-stats
+    static_configs:
+      - targets:
+          - docker-stats-exporter:9487
+        labels:
+          service: docker-stats
+
   - job_name: backend-dev
     metrics_path: /api/v1/actuator/prometheus
     static_configs:
