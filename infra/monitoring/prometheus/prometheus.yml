@@ -20,13 +20,6 @@ scrape_configs:
         labels:
           service: node-exporter
 
-  - job_name: cadvisor
-    static_configs:
-      - targets:
-          - cadvisor:8080
-        labels:
-          service: cadvisor
-
   - job_name: docker-stats
     static_configs:
       - targets:
