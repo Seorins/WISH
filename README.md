@@ -1,8 +1,8 @@
-# 🔊 WISH
+# WISH
 
 ---
 
-## 🎬 WISH 소개 영상
+## WISH 소개 영상
 
 <a href="https://youtu.be/tAUvHT38HNQ" target="_blank">
   <img src="exec/demo-scenario-assets/01-game-start.png" alt="WISH 소개 영상" width="100%" />
@@ -10,7 +10,7 @@
 
 <br />
 
-**AI 기반 소아암 환아 일상회복 및 활동 지원 서비스**
+**소아암 환아를 위한 행동 기반 감정 회복 마을 플랫폼**
 
 WISH는 환아가 가상 마을을 탐험하며 미술, 체조, 태권도, 음악 콘텐츠를 경험하는 웹 기반 인터랙티브 게임 플랫폼입니다.  
 환아용 게임 웹, 관리자 웹, 보호자&의료진 웹이 하나의 백엔드와 AI 서비스로 연결되어 활동 수행, 콘텐츠 관리, 환아 활동 모니터링 흐름을 제공합니다.
